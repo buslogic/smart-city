@@ -48,11 +48,11 @@ async function main() {
     { name: 'settings.general.manage', resource: 'settings', action: 'manage', description: 'Upravljanje opštim podešavanjima' },
     
     // Legacy Database permissions
-    { name: 'settings.legacy_databases.create', resource: 'legacy_databases', action: 'create', description: 'Kreiranje konfiguracije legacy baza' },
-    { name: 'settings.legacy_databases.read', resource: 'legacy_databases', action: 'read', description: 'Pregled konfiguracija legacy baza' },
-    { name: 'settings.legacy_databases.update', resource: 'legacy_databases', action: 'update', description: 'Ažuriranje konfiguracija legacy baza' },
-    { name: 'settings.legacy_databases.delete', resource: 'legacy_databases', action: 'delete', description: 'Brisanje konfiguracija legacy baza' },
-    { name: 'settings.legacy_databases.manage', resource: 'legacy_databases', action: 'manage', description: 'Upravljanje legacy bazama' },
+    { name: 'legacy_databases:create', resource: 'legacy_databases', action: 'create', description: 'Kreiranje konfiguracije legacy baza' },
+    { name: 'legacy_databases:read', resource: 'legacy_databases', action: 'read', description: 'Pregled konfiguracija legacy baza' },
+    { name: 'legacy_databases:update', resource: 'legacy_databases', action: 'update', description: 'Ažuriranje konfiguracija legacy baza' },
+    { name: 'legacy_databases:delete', resource: 'legacy_databases', action: 'delete', description: 'Brisanje konfiguracija legacy baza' },
+    { name: 'legacy_databases:manage', resource: 'legacy_databases', action: 'manage', description: 'Upravljanje legacy bazama' },
     
     // API Settings permissions  
     { name: 'settings.api.read', resource: 'api_settings', action: 'read', description: 'Pregled API podešavanja' },

@@ -51,7 +51,7 @@ export class AuthService {
     // Formatiranje korisničkih podataka
     const roles = user.roles.map(ur => ur.role.name);
     const permissions = user.roles.flatMap(ur =>
-      ur.role.permissions.map(rp => `${rp.permission.resource}:${rp.permission.action}`)
+      ur.role.permissions.map(rp => rp.permission.name)
     );
 
     return {
@@ -184,7 +184,7 @@ export class AuthService {
       // Formatiranje korisničkih podataka
       const roles = user.roles.map(ur => ur.role.name);
       const permissions = user.roles.flatMap(ur =>
-        ur.role.permissions.map(rp => `${rp.permission.resource}:${rp.permission.action}`)
+        ur.role.permissions.map(rp => rp.permission.name)
       );
 
       const userInfo = {

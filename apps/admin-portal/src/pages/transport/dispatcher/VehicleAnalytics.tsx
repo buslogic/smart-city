@@ -83,7 +83,7 @@ export default function VehicleAnalytics() {
       // Dohvati sve vozila sa velikim limitom
       const response = await axios.get(`${API_BASE}/api/vehicles`, {
         params: {
-          limit: 100, // Dovoljno za sve vozila
+          limit: 2000, // Povećano da učita sva vozila
           page: 1
         },
         headers: { Authorization: `Bearer ${token}` }
@@ -94,8 +94,12 @@ export default function VehicleAnalytics() {
       
       setVehicles(vehiclesData);
       
-      // Auto-select prvo vozilo ako postoji
-      if (vehiclesData.length > 0) {
+      // Pokušaj da pronađeš vozilo P93597 koje ima GPS podatke
+      const p93597 = vehiclesData.find(v => v.garageNumber === 'P93597');
+      if (p93597) {
+        setSelectedVehicle(p93597.id);
+      } else if (vehiclesData.length > 0) {
+        // Ako P93597 ne postoji, selektuj prvo vozilo
         setSelectedVehicle(vehiclesData[0].id);
       }
     } catch (error: any) {

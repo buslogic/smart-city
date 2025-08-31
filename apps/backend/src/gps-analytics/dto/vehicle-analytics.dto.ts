@@ -1,9 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsNumber } from 'class-validator';
+import { IsDateString, IsNumber, IsInt, Min } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class VehicleAnalyticsQueryDto {
   @ApiProperty({ description: 'ID vozila' })
-  @IsNumber()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
   vehicleId: number;
 
   @ApiProperty({ description: 'Početni datum (ISO 8601)' })

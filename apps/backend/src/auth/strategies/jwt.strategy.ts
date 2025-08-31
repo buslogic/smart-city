@@ -72,6 +72,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       ur.role.permissions.map(rp => rp.permission.name)
     );
 
+    // Debug logovanje
+    console.log('🔍 JWT Strategy - User:', user.email);
+    console.log('🔍 JWT Strategy - Roles:', roles);
+    console.log('🔍 JWT Strategy - Raw permissions:', permissions);
+    console.log('🔍 JWT Strategy - Unique permissions:', [...new Set(permissions)]);
+
     return {
       id: user.id,
       email: user.email,
