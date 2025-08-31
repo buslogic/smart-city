@@ -200,7 +200,7 @@ export default function VehicleAnalytics() {
   };
 
   const efficiencyGaugeConfig = {
-    percent: (analytics?.efficiency || 0) / 100,
+    percent: analytics ? (analytics.efficiency || 0) / 100 : 0,
     range: {
       color: 'l(0) 0:#F4664A 0.5:#FAAD14 1:#30BF78',
     },
@@ -210,7 +210,7 @@ export default function VehicleAnalytics() {
     },
     axis: {
       label: {
-        formatter: (v: string) => Number(v) * 100,
+        formatter: (v: string) => (Number(v) * 100).toFixed(0),
       },
     },
     statistic: {
@@ -219,7 +219,7 @@ export default function VehicleAnalytics() {
         style: { fontSize: '14px' }
       },
       content: {
-        formatter: () => `${analytics?.efficiency.toFixed(0) || 0}%`,
+        formatter: () => `${analytics ? Math.round(analytics.efficiency) : 0}%`,
         style: { fontSize: '24px' }
       },
     },
@@ -376,23 +376,27 @@ export default function VehicleAnalytics() {
             <Col xs={24} sm={12} md={6}>
               <Card title="Efikasnost" hoverable>
                 <div style={{ height: 120 }}>
-                  <Gauge {...efficiencyGaugeConfig} />
+                  {analytics && <Gauge {...efficiencyGaugeConfig} />}
                 </div>
               </Card>
             </Col>
             <Col xs={24} sm={12} md={6}>
               <Card title="Distribucija brzine" hoverable>
-                {analytics.speedDistribution.map((item, idx) => (
-                  <div key={idx} style={{ marginBottom: 8 }}>
-                    <div style={{ fontSize: 12, color: '#666', marginBottom: 2 }}>{item.range}</div>
-                    <Progress 
-                      percent={item.percentage} 
-                      size="small"
-                      strokeColor={getSpeedRangeColor(item.range)}
-                      format={(percent) => `${percent?.toFixed(0)}%`}
-                    />
-                  </div>
-                ))}
+                {analytics.speedDistribution && analytics.speedDistribution.length > 0 ? (
+                  analytics.speedDistribution.map((item, idx) => (
+                    <div key={idx} style={{ marginBottom: 8 }}>
+                      <div style={{ fontSize: 12, color: '#666', marginBottom: 2 }}>{item.range}</div>
+                      <Progress 
+                        percent={item.percentage} 
+                        size="small"
+                        strokeColor={getSpeedRangeColor(item.range)}
+                        format={(percent) => `${percent?.toFixed(0)}%`}
+                      />
+                    </div>
+                  ))
+                ) : (
+                  <Empty description="Nema podataka" />
+                )}
               </Card>
             </Col>
           </Row>
@@ -401,18 +405,26 @@ export default function VehicleAnalytics() {
           <Row gutter={16} style={{ marginBottom: 16 }}>
             <Col xs={24} md={12}>
               <Card title="Prosečna brzina po satima" hoverable>
-                <Line {...speedChartConfig} height={250} />
+                {analytics.hourlyData && analytics.hourlyData.length > 0 ? (
+                  <Line {...speedChartConfig} height={250} />
+                ) : (
+                  <Empty description="Nema podataka po satima" />
+                )}
               </Card>
             </Col>
             <Col xs={24} md={12}>
               <Card title="Pređena kilometraža po satima" hoverable>
-                <Column {...distanceChartConfig} height={250} />
+                {analytics.hourlyData && analytics.hourlyData.length > 0 ? (
+                  <Column {...distanceChartConfig} height={250} />
+                ) : (
+                  <Empty description="Nema podataka po satima" />
+                )}
               </Card>
             </Col>
           </Row>
 
           {/* Dnevna statistika tabela */}
-          {analytics.dailyStats.length > 0 && (
+          {analytics.dailyStats && analytics.dailyStats.length > 0 && (
             <Card title="Dnevna statistika" hoverable>
               <Table
                 dataSource={analytics.dailyStats}

@@ -24,6 +24,38 @@ export class GpsAnalyticsService {
     endDate: string,
   ): Promise<VehicleAnalyticsDto> {
     try {
+      // Prvo proveri da li ima podataka
+      const countQuery = `
+        SELECT COUNT(*) as count 
+        FROM gps_data 
+        WHERE vehicle_id = $1 AND time BETWEEN $2 AND $3
+      `;
+      const countResult = await this.pgPool.query(countQuery, [vehicleId, startDate, endDate]);
+      const totalPoints = parseInt(countResult.rows[0]?.count || '0');
+      
+      // Ako nema podataka, vrati prazan rezultat sa strukturom
+      if (totalPoints === 0) {
+        return {
+          totalPoints: 0,
+          totalDistance: 0,
+          avgSpeed: 0,
+          maxSpeed: 0,
+          drivingHours: 0,
+          idleTime: 0,
+          totalStops: 0,
+          efficiency: 0,
+          hourlyData: [],
+          speedDistribution: [
+            { range: '0 km/h (mirovanje)', count: 0, percentage: 0 },
+            { range: '1-20 km/h', count: 0, percentage: 0 },
+            { range: '21-40 km/h', count: 0, percentage: 0 },
+            { range: '41-60 km/h', count: 0, percentage: 0 },
+            { range: '60+ km/h', count: 0, percentage: 0 },
+          ],
+          dailyStats: [],
+        };
+      }
+
       // Osnovne metrike
       const metricsQuery = `
         WITH vehicle_data AS (
