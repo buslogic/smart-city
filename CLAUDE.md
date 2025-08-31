@@ -171,6 +171,7 @@ smart-city/
 - Mobile Metro: **8081**
 - MySQL: **3325**
 - Redis: **6380**
+- TimescaleDB: **5433**
 - MQTT Broker: **1883** (opciono)
 - WebSocket: **3010** (isti kao API)
 
@@ -436,6 +437,25 @@ npm run start:debug
 - Testirati na oba OS-a pre release
 - Optimizovati performanse za slabije uređaje
 - Offline-first pristup za mobile
+
+## 🗺️ GPS Tracking System (TimescaleDB + PostGIS)
+
+### Implementacija (31.08.2025)
+- **TimescaleDB sa PostGIS 3.5** za GPS time-series podatke
+- **GPS Ingest API** (`/gps-ingest/batch`) za prijem podataka sa legacy servera
+- **Automatska kalkulacija kilometraže** pomoću PostGIS funkcija
+- **CRON skriptovi** (PHP/Python) za sinhronizaciju sa legacy serverom
+- **API key autentifikacija** za sigurnost
+
+### GPS tabele u TimescaleDB
+- `gps_data` - hypertable sa automatskom particijom po danima
+- `api_keys` - za autentifikaciju legacy servera
+- Unique constraint na (garage_no, time)
+- Kompresija nakon 7 dana, retention 90 dana
+
+### Testni podaci
+- Importovano 604 GPS tačaka za vozilo P93597
+- PostGIS uspešno računa kilometražu i rute
 
 ## ✅ Checklist za development
 

@@ -113,7 +113,7 @@ export class GpsIngestService {
           values.push(...rowValues);
 
           // Kreiraj placeholder string za ovaj red
-          const placeholders = [];
+          const placeholders: string[] = [];
           for (let i = 0; i < rowValues.length; i++) {
             placeholders.push(`$${paramCounter++}`);
           }
