@@ -18,7 +18,9 @@ import {
   Globe,
   Server,
   Bus,
-  Car
+  Car,
+  Map,
+  Navigation
 } from 'lucide-react';
 import type { Permission } from '../../../types/rbac.types';
 
@@ -46,7 +48,7 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
   onPermissionToggle,
   onBulkToggle,
 }) => {
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['korisnici', 'podesavanja']));
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['korisnici', 'autobuski-prevoznici', 'podesavanja']));
 
   // Organizuj permisije prema hijerarhiji menija
   const buildPermissionTree = (): PermissionNode[] => {
@@ -157,6 +159,60 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
                 icon: <Car className="h-4 w-4" />,
                 children: allPermissions
                   .filter(p => p.resource === 'vehicles')
+                  .map(p => ({
+                    id: `perm-${p.id}`,
+                    name: getPermissionLabel(p),
+                    type: 'permission' as const,
+                    permission: p,
+                    color: getPermissionColor(p.action),
+                  })),
+              },
+            ],
+          },
+          {
+            id: 'dispecerski-modul',
+            name: 'Dispečerski Modul',
+            type: 'submenu',
+            icon: <Navigation className="h-4 w-4" />,
+            color: 'text-indigo-600',
+            children: [
+              {
+                id: 'dispatcher-main',
+                name: 'Osnovno upravljanje',
+                type: 'section',
+                icon: <Navigation className="h-4 w-4" />,
+                children: allPermissions
+                  .filter(p => p.resource === 'dispatcher' && !p.name.includes('view'))
+                  .map(p => ({
+                    id: `perm-${p.id}`,
+                    name: getPermissionLabel(p),
+                    type: 'permission' as const,
+                    permission: p,
+                    color: getPermissionColor(p.action),
+                  })),
+              },
+              {
+                id: 'dispatcher-views',
+                name: 'Prikazi i Analitika',
+                type: 'section',
+                icon: <Map className="h-4 w-4" />,
+                children: allPermissions
+                  .filter(p => p.resource === 'dispatcher_map' || p.resource === 'dispatcher_analytics')
+                  .map(p => ({
+                    id: `perm-${p.id}`,
+                    name: getPermissionLabel(p),
+                    type: 'permission' as const,
+                    permission: p,
+                    color: getPermissionColor(p.action),
+                  })),
+              },
+              {
+                id: 'dispatcher-routes',
+                name: 'Rute',
+                type: 'section',
+                icon: <Map className="h-4 w-4" />,
+                children: allPermissions
+                  .filter(p => p.resource === 'dispatcher_routes')
                   .map(p => ({
                     id: `perm-${p.id}`,
                     name: getPermissionLabel(p),

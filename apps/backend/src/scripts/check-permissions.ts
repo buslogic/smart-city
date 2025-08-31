@@ -8,11 +8,11 @@ async function checkPermissions() {
     const adminUser = await prisma.user.findFirst({
       where: { email: 'admin@smart-city.rs' },
       include: {
-        userRoles: {
+        roles: {
           include: {
             role: {
               include: {
-                rolePermissions: {
+                permissions: {
                   include: {
                     permission: true
                   }
@@ -34,14 +34,14 @@ async function checkPermissions() {
     console.log(`   Active: ${adminUser.isActive}`);
     
     console.log('\n📋 Roles:');
-    for (const userRole of adminUser.userRoles) {
+    for (const userRole of adminUser.roles) {
       console.log(`   - ${userRole.role.name}`);
-      console.log(`     Permissions count: ${userRole.role.rolePermissions.length}`);
+      console.log(`     Permissions count: ${userRole.role.permissions.length}`);
     }
 
     // Check for specific permission
-    const hasAnalyticsPermission = adminUser.userRoles.some(ur => 
-      ur.role.rolePermissions.some(rp => 
+    const hasAnalyticsPermission = adminUser.roles.some(ur => 
+      ur.role.permissions.some(rp => 
         rp.permission.name === 'dispatcher:view_analytics'
       )
     );
@@ -53,8 +53,8 @@ async function checkPermissions() {
     console.log('\n📊 All dispatcher permissions:');
     const dispatcherPerms = new Set<string>();
     
-    for (const userRole of adminUser.userRoles) {
-      for (const rolePerm of userRole.role.rolePermissions) {
+    for (const userRole of adminUser.roles) {
+      for (const rolePerm of userRole.role.permissions) {
         if (rolePerm.permission.name.startsWith('dispatcher:')) {
           dispatcherPerms.add(rolePerm.permission.name);
         }

@@ -78,8 +78,9 @@ const PermissionsManagement: React.FC = () => {
         { id: 24, name: 'dispatcher:track_vehicles', resource: 'dispatcher', action: 'track_vehicles', description: 'Praćenje vozila na mapi', createdAt: '', updatedAt: '' },
         { id: 25, name: 'dispatcher:send_commands', resource: 'dispatcher', action: 'send_commands', description: 'Slanje komandi vozačima', createdAt: '', updatedAt: '' },
         { id: 26, name: 'dispatcher:view_map', resource: 'dispatcher_map', action: 'read', description: 'Pregled mape sa vozilima', createdAt: '', updatedAt: '' },
-        { id: 27, name: 'dispatcher:manage_routes', resource: 'dispatcher_routes', action: 'manage', description: 'Upravljanje rutama', createdAt: '', updatedAt: '' },
-        { id: 28, name: 'dispatcher:emergency_actions', resource: 'dispatcher', action: 'emergency', description: 'Hitne akcije u dispečerskom modulu', createdAt: '', updatedAt: '' },
+        { id: 27, name: 'dispatcher:view_analytics', resource: 'dispatcher_analytics', action: 'read', description: 'Pregled analitike vozila', createdAt: '', updatedAt: '' },
+        { id: 28, name: 'dispatcher:manage_routes', resource: 'dispatcher_routes', action: 'manage', description: 'Upravljanje rutama', createdAt: '', updatedAt: '' },
+        { id: 29, name: 'dispatcher:emergency_actions', resource: 'dispatcher', action: 'emergency', description: 'Hitne akcije u dispečerskom modulu', createdAt: '', updatedAt: '' },
       ]);
     }
   };
@@ -96,11 +97,11 @@ const PermissionsManagement: React.FC = () => {
       console.error('Greška pri učitavanju permisija role:', error);
       // Mock podaci - različite permisije za različite role
       const mockPermissions: Record<number, number[]> = {
-        1: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28], // SUPER_ADMIN - sve
-        2: [2, 3, 7, 11, 12, 14, 17, 18, 20, 21, 22, 23, 24, 25, 26, 27], // CITY_MANAGER - korisnici, vozila, dispečer
-        3: [2, 7, 11, 14, 17, 22, 26], // DEPARTMENT_HEAD - osnovno + pregled vozila i mape
+        1: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29], // SUPER_ADMIN - sve
+        2: [2, 3, 7, 11, 12, 14, 17, 18, 20, 21, 22, 23, 24, 25, 26, 27, 28], // CITY_MANAGER - korisnici, vozila, dispečer + analitika
+        3: [2, 7, 11, 14, 17, 22, 26, 27], // DEPARTMENT_HEAD - osnovno + pregled vozila, mape i analitike
         4: [2, 11, 17, 22, 24, 26], // OPERATOR - pregled + praćenje vozila
-        5: [2, 7, 11, 12, 14, 15, 17, 22, 26], // ANALYST - čitanje + mapa
+        5: [2, 7, 11, 12, 14, 15, 17, 22, 26, 27], // ANALYST - čitanje + mapa + analitika
         6: [11], // CITIZEN - samo dashboard
       };
       const permissions = mockPermissions[roleId] || [];
