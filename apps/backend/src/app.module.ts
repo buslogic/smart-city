@@ -16,6 +16,7 @@ import { VehiclesModule } from './vehicles/vehicles.module';
 import { VehicleSyncModule } from './vehicle-sync/vehicle-sync.module';
 import { DispatcherModule } from './dispatcher/dispatcher.module';
 import { GpsIngestModule } from './gps-ingest/gps-ingest.module';
+import { GpsAnalyticsModule } from './gps-analytics/gps-analytics.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { GpsIngestModule } from './gps-ingest/gps-ingest.module';
     VehicleSyncModule,
     DispatcherModule,
     GpsIngestModule,
+    GpsAnalyticsModule,
   ],
   controllers: [AppController],
   providers: [
