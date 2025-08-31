@@ -28,7 +28,7 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
-  @RequirePermissions('users:create')
+  @RequirePermissions('users.create')
   @ApiOperation({ summary: 'Create a new user' })
   @ApiResponse({ status: 201, description: 'User successfully created', type: UserResponseDto })
   @ApiResponse({ status: 409, description: 'User with this email already exists' })
@@ -37,7 +37,7 @@ export class UsersController {
   }
 
   @Get()
-  @RequirePermissions('users:read')
+  @RequirePermissions('users.read')
   @ApiOperation({ summary: 'Get all users' })
   @ApiResponse({ status: 200, description: 'Users retrieved successfully', type: [UserResponseDto] })
   findAll(
@@ -51,7 +51,7 @@ export class UsersController {
   }
 
   @Get(':id')
-  @RequirePermissions('users:read')
+  @RequirePermissions('users.read')
   @ApiOperation({ summary: 'Get user by ID' })
   @ApiResponse({ status: 200, description: 'User found', type: UserResponseDto })
   @ApiResponse({ status: 404, description: 'User not found' })
@@ -60,7 +60,7 @@ export class UsersController {
   }
 
   @Patch(':id')
-  @RequirePermissions('users:update')
+  @RequirePermissions('users.update')
   @ApiOperation({ summary: 'Update user' })
   @ApiResponse({ status: 200, description: 'User updated successfully', type: UserResponseDto })
   @ApiResponse({ status: 404, description: 'User not found' })
@@ -73,7 +73,7 @@ export class UsersController {
   }
 
   @Delete(':id')
-  @RequirePermissions('users:delete')
+  @RequirePermissions('users.delete')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete user' })
   @ApiResponse({ status: 204, description: 'User deleted successfully' })
@@ -83,7 +83,7 @@ export class UsersController {
   }
 
   @Patch(':id/status')
-  @RequirePermissions('users:update')
+  @RequirePermissions('users.update')
   @ApiOperation({ summary: 'Toggle user status' })
   @ApiResponse({ status: 200, description: 'User status updated successfully', type: UserResponseDto })
   @ApiResponse({ status: 404, description: 'User not found' })

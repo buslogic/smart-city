@@ -11,7 +11,7 @@ import {
   StopOutlined
 } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
-import { Line, Column, Gauge } from '@ant-design/plots';
+import { Line, Column } from '@ant-design/plots';
 import axios from 'axios';
 import { TokenManager } from '../../../utils/token';
 
@@ -95,7 +95,7 @@ export default function VehicleAnalytics() {
       setVehicles(vehiclesData);
       
       // Pokušaj da pronađeš vozilo P93597 koje ima GPS podatke
-      const p93597 = vehiclesData.find(v => v.garageNumber === 'P93597');
+      const p93597 = vehiclesData.find((v: Vehicle) => v.garageNumber === 'P93597');
       if (p93597) {
         setSelectedVehicle(p93597.id);
       } else if (vehiclesData.length > 0) {
@@ -199,30 +199,10 @@ export default function VehicleAnalytics() {
     },
   };
 
-  const efficiencyGaugeConfig = {
-    percent: analytics ? (analytics.efficiency || 0) / 100 : 0,
-    range: {
-      color: 'l(0) 0:#F4664A 0.5:#FAAD14 1:#30BF78',
-    },
-    indicator: {
-      pointer: { style: { stroke: '#D0D0D0' } },
-      pin: { style: { stroke: '#D0D0D0' } },
-    },
-    axis: {
-      label: {
-        formatter: (v: string) => (Number(v) * 100).toFixed(0),
-      },
-    },
-    statistic: {
-      title: {
-        formatter: () => 'Efikasnost',
-        style: { fontSize: '14px' }
-      },
-      content: {
-        formatter: () => `${analytics ? Math.round(analytics.efficiency) : 0}%`,
-        style: { fontSize: '24px' }
-      },
-    },
+  const getEfficiencyColor = (percent: number) => {
+    if (percent < 30) return '#ff4d4f';
+    if (percent < 60) return '#faad14';
+    return '#52c41a';
   };
 
   // Boje za distribuciju brzine
@@ -374,10 +354,21 @@ export default function VehicleAnalytics() {
               </Card>
             </Col>
             <Col xs={24} sm={12} md={6}>
-              <Card title="Efikasnost" hoverable>
-                <div style={{ height: 120 }}>
-                  {analytics && <Gauge {...efficiencyGaugeConfig} />}
-                </div>
+              <Card hoverable>
+                <Statistic
+                  title="Efikasnost"
+                  value={analytics?.efficiency || 0}
+                  precision={0}
+                  suffix="%"
+                  prefix={<DashboardOutlined style={{ color: getEfficiencyColor(analytics?.efficiency || 0) }} />}
+                />
+                <Progress 
+                  type="dashboard"
+                  percent={analytics?.efficiency || 0}
+                  strokeColor={getEfficiencyColor(analytics?.efficiency || 0)}
+                  size={80}
+                  format={percent => `${percent}%`}
+                />
               </Card>
             </Col>
             <Col xs={24} sm={12} md={6}>

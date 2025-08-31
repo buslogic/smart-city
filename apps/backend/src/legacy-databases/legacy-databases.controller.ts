@@ -27,7 +27,7 @@ export class LegacyDatabasesController {
   constructor(private readonly legacyDatabasesService: LegacyDatabasesService) {}
 
   @Post()
-  @RequirePermissions('legacy_databases:create')
+  @RequirePermissions('settings.legacy_databases.create')
   @ApiOperation({ summary: 'Kreiranje nove legacy database konfiguracije' })
   @ApiResponse({ status: 201, description: 'Legacy database je uspešno kreirana' })
   @ApiResponse({ status: 403, description: 'Nemate dozvolu za kreiranje' })
@@ -36,7 +36,7 @@ export class LegacyDatabasesController {
   }
 
   @Get()
-  @RequirePermissions('legacy_databases:read')
+  @RequirePermissions('settings.legacy_databases.read')
   @ApiOperation({ summary: 'Dohvatanje svih legacy database konfiguracija' })
   @ApiResponse({ status: 200, description: 'Lista legacy databases' })
   findAll() {
@@ -44,7 +44,7 @@ export class LegacyDatabasesController {
   }
 
   @Get(':id')
-  @RequirePermissions('legacy_databases:read')
+  @RequirePermissions('settings.legacy_databases.read')
   @ApiOperation({ summary: 'Dohvatanje legacy database po ID-u' })
   @ApiParam({ name: 'id', description: 'ID legacy database' })
   @ApiResponse({ status: 200, description: 'Legacy database podaci' })
@@ -54,7 +54,7 @@ export class LegacyDatabasesController {
   }
 
   @Patch(':id')
-  @RequirePermissions('legacy_databases:update')
+  @RequirePermissions('settings.legacy_databases.update')
   @ApiOperation({ summary: 'Ažuriranje legacy database konfiguracije' })
   @ApiParam({ name: 'id', description: 'ID legacy database' })
   @ApiResponse({ status: 200, description: 'Legacy database je uspešno ažurirana' })
@@ -68,7 +68,7 @@ export class LegacyDatabasesController {
   }
 
   @Delete(':id')
-  @RequirePermissions('legacy_databases:delete')
+  @RequirePermissions('settings.legacy_databases.delete')
   @ApiOperation({ summary: 'Brisanje legacy database konfiguracije' })
   @ApiParam({ name: 'id', description: 'ID legacy database' })
   @ApiResponse({ status: 200, description: 'Legacy database je uspešno obrisana' })
@@ -79,7 +79,7 @@ export class LegacyDatabasesController {
   }
 
   @Post(':id/test-connection')
-  @RequirePermissions('legacy_databases:read')
+  @RequirePermissions('settings.legacy_databases.read')
   @ApiOperation({ summary: 'Testiranje konekcije sa legacy database' })
   @ApiParam({ name: 'id', description: 'ID legacy database' })
   @ApiResponse({ status: 200, description: 'Rezultat testiranja konekcije' })
@@ -89,7 +89,7 @@ export class LegacyDatabasesController {
   }
 
   @Post('test-connection')
-  @RequirePermissions('legacy_databases:read')
+  @RequirePermissions('settings.legacy_databases.read')
   @ApiOperation({ summary: 'Testiranje konekcije sa proizvoljnim parametrima' })
   @ApiResponse({ status: 200, description: 'Rezultat testiranja konekcije' })
   testCustomConnection(@Body() testConnectionDto: TestConnectionDto) {
