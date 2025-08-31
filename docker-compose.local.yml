@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: smartcity-mysql-local
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: smartcity_dev
+      MYSQL_USER: smartcity_user
+      MYSQL_PASSWORD: SecurePassword123!
+    ports:
+      - "3325:3306"
+    volumes:
+      - mysql_data_local:/var/lib/mysql
+    networks:
+      - smartcity-network-local
+    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: smartcity-redis-local
+    restart: unless-stopped
+    command: redis-server --requirepass RedisPassword123! --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data_local:/data
+    networks:
+      - smartcity-network-local
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      timeout: 3s
+      retries: 5
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: smartcity-timescale-local
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: smartcity_gps
+      POSTGRES_USER: smartcity_ts
+      POSTGRES_PASSWORD: TimescalePass123!
+      TS_TUNE_MAX_CONNS: 100
+      TS_TUNE_MAX_BG_WORKERS: 8
+    ports:
+      - "5433:5432"
+    volumes:
+      - timescale_data_local:/var/lib/postgresql/data
+      - ./docker/timescale-init:/docker-entrypoint-initdb.d
+    networks:
+      - smartcity-network-local
+    command: ["postgres", "-c", "shared_preload_libraries=timescaledb", "-c", "max_connections=100"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartcity_ts -d smartcity_gps"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  smartcity-network-local:
+    driver: bridge
+
+volumes:
+  mysql_data_local:
+  redis_data_local:
+  timescale_data_local:

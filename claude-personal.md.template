@@ -1,0 +1,56 @@
+# Claude Personal Configuration - Smart City Platform
+
+⚠️ **VAŽNO**: Ovo je template fajl. Kopiraj ga u `claude-personal.md` i popuni sa stvarnim podacima.
+Fajl `claude-personal.md` NIKAD ne commituj u Git!
+
+## 🔐 Development kredencijali
+
+### MySQL Database
+```
+Host: localhost
+Port: 3325
+Database: smartcity_dev
+Username: smartcity_user
+Password: YOUR_PASSWORD_HERE
+```
+
+### Test korisnici
+```
+Admin:
+Email: admin@smartcity.rs
+Password: YOUR_ADMIN_PASSWORD
+
+User:
+Email: user@smartcity.rs
+Password: YOUR_USER_PASSWORD
+```
+
+## 🖥️ Server SSH Access
+
+### Test Server
+```bash
+ssh root@YOUR_TEST_SERVER_IP
+```
+
+### Production Server
+```bash
+ssh root@YOUR_PROD_SERVER_IP
+```
+
+## 🔑 API Keys
+
+### JWT Secrets
+```
+JWT_SECRET=YOUR_JWT_SECRET_HERE
+JWT_REFRESH_SECRET=YOUR_JWT_REFRESH_SECRET_HERE
+```
+
+## 📝 Git Configuration
+
+```bash
+git config user.name "YOUR_NAME"
+git config user.email "YOUR_EMAIL"
+```
+
+---
+*Ovaj fajl sadrži sensitive informacije. Čuvaj ga bezbedno!*

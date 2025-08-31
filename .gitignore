@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Production
+dist/
+build/
+
+# Environment
+.env
+.env.local
+
+# Personal configuration
+claude-personal.md
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Logs
+*.log
+
+# Mobile
+.expo/
+*.apk
+*.aab
+
+# Misc
+*.tmp
+tmp/

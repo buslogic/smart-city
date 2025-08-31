@@ -1,0 +1,74 @@
+name: Deploy Backend to DigitalOcean
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/backend/**'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: apps/backend/package-lock.json
+      
+      - name: Install dependencies
+        working-directory: ./apps/backend
+        run: npm ci
+      
+      - name: Run linter
+        working-directory: ./apps/backend
+        run: npm run lint
+      
+      - name: Run tests
+        working-directory: ./apps/backend
+        run: npm test
+      
+      - name: Build application
+        working-directory: ./apps/backend
+        run: npm run build
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+      
+      - name: Build and push Docker image
+        run: |
+          docker build -t registry.digitalocean.com/${{ secrets.DIGITALOCEAN_REGISTRY }}/smart-city-backend:${{ github.sha }} -f apps/backend/Dockerfile .
+          docker build -t registry.digitalocean.com/${{ secrets.DIGITALOCEAN_REGISTRY }}/smart-city-backend:latest -f apps/backend/Dockerfile .
+          doctl registry login
+          docker push registry.digitalocean.com/${{ secrets.DIGITALOCEAN_REGISTRY }}/smart-city-backend:${{ github.sha }}
+          docker push registry.digitalocean.com/${{ secrets.DIGITALOCEAN_REGISTRY }}/smart-city-backend:latest
+      
+      - name: Deploy to App Platform
+        run: |
+          doctl apps update ${{ secrets.DIGITALOCEAN_APP_ID }} --spec .do/app.yaml
+      
+      - name: Wait for deployment
+        run: |
+          doctl apps list-deployments ${{ secrets.DIGITALOCEAN_APP_ID }}
+          
+      - name: Health check
+        run: |
+          sleep 60
+          curl -f https://api.smart-city.rs/health || exit 1
