@@ -16,6 +16,7 @@ import {
   RefreshCw,
   Map,
   Navigation,
+  BarChart3,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth.store';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -71,6 +72,11 @@ const MainLayout: React.FC = () => {
           name: 'Dispečerski Modul - Mapa i vozila',
           href: '/transport/dispatcher/map-vehicles',
           icon: Map,
+        },
+        hasPermission('dispatcher:view_analytics') && {
+          name: 'Dispečerski Modul - Analiza',
+          href: '/transport/dispatcher/analytics',
+          icon: BarChart3,
         },
       ].filter(Boolean),
     },

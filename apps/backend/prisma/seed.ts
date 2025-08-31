@@ -82,6 +82,7 @@ async function main() {
     { name: 'dispatcher:track_vehicles', resource: 'dispatcher', action: 'track_vehicles', description: 'Praćenje vozila na mapi' },
     { name: 'dispatcher:send_commands', resource: 'dispatcher', action: 'send_commands', description: 'Slanje komandi vozačima' },
     { name: 'dispatcher:view_map', resource: 'dispatcher_map', action: 'read', description: 'Pregled mape sa vozilima' },
+    { name: 'dispatcher:view_analytics', resource: 'dispatcher_analytics', action: 'read', description: 'Pregled analitike vozila' },
     { name: 'dispatcher:manage_routes', resource: 'dispatcher_routes', action: 'manage', description: 'Upravljanje rutama' },
     { name: 'dispatcher:emergency_actions', resource: 'dispatcher', action: 'emergency', description: 'Hitne akcije u dispečerskom modulu' },
   ];
@@ -187,6 +188,7 @@ async function main() {
           { resource: 'vehicles', action: { in: ['read', 'create', 'update', 'sync'] } },
           { resource: 'dispatcher', action: { in: ['read', 'manage', 'track_vehicles', 'send_commands'] } },
           { resource: 'dispatcher_map', action: 'read' },
+          { resource: 'dispatcher_analytics', action: 'read' },
           { resource: 'dispatcher_routes', action: 'manage' },
         ],
       },

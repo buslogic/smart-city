@@ -11,6 +11,7 @@ import GeneralSettings from './pages/settings/GeneralSettings';
 import Vehicles from './pages/transport/Vehicles';
 import VehicleSync from './pages/transport/VehicleSync';
 import MapVehicles from './pages/transport/dispatcher/MapVehicles';
+import VehicleAnalytics from './pages/transport/dispatcher/VehicleAnalytics';
 
 function App() {
   return (
@@ -81,6 +82,15 @@ function App() {
               element={
                 <PermissionGuard permissions={['dispatcher:view_map']}>
                   <MapVehicles />
+                </PermissionGuard>
+              } 
+            />
+            
+            <Route 
+              path="transport/dispatcher/analytics" 
+              element={
+                <PermissionGuard permissions={['dispatcher:view_analytics']}>
+                  <VehicleAnalytics />
                 </PermissionGuard>
               } 
             />
