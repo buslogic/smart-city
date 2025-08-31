@@ -28,3 +28,4 @@ claude-personal.md
 # Misc
 *.tmp
 tmp/
+.vercel

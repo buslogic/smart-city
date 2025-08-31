@@ -15,6 +15,7 @@ import { LegacyTableMappingsModule } from './legacy-table-mappings/legacy-table-
 import { VehiclesModule } from './vehicles/vehicles.module';
 import { VehicleSyncModule } from './vehicle-sync/vehicle-sync.module';
 import { DispatcherModule } from './dispatcher/dispatcher.module';
+import { GpsIngestModule } from './gps-ingest/gps-ingest.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { DispatcherModule } from './dispatcher/dispatcher.module';
     VehiclesModule,
     VehicleSyncModule,
     DispatcherModule,
+    GpsIngestModule,
   ],
   controllers: [AppController],
   providers: [
