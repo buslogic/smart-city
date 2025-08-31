@@ -17,6 +17,8 @@ import { VehicleSyncModule } from './vehicle-sync/vehicle-sync.module';
 import { DispatcherModule } from './dispatcher/dispatcher.module';
 import { GpsIngestModule } from './gps-ingest/gps-ingest.module';
 import { GpsAnalyticsModule } from './gps-analytics/gps-analytics.module';
+import { GpsSyncModule } from './gps-sync/gps-sync.module';
+import { DrivingBehaviorModule } from './driving-behavior/driving-behavior.module';
 
 @Module({
   imports: [
@@ -35,6 +37,8 @@ import { GpsAnalyticsModule } from './gps-analytics/gps-analytics.module';
     DispatcherModule,
     GpsIngestModule,
     GpsAnalyticsModule,
+    GpsSyncModule,
+    DrivingBehaviorModule,
   ],
   controllers: [AppController],
   providers: [

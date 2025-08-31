@@ -23,6 +23,7 @@ model User {
   roles             UserRole[]
   sessions          Session[]
   vehicleSyncLogs   VehicleSyncLog[]
+  gpsSyncLogs       GpsSyncLog[]
   
   @@index([email])
   @@map("users")
@@ -294,4 +295,34 @@ model LegacyCityGpsCurrent {
   @@index([captured])
   @@index([vehicleId])
   @@map("legacy_city_gps_current")
+}
+
+model GpsSyncLog {
+  id                Int       @id @default(autoincrement())
+  vehicleId         Int?      @map("vehicle_id")
+  vehicleGarageNo   String?   @map("vehicle_garage_no") @db.VarChar(50)
+  syncStartDate     DateTime  @map("sync_start_date")
+  syncEndDate       DateTime  @map("sync_end_date")
+  status            String    // 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled'
+  totalPoints       Int       @default(0) @map("total_points")
+  processedPoints   Int       @default(0) @map("processed_points")
+  insertedPoints    Int       @default(0) @map("inserted_points")
+  updatedPoints     Int       @default(0) @map("updated_points")
+  skippedPoints     Int       @default(0) @map("skipped_points")
+  errorPoints       Int       @default(0) @map("error_points")
+  totalDistance     Float?    @map("total_distance")
+  batchSize         Int       @default(1000) @map("batch_size")
+  delayMs           Int       @default(3000) @map("delay_ms")
+  startedAt         DateTime  @map("started_at")
+  completedAt       DateTime? @map("completed_at")
+  error             String?   @db.Text
+  
+  // Relations
+  userId            Int?      @map("user_id")
+  user              User?     @relation(fields: [userId], references: [id])
+  
+  @@index([status])
+  @@index([vehicleGarageNo])
+  @@index([startedAt])
+  @@map("gps_sync_logs")
 }

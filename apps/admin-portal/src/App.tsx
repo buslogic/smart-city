@@ -12,6 +12,9 @@ import Vehicles from './pages/transport/Vehicles';
 import VehicleSync from './pages/transport/VehicleSync';
 import MapVehicles from './pages/transport/dispatcher/MapVehicles';
 import VehicleAnalytics from './pages/transport/dispatcher/VehicleAnalytics';
+import GpsSync from './pages/transport/dispatcher/GpsSync';
+import AggressiveDriving from './pages/transport/safety/AggressiveDriving';
+import MonthlyReport from './pages/transport/safety/MonthlyReport';
 
 function App() {
   return (
@@ -91,6 +94,33 @@ function App() {
               element={
                 <PermissionGuard permissions={['dispatcher:view_analytics']}>
                   <VehicleAnalytics />
+                </PermissionGuard>
+              } 
+            />
+            
+            <Route 
+              path="transport/dispatcher/gps-sync" 
+              element={
+                <PermissionGuard permissions={['dispatcher:sync_gps']}>
+                  <GpsSync />
+                </PermissionGuard>
+              } 
+            />
+            
+            <Route 
+              path="transport/safety/aggressive-driving" 
+              element={
+                <PermissionGuard permissions={['dispatcher:view_analytics']}>
+                  <AggressiveDriving />
+                </PermissionGuard>
+              } 
+            />
+            
+            <Route 
+              path="transport/safety/monthly-report" 
+              element={
+                <PermissionGuard permissions={['dispatcher:view_analytics']}>
+                  <MonthlyReport />
                 </PermissionGuard>
               } 
             />

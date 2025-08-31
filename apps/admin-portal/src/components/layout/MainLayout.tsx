@@ -17,6 +17,8 @@ import {
   Map,
   Navigation,
   BarChart3,
+  AlertTriangle,
+  FileText,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth.store';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -77,6 +79,21 @@ const MainLayout: React.FC = () => {
           name: 'Dispečerski Modul - Analiza',
           href: '/transport/dispatcher/analytics',
           icon: BarChart3,
+        },
+        hasPermission('dispatcher:sync_gps') && {
+          name: 'Dispečerski Modul - Sinhronizacija',
+          href: '/transport/dispatcher/gps-sync',
+          icon: RefreshCw,
+        },
+        hasPermission('dispatcher:view_analytics') && {
+          name: 'Bezbednost - Agresivna vožnja',
+          href: '/transport/safety/aggressive-driving',
+          icon: AlertTriangle,
+        },
+        hasPermission('dispatcher:view_analytics') && {
+          name: 'Bezbednost - Mesečni izveštaj',
+          href: '/transport/safety/monthly-report',
+          icon: FileText,
         },
       ].filter(Boolean),
     },
