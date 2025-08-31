@@ -7,7 +7,7 @@ import { Reflector } from '@nestjs/core';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   
-  // Global prefix
+  // Global API prefix
   app.setGlobalPrefix('api');
   
   // CORS
