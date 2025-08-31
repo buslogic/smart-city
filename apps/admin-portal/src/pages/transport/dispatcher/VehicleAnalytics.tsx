@@ -13,9 +13,10 @@ import {
 import dayjs, { Dayjs } from 'dayjs';
 import { Line, Column, Gauge } from '@ant-design/plots';
 import axios from 'axios';
+import { TokenManager } from '../../../utils/token';
 
 const { RangePicker } = DatePicker;
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3010/api';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3010';
 
 interface Vehicle {
   id: number;
@@ -73,14 +74,29 @@ export default function VehicleAnalytics() {
 
   const loadVehicles = async () => {
     try {
-      const response = await axios.get(`${API_BASE}/vehicles`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
+      const token = TokenManager.getAccessToken();
+      if (!token) {
+        message.error('Morate biti prijavljeni');
+        return;
+      }
+      
+      // Dohvati sve vozila sa velikim limitom
+      const response = await axios.get(`${API_BASE}/api/vehicles`, {
+        params: {
+          limit: 100, // Dovoljno za sve vozila
+          page: 1
+        },
+        headers: { Authorization: `Bearer ${token}` }
       });
-      setVehicles(response.data);
+      
+      // Response je paginiran objekat sa data property
+      const vehiclesData = response.data?.data || [];
+      
+      setVehicles(vehiclesData);
       
       // Auto-select prvo vozilo ako postoji
-      if (response.data.length > 0) {
-        setSelectedVehicle(response.data[0].id);
+      if (vehiclesData.length > 0) {
+        setSelectedVehicle(vehiclesData[0].id);
       }
     } catch (error: any) {
       console.error('Greška pri učitavanju vozila:', error);
@@ -93,15 +109,21 @@ export default function VehicleAnalytics() {
   const loadAnalytics = async () => {
     if (!selectedVehicle || !dateRange[0] || !dateRange[1]) return;
     
+    const token = TokenManager.getAccessToken();
+    if (!token) {
+      message.error('Morate biti prijavljeni');
+      return;
+    }
+    
     setLoading(true);
     try {
-      const response = await axios.get(`${API_BASE}/gps-analytics/vehicle`, {
+      const response = await axios.get(`${API_BASE}/api/gps-analytics/vehicle`, {
         params: {
           vehicleId: selectedVehicle,
           startDate: dateRange[0].toISOString(),
           endDate: dateRange[1].toISOString()
         },
-        headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
+        headers: { Authorization: `Bearer ${token}` }
       });
       setAnalytics(response.data);
     } catch (error: any) {
@@ -255,9 +277,12 @@ export default function VehicleAnalytics() {
       </Card>
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '50px' }}>
-          <Spin size="large" tip="Učitavanje analitike..." />
-        </div>
+        <Card>
+          <div style={{ textAlign: 'center', padding: '50px' }}>
+            <Spin size="large" />
+            <div style={{ marginTop: '16px' }}>Učitavanje analitike...</div>
+          </div>
+        </Card>
       ) : !analytics || analytics.totalPoints === 0 ? (
         <Card>
           <Empty description="Nema GPS podataka za izabrani period" />

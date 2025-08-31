@@ -104,8 +104,18 @@ jobs:
               --env-file /root/apps/backend/.env.production \
               ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
             
-            # Health check
+            # Wait for container to be ready
             sleep 10
+            
+            # Run database migrations
+            echo "Running database migrations..."
+            docker exec backend-app npx prisma migrate deploy
+            
+            # Run seed (only if needed - check if admin exists first)
+            echo "Checking if database needs seeding..."
+            docker exec backend-app npx prisma db seed || echo "Seed might have failed, but continuing..."
+            
+            # Health check
             curl -f http://localhost:3010/api/health || exit 1
             
             echo "Deployment successful!"

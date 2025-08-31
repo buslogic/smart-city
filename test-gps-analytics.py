@@ -25,6 +25,18 @@ def login():
             data = response.json()
             print("✅ Login successful!")
             token = data.get("accessToken")  # Changed from access_token to accessToken
+            if token:
+                # Decode JWT to see permissions
+                import base64
+                parts = token.split('.')
+                if len(parts) >= 2:
+                    payload = parts[1]
+                    # Add padding if needed
+                    payload += '=' * (4 - len(payload) % 4)
+                    decoded = base64.b64decode(payload)
+                    import json as j
+                    user_data = j.loads(decoded)
+                    print(f"   User ID: {user_data.get('sub')}")
             return token
         else:
             print(f"❌ Login failed: {response.status_code}")
