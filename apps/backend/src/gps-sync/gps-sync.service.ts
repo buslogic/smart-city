@@ -306,14 +306,27 @@ export class GpsSyncService {
       });
 
       // Konektuj se na TimescaleDB
-      this.pgPool = new Pool({
-        host: 'localhost',
-        port: 5433,
-        database: 'smartcity_gps',
-        user: 'smartcity_ts',
-        password: 'TimescalePass123!',
-        max: 5,
-      });
+      // Preferiraj connection string ako postoji
+      if (process.env.TIMESCALE_DATABASE_URL) {
+        this.logger.log('📊 Koristi se TIMESCALE_DATABASE_URL za TimescaleDB konekciju');
+        this.pgPool = new Pool({
+          connectionString: process.env.TIMESCALE_DATABASE_URL,
+          max: 5,
+        });
+      } else {
+        // Fallback na pojedinačne environment varijable
+        const tsHost = process.env.TIMESCALE_HOST || 'localhost';
+        const tsPort = process.env.TIMESCALE_PORT || '5433';
+        this.logger.log(`📊 Koristi se TimescaleDB konekcija: ${tsHost}:${tsPort}`);
+        this.pgPool = new Pool({
+          host: tsHost,
+          port: parseInt(tsPort),
+          database: process.env.TIMESCALE_DATABASE || 'smartcity_gps',
+          user: process.env.TIMESCALE_USER || 'smartcity_ts',
+          password: process.env.TIMESCALE_PASSWORD || 'TimescalePass123!',
+          max: 5,
+        });
+      }
 
       // Određi koja vozila treba sinhronizovati - sada koristimo vehicle IDs
       let vehicles;
@@ -498,7 +511,11 @@ export class GpsSyncService {
               }
               
             } catch (error) {
-              this.logger.error(`Greška pri batch unosu GPS tačaka: ${error.message}`);
+              this.logger.error(`Greška pri batch unosu GPS tačaka:`, error);
+              this.logger.error(`Error detalji: ${error.message}`);
+              if (error.code) {
+                this.logger.error(`Error code: ${error.code}`);
+              }
               totalErrors += batch.length;
             }
 
