@@ -42,7 +42,10 @@ export class VehicleSyncService {
     });
 
     if (!mapping) {
-      throw new NotFoundException('Nema aktivnog mapiranja za bus_vehicles tabelu');
+      throw new NotFoundException(
+        'Mapiranje za bus_vehicles tabelu nije konfigurisano. ' +
+        'Molim idite na Podešavanja > Legacy baze i konfiguršite mapiranje tabele pre pokretanja sinhronizacije.'
+      );
     }
 
     // Kreiraj sync log

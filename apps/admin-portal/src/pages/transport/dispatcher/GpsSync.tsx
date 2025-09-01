@@ -217,7 +217,29 @@ const GpsSync: React.FC = () => {
       message.success(result.message);
       loadStatus();
     } catch (error: any) {
-      message.error(error.response?.data?.message || 'Greška pri pokretanju sinhronizacije');
+      // Proveri da li je greška zbog nemapiranja
+      if (error.response?.status === 404 && error.response?.data?.message?.includes('mapiranje')) {
+        // Prikaži modal sa detaljnim uputstvima
+        Modal.error({
+          title: 'Mapiranje nije konfigurisano',
+          content: (
+            <div>
+              <p>{error.response.data.message}</p>
+              <ol style={{ marginTop: '16px' }}>
+                <li>Idite na <strong>Podešavanja → Legacy baze</strong></li>
+                <li>Pronađite vašu legacy bazu u listi</li>
+                <li>Kliknite na <strong>Mapiranje tabela</strong></li>
+                <li>Dodajte mapiranje za <strong>bus_vehicles</strong> tabelu</li>
+                <li>Aktivirajte sinhronizaciju za tu tabelu</li>
+              </ol>
+            </div>
+          ),
+          okText: 'Razumem',
+          width: 520,
+        });
+      } else {
+        message.error(error.response?.data?.message || 'Greška pri pokretanju sinhronizacije');
+      }
     } finally {
       setLoading(false);
     }
