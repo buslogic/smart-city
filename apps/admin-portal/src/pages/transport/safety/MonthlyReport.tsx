@@ -100,7 +100,7 @@ const MonthlyReport: React.FC = () => {
 
         // Use ID for API call (not legacyId) because TimescaleDB uses the same ID
         const apiVehicleId = vehicle.id;
-        console.log(`Fetching stats for vehicle ${vehicle.garageNumber} (ID: ${apiVehicleId}) from ${dateRange[0].format('YYYY-MM-DD')} to ${dateRange[1].format('YYYY-MM-DD')}`);
+        // console.log(`Fetching stats for vehicle ${vehicle.garageNumber} (ID: ${apiVehicleId}) from ${dateRange[0].format('YYYY-MM-DD')} to ${dateRange[1].format('YYYY-MM-DD')}`);
         
         const stats = await drivingBehaviorService.getVehicleStatistics(
           apiVehicleId,
@@ -108,11 +108,11 @@ const MonthlyReport: React.FC = () => {
           dateRange[1].format('YYYY-MM-DD')
         );
         
-        console.log(`Stats received for ${vehicle.garageNumber}:`, stats);
+        // console.log(`Stats received for ${vehicle.garageNumber}:`, stats);
 
         // Skip if no data (no distance traveled)
         if (!stats.totalDistanceKm || stats.totalDistanceKm === 0) {
-          console.log(`No data for ${vehicle.garageNumber} - skipping`);
+          // console.log(`No data for ${vehicle.garageNumber} - skipping`);
           // Still add to report but with zero values
           reportDataArray.push({
             vehicleId: apiVehicleId,

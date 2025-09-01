@@ -202,16 +202,16 @@ const GpsSync: React.FC = () => {
         delay,
       };
       
-      // Loguj parametre koji se šalju
-      console.log('🚀 GPS Sync parametri:', {
-        vehicleIds: params.vehicleIds,
-        startDate: params.startDate,
-        endDate: params.endDate,
-        batchSize: params.batchSize,
-        delay: params.delay,
-        startDateLocal: dateRange[0].format('YYYY-MM-DD HH:mm:ss'),
-        endDateLocal: dateRange[1].format('YYYY-MM-DD HH:mm:ss'),
-      });
+      // Loguj parametre koji se šalju - zakomentarisano
+      // console.log('🚀 GPS Sync parametri:', {
+      //   vehicleIds: params.vehicleIds,
+      //   startDate: params.startDate,
+      //   endDate: params.endDate,
+      //   batchSize: params.batchSize,
+      //   delay: params.delay,
+      //   startDateLocal: dateRange[0].format('YYYY-MM-DD HH:mm:ss'),
+      //   endDateLocal: dateRange[1].format('YYYY-MM-DD HH:mm:ss'),
+      // });
       
       const result = await gpsSyncService.startSync(params);
       message.success(result.message);

@@ -41,7 +41,7 @@ const UserAdministration: React.FC = () => {
       setLoading(true);
       const response = await userService.getUsers(page, pageSize);
       
-      console.log('API Response:', response); // Debug log
+      // console.log('API Response:', response); // Debug log - zakomentarisano
       
       // Direktno koristi response.data
       setUsers(response.data);

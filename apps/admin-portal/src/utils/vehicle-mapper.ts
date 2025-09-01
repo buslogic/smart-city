@@ -257,7 +257,7 @@ export class VehicleMapper {
     this.cache.clear();
     this.allVehiclesCache = null;
     this.allVehiclesCacheTime = null;
-    console.log('[VehicleMapper] Cache očišćen');
+    // console.log('[VehicleMapper] Cache očišćen');
   }
 
   /**
@@ -276,12 +276,12 @@ export class VehicleMapper {
    * Debug funkcija - prikaži stanje cache-a
    */
   static debugCache(): void {
-    console.log('[VehicleMapper] Cache status:');
-    console.log(`- Pojedinačni cache: ${this.cache.size} vozila`);
-    console.log(`- Sva vozila cache: ${this.allVehiclesCache?.length || 0} vozila`);
-    console.log(`- Cache starost: ${this.allVehiclesCacheTime ? 
-      Math.round((Date.now() - this.allVehiclesCacheTime.getTime()) / 1000) + 's' : 
-      'N/A'}`);
+    // console.log('[VehicleMapper] Cache status:');
+    // console.log(`- Pojedinačni cache: ${this.cache.size} vozila`);
+    // console.log(`- Sva vozila cache: ${this.allVehiclesCache?.length || 0} vozila`);
+    // console.log(`- Cache starost: ${this.allVehiclesCacheTime ? 
+    //   Math.round((Date.now() - this.allVehiclesCacheTime.getTime()) / 1000) + 's' : 
+    //   'N/A'}`);
   }
 }
 
