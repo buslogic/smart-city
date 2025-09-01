@@ -19,6 +19,7 @@ import { GpsIngestModule } from './gps-ingest/gps-ingest.module';
 import { GpsAnalyticsModule } from './gps-analytics/gps-analytics.module';
 import { GpsSyncModule } from './gps-sync/gps-sync.module';
 import { DrivingBehaviorModule } from './driving-behavior/driving-behavior.module';
+import { SpacesModule } from './spaces/spaces.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { DrivingBehaviorModule } from './driving-behavior/driving-behavior.modul
     GpsAnalyticsModule,
     GpsSyncModule,
     DrivingBehaviorModule,
+    SpacesModule,
   ],
   controllers: [AppController],
   providers: [

@@ -23,6 +23,10 @@ import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 export class VehicleSyncController {
   constructor(private readonly vehicleSyncService: VehicleSyncService) {}
 
+  /**
+   * Pokreće sinhronizaciju vozila sa legacy sistemom
+   * Zahteva vehicles:sync permisiju
+   */
   @Post('start')
   @RequirePermissions('vehicles:sync')
   @ApiOperation({ summary: 'Pokreni sinhronizaciju vozila' })
@@ -48,6 +52,10 @@ export class VehicleSyncController {
     }
   }
 
+  /**
+   * Zaustavlja trenutnu sinhronizaciju vozila
+   * Zahteva vehicles:sync permisiju
+   */
   @Delete('stop')
   @RequirePermissions('vehicles:sync')
   @ApiOperation({ summary: 'Zaustavi sinhronizaciju vozila' })
@@ -57,6 +65,10 @@ export class VehicleSyncController {
     return this.vehicleSyncService.stopSync();
   }
 
+  /**
+   * Vraća trenutni status sinhronizacije vozila
+   * Zahteva vehicles:read permisiju
+   */
   @Get('status')
   @RequirePermissions('vehicles:read')
   @ApiOperation({ summary: 'Trenutni status sinhronizacije' })
