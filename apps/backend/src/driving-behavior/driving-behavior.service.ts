@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Pool } from 'pg';
+import { createTimescalePool, testTimescaleConnection } from '../common/config/timescale.config';
 import {
   DrivingEventDto,
   GetEventsQueryDto,
@@ -16,19 +17,17 @@ export class DrivingBehaviorService {
   private pgPool: Pool;
 
   constructor() {
-    // Initialize TimescaleDB connection pool
-    this.pgPool = new Pool({
-      host: process.env.TIMESCALE_HOST || 'localhost',
-      port: parseInt(process.env.TIMESCALE_PORT || '5433'),
-      database: process.env.TIMESCALE_DB || 'smartcity_gps',
-      user: process.env.TIMESCALE_USER || 'smartcity_ts',
-      password: process.env.TIMESCALE_PASSWORD || 'TimescalePass123!',
-      max: 10,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
+    // Initialize TimescaleDB connection pool using centralized config
+    this.pgPool = createTimescalePool();
+    
+    // Test connection
+    testTimescaleConnection(this.pgPool).then(success => {
+      if (success) {
+        this.logger.log('✅ DrivingBehaviorService povezan na TimescaleDB');
+      } else {
+        this.logger.error('❌ DrivingBehaviorService - neuspešna konekcija na TimescaleDB');
+      }
     });
-
-    this.logger.log('DrivingBehaviorService initialized with TimescaleDB connection');
   }
 
   /**

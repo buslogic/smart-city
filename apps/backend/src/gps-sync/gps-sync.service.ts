@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { VehicleMapperService } from '../common/helpers/vehicle-mapper';
+import { createTimescalePool } from '../common/config/timescale.config';
 import * as mysql from 'mysql2/promise';
 import { Pool } from 'pg';
 import * as crypto from 'crypto';
@@ -305,28 +306,8 @@ export class GpsSyncService {
         connectTimeout: 30000,
       });
 
-      // Konektuj se na TimescaleDB
-      // Preferiraj connection string ako postoji
-      if (process.env.TIMESCALE_DATABASE_URL) {
-        this.logger.log('📊 Koristi se TIMESCALE_DATABASE_URL za TimescaleDB konekciju');
-        this.pgPool = new Pool({
-          connectionString: process.env.TIMESCALE_DATABASE_URL,
-          max: 5,
-        });
-      } else {
-        // Fallback na pojedinačne environment varijable
-        const tsHost = process.env.TIMESCALE_HOST || 'localhost';
-        const tsPort = process.env.TIMESCALE_PORT || '5433';
-        this.logger.log(`📊 Koristi se TimescaleDB konekcija: ${tsHost}:${tsPort}`);
-        this.pgPool = new Pool({
-          host: tsHost,
-          port: parseInt(tsPort),
-          database: process.env.TIMESCALE_DATABASE || 'smartcity_gps',
-          user: process.env.TIMESCALE_USER || 'smartcity_ts',
-          password: process.env.TIMESCALE_PASSWORD || 'TimescalePass123!',
-          max: 5,
-        });
-      }
+      // Konektuj se na TimescaleDB koristeći centralizovan config
+      this.pgPool = createTimescalePool();
 
       // Određi koja vozila treba sinhronizovati - sada koristimo vehicle IDs
       let vehicles;
