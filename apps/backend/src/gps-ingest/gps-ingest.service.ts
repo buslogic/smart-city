@@ -17,11 +17,9 @@ export class GpsIngestService {
       this.logger.error('Neočekivana greška na TimescaleDB pool', err);
     });
 
-    // Testiraj konekciju pri pokretanju
+    // Test connection - quiet initialization
     testTimescaleConnection(this.timescalePool).then(success => {
-      if (success) {
-        this.logger.log('✅ GpsIngestService povezan na TimescaleDB');
-      } else {
+      if (!success) {
         this.logger.error('❌ GpsIngestService nije mogao da se poveže na TimescaleDB');
       }
     });

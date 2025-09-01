@@ -9,7 +9,7 @@ export interface DrivingEvent {
   vehicleId: number;
   garageNo: string;
   eventType: 'acceleration' | 'braking' | 'cornering';
-  severity: 'normal' | 'moderate' | 'severe';
+  severity: number; // Changed to number (1=normal, 3=moderate, 5=severe)
   accelerationValue: number;
   gForce: number;
   speedBefore: number;
@@ -153,19 +153,26 @@ class DrivingBehaviorService {
   }
 
   /**
-   * Helper to get severity color
+   * Helper to get severity color - supports both string and integer severity
    */
-  getSeverityColor(severity: string): string {
-    switch (severity) {
-      case 'severe':
-        return '#ff4d4f'; // red
-      case 'moderate':
-        return '#faad14'; // orange
-      case 'normal':
-        return '#52c41a'; // green
-      default:
-        return '#d9d9d9'; // gray
+  getSeverityColor(severity: string | number): string {
+    // Handle both string and integer severity values
+    if (typeof severity === 'number') {
+      if (severity >= 4) return '#ff4d4f'; // red for severe (4-5)
+      if (severity === 3) return '#faad14'; // orange for moderate (3)
+      if (severity <= 2) return '#52c41a'; // green for normal (1-2)
+    } else {
+      // Legacy string support
+      switch (severity) {
+        case 'severe':
+          return '#ff4d4f'; // red
+        case 'moderate':
+          return '#faad14'; // orange
+        case 'normal':
+          return '#52c41a'; // green
+      }
     }
+    return '#d9d9d9'; // gray for unknown
   }
 
   /**

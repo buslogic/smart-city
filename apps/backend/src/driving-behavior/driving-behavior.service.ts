@@ -20,14 +20,36 @@ export class DrivingBehaviorService {
     // Initialize TimescaleDB connection pool using centralized config
     this.pgPool = createTimescalePool();
     
-    // Test connection
+    // Test connection - quiet initialization
     testTimescaleConnection(this.pgPool).then(success => {
-      if (success) {
-        this.logger.log('✅ DrivingBehaviorService povezan na TimescaleDB');
-      } else {
+      if (!success) {
         this.logger.error('❌ DrivingBehaviorService - neuspešna konekcija na TimescaleDB');
       }
     });
+  }
+
+  /**
+   * Map frontend event types to database enum values
+   */
+  private mapEventType(eventType: string): string {
+    const mapping = {
+      'acceleration': 'harsh_acceleration',
+      'braking': 'harsh_braking',
+      'cornering': 'sharp_turn',
+    };
+    return mapping[eventType] || eventType;
+  }
+
+  /**
+   * Map database event types to frontend values
+   */
+  private mapEventTypeToFrontend(dbEventType: string): EventType {
+    const mapping = {
+      'harsh_acceleration': EventType.ACCELERATION,
+      'harsh_braking': EventType.BRAKING,
+      'sharp_turn': EventType.CORNERING,
+    };
+    return mapping[dbEventType] || EventType.ACCELERATION; // Default fallback
   }
 
   /**
@@ -59,14 +81,21 @@ export class DrivingBehaviorService {
       }
 
       if (severity) {
+        // Convert string severity to integer for database
+        const severityMap = {
+          'normal': 1,
+          'moderate': 3,
+          'severe': 5,
+        };
+        const severityValue = severityMap[severity] || severity;
         conditions.push(`severity = $${paramIndex}`);
-        params.push(severity);
+        params.push(severityValue);
         paramIndex++;
       }
 
       if (eventType) {
         conditions.push(`event_type = $${paramIndex}`);
-        params.push(eventType);
+        params.push(this.mapEventType(eventType));
         paramIndex++;
       }
 
@@ -109,8 +138,14 @@ export class DrivingBehaviorService {
 
       const eventsResult = await this.pgPool.query(eventsQuery, params);
 
+      // Map database event types to frontend values
+      const mappedEvents = eventsResult.rows.map(event => ({
+        ...event,
+        eventType: this.mapEventTypeToFrontend(event.eventType),
+      }));
+
       return {
-        events: eventsResult.rows,
+        events: mappedEvents,
         total,
       };
     } catch (error) {
@@ -137,12 +172,7 @@ export class DrivingBehaviorService {
         SELECT * FROM get_vehicle_driving_statistics($1, $2::date, $3::date)
       `;
       
-      this.logger.log(`Getting statistics for vehicle ${vehicleId} from ${start} to ${end}`);
       const statsResult = await this.pgPool.query(statsQuery, [vehicleId, start, end]);
-      
-      if (statsResult.rows.length > 0) {
-        this.logger.log(`Statistics result:`, statsResult.rows[0]);
-      }
 
       if (!statsResult.rows.length) {
         // No statistics available, return zeros
@@ -234,7 +264,7 @@ export class DrivingBehaviorService {
         samplingInterval = 120; // Every 120th point (every 6 minutes) for month
       }
 
-      this.logger.log(`Chart data: Period ${periodDays} days, sampling every ${samplingInterval} points`);
+      // Sampling logic based on period
 
       // Get GPS data points for continuous line with smart sampling
       // Also include all times where we have events
@@ -278,11 +308,7 @@ export class DrivingBehaviorService {
 
       const gpsResult = await this.pgPool.query(gpsQuery, [vehicleId, start, end, samplingInterval]);
 
-      // Log events for debugging
-      this.logger.log(`Found ${eventsResult.rows.length} driving events for vehicle ${vehicleId}`);
-      if (eventsResult.rows.length > 0) {
-        this.logger.log(`Event severities: ${eventsResult.rows.map(e => e.severity).join(', ')}`);
-      }
+      // Process events for chart
 
       // Create a map of events by rounded time (to nearest second) for easier merging
       const eventsMap = new Map<string, any>();
@@ -292,12 +318,12 @@ export class DrivingBehaviorService {
         eventTime.setMilliseconds(0);
         const timeKey = eventTime.toISOString();
         eventsMap.set(timeKey, {
-          eventType: event.eventType,
+          eventType: this.mapEventTypeToFrontend(event.eventType), // Map to frontend values
           severity: event.severity,
           gForce: parseFloat(event.gForce),
           originalTime: event.time,
         });
-        this.logger.log(`Event at ${timeKey}: ${event.eventType} - ${event.severity}`);
+        // Event mapped for chart
       });
 
       // Merge GPS data with events
@@ -322,7 +348,7 @@ export class DrivingBehaviorService {
           point.eventType = event.eventType;
           point.severity = event.severity;
           point.gForce = event.gForce;
-          this.logger.log(`Matched event at ${timeKey}: ${event.eventType} - ${event.severity}`);
+          // Event matched to GPS point
         }
         
         dataPoints.push(point);
@@ -348,22 +374,16 @@ export class DrivingBehaviorService {
             time: event.time.toISOString(),
             acceleration: parseFloat(event.acceleration),
             speed: event.speed,
-            eventType: event.eventType,
+            eventType: this.mapEventTypeToFrontend(event.eventType), // Map to frontend values
             severity: event.severity,
             gForce: parseFloat(event.gForce),
           });
-          this.logger.log(`Added unmatched event at ${event.time}: ${event.eventType} - ${event.severity}`);
+          // Unmatched event added
         }
       });
-      
-      if (unmatchedEvents > 0) {
-        this.logger.log(`Added ${unmatchedEvents} unmatched events to chart`);
-      }
 
       // Sort by time
       dataPoints.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-      
-      this.logger.log(`Total chart data points: ${dataPoints.length}, with events: ${dataPoints.filter(p => p.eventType).length}`);
 
       // Get garage number
       const garageQuery = `

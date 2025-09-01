@@ -12,11 +12,9 @@ export class GpsAnalyticsService {
     // Koristi centralizovanu konfiguraciju za TimescaleDB
     this.pgPool = createTimescalePool();
     
-    // Testiraj konekciju
+    // Test connection - quiet initialization
     testTimescaleConnection(this.pgPool).then(success => {
-      if (success) {
-        this.logger.log('✅ GpsAnalyticsService povezan na TimescaleDB');
-      } else {
+      if (!success) {
         this.logger.error('❌ GpsAnalyticsService nije mogao da se poveže na TimescaleDB');
       }
     });

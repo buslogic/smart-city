@@ -160,9 +160,9 @@ const AggressiveDriving: React.FC = () => {
       title: 'Ozbiljnost',
       dataIndex: 'severity',
       key: 'severity',
-      render: (severity: string) => {
+      render: (severity: number) => {
         const color = drivingBehaviorService.getSeverityColor(severity);
-        const text = severity === 'severe' ? 'Ozbiljno' : severity === 'moderate' ? 'Umereno' : 'Normalno';
+        const text = severity >= 4 ? 'Ozbiljno' : severity === 3 ? 'Umereno' : 'Normalno';
         return <Tag color={color}>{text}</Tag>;
       },
       width: 100,
@@ -246,18 +246,20 @@ const AggressiveDriving: React.FC = () => {
 
   // Custom dot renderer for events
   const renderCustomDot = (props: any) => {
-    const { cx, cy, payload } = props;
+    const { cx, cy, payload, index } = props;
     
     if (payload.eventType) {
       let fill = '#52c41a'; // green for normal
-      if (payload.severity === 'severe') {
-        fill = '#ff4d4f'; // red
-      } else if (payload.severity === 'moderate') {
-        fill = '#faad14'; // orange
+      // severity je sada INTEGER (1=normal, 3=moderate, 5=severe)
+      if (payload.severity >= 4) {
+        fill = '#ff4d4f'; // red for severe (4-5)
+      } else if (payload.severity === 3) {
+        fill = '#faad14'; // orange for moderate (3)
       }
       
       return (
         <circle
+          key={`dot-event-${index}`}
           cx={cx}
           cy={cy}
           r={6}
@@ -271,6 +273,7 @@ const AggressiveDriving: React.FC = () => {
     // Normal points - smaller blue dots
     return (
       <circle
+        key={`dot-normal-${index}`}
         cx={cx}
         cy={cy}
         r={2}
@@ -288,14 +291,15 @@ const AggressiveDriving: React.FC = () => {
       let color = '#1890ff';
       
       if (data.eventType) {
-        const severityText = data.severity === 'severe' ? 'Ozbiljno' : 
-                            data.severity === 'moderate' ? 'Umereno' : 'Normalno';
+        // severity je sada INTEGER (1=normal, 3=moderate, 5=severe)
+        const severityText = data.severity >= 4 ? 'Ozbiljno' : 
+                            data.severity === 3 ? 'Umereno' : 'Normalno';
         const eventText = data.eventType === 'acceleration' ? 'Ubrzanje' : 'Kočenje';
         label = `${eventText} (${severityText})`;
         
-        if (data.severity === 'severe') color = '#ff4d4f';
-        else if (data.severity === 'moderate') color = '#faad14';
-        else color = '#52c41a';
+        if (data.severity >= 4) color = '#ff4d4f';  // red for severe
+        else if (data.severity === 3) color = '#faad14';  // orange for moderate
+        else color = '#52c41a';  // green for normal
       }
       
       return (
@@ -417,7 +421,7 @@ const AggressiveDriving: React.FC = () => {
                 format="DD.MM.YYYY"
                 allowClear={false}
               />
-              <Button.Group>
+              <Space.Compact>
                 <Tooltip title="Danas">
                   <Button 
                     icon={<ClockCircleOutlined />}
@@ -438,7 +442,7 @@ const AggressiveDriving: React.FC = () => {
                     M
                   </Button>
                 </Tooltip>
-              </Button.Group>
+              </Space.Compact>
             </Space.Compact>
           </Col>
           <Col span={4}>
@@ -652,8 +656,8 @@ const AggressiveDriving: React.FC = () => {
           columns={columns}
           dataSource={
             eventsData?.events?.filter(event => {
-              if (selectedSeverity === 'severe') return event.severity === 'severe';
-              if (selectedSeverity === 'moderate') return event.severity === 'severe' || event.severity === 'moderate';
+              if (selectedSeverity === 'severe') return event.severity >= 4; // severe (4-5)
+              if (selectedSeverity === 'moderate') return event.severity >= 3; // moderate (3) and severe (4-5)
               return true; // 'all' - prikaži sve
             })
           }

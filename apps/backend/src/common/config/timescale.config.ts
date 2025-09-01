@@ -7,7 +7,6 @@ import { Pool } from 'pg';
 export function createTimescalePool(): Pool {
   // Prioritet 1: Koristi connection string ako postoji
   if (process.env.TIMESCALE_DATABASE_URL) {
-    console.log('📊 Koristi se TIMESCALE_DATABASE_URL za TimescaleDB konekciju');
     return new Pool({
       connectionString: process.env.TIMESCALE_DATABASE_URL,
       max: 20,
@@ -17,7 +16,6 @@ export function createTimescalePool(): Pool {
   }
 
   // Prioritet 2: Fallback na pojedinačne environment varijable
-  console.log('📊 Koriste se pojedinačne environment varijable za TimescaleDB');
   return new Pool({
     host: process.env.TIMESCALE_HOST || 'localhost',
     port: parseInt(process.env.TIMESCALE_PORT || '5433'),
@@ -36,7 +34,7 @@ export function createTimescalePool(): Pool {
 export async function testTimescaleConnection(pool: Pool): Promise<boolean> {
   try {
     const result = await pool.query('SELECT version()');
-    console.log('✅ TimescaleDB konekcija uspešna:', result.rows[0].version);
+    // Verbose logging disabled - connection successful
     return true;
   } catch (error) {
     console.error('❌ TimescaleDB konekcija neuspešna:', error);
