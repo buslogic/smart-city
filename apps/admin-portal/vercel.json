@@ -14,5 +14,9 @@
     "env": {
       "NODE_VERSION": "18"
     }
+  },
+  "github": {
+    "enabled": true,
+    "autoAlias": false
   }
 }
