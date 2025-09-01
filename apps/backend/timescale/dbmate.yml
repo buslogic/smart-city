@@ -1,0 +1,5 @@
+migrations_dir: "./migrations"
+migrations_table: "schema_migrations"
+no_dump_schema: false
+wait: true
+wait_timeout: 60s

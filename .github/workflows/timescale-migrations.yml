@@ -1,0 +1,85 @@
+name: TimescaleDB Migrations
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'apps/backend/timescale/migrations/**'
+      - '.github/workflows/timescale-migrations.yml'
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Migration action'
+        required: true
+        default: 'up'
+        type: choice
+        options:
+          - up
+          - status
+          - rollback
+
+jobs:
+  migrate:
+    name: Run TimescaleDB Migrations
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout kod
+        uses: actions/checkout@v4
+
+      - name: Instaliraj dbmate
+        run: |
+          curl -fsSL -o /usr/local/bin/dbmate https://github.com/amacneil/dbmate/releases/latest/download/dbmate-linux-amd64
+          chmod +x /usr/local/bin/dbmate
+          dbmate --version
+
+      - name: Proveri status migracija
+        working-directory: apps/backend/timescale
+        env:
+          DATABASE_URL: ${{ secrets.TIMESCALE_DATABASE_URL }}
+        run: |
+          echo "📊 Trenutni status migracija:"
+          dbmate --migrations-dir ./migrations status
+
+      - name: Pokreni migracije (up)
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'up')
+        working-directory: apps/backend/timescale
+        env:
+          DATABASE_URL: ${{ secrets.TIMESCALE_DATABASE_URL }}
+        run: |
+          echo "🚀 Pokretanje migracija..."
+          dbmate --migrations-dir ./migrations up
+          echo "✅ Migracije uspešno izvršene!"
+
+      - name: Rollback poslednje migracije
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'rollback'
+        working-directory: apps/backend/timescale
+        env:
+          DATABASE_URL: ${{ secrets.TIMESCALE_DATABASE_URL }}
+        run: |
+          echo "⏪ Vraćanje poslednje migracije..."
+          dbmate --migrations-dir ./migrations rollback
+          echo "✅ Rollback uspešno izvršen!"
+
+      - name: Finalni status
+        if: always()
+        working-directory: apps/backend/timescale
+        env:
+          DATABASE_URL: ${{ secrets.TIMESCALE_DATABASE_URL }}
+        run: |
+          echo "📊 Finalni status migracija:"
+          dbmate --migrations-dir ./migrations status
+
+      - name: Notifikacija na Slack (opciono)
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: |
+            TimescaleDB Migracije: ${{ job.status }}
+            Branch: ${{ github.ref }}
+            Commit: ${{ github.sha }}
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        continue-on-error: true
