@@ -71,15 +71,3 @@ jobs:
         run: |
           echo "📊 Finalni status migracija:"
           dbmate --migrations-dir ./migrations status
-
-      - name: Notifikacija na Slack (opciono)
-        if: always()
-        uses: 8398a7/action-slack@v3
-        with:
-          status: ${{ job.status }}
-          text: |
-            TimescaleDB Migracije: ${{ job.status }}
-            Branch: ${{ github.ref }}
-            Commit: ${{ github.sha }}
-          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
-        continue-on-error: true
