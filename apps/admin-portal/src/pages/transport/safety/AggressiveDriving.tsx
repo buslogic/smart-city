@@ -129,15 +129,16 @@ const AggressiveDriving: React.FC = () => {
       );
     },
     enabled: !!selectedVehicle,
-    onSuccess: (data) => {
-      // Debug log za produkciju
-      if (data?.dataPoints) {
-        const severeCounts = data.dataPoints.filter((p: any) => p.eventType && p.severity >= 4).length;
-        const moderateCounts = data.dataPoints.filter((p: any) => p.eventType && p.severity === 3).length;
-        console.log(`[AggressiveDriving] Chart loaded: ${data.dataPoints.length} points, ${severeCounts} severe, ${moderateCounts} moderate`);
-      }
-    },
   });
+
+  // Debug log za produkciju
+  useEffect(() => {
+    if (chartData?.dataPoints) {
+      const severeCounts = chartData.dataPoints.filter((p: any) => p.eventType && p.severity >= 4).length;
+      const moderateCounts = chartData.dataPoints.filter((p: any) => p.eventType && p.severity === 3).length;
+      console.log(`[AggressiveDriving] Chart loaded: ${chartData.dataPoints.length} points, ${severeCounts} severe, ${moderateCounts} moderate`);
+    }
+  }, [chartData]);
 
   // Table columns
   const columns = [
