@@ -131,14 +131,6 @@ const AggressiveDriving: React.FC = () => {
     enabled: !!selectedVehicle,
   });
 
-  // Debug log za produkciju
-  useEffect(() => {
-    if (chartData?.dataPoints) {
-      const severeCounts = chartData.dataPoints.filter((p: any) => p.eventType && p.severity >= 4).length;
-      const moderateCounts = chartData.dataPoints.filter((p: any) => p.eventType && p.severity === 3).length;
-      console.log(`[AggressiveDriving] Chart loaded: ${chartData.dataPoints.length} points, ${severeCounts} severe, ${moderateCounts} moderate`);
-    }
-  }, [chartData]);
 
   // Table columns
   const columns = [
@@ -265,10 +257,6 @@ const AggressiveDriving: React.FC = () => {
     if (payload.eventType) {
       let fill = '#52c41a'; // green for normal
       // severity je sada INTEGER (1=normal, 3=moderate, 5=severe)
-      // Debug log za produkciju
-      if (index % 100 === 0) { // Log svakih 100 tačaka da ne zagušimo konzolu
-        console.log(`[AggressiveDriving] Event ${index}: severity=${payload.severity}, type=${typeof payload.severity}`);
-      }
       
       if (payload.severity >= 4) {
         fill = '#ff4d4f'; // red for severe (4-5)
