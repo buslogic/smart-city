@@ -85,12 +85,12 @@ const MainLayout: React.FC = () => {
           href: '/transport/dispatcher/gps-sync',
           icon: RefreshCw,
         },
-        hasPermission('dispatcher:view_analytics') && {
+        hasPermission('safety:view_aggressive_driving') && {
           name: 'Bezbednost - Agresivna vožnja',
           href: '/transport/safety/aggressive-driving',
           icon: AlertTriangle,
         },
-        hasPermission('dispatcher:view_analytics') && {
+        hasPermission('safety:view_monthly_report') && {
           name: 'Bezbednost - Mesečni izveštaj',
           href: '/transport/safety/monthly-report',
           icon: FileText,

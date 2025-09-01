@@ -103,16 +103,6 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
             </Button>
           </Form.Item>
         </Form>
-
-        <div className="mt-6 text-center">
-          <div className="text-sm text-gray-600">
-            <Text type="secondary">Test nalozi:</Text>
-          </div>
-          <div className="mt-2 space-y-1 text-xs text-gray-500">
-            <div>admin@smart-city.rs - Lozinka: Test123!</div>
-            <div>petar.petrovic@smart-city.rs - Lozinka: Test123!</div>
-          </div>
-        </div>
       </Card>
     </div>
   );

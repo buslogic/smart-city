@@ -457,6 +457,185 @@ npm run start:debug
 - Importovano 604 GPS tačaka za vozilo P93597
 - PostGIS uspešno računa kilometražu i rute
 
+## 🗄️ KRITIČNO: TimescaleDB Migracije
+
+### ⚠️ OBAVEZNO PRAVILO:
+**NIKADA ne izvršavaj SQL komande direktno na TimescaleDB bazi!**
+Sve promene MORAJU proći kroz dbmate migracije zbog LIVE servera.
+
+### Lokacija i komande:
+```bash
+# UVEK prelazi u ovaj direktorijum pre rada sa migracijama:
+cd /home/kocev/smart-city/apps/backend/timescale
+
+# Proveri status migracija:
+export PATH=$PATH:~/bin && dbmate --migrations-dir ./migrations status
+
+# Pokreni sve migracije:
+export PATH=$PATH:~/bin && dbmate --migrations-dir ./migrations up
+
+# Rollback poslednje migracije:
+export PATH=$PATH:~/bin && dbmate --migrations-dir ./migrations rollback
+
+# Kreiraj novu migraciju:
+export PATH=$PATH:~/bin && dbmate --migrations-dir ./migrations new naziv_migracije
+```
+
+### Struktura:
+```
+apps/backend/timescale/
+├── .env                    # DATABASE_URL za TimescaleDB
+├── dbmate.yml             # Konfiguracija dbmate
+└── migrations/            # SQL migracije
+    ├── 20250831_initial_schema.sql
+    ├── 20250901_vehicle_id_constraint.sql
+    └── 20250901_cleanup_test_data.sql
+```
+
+### Pravila pisanja migracija:
+1. **Uvek koristi IF EXISTS/IF NOT EXISTS** za idempotentnost
+2. **Dodaj RAISE NOTICE** za praćenje
+3. **Implementiraj rollback (migrate:down)** sekciju
+4. **Za TimescaleDB specifično:**
+   - Koristi CASCADE za brisanje indeksa sa chunk-ova
+   - Proveri da li je chunk kompresovan pre modifikacije
+   - Koristi tačne timestamp vrednosti za DELETE operacije
+
+### Zašto je ovo kritično:
+- LIVE server koristi iste migracije
+- Ručne izmene se gube pri deploy-u
+- Rollback mora biti moguć
+- Sve promene moraju biti reverzibilne
+
+## ⚠️ KRITIČNA NAPOMENA: Vehicle Identifikatori i VehicleMapper
+
+### Problem sa ID-evima (Ažurirano: 01.09.2025)
+Sistem koristi TRI različita identifikatora za vozila:
+
+1. **`id`** - PRIMARNI KLJUČ u našoj MySQL bazi (`bus_vehicles`) - NEPROMENLJIV
+2. **`legacy_id`** - ID iz legacy sistema (unique u `bus_vehicles`) - samo za legacy integraciju
+3. **`garage_number`** - garažni broj vozila (unique, npr. "P93597") - MOŽE SE PROMENITI
+
+### 🔴 OBAVEZNO KORISTI VEHICLEMAPPER HELPER!
+
+**NIKADA ne radi direktne konverzije između identifikatora!**
+
+#### Lokacije VehicleMapper helper-a:
+- **Frontend:** `/apps/admin-portal/src/utils/vehicle-mapper.ts`
+- **Backend:** `/apps/backend/src/common/helpers/vehicle-mapper.ts`
+
+#### Pravilno korišćenje:
+```typescript
+// ✅ ISPRAVNO - koristi VehicleMapper
+import { VehicleMapper } from '@/utils/vehicle-mapper';
+
+// Konvertuj ID u garage number za prikaz
+const garageNo = await VehicleMapper.idToGarageNumber(460); // "P93597"
+
+// Konvertuj garage number u ID za API pozive
+const vehicleId = await VehicleMapper.garageNumberToId("P93597"); // 460
+
+// Reši bilo koji identifikator u vehicle ID
+const id = await VehicleMapper.resolveVehicleId("P93597"); // 460
+const id = await VehicleMapper.resolveVehicleId(460); // 460
+
+// ❌ POGREŠNO - direktna konverzija
+const vehicle = vehicles.find(v => v.garageNumber === "P93597");
+const id = vehicle.id; // NE RADI OVO!
+```
+
+### ✅ KONVENCIJA ZA VEHICLE ID (REFAKTORISANO):
+
+**Sve operacije sada koriste `vehicle_id` (broj) kao primarni identifikator:**
+
+1. **GPS Sync:**
+   - Frontend šalje: `vehicleIds: [460, 461]` (brojevi)
+   - Backend prima vehicle IDs i mapira na garage numbers za legacy
+
+2. **Vehicle Analytics:**
+   - API poziv: `/api/gps-analytics/vehicle?vehicleId=460`
+   - TimescaleDB query: `WHERE vehicle_id = 460`
+
+3. **Aggressive Driving:**
+   - API poziv: `/api/driving-behavior/vehicle/460/events`
+   - Koristi vehicle ID kroz celu aplikaciju
+
+4. **TimescaleDB:**
+   - Unique constraint: `(vehicle_id, time)` - NE VIŠE (garage_no, time)
+   - `garage_no` se čuva ali nije primarni ključ
+   - Može se ažurirati ako se promeni u MySQL
+
+### 📝 Zašto vehicle ID umesto garage_number?
+
+**Problem:** Garažni broj može da se promeni (npr. P93597 → P94001)
+**Posledice ako koristimo garage_number:**
+- Gubimo kontinuitet GPS podataka
+- Statistike se "cepaju" na dva vozila
+- Legacy integracija se kvari
+
+**Rešenje:** Koristimo nepromenljiv `vehicle_id`:
+- ID se nikad ne menja
+- Garažni broj može da se menja bez problema
+- Svi istorijski podaci ostaju povezani
+
+### 🛠️ Migracija baze podataka:
+
+Ako radiš sa postojećim podacima, pokreni migraciju:
+```bash
+# TimescaleDB migracija
+psql -U smartcity_ts -d smartcity_gps -f scripts/timescale-migration-vehicle-id.sql
+```
+
+### ⚡ Kad MORAŠ koristiti VehicleMapper:
+
+1. **Svaka konverzija između ID formata**
+2. **Prikazivanje vozila korisniku** (ID → garage number)
+3. **API pozivi** (uvek vehicle ID)
+4. **Legacy integracija** (vehicle ID → garage number)
+5. **Import/Export podataka**
+
+### 🎯 Primeri iz koda:
+
+```typescript
+// GPS Sync komponenta
+const handleStartSync = async () => {
+  // Koristimo vehicle IDs
+  const vehicleIds = [460, 461]; // NE ["P93597", "P93598"]
+  
+  // Ali za prikaz koristimo garage numbers
+  const garageNumbers = await VehicleMapper.mapIdsToGarageNumbers(vehicleIds);
+  console.log(`Sinhroniuzjem: ${Array.from(garageNumbers.values()).join(', ')}`);
+  
+  await gpsSyncService.startSync({ vehicleIds });
+};
+
+// Backend servis
+async performSync(vehicleId: number) {
+  const vehicle = await this.vehicleMapper.getVehicleForGPS(vehicleId);
+  // vehicle.id = 460 (za TimescaleDB)
+  // vehicle.garageNumber = "P93597" (za legacy)
+  
+  // Legacy query koristi garage number
+  const legacyData = await mysql.query(
+    `SELECT * FROM ${vehicle.garageNumber}gps`
+  );
+  
+  // TimescaleDB insert koristi vehicle ID
+  await pg.query(
+    'INSERT INTO gps_data (vehicle_id, garage_no, ...) VALUES ($1, $2, ...)',
+    [vehicle.id, vehicle.garageNumber, ...]
+  );
+}
+```
+
+### ❗ VAŽNO za nove instance:
+
+1. **NIKAD ne pretpostavljaj format identifikatora**
+2. **UVEK koristi VehicleMapper za konverzije**
+3. **Ako VehicleMapper nema metod koji ti treba, DODAJ ga**
+4. **Nakon CRUD operacija pozovi `VehicleMapper.clearCache()`**
+5. **Za debug koristi `VehicleMapper.debugCache()`**
+
 ## ✅ Checklist za development
 
 **Backend:**

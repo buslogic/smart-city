@@ -14,6 +14,7 @@ import dayjs, { Dayjs } from 'dayjs';
 import { Line, Column } from '@ant-design/plots';
 import axios from 'axios';
 import { TokenManager } from '../../../utils/token';
+import { VehicleMapper } from '../../../utils/vehicle-mapper';
 
 const { RangePicker } = DatePicker;
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3010';
@@ -56,7 +57,7 @@ interface GPSAnalytics {
 
 export default function VehicleAnalytics() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [selectedVehicle, setSelectedVehicle] = useState<number | null>(null);
+  const [selectedVehicle, setSelectedVehicle] = useState<number | null>(null); // vehicle ID
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs]>([dayjs().startOf('day'), dayjs().endOf('day')]);
   const [analytics, setAnalytics] = useState<GPSAnalytics | null>(null);
   const [loading, setLoading] = useState(false);
@@ -123,7 +124,7 @@ export default function VehicleAnalytics() {
     try {
       const response = await axios.get(`${API_BASE}/api/gps-analytics/vehicle`, {
         params: {
-          vehicleId: selectedVehicle,
+          vehicleId: selectedVehicle, // prosleđujemo vehicle ID
           startDate: dateRange[0].toISOString(),
           endDate: dateRange[1].toISOString()
         },
@@ -345,10 +346,10 @@ export default function VehicleAnalytics() {
             <Col xs={6} sm={6} md={4}>
               <Card hoverable>
                 <Statistic
-                  title="Mirovanje"
+                  title="Vreme mirovanja"
                   value={analytics.idleTime}
                   precision={1}
-                  suffix="h"
+                  suffix="sati"
                   valueStyle={{ color: '#faad14' }}
                 />
               </Card>

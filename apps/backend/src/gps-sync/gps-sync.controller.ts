@@ -23,12 +23,12 @@ import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 export class StartGpsSyncDto {
   @ApiProperty({ required: false })
   @IsOptional()
-  @IsString()
-  vehicleId?: string | null;
+  @IsNumber()
+  vehicleId?: number | null;
 
-  @ApiProperty({ required: false, type: [String] })
+  @ApiProperty({ required: false, type: [Number] })
   @IsOptional()
-  vehicleIds?: string[] | null;
+  vehicleIds?: number[] | null;
 
   @ApiProperty()
   @IsDateString()

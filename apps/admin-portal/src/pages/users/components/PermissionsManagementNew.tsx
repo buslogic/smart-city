@@ -81,6 +81,17 @@ const PermissionsManagement: React.FC = () => {
         { id: 27, name: 'dispatcher:view_analytics', resource: 'dispatcher_analytics', action: 'read', description: 'Pregled analitike vozila', createdAt: '', updatedAt: '' },
         { id: 28, name: 'dispatcher:manage_routes', resource: 'dispatcher_routes', action: 'manage', description: 'Upravljanje rutama', createdAt: '', updatedAt: '' },
         { id: 29, name: 'dispatcher:emergency_actions', resource: 'dispatcher', action: 'emergency', description: 'Hitne akcije u dispečerskom modulu', createdAt: '', updatedAt: '' },
+        
+        // GPS Sync permission
+        { id: 30, name: 'dispatcher:sync_gps', resource: 'dispatcher', action: 'sync_gps', description: 'GPS sinhronizacija dispečerskog modula', createdAt: '', updatedAt: '' },
+        
+        // Safety/Bezbednost permissions
+        { id: 31, name: 'safety:view_aggressive_driving', resource: 'safety', action: 'view_aggressive', description: 'Pregled agresivne vožnje', createdAt: '', updatedAt: '' },
+        { id: 32, name: 'safety:view_monthly_report', resource: 'safety', action: 'view_report', description: 'Pregled mesečnog izveštaja bezbednosti', createdAt: '', updatedAt: '' },
+        
+        // Settings permissions
+        { id: 33, name: 'settings:general:read', resource: 'settings', action: 'read', description: 'Pregled opštih podešavanja', createdAt: '', updatedAt: '' },
+        { id: 34, name: 'settings:general:update', resource: 'settings', action: 'update', description: 'Ažuriranje opštih podešavanja', createdAt: '', updatedAt: '' },
       ]);
     }
   };

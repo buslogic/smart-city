@@ -45,6 +45,7 @@ import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 import { useQuery } from '@tanstack/react-query';
 import { vehiclesService } from '../../../services/vehicles.service';
+import { VehicleMapper } from '../../../utils/vehicle-mapper';
 import { 
   drivingBehaviorService, 
   type DrivingEvent, 
@@ -58,7 +59,7 @@ const { Text, Title } = Typography;
 
 const AggressiveDriving: React.FC = () => {
   // State
-  const [selectedVehicle, setSelectedVehicle] = useState<number | null>(null);
+  const [selectedVehicle, setSelectedVehicle] = useState<number | null>(null); // vehicle ID
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs]>([
     dayjs().startOf('day'),  // Početak današnjeg dana (00:00)
     dayjs().endOf('day'),    // Kraj današnjeg dana (23:59)
@@ -76,8 +77,8 @@ const AggressiveDriving: React.FC = () => {
   // Set default vehicle when vehicles load
   useEffect(() => {
     if (vehiclesData?.data?.length && !selectedVehicle) {
-      // Find vehicle P93597 (id: 460) or use first vehicle
-      const defaultVehicle = vehiclesData.data.find(v => v.id === 460) || vehiclesData.data[0];
+      // Find vehicle P93597 or use first vehicle
+      const defaultVehicle = vehiclesData.data.find(v => v.garageNumber === 'P93597') || vehiclesData.data[0];
       setSelectedVehicle(defaultVehicle.id);
     }
   }, [vehiclesData, selectedVehicle]);

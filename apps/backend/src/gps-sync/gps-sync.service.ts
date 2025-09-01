@@ -1,12 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { VehicleMapperService } from '../common/helpers/vehicle-mapper';
 import * as mysql from 'mysql2/promise';
 import { Pool } from 'pg';
 import * as crypto from 'crypto';
 
 interface SyncParams {
-  vehicleId?: string | null;  // za kompatibilnost
-  vehicleIds?: string[] | null;  // nova opcija
+  vehicleId?: number | null;  // sada je vehicle ID broj
+  vehicleIds?: number[] | null;  // lista vehicle ID-eva
   startDate: string;
   endDate: string;
   batchSize: number;
@@ -21,7 +22,10 @@ export class GpsSyncService {
   private shouldStop = false;
   private pgPool: Pool | null = null;
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private vehicleMapper: VehicleMapperService,
+  ) {}
 
   async startSync(userId: number, params: SyncParams) {
     if (this.isRunning) {
@@ -43,12 +47,15 @@ export class GpsSyncService {
     this.isRunning = true;
     this.shouldStop = false;
 
-    // Odredi opis vozila za log
+    // Odredi opis vozila za log - konvertuj ID-eve u garage numbers za prikaz
     let vehicleDescription: string | null = null;
     if (params.vehicleIds && params.vehicleIds.length > 0) {
-      vehicleDescription = `${params.vehicleIds.length} vozila: ${params.vehicleIds.slice(0, 5).join(', ')}${params.vehicleIds.length > 5 ? '...' : ''}`;
+      const garageMap = await this.vehicleMapper.mapIdsToGarageNumbers(params.vehicleIds.slice(0, 5));
+      const garageNumbers = params.vehicleIds.slice(0, 5).map(id => garageMap.get(id) || `ID:${id}`);
+      vehicleDescription = `${params.vehicleIds.length} vozila: ${garageNumbers.join(', ')}${params.vehicleIds.length > 5 ? '...' : ''}`;
     } else if (params.vehicleId) {
-      vehicleDescription = params.vehicleId;
+      const garageNumber = await this.vehicleMapper.idToGarageNumber(params.vehicleId);
+      vehicleDescription = garageNumber;
     }
 
     // Kreiraj log u bazi
@@ -308,31 +315,31 @@ export class GpsSyncService {
         max: 5,
       });
 
-      // Određi koja vozila treba sinhronizovati
+      // Određi koja vozila treba sinhronizovati - sada koristimo vehicle IDs
       let vehicles;
       if (params.vehicleIds && params.vehicleIds.length > 0) {
-        // Sinhronizuj specifičnu listu vozila
+        // Sinhronizuj specifičnu listu vozila po ID-evima
         vehicles = await this.prisma.busVehicle.findMany({
           where: { 
-            garageNumber: { 
+            id: { 
               in: params.vehicleIds 
             } 
           },
           select: { id: true, garageNumber: true },
         });
         if (vehicles.length === 0) {
-          throw new Error(`Nijedno vozilo nije pronađeno sa zadatim garage brojevima`);
+          throw new Error(`Nijedno vozilo nije pronađeno sa zadatim ID-evima`);
         }
         this.logger.log(`📋 Pronađeno ${vehicles.length} od ${params.vehicleIds.length} traženih vozila`);
-        this.logger.log(`📋 Lista vozila za sinhronizaciju: ${vehicles.map(v => v.garageNumber).join(', ')}`);
+        this.logger.log(`📋 Lista vozila za sinhronizaciju: ${vehicles.map(v => `${v.garageNumber} (ID:${v.id})`).join(', ')}`);
       } else if (params.vehicleId) {
-        // Sinhronizuj jedno vozilo (za kompatibilnost)
-        const vehicle = await this.prisma.busVehicle.findFirst({
-          where: { garageNumber: params.vehicleId },
+        // Sinhronizuj jedno vozilo po ID-u
+        const vehicle = await this.prisma.busVehicle.findUnique({
+          where: { id: params.vehicleId },
           select: { id: true, garageNumber: true },
         });
         if (!vehicle) {
-          throw new Error(`Vozilo sa garage brojem ${params.vehicleId} nije pronađeno`);
+          throw new Error(`Vozilo sa ID ${params.vehicleId} nije pronađeno`);
         }
         vehicles = [vehicle];
       } else {
@@ -447,7 +454,7 @@ export class GpsSyncService {
                 
                 queryParams.push(
                   new Date(point.captured),
-                  ('id' in vehicle ? vehicle.id : null),
+                  vehicle.id,  // čuvamo vehicle_id za JOIN operacije, ali nije primarni ključ
                   point.garageNo,
                   parseFloat(point.lat),
                   parseFloat(point.lng),
@@ -457,7 +464,7 @@ export class GpsSyncService {
                   point.course || 0,
                   point.alt || 0,
                   point.state || 0,
-                  point.inroute || 0,
+                  Boolean(point.inroute),  // Konvertuj u boolean
                   'gps_sync'
                 );
                 
@@ -469,7 +476,8 @@ export class GpsSyncService {
                   time, vehicle_id, garage_no, lat, lng, location,
                   speed, course, alt, state, in_route, data_source
                 ) VALUES ${values.join(', ')}
-                ON CONFLICT (time, garage_no) DO UPDATE SET
+                ON CONFLICT (vehicle_id, time) DO UPDATE SET
+                  garage_no = EXCLUDED.garage_no,  -- ažuriraj garage_no ako se promenio
                   lat = EXCLUDED.lat,
                   lng = EXCLUDED.lng,
                   location = EXCLUDED.location,

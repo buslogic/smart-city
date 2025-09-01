@@ -36,7 +36,7 @@ export interface GpsSyncStatus {
 
 export interface StartSyncParams {
   vehicleId?: string | null;  // za kompatibilnost sa starim kodom
-  vehicleIds?: string[] | null;  // nova opcija za listu vozila
+  vehicleIds?: number[] | null;  // nova opcija za listu vozila - koristi number[] jer su vehicle ID-jevi brojevi
   startDate: string;
   endDate: string;
   batchSize: number;

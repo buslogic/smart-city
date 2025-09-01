@@ -78,7 +78,7 @@ class DrivingBehaviorService {
   }
 
   /**
-   * Get driving events for a specific vehicle
+   * Get driving events for a specific vehicle by ID
    */
   async getVehicleEvents(
     vehicleId: number,
@@ -100,7 +100,7 @@ class DrivingBehaviorService {
   }
 
   /**
-   * Get statistics for a specific vehicle
+   * Get statistics for a specific vehicle by ID
    */
   async getVehicleStatistics(
     vehicleId: number,
@@ -123,7 +123,7 @@ class DrivingBehaviorService {
   }
 
   /**
-   * Get chart data for a specific vehicle
+   * Get chart data for a specific vehicle by ID
    */
   async getVehicleChartData(
     vehicleId: number,

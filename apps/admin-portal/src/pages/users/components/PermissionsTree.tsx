@@ -20,7 +20,9 @@ import {
   Bus,
   Car,
   Map,
-  Navigation
+  Navigation,
+  RefreshCw,
+  AlertTriangle
 } from 'lucide-react';
 import type { Permission } from '../../../types/rbac.types';
 
@@ -170,6 +172,30 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
             ],
           },
           {
+            id: 'sinhronizacija-vozila',
+            name: 'Sinhronizacija Vozila',
+            type: 'submenu',
+            icon: <RefreshCw className="h-4 w-4" />,
+            color: 'text-green-600',
+            children: [
+              {
+                id: 'vehicle-sync',
+                name: 'Sinhronizacija vozila',
+                type: 'section',
+                icon: <RefreshCw className="h-4 w-4" />,
+                children: allPermissions
+                  .filter(p => p.resource === 'vehicles' && p.action === 'sync')
+                  .map(p => ({
+                    id: `perm-${p.id}`,
+                    name: getPermissionLabel(p),
+                    type: 'permission' as const,
+                    permission: p,
+                    color: getPermissionColor(p.action),
+                  })),
+              },
+            ],
+          },
+          {
             id: 'dispecerski-modul',
             name: 'Dispečerski Modul',
             type: 'submenu',
@@ -177,12 +203,12 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
             color: 'text-indigo-600',
             children: [
               {
-                id: 'dispatcher-main',
-                name: 'Osnovno upravljanje',
+                id: 'dispatcher-map',
+                name: 'Mapa i vozila',
                 type: 'section',
-                icon: <Navigation className="h-4 w-4" />,
+                icon: <Map className="h-4 w-4" />,
                 children: allPermissions
-                  .filter(p => p.resource === 'dispatcher' && !p.name.includes('view'))
+                  .filter(p => p.resource === 'dispatcher_map' || (p.resource === 'dispatcher' && p.action === 'track_vehicles'))
                   .map(p => ({
                     id: `perm-${p.id}`,
                     name: getPermissionLabel(p),
@@ -192,12 +218,12 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
                   })),
               },
               {
-                id: 'dispatcher-views',
-                name: 'Prikazi i Analitika',
+                id: 'dispatcher-analytics',
+                name: 'Analiza',
                 type: 'section',
-                icon: <Map className="h-4 w-4" />,
+                icon: <BarChart3 className="h-4 w-4" />,
                 children: allPermissions
-                  .filter(p => p.resource === 'dispatcher_map' || p.resource === 'dispatcher_analytics')
+                  .filter(p => p.resource === 'dispatcher_analytics')
                   .map(p => ({
                     id: `perm-${p.id}`,
                     name: getPermissionLabel(p),
@@ -207,12 +233,51 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
                   })),
               },
               {
-                id: 'dispatcher-routes',
-                name: 'Rute',
+                id: 'dispatcher-sync',
+                name: 'Sinhronizacija',
                 type: 'section',
-                icon: <Map className="h-4 w-4" />,
+                icon: <RefreshCw className="h-4 w-4" />,
                 children: allPermissions
-                  .filter(p => p.resource === 'dispatcher_routes')
+                  .filter(p => p.resource === 'dispatcher' && p.action === 'sync_gps')
+                  .map(p => ({
+                    id: `perm-${p.id}`,
+                    name: getPermissionLabel(p),
+                    type: 'permission' as const,
+                    permission: p,
+                    color: getPermissionColor(p.action),
+                  })),
+              },
+            ],
+          },
+          {
+            id: 'bezbednost',
+            name: 'Bezbednost',
+            type: 'submenu',
+            icon: <AlertTriangle className="h-4 w-4" />,
+            color: 'text-red-600',
+            children: [
+              {
+                id: 'aggressive-driving',
+                name: 'Agresivna vožnja',
+                type: 'section',
+                icon: <AlertTriangle className="h-4 w-4" />,
+                children: allPermissions
+                  .filter(p => p.resource === 'safety' && (p.action === 'view_aggressive' || p.name.includes('aggressive')))
+                  .map(p => ({
+                    id: `perm-${p.id}`,
+                    name: getPermissionLabel(p),
+                    type: 'permission' as const,
+                    permission: p,
+                    color: getPermissionColor(p.action),
+                  })),
+              },
+              {
+                id: 'monthly-report',
+                name: 'Mesečni izveštaj',
+                type: 'section',
+                icon: <FileText className="h-4 w-4" />,
+                children: allPermissions
+                  .filter(p => p.resource === 'safety' && (p.action === 'view_report' || p.name.includes('report')))
                   .map(p => ({
                     id: `perm-${p.id}`,
                     name: getPermissionLabel(p),
@@ -241,6 +306,21 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
             color: 'text-gray-600',
             children: [
               {
+                id: 'general-settings',
+                name: 'Opšta podešavanja',
+                type: 'section',
+                icon: <Settings className="h-4 w-4" />,
+                children: allPermissions
+                  .filter(p => p.resource === 'settings')
+                  .map(p => ({
+                    id: `perm-${p.id}`,
+                    name: getPermissionLabel(p),
+                    type: 'permission' as const,
+                    permission: p,
+                    color: getPermissionColor(p.action),
+                  })),
+              },
+              {
                 id: 'legacy-baze',
                 name: 'Legacy Baze',
                 type: 'section',
@@ -262,36 +342,6 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
                 icon: <Database className="h-4 w-4" />,
                 children: allPermissions
                   .filter(p => p.resource === 'legacy_tables')
-                  .map(p => ({
-                    id: `perm-${p.id}`,
-                    name: getPermissionLabel(p),
-                    type: 'permission' as const,
-                    permission: p,
-                    color: getPermissionColor(p.action),
-                  })),
-              },
-              {
-                id: 'api-settings',
-                name: 'API Podešavanja',
-                type: 'section',
-                icon: <Globe className="h-4 w-4" />,
-                children: allPermissions
-                  .filter(p => p.resource === 'api_settings')
-                  .map(p => ({
-                    id: `perm-${p.id}`,
-                    name: getPermissionLabel(p),
-                    type: 'permission' as const,
-                    permission: p,
-                    color: getPermissionColor(p.action),
-                  })),
-              },
-              {
-                id: 'system-settings',
-                name: 'Sistemska podešavanja',
-                type: 'section',
-                icon: <Server className="h-4 w-4" />,
-                children: allPermissions
-                  .filter(p => p.resource === 'system_settings' || p.resource === 'settings')
                   .map(p => ({
                     id: `perm-${p.id}`,
                     name: getPermissionLabel(p),

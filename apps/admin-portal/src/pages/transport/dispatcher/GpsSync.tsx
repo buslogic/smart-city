@@ -41,6 +41,7 @@ import { gpsSyncService } from '../../../services/gps-sync.service';
 import { vehiclesService } from '../../../services/vehicles.service';
 import type { GpsSyncLog, GpsSyncStatus } from '../../../services/gps-sync.service';
 import { usePermissions } from '../../../hooks/usePermissions';
+import { VehicleMapper } from '../../../utils/vehicle-mapper';
 import dayjs from 'dayjs';
 
 const { Option } = Select;
@@ -54,10 +55,10 @@ const GpsSync: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [polling, setPolling] = useState<ReturnType<typeof setInterval> | null>(null);
   
-  // Sync parametri
+  // Sync parametri - sada koristimo vehicle ID umesto garage number
   const [selectionMode, setSelectionMode] = useState<'single' | 'multiple' | 'all'>('single');
-  const [selectedVehicle, setSelectedVehicle] = useState<string>('all');
-  const [selectedVehicles, setSelectedVehicles] = useState<string[]>([]);
+  const [selectedVehicle, setSelectedVehicle] = useState<number | null>(null); // vehicle ID
+  const [selectedVehicles, setSelectedVehicles] = useState<number[]>([]); // vehicle IDs
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
     dayjs().startOf('day'),
     dayjs().endOf('day')
@@ -159,19 +160,24 @@ const GpsSync: React.FC = () => {
       return;
     }
 
-    // Pripremi listu vozila
-    let vehicleList: string[] | null = null;
+    // Pripremi listu vozila - sada šaljemo vehicle IDs
+    let vehicleList: number[] | null = null;
     let syncDescription = '';
     
     if (selectionMode === 'all') {
       vehicleList = null;
       syncDescription = 'sva vozila';
-    } else if (selectionMode === 'single') {
+    } else if (selectionMode === 'single' && selectedVehicle) {
       vehicleList = [selectedVehicle];
-      syncDescription = `vozilo ${selectedVehicle}`;
+      // Dohvati garage number za prikaz
+      const garageNo = await VehicleMapper.idToGarageNumber(selectedVehicle);
+      syncDescription = `vozilo ${garageNo}`;
     } else if (selectionMode === 'multiple') {
       vehicleList = selectedVehicles;
-      syncDescription = `${selectedVehicles.length} vozila (${selectedVehicles.slice(0, 3).join(', ')}${selectedVehicles.length > 3 ? '...' : ''})`;
+      // Dohvati garage numbers za prikaz
+      const garageNumbers = await VehicleMapper.mapIdsToGarageNumbers(selectedVehicles);
+      const displayNames = selectedVehicles.slice(0, 3).map(id => garageNumbers.get(id) || `ID:${id}`);
+      syncDescription = `${selectedVehicles.length} vozila (${displayNames.join(', ')}${selectedVehicles.length > 3 ? '...' : ''})`;
     }
 
     const confirmed = window.confirm(
@@ -573,7 +579,7 @@ const GpsSync: React.FC = () => {
                   onChange={(e) => {
                     setSelectionMode(e.target.value);
                     setSelectedVehicles([]);
-                    setSelectedVehicle('');
+                    setSelectedVehicle(null);
                   }}
                   disabled={isRunning}
                 >
@@ -596,8 +602,8 @@ const GpsSync: React.FC = () => {
                       (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
                     }
                     options={vehicles.map(v => ({
-                      value: v.garageNumber,
-                      label: `${v.garageNumber} - ${v.plateNumber}`,
+                      value: v.id, // koristimo vehicle ID kao value
+                      label: `${v.garageNumber} - ${v.registrationNumber || v.plateNumber || 'N/A'}`,
                     }))}
                   />
                 </Form.Item>
@@ -617,8 +623,8 @@ const GpsSync: React.FC = () => {
                       (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
                     }
                     options={vehicles.map(v => ({
-                      value: v.garageNumber,
-                      label: `${v.garageNumber} - ${v.plateNumber}`,
+                      value: v.id, // koristimo vehicle ID kao value
+                      label: `${v.garageNumber} - ${v.registrationNumber || v.plateNumber || 'N/A'}`,
                     }))}
                   />
                   {selectedVehicles.length > 0 && (
@@ -703,8 +709,10 @@ const GpsSync: React.FC = () => {
                 <Col span={8}>
                   <Form.Item label="Procenjeno vreme">
                     <div className="text-lg">
-                      {selectedVehicle === 'all' 
+                      {selectionMode === 'all' 
                         ? `~${Math.round(vehicles.length * dateRange[1].diff(dateRange[0], 'day') * 2)} min`
+                        : selectionMode === 'multiple'
+                        ? `~${Math.round(selectedVehicles.length * dateRange[1].diff(dateRange[0], 'day') * 2)} min`
                         : `~${Math.round(dateRange[1].diff(dateRange[0], 'day') * 2)} min`
                       }
                     </div>
