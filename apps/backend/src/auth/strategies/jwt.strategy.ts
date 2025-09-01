@@ -39,7 +39,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Session je istekla');
     }
 
-    // Učitavanje korisnika sa ulogama i permisijama
+    // Učitavanje korisnika sa ulogama
     const user = await this.prisma.user.findUnique({
       where: { 
         id: payload.sub,
@@ -48,18 +48,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       include: {
         roles: {
           include: {
-            role: {
-              include: {
-                permissions: {
-                  include: {
-                    permission: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
+            role: true
+          }
+        }
+      }
     });
 
     if (!user) {
@@ -68,8 +60,24 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     // Formatiranje podataka o korisniku
     const roles = user.roles.map(ur => ur.role.name);
-    const permissions = user.roles.flatMap(ur =>
-      ur.role.permissions.map(rp => rp.permission.name)
+    const roleIds = user.roles.map(ur => ur.roleId);
+    
+    // Učitaj permisije za sve role korisnika
+    const rolesWithPermissions = await this.prisma.role.findMany({
+      where: {
+        id: { in: roleIds }
+      },
+      include: {
+        permissions: {
+          include: {
+            permission: true
+          }
+        }
+      }
+    });
+    
+    const permissions = rolesWithPermissions.flatMap(role =>
+      role.permissions.map(rp => rp.permission.name)
     );
 
     return {
