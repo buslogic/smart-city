@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Pool } from 'pg';
 import { GpsPointDto } from './dto/gps-batch.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import { createTimescalePool, testTimescaleConnection } from '../common/config/timescale.config';
 
 @Injectable()
 export class GpsIngestService {
@@ -9,20 +10,20 @@ export class GpsIngestService {
   private timescalePool: Pool;
 
   constructor(private prisma: PrismaService) {
-    // Kreiraj konekciju na TimescaleDB
-    this.timescalePool = new Pool({
-      host: process.env.TIMESCALE_HOST || 'localhost',
-      port: parseInt(process.env.TIMESCALE_PORT || '5433'),
-      database: process.env.TIMESCALE_DB || 'smartcity_gps',
-      user: process.env.TIMESCALE_USER || 'smartcity_ts',
-      password: process.env.TIMESCALE_PASSWORD || 'TimescalePass123!',
-      max: 20, // maksimalni broj konekcija u pool-u
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
-    });
+    // Kreiraj konekciju na TimescaleDB koristeći centralizovanu konfiguraciju
+    this.timescalePool = createTimescalePool();
 
     this.timescalePool.on('error', (err) => {
       this.logger.error('Neočekivana greška na TimescaleDB pool', err);
+    });
+
+    // Testiraj konekciju pri pokretanju
+    testTimescaleConnection(this.timescalePool).then(success => {
+      if (success) {
+        this.logger.log('✅ GpsIngestService povezan na TimescaleDB');
+      } else {
+        this.logger.error('❌ GpsIngestService nije mogao da se poveže na TimescaleDB');
+      }
     });
   }
 

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Pool } from 'pg';
 import { VehicleAnalyticsDto, HourlyDataDto, SpeedDistributionDto, DailyStatsDto } from './dto/vehicle-analytics.dto';
+import { createTimescalePool, testTimescaleConnection } from '../common/config/timescale.config';
 
 @Injectable()
 export class GpsAnalyticsService {
@@ -8,13 +9,16 @@ export class GpsAnalyticsService {
   private pgPool: Pool;
 
   constructor() {
-    this.pgPool = new Pool({
-      host: process.env.TIMESCALE_HOST || 'localhost',
-      port: parseInt(process.env.TIMESCALE_PORT || '5433'),
-      database: process.env.TIMESCALE_DB || 'smartcity_gps',
-      user: process.env.TIMESCALE_USER || 'smartcity_ts',
-      password: process.env.TIMESCALE_PASSWORD || 'TimescalePass123!',
-      max: 10,
+    // Koristi centralizovanu konfiguraciju za TimescaleDB
+    this.pgPool = createTimescalePool();
+    
+    // Testiraj konekciju
+    testTimescaleConnection(this.pgPool).then(success => {
+      if (success) {
+        this.logger.log('✅ GpsAnalyticsService povezan na TimescaleDB');
+      } else {
+        this.logger.error('❌ GpsAnalyticsService nije mogao da se poveže na TimescaleDB');
+      }
     });
   }
 
