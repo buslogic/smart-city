@@ -262,4 +262,32 @@ export class UsersService {
 
     return new UserResponseDto(updatedUser);
   }
+
+  async updateProfile(id: number, data: { avatar?: string | null }) {
+    return this.prisma.user.update({
+      where: { id },
+      data: {
+        avatar: data.avatar,
+      },
+    });
+  }
+
+  async findOneWithDetails(id: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      include: {
+        roles: {
+          include: {
+            role: true,
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+
+    return user;
+  }
 }

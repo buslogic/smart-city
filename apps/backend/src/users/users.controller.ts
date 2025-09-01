@@ -11,12 +11,15 @@ import {
   HttpStatus,
   Query,
   UseInterceptors,
-  ClassSerializerInterceptor
+  ClassSerializerInterceptor,
+  Req,
+  Request
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UserResponseDto } from './dto/user-response.dto';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 
@@ -92,5 +95,46 @@ export class UsersController {
     @Body('isActive') isActive: boolean
   ): Promise<UserResponseDto> {
     return this.usersService.toggleStatus(id, isActive);
+  }
+
+  @Get('profile')
+  @ApiOperation({ summary: 'Get current user profile' })
+  @ApiResponse({ status: 200, description: 'Profile retrieved successfully' })
+  async getProfile(@Request() req: any) {
+    const user = await this.usersService.findOneWithDetails(req.user.id);
+    return {
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      avatar: user.avatar || null,
+      isActive: user.isActive,
+      createdAt: user.createdAt,
+      lastLoginAt: user.lastLoginAt,
+      roles: user.roles?.map(ur => ur.role.name) || [],
+    };
+  }
+
+  @Patch('profile/avatar')
+  @ApiOperation({ summary: 'Update profile avatar' })
+  @ApiResponse({ status: 200, description: 'Avatar updated successfully' })
+  async updateAvatar(
+    @Request() req: any,
+    @Body() updateProfileDto: UpdateProfileDto
+  ) {
+    await this.usersService.updateProfile(req.user.id, {
+      avatar: updateProfileDto.avatarUrl
+    });
+    return this.getProfile(req);
+  }
+
+  @Delete('profile/avatar')
+  @ApiOperation({ summary: 'Remove profile avatar' })
+  @ApiResponse({ status: 200, description: 'Avatar removed successfully' })
+  async removeAvatar(@Request() req: any) {
+    await this.usersService.updateProfile(req.user.id, {
+      avatar: null
+    });
+    return this.getProfile(req);
   }
 }

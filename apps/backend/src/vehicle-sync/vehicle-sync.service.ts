@@ -42,6 +42,30 @@ export class VehicleSyncService {
     });
 
     if (!mapping) {
+      // Proveri da li postoji mapiranje ali je sync_enabled = false
+      const disabledMapping = await this.prisma.legacyTableMapping.findFirst({
+        where: {
+          localTableName: 'bus_vehicles',
+          syncEnabled: false,
+        },
+        include: {
+          legacyDatabase: true,
+        },
+      });
+
+      if (disabledMapping) {
+        throw new BadRequestException(
+          '⚠️ VAŽNO: Sinhronizacija je onemogućena!\n\n' +
+          'Mapiranje za bus_vehicles tabelu postoji ali opcija "Omogući sinhronizaciju" NIJE OZNAČENA.\n\n' +
+          '✅ Rešenje:\n' +
+          '1. Idite na Podešavanja > Legacy baze\n' +
+          '2. Pronađite mapiranje za bus_vehicles tabelu\n' +
+          '3. OZNAČITE checkbox "Omogući sinhronizaciju"\n' +
+          '4. Sačuvajte izmene\n' +
+          '5. Pokušajte ponovo sinhronizaciju'
+        );
+      }
+
       throw new NotFoundException(
         'Mapiranje za bus_vehicles tabelu nije konfigurisano. ' +
         'Molim idite na Podešavanja > Legacy baze i konfiguršite mapiranje tabele pre pokretanja sinhronizacije.'

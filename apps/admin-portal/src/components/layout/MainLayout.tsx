@@ -269,7 +269,7 @@ const MainLayout: React.FC = () => {
                           key: 'profile',
                           icon: <UserOutlined />,
                           label: 'Profil',
-                          onClick: () => console.log('Profil'),
+                          onClick: () => window.location.href = '/users/profile',
                         },
                         {
                           type: 'divider',

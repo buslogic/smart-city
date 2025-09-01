@@ -13,6 +13,7 @@ model User {
   firstName         String             @map("first_name")
   lastName          String             @map("last_name")
   password          String
+  avatar            String?            @db.Text
   isActive          Boolean            @default(true) @map("is_active")
   refreshToken      String?            @map("refresh_token") @db.Text
   lastLoginAt       DateTime?          @map("last_login_at")

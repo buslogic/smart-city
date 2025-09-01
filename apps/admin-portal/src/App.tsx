@@ -15,6 +15,7 @@ import VehicleAnalytics from './pages/transport/dispatcher/VehicleAnalytics';
 import GpsSync from './pages/transport/dispatcher/GpsSync';
 import AggressiveDriving from './pages/transport/safety/AggressiveDriving';
 import MonthlyReport from './pages/transport/safety/MonthlyReport';
+import Profile from './pages/users/Profile';
 
 function App() {
   return (
@@ -51,6 +52,11 @@ function App() {
                   <RolesPermissions />
                 </PermissionGuard>
               } 
+            />
+            
+            <Route 
+              path="users/profile" 
+              element={<Profile />} 
             />
             
             <Route 

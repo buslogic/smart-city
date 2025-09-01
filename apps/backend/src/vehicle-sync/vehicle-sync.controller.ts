@@ -41,15 +41,10 @@ export class VehicleSyncController {
     @Query('batchSize', new DefaultValuePipe(50), ParseIntPipe) batchSize: number,
     @Query('delay', new DefaultValuePipe(2000), ParseIntPipe) delay: number,
   ) {
-    try {
-      const result = await this.vehicleSyncService.startSync(req.user.id, syncType, {
-        batchSize,
-        delay
-      });
-      return result;
-    } catch (error) {
-      throw error;
-    }
+    return this.vehicleSyncService.startSync(req.user.id, syncType, {
+      batchSize,
+      delay
+    });
   }
 
   /**
