@@ -46,7 +46,7 @@ interface UserProfile {
 
 const Profile: React.FC = () => {
   const navigate = useNavigate();
-  const { user, logout, token } = useAuthStore();
+  const { user, logout, accessToken } = useAuthStore();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
@@ -62,7 +62,7 @@ const Profile: React.FC = () => {
         `${import.meta.env.VITE_API_URL}/api/users/profile`,
         {
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${accessToken}`,
           },
         }
       );
@@ -160,7 +160,7 @@ const Profile: React.FC = () => {
         formData,
         {
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${accessToken}`,
             'Content-Type': 'multipart/form-data',
           },
         }
@@ -172,7 +172,7 @@ const Profile: React.FC = () => {
         { avatarUrl: uploadResponse.data.file.url },
         {
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${accessToken}`,
           },
         }
       );
@@ -204,7 +204,7 @@ const Profile: React.FC = () => {
             `${import.meta.env.VITE_API_URL}/api/users/profile/avatar`,
             {
               headers: {
-                Authorization: `Bearer ${token}`,
+                Authorization: `Bearer ${accessToken}`,
               },
             }
           );
