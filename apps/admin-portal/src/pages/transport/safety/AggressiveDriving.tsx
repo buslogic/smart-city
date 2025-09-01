@@ -129,6 +129,14 @@ const AggressiveDriving: React.FC = () => {
       );
     },
     enabled: !!selectedVehicle,
+    onSuccess: (data) => {
+      // Debug log za produkciju
+      if (data?.dataPoints) {
+        const severeCounts = data.dataPoints.filter((p: any) => p.eventType && p.severity >= 4).length;
+        const moderateCounts = data.dataPoints.filter((p: any) => p.eventType && p.severity === 3).length;
+        console.log(`[AggressiveDriving] Chart loaded: ${data.dataPoints.length} points, ${severeCounts} severe, ${moderateCounts} moderate`);
+      }
+    },
   });
 
   // Table columns
@@ -163,7 +171,12 @@ const AggressiveDriving: React.FC = () => {
       render: (severity: number) => {
         const color = drivingBehaviorService.getSeverityColor(severity);
         const text = severity >= 4 ? 'Ozbiljno' : severity === 3 ? 'Umereno' : 'Normalno';
-        return <Tag color={color}>{text}</Tag>;
+        const icon = severity >= 4 ? '⚠️' : severity === 3 ? '⚡' : '✓';
+        return (
+          <Tag color={color}>
+            {icon} {text}
+          </Tag>
+        );
       },
       width: 100,
     },
@@ -251,6 +264,11 @@ const AggressiveDriving: React.FC = () => {
     if (payload.eventType) {
       let fill = '#52c41a'; // green for normal
       // severity je sada INTEGER (1=normal, 3=moderate, 5=severe)
+      // Debug log za produkciju
+      if (index % 100 === 0) { // Log svakih 100 tačaka da ne zagušimo konzolu
+        console.log(`[AggressiveDriving] Event ${index}: severity=${payload.severity}, type=${typeof payload.severity}`);
+      }
+      
       if (payload.severity >= 4) {
         fill = '#ff4d4f'; // red for severe (4-5)
       } else if (payload.severity === 3) {
