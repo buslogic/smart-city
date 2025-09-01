@@ -23,8 +23,9 @@ export class PermissionsGuard implements CanActivate {
       throw new ForbiddenException('Korisnik nije autentifikovan');
     }
 
-    console.log('PermissionsGuard - Required:', requiredPermissions);
-    console.log('PermissionsGuard - User permissions:', user.permissions);
+    // Debug logovi - zakomentarisani da ne zagušuju konzolu
+    // console.log('PermissionsGuard - Required:', requiredPermissions);
+    // console.log('PermissionsGuard - User permissions:', user.permissions);
 
     const hasPermission = requiredPermissions.some((permission) =>
       user.permissions?.includes(permission),
