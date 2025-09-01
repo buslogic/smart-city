@@ -18,10 +18,11 @@ export class AppController {
   @Public()
   @Get('health')
   @ApiOperation({ summary: 'Health check endpoint' })
-  health(): { status: string; timestamp: string } {
+  health(): { status: string; timestamp: string; version: string } {
     return {
       status: 'ok',
       timestamp: new Date().toISOString(),
+      version: '1.0.1', // Includes VehicleSyncModule
     };
   }
 }
