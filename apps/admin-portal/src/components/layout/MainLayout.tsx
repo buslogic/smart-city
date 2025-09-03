@@ -19,6 +19,7 @@ import {
   BarChart3,
   AlertTriangle,
   FileText,
+  Activity,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth.store';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -87,6 +88,11 @@ const MainLayout: React.FC = () => {
           name: 'Dispečerski Modul - Sinhronizacija',
           href: '/transport/dispatcher/gps-sync',
           icon: RefreshCw,
+        },
+        hasPermission('dispatcher:view_sync_dashboard') && {
+          name: 'Dispečerski Modul - Sinhronizacija Dashboard',
+          href: '/transport/dispatcher/gps-sync-dashboard',
+          icon: Activity,
         },
         hasPermission('safety:view_aggressive') && {
           name: 'Bezbednost - Agresivna vožnja',

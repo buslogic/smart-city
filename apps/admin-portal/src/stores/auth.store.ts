@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { AuthState, AuthActions, LoginRequest } from '../types/auth';
+import { AuthState, AuthActions, LoginRequest, User } from '../types/auth';
 import { authService } from '../services/auth.service';
 import { TokenManager } from '../utils/token';
 
