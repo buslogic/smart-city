@@ -12,8 +12,7 @@ import {
   DashboardOutlined
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
-import axios from 'axios';
-import { TokenManager } from '../../../utils/token';
+import { api } from '../../../services/api';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/sr';
@@ -97,10 +96,7 @@ const GpsSyncDashboard: React.FC = () => {
   const { data: bufferStatus, refetch: refetchBuffer, isLoading: isLoadingBuffer } = useQuery<BufferStatus>({
     queryKey: ['gps-buffer-status'],
     queryFn: async () => {
-      const token = TokenManager.getAccessToken();
-      const response = await axios.get(`${API_BASE}/api/gps-sync-dashboard/buffer-status`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await api.get('/api/gps-sync-dashboard/buffer-status');
       setLastUpdate(new Date());
       return response.data;
     },
@@ -112,10 +108,7 @@ const GpsSyncDashboard: React.FC = () => {
   const { data: processingStats, refetch: refetchStats } = useQuery<ProcessingStats>({
     queryKey: ['gps-processing-stats'],
     queryFn: async () => {
-      const token = TokenManager.getAccessToken();
-      const response = await axios.get(`${API_BASE}/api/gps-sync-dashboard/processing-stats`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await api.get('/api/gps-sync-dashboard/processing-stats');
       return response.data;
     },
     refetchInterval: autoRefresh ? 30000 : false,
@@ -126,10 +119,7 @@ const GpsSyncDashboard: React.FC = () => {
   const { data: timescaleStatus, refetch: refetchTimescale } = useQuery<TimescaleStatus>({
     queryKey: ['timescale-status'],
     queryFn: async () => {
-      const token = TokenManager.getAccessToken();
-      const response = await axios.get(`${API_BASE}/api/gps-sync-dashboard/timescale-status`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await api.get('/api/gps-sync-dashboard/timescale-status');
       return response.data;
     },
     refetchInterval: autoRefresh ? 30000 : false,
@@ -140,10 +130,7 @@ const GpsSyncDashboard: React.FC = () => {
   const { data: cronStatus, refetch: refetchCron } = useQuery<CronStatus>({
     queryKey: ['cron-status'],
     queryFn: async () => {
-      const token = TokenManager.getAccessToken();
-      const response = await axios.get(`${API_BASE}/api/gps-sync-dashboard/cron-status`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await api.get('/api/gps-sync-dashboard/cron-status');
       return response.data;
     },
     refetchInterval: autoRefresh ? 30000 : false,

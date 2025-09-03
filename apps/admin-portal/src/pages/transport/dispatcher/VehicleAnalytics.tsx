@@ -12,8 +12,7 @@ import {
 } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
 import { Line, Column } from '@ant-design/plots';
-import axios from 'axios';
-import { TokenManager } from '../../../utils/token';
+import { api } from '../../../services/api';
 import { VehicleMapper } from '../../../utils/vehicle-mapper';
 
 const { RangePicker } = DatePicker;
@@ -75,19 +74,12 @@ export default function VehicleAnalytics() {
 
   const loadVehicles = async () => {
     try {
-      const token = TokenManager.getAccessToken();
-      if (!token) {
-        message.error('Morate biti prijavljeni');
-        return;
-      }
-      
       // Dohvati sve vozila sa velikim limitom
-      const response = await axios.get(`${API_BASE}/api/vehicles`, {
+      const response = await api.get('/api/vehicles', {
         params: {
           limit: 2000, // Povećano da učita sva vozila
           page: 1
-        },
-        headers: { Authorization: `Bearer ${token}` }
+        }
       });
       
       // Response je paginiran objekat sa data property
@@ -114,21 +106,14 @@ export default function VehicleAnalytics() {
   const loadAnalytics = async () => {
     if (!selectedVehicle || !dateRange[0] || !dateRange[1]) return;
     
-    const token = TokenManager.getAccessToken();
-    if (!token) {
-      message.error('Morate biti prijavljeni');
-      return;
-    }
-    
     setLoading(true);
     try {
-      const response = await axios.get(`${API_BASE}/api/gps-analytics/vehicle`, {
+      const response = await api.get('/api/gps-analytics/vehicle', {
         params: {
           vehicleId: selectedVehicle, // prosleđujemo vehicle ID
           startDate: dateRange[0].toISOString(),
           endDate: dateRange[1].toISOString()
-        },
-        headers: { Authorization: `Bearer ${token}` }
+        }
       });
       setAnalytics(response.data);
     } catch (error: any) {

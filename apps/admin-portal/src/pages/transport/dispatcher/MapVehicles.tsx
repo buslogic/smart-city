@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Row, Col, Select, Tag, Spin, Empty, Button, Space, Badge, Statistic, Radio, message, Alert } from 'antd';
 import { Map as MapIcon, Navigation, RefreshCw, Car, Users, AlertCircle, Server, Database, WifiOff } from 'lucide-react';
-import axios from 'axios';
+import { api } from '../../../services/api';
 import VehicleMap from '../../../components/map/VehicleMap';
 
 const { Option } = Select;
@@ -38,14 +38,8 @@ const MapVehicles: React.FC = () => {
     setLoading(true);
     setConnectionError(null);
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get(
-        `http://localhost:3010/api/dispatcher/current-positions?source=${dataSource}&limit=2000`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
+      const response = await api.get(
+        `/api/dispatcher/current-positions?source=${dataSource}&limit=2000`
       );
       
       if (response.data.success) {

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { TokenManager } from '../utils/token';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3010';
 
@@ -11,7 +12,7 @@ export const api = axios.create({
 
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('accessToken');
+    const token = TokenManager.getAccessToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -31,7 +32,7 @@ api.interceptors.response.use(
       originalRequest._retry = true;
       
       try {
-        const refreshToken = localStorage.getItem('refreshToken');
+        const refreshToken = TokenManager.getRefreshToken();
         if (!refreshToken) {
           throw new Error('No refresh token');
         }
@@ -40,14 +41,15 @@ api.interceptors.response.use(
           refreshToken,
         });
         
-        const { accessToken } = response.data;
-        localStorage.setItem('accessToken', accessToken);
+        const { accessToken, refreshToken: newRefreshToken, expiresIn } = response.data;
+        
+        // Ažuriraj tokene koristeći TokenManager
+        TokenManager.setTokens(accessToken, newRefreshToken || refreshToken, expiresIn || 3600);
         
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         return api(originalRequest);
       } catch (refreshError) {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
+        TokenManager.clearTokens();
         window.location.href = '/login';
         return Promise.reject(refreshError);
       }
