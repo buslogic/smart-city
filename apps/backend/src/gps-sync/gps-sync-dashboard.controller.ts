@@ -372,11 +372,11 @@ export class GpsSyncDashboardController {
       this.logger.warn(`Couldn't check active connections: ${error.message}`);
     }
     
-    // Proveri veličinu smart-city-gps-raw-log.txt fajlova za teltonika60 i teltonika61
+    // Proveri veličinu smart-city-gps-raw-log.txt fajlova za teltonika60, teltonika61, teltonika62, teltonika63 i teltonika64
     let rawLogSizes: Map<number, string> = new Map();
     try {
       const { stdout } = await exec(
-        `ssh -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "for folder in teltonika60 teltonika61; do if [ -f /var/www/\\$folder/smart-city-gps-raw-log.txt ]; then instance=\\$(echo \\$folder | grep -oP '[0-9]+'); size=\\$(ls -lh /var/www/\\$folder/smart-city-gps-raw-log.txt | awk '{print \\$5}'); echo \\$instance:\\$size; fi; done"`,
+        `ssh -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "for folder in teltonika60 teltonika61 teltonika62 teltonika63 teltonika64; do if [ -f /var/www/\\$folder/smart-city-gps-raw-log.txt ]; then instance=\\$(echo \\$folder | grep -oP '[0-9]+'); size=\\$(ls -lh /var/www/\\$folder/smart-city-gps-raw-log.txt | awk '{print \\$5}'); echo \\$instance:\\$size; fi; done"`,
         { timeout: 5000 }
       );
       if (stdout) {
@@ -643,8 +643,8 @@ export class GpsSyncDashboardController {
     const logger = new Logger('CronProcessControl');
     
     try {
-      // Samo za teltonika60 i teltonika61 koji imaju Smart City setup
-      if (dto.instance !== 60 && dto.instance !== 61) {
+      // Samo za teltonika60, teltonika61, teltonika62, teltonika63 i teltonika64 koji imaju Smart City setup
+      if (dto.instance !== 60 && dto.instance !== 61 && dto.instance !== 62 && dto.instance !== 63 && dto.instance !== 64) {
         return {
           success: false,
           message: `Teltonika${dto.instance} nema Smart City processor`
