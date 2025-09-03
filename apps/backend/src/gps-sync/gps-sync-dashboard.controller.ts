@@ -2,19 +2,34 @@ import {
   Controller, 
   Get, 
   UseGuards,
+  Logger,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 import { PrismaService } from '../prisma/prisma.service';
+import * as fs from 'fs';
+import * as path from 'path';
 
 @ApiTags('GPS Sync Dashboard')
 @ApiBearerAuth()
 @Controller('gps-sync-dashboard')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class GpsSyncDashboardController {
+  private readonly logger = new Logger(GpsSyncDashboardController.name);
+  private static cronLastRun = {
+    processor: null as Date | null,
+    cleanup: null as Date | null,
+    statsCleanup: null as Date | null
+  };
+  
   constructor(private readonly prisma: PrismaService) {}
+  
+  // Metoda koju će pozivati cron servisi da ažuriraju svoje vreme
+  static updateCronLastRun(cronName: 'processor' | 'cleanup' | 'statsCleanup') {
+    this.cronLastRun[cronName] = new Date();
+  }
 
   @Get('buffer-status')
   @RequirePermissions('dispatcher:view_sync_dashboard')
@@ -163,75 +178,72 @@ export class GpsSyncDashboardController {
     const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     const last1h = new Date(now.getTime() - 60 * 60 * 1000);
 
-    const [
-      last24hStats,
-      lastHourStats,
-      errorStats
-    ] = await Promise.all([
-      // Statistike za zadnjih 24 sata
-      this.prisma.$queryRaw<{ 
-        total: bigint;
-        processed: bigint;
-        errors: bigint;
-      }[]>`
-        SELECT 
-          COUNT(*) as total,
-          SUM(CASE WHEN process_status = 'processed' THEN 1 ELSE 0 END) as processed,
-          SUM(CASE WHEN process_status = 'error' THEN 1 ELSE 0 END) as errors
-        FROM gps_raw_buffer
-        WHERE received_at >= ${last24h}
-      `,
-      
-      // Statistike za zadnji sat
-      this.prisma.$queryRaw<{ 
-        total: bigint;
-        processed: bigint;
-        rate: number;
-      }[]>`
-        SELECT 
-          COUNT(*) as total,
-          SUM(CASE WHEN process_status = 'processed' THEN 1 ELSE 0 END) as processed,
-          COUNT(*) / 60.0 as rate
-        FROM gps_raw_buffer
-        WHERE received_at >= ${last1h}
-      `,
-      
-      // Top greške
-      this.prisma.$queryRaw<Array<{ 
-        error_message: string;
-        count: bigint;
-      }>>`
-        SELECT 
-          error_message,
-          COUNT(*) as count
-        FROM gps_raw_buffer
-        WHERE process_status = 'error'
-        AND received_at >= ${last24h}
-        AND error_message IS NOT NULL
-        GROUP BY error_message
-        ORDER BY count DESC
-        LIMIT 5
-      `
-    ]);
-
+    // Dohvati statistike iz stats tabele za 24h
+    const processedStats24h = await this.prisma.$queryRaw<{ 
+      total_received: bigint;
+      total_processed: bigint;
+      avg_time: number;
+    }[]>`
+      SELECT 
+        COALESCE(SUM(received_count), 0) as total_received,
+        COALESCE(SUM(processed_count), 0) as total_processed,
+        COALESCE(AVG(avg_processing_time_ms), 0) as avg_time
+      FROM gps_processing_stats
+      WHERE hour_slot >= ${last24h}
+    `;
+    
+    // Dohvati trenutno pending i error iz buffer-a
+    const currentBufferStats = await this.prisma.$queryRaw<{ 
+      pending: bigint;
+      errors: bigint;
+    }[]>`
+      SELECT 
+        SUM(CASE WHEN process_status = 'pending' THEN 1 ELSE 0 END) as pending,
+        SUM(CASE WHEN process_status = 'error' THEN 1 ELSE 0 END) as errors
+      FROM gps_raw_buffer
+    `;
+    
+    // Za zadnji sat - gledaj samo buffer
+    const lastHourStats = await this.prisma.$queryRaw<{ 
+      total: bigint;
+    }[]>`
+      SELECT COUNT(*) as total
+      FROM gps_raw_buffer
+      WHERE received_at >= ${last1h}
+    `;
+    
+    // Processed u zadnjem satu iz stats tabele
+    const lastHourProcessed = await this.prisma.$queryRaw<{ 
+      processed: bigint;
+    }[]>`
+      SELECT COALESCE(SUM(processed_count), 0) as processed
+      FROM gps_processing_stats
+      WHERE hour_slot >= ${last1h}
+    `;
+    
+    // Koristi received_count kao total (koliko je stiglo sa legacy servera)
+    const total24h = Number(processedStats24h[0]?.total_received || 0);
+    const processed24h = Number(processedStats24h[0]?.total_processed || 0);
+    const errors24h = Number(currentBufferStats[0]?.errors || 0);
+    
+    const totalLastHour = Number(lastHourStats[0]?.total || 0) + Number(lastHourProcessed[0]?.processed || 0);
+    const processedLastHour = Number(lastHourProcessed[0]?.processed || 0);
+    
     return {
       last24Hours: {
-        total: Number(last24hStats[0]?.total || 0),
-        processed: Number(last24hStats[0]?.processed || 0),
-        errors: Number(last24hStats[0]?.errors || 0),
-        successRate: last24hStats[0]?.total > 0 
-          ? (Number(last24hStats[0]?.processed) / Number(last24hStats[0]?.total) * 100).toFixed(2)
-          : 0
+        total: total24h,
+        processed: processed24h,
+        errors: errors24h,
+        successRate: total24h > 0 
+          ? (processed24h / total24h * 100).toFixed(2)
+          : '0'
       },
       lastHour: {
-        total: Number(lastHourStats[0]?.total || 0),
-        processed: Number(lastHourStats[0]?.processed || 0),
-        recordsPerMinute: Number(lastHourStats[0]?.rate || 0).toFixed(2)
+        total: totalLastHour,
+        processed: processedLastHour,
+        recordsPerMinute: (totalLastHour / 60).toFixed(2)
       },
-      topErrors: errorStats.map(e => ({
-        message: e.error_message,
-        count: Number(e.count)
-      })),
+      topErrors: [], // Za sada prazno, možemo dodati error tracking
       timestamp: new Date()
     };
   }
@@ -257,6 +269,85 @@ export class GpsSyncDashboardController {
       timescaleConnected: true, // Ovo bi trebalo proveriti stvarnu konekciju
       lastTransferTime: new Date(), // Ovo bi trebalo čitati iz log tabele
       transferRate: "30 seconds", // Interval transfera
+      timestamp: new Date()
+    };
+  }
+
+  @Get('cron-status')
+  @RequirePermissions('dispatcher:view_sync_dashboard')
+  @ApiOperation({ summary: 'Status svih cron procesa' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Status cron procesa'
+  })
+  async getCronStatus() {
+    const now = new Date();
+    
+    // Proveri poslednju obradu legacy processor-a
+    // Gledamo poslednji zapis u buffer-u kao indikator rada legacy cron-a
+    const lastLegacyActivity = await this.prisma.$queryRaw<[{ last_received: Date | null }]>`
+      SELECT MAX(received_at) as last_received
+      FROM gps_raw_buffer
+    `;
+    
+    // Proveri poslednje procesiranje (backend cron)
+    const lastProcessedActivity = await this.prisma.$queryRaw<[{ last_processed: Date | null }]>`
+      SELECT MAX(processed_at) as last_processed
+      FROM gps_raw_buffer
+      WHERE process_status = 'processed'
+    `;
+    
+    // Računaj da li su cron-ovi aktivni
+    const legacyLastRun = lastLegacyActivity[0]?.last_received;
+    const processorLastRun = lastProcessedActivity[0]?.last_processed;
+    
+    // Cron se smatra aktivnim ako je radio u zadnjih X minuta
+    const isActive = (lastRun: Date | null, intervalMinutes: number) => {
+      if (!lastRun) return false;
+      const diffMinutes = (now.getTime() - new Date(lastRun).getTime()) / (1000 * 60);
+      return diffMinutes < intervalMinutes * 2; // Duplo vreme kao tolerancija
+    };
+    
+    return {
+      cronProcesses: [
+        {
+          name: 'Legacy GPS Processor',
+          location: 'Legacy Server (79.101.48.11)',
+          schedule: 'Svakih 2 minuta',
+          lastRun: legacyLastRun,
+          isActive: isActive(legacyLastRun, 2),
+          description: 'Filtrira i šalje GPS podatke u MySQL buffer'
+        },
+        {
+          name: 'Backend GPS Processor',
+          location: 'Backend NestJS',
+          schedule: 'Svakih 30 sekundi',
+          lastRun: processorLastRun,
+          isActive: isActive(processorLastRun, 0.5),
+          description: 'Prebacuje podatke iz buffer-a u TimescaleDB'
+        },
+        {
+          name: 'Buffer Cleanup',
+          location: 'Backend NestJS',
+          schedule: 'Svakih 2 minuta',
+          lastRun: GpsSyncDashboardController.cronLastRun.cleanup,
+          isActive: isActive(GpsSyncDashboardController.cronLastRun.cleanup, 2),
+          description: 'Briše stare processed zapise iz buffer-a'
+        },
+        {
+          name: 'Stats Cleanup',
+          location: 'Backend NestJS',
+          schedule: 'Jednom dnevno u 3:00',
+          lastRun: GpsSyncDashboardController.cronLastRun.statsCleanup,
+          isActive: isActive(GpsSyncDashboardController.cronLastRun.statsCleanup, 1440), // 24 sata
+          description: 'Briše statistike starije od 10 dana'
+        }
+      ],
+      summary: {
+        totalCrons: 4,
+        activeCrons: 0, // Će se računati na frontu
+        dataFlowStatus: 'operational', // ili 'degraded', 'down'
+      },
       timestamp: new Date()
     };
   }

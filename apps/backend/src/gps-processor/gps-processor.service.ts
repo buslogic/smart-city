@@ -135,12 +135,30 @@ export class GpsProcessorService {
         `;
 
         const processingTime = Date.now() - startTime;
-        this.processedCount += batch.length;
+        const actualProcessed = valueStrings.length; // Broj stvarno procesiranih (nakon deduplikacije)
+        this.processedCount += actualProcessed;
         this.lastProcessTime = new Date();
 
         this.logger.log(
-          `✅ Procesirano ${batch.length} GPS tačaka u TimescaleDB za ${processingTime}ms`
+          `✅ Procesirano ${actualProcessed} GPS tačaka u TimescaleDB za ${processingTime}ms (od ${batch.length} iz buffer-a)`
         );
+        
+        // Ažuriraj statistike
+        const hourSlot = new Date();
+        hourSlot.setMinutes(0, 0, 0);
+        hourSlot.setMilliseconds(0);
+        await this.prisma.$executeRaw`
+          INSERT INTO gps_processing_stats (hour_slot, processed_count, avg_processing_time_ms, updated_at)
+          VALUES (${hourSlot}, ${actualProcessed}, ${Math.round(processingTime)}, NOW())
+          ON DUPLICATE KEY UPDATE
+            processed_count = processed_count + ${actualProcessed},
+            avg_processing_time_ms = (avg_processing_time_ms + ${Math.round(processingTime)}) / 2,
+            updated_at = NOW()
+        `;
+        
+        // Ažuriraj vreme poslednjeg izvršavanja
+        const { GpsSyncDashboardController } = require('../gps-sync/gps-sync-dashboard.controller');
+        GpsSyncDashboardController.updateCronLastRun('processor');
       }
 
     } catch (error) {
@@ -161,6 +179,70 @@ export class GpsProcessorService {
     } finally {
       this.isProcessing = false;
     }
+  }
+
+  /**
+   * Procesira batch podataka sa legacy sistema
+   * Koristi se iz GpsLegacyController
+   */
+  async processLegacyBatch(points: any[]): Promise<{ processed: number; failed: number }> {
+    let processed = 0;
+    let failed = 0;
+
+    // Validacija i priprema podataka
+    const validPoints: any[] = [];
+    
+    for (const point of points) {
+      try {
+        // Validacija obaveznih polja
+        if (!point.vehicleId || !point.lat || !point.lng || !point.gpsTime) {
+          failed++;
+          continue;
+        }
+
+        // Priprema podatka za buffer
+        const bufferData = {
+          vehicleId: point.vehicleId,
+          garageNo: point.garageNo || '',
+          timestamp: new Date((point.timestamp || Math.floor(Date.now() / 1000)) * 1000), // Convert Unix timestamp to Date
+          lat: parseFloat(point.lat),
+          lng: parseFloat(point.lng),
+          speed: parseInt(point.speed) || 0,
+          course: parseInt(point.angle || point.course) || 0, // course umesto angle
+          altitude: parseInt(point.altitude) || 0,
+          inRoute: parseInt(point.inRoute) || 0, // Int umesto Boolean
+          rawData: JSON.stringify(point),
+          processStatus: 'pending',
+          receivedAt: new Date(),
+          satellites: 0,
+          state: 0,
+          // gpsTime se čuva u rawData
+        };
+
+        validPoints.push(bufferData);
+        processed++;
+      } catch (error) {
+        this.logger.warn(`Invalid GPS point: ${JSON.stringify(point)}`);
+        failed++;
+      }
+    }
+
+    // Batch insert u buffer
+    if (validPoints.length > 0) {
+      try {
+        await this.prisma.gpsRawBuffer.createMany({
+          data: validPoints,
+          skipDuplicates: true,
+        });
+
+        this.logger.log(`Inserted ${validPoints.length} points to buffer`);
+      } catch (error) {
+        this.logger.error('Error inserting to buffer', error);
+        throw error;
+      }
+    }
+
+    return { processed, failed };
   }
 
   /**
@@ -231,23 +313,57 @@ export class GpsProcessorService {
    * Počisti stare processed zapise
    * Pokreće se periodično da oslobodi prostor
    */
-  @Cron('0 */10 * * *') // Svakih 10 minuta
+  @Cron('*/2 * * * *') // Svakih 2 minuta
   async cleanupProcessedRecords() {
     try {
-      // Briši processed zapise starije od 1 sata
+      // Briši processed zapise starije od 5 minuta (dovoljno za monitoring)
       const result = await this.prisma.$executeRaw`
         DELETE FROM gps_raw_buffer 
         WHERE process_status = 'processed' 
-        AND processed_at < DATE_SUB(NOW(), INTERVAL 1 HOUR)
+        AND processed_at < DATE_SUB(NOW(), INTERVAL 5 MINUTE)
       `;
 
       if (result > 0) {
-        this.logger.log(`🧹 Obrisano ${result} processed GPS zapisa starijih od 1h`);
+        this.logger.log(`🧹 Obrisano ${result} processed GPS zapisa starijih od 5 minuta`);
       }
+      
+      // Ažuriraj vreme poslednjeg izvršavanja
+      const { GpsSyncDashboardController } = require('../gps-sync/gps-sync-dashboard.controller');
+      GpsSyncDashboardController.updateCronLastRun('cleanup');
       
       return result;
     } catch (error) {
       this.logger.error('Greška pri čišćenju processed zapisa:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Počisti stare statistike (starije od 10 dana)
+   * Pokreće se jednom dnevno
+   */
+  @Cron('0 3 * * *') // Svaki dan u 3 ujutru
+  async cleanupOldStats() {
+    try {
+      const tenDaysAgo = new Date();
+      tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
+      
+      const result = await this.prisma.$executeRaw`
+        DELETE FROM gps_processing_stats
+        WHERE hour_slot < ${tenDaysAgo}
+      `;
+
+      if (result > 0) {
+        this.logger.log(`📊 Obrisano ${result} starih statistika (starije od 10 dana)`);
+      }
+      
+      // Ažuriraj vreme poslednjeg izvršavanja
+      const { GpsSyncDashboardController } = require('../gps-sync/gps-sync-dashboard.controller');
+      GpsSyncDashboardController.updateCronLastRun('statsCleanup');
+      
+      return result;
+    } catch (error) {
+      this.logger.error('Greška pri čišćenju starih statistika:', error);
       return 0;
     }
   }

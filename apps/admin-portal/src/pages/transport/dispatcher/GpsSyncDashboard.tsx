@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, Row, Col, Statistic, Progress, Typography, Space, Tag, Alert, Button, Table, Divider } from 'antd';
+import { Card, Row, Col, Statistic, Progress, Typography, Space, Tag, Alert, Button, Table, Divider, Spin } from 'antd';
 import { 
   DatabaseOutlined, 
   ClockCircleOutlined, 
@@ -70,6 +70,25 @@ interface TimescaleStatus {
   timestamp: string;
 }
 
+interface CronProcess {
+  name: string;
+  location: string;
+  schedule: string;
+  lastRun: string | null;
+  isActive: boolean;
+  description: string;
+}
+
+interface CronStatus {
+  cronProcesses: CronProcess[];
+  summary: {
+    totalCrons: number;
+    activeCrons: number;
+    dataFlowStatus: string;
+  };
+  timestamp: string;
+}
+
 const GpsSyncDashboard: React.FC = () => {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
@@ -117,11 +136,26 @@ const GpsSyncDashboard: React.FC = () => {
     refetchIntervalInBackground: false,
   });
 
+  // Fetch Cron status
+  const { data: cronStatus, refetch: refetchCron } = useQuery<CronStatus>({
+    queryKey: ['cron-status'],
+    queryFn: async () => {
+      const token = TokenManager.getAccessToken();
+      const response = await axios.get(`${API_BASE}/api/gps-sync-dashboard/cron-status`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      return response.data;
+    },
+    refetchInterval: autoRefresh ? 30000 : false,
+    refetchIntervalInBackground: false,
+  });
+
   const handleManualRefresh = useCallback(() => {
     refetchBuffer();
     refetchStats();
     refetchTimescale();
-  }, [refetchBuffer, refetchStats, refetchTimescale]);
+    refetchCron();
+  }, [refetchBuffer, refetchStats, refetchTimescale, refetchCron]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -386,7 +420,7 @@ const GpsSyncDashboard: React.FC = () => {
 
       {/* Status by Type */}
       {bufferStatus && (
-        <Card title="Distribucija po statusu">
+        <Card title="Distribucija po statusu" style={{ marginBottom: 24 }}>
           <Row gutter={[16, 16]}>
             {Object.entries(bufferStatus.recordsByStatus).map(([status, count]) => (
               <Col key={status} xs={12} sm={6}>
@@ -401,6 +435,99 @@ const GpsSyncDashboard: React.FC = () => {
           </Row>
         </Card>
       )}
+
+      {/* Cron Process Status */}
+      <Card 
+        title={
+          <Space>
+            <SyncOutlined spin={cronStatus?.cronProcesses.some(c => c.isActive)} />
+            <span>Status Cron Procesa</span>
+          </Space>
+        }
+        extra={
+          cronStatus && (
+            <Tag color={
+              cronStatus.cronProcesses.filter(c => c.isActive).length === cronStatus.cronProcesses.length ? 'green' :
+              cronStatus.cronProcesses.filter(c => c.isActive).length > 0 ? 'orange' : 'red'
+            }>
+              {cronStatus.cronProcesses.filter(c => c.isActive).length}/{cronStatus.cronProcesses.length} Aktivno
+            </Tag>
+          )
+        }
+      >
+        {cronStatus ? (
+          <Table
+            dataSource={cronStatus.cronProcesses}
+            rowKey="name"
+            pagination={false}
+            columns={[
+              {
+                title: 'Proces',
+                dataIndex: 'name',
+                key: 'name',
+                render: (text: string, record: CronProcess) => (
+                  <Space direction="vertical" size={0}>
+                    <Text strong>{text}</Text>
+                    <Text type="secondary" style={{ fontSize: 12 }}>{record.location}</Text>
+                  </Space>
+                ),
+              },
+              {
+                title: 'Raspored',
+                dataIndex: 'schedule',
+                key: 'schedule',
+                width: 150,
+                render: (text: string) => <Tag>{text}</Tag>,
+              },
+              {
+                title: 'Poslednje izvršavanje',
+                dataIndex: 'lastRun',
+                key: 'lastRun',
+                width: 200,
+                render: (text: string | null) => text ? (
+                  <Space direction="vertical" size={0}>
+                    <Text>{dayjs(text).format('HH:mm:ss')}</Text>
+                    <Text type="secondary" style={{ fontSize: 12 }}>{dayjs(text).fromNow()}</Text>
+                  </Space>
+                ) : (
+                  <Text type="secondary">N/A</Text>
+                ),
+              },
+              {
+                title: 'Status',
+                dataIndex: 'isActive',
+                key: 'isActive',
+                width: 100,
+                render: (isActive: boolean) => (
+                  <Tag color={isActive ? 'green' : 'red'}>
+                    {isActive ? 'Aktivan' : 'Neaktivan'}
+                  </Tag>
+                ),
+              },
+              {
+                title: 'Opis',
+                dataIndex: 'description',
+                key: 'description',
+                ellipsis: true,
+                render: (text: string) => <Text type="secondary" style={{ fontSize: 12 }}>{text}</Text>,
+              },
+            ]}
+          />
+        ) : (
+          <Spin />
+        )}
+        
+        {cronStatus && cronStatus.cronProcesses.filter(c => !c.isActive).length > 0 && (
+          <Alert
+            message="Neki cron procesi nisu aktivni"
+            description={`${cronStatus.cronProcesses.filter(c => !c.isActive).map(c => c.name).join(', ')} nisu izvršeni u očekivanom vremenskom okviru.`}
+            type="warning"
+            icon={<WarningOutlined />}
+            style={{ marginTop: 16 }}
+            showIcon
+          />
+        )}
+      </Card>
     </div>
   );
 };

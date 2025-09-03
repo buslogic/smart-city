@@ -357,6 +357,7 @@ model GpsRawBuffer {
   processStatus     String    @default("pending") @map("process_status") // pending | processing | sent | failed
   retryCount        Int       @default(0) @map("retry_count")
   errorMessage      String?   @map("error_message") @db.Text
+  rawData           Json?     @map("raw_data") // Čuvamo originalne podatke kao JSON
   source            String    @default("legacy") @db.VarChar(50)
   
   @@index([processStatus, receivedAt], name: "idx_status_received")
@@ -365,4 +366,17 @@ model GpsRawBuffer {
   @@index([garageNo, timestamp], name: "idx_garage_timestamp")
   @@index([receivedAt], name: "idx_received_at")
   @@map("gps_raw_buffer")
+}
+
+model GpsProcessingStats {
+  id                    Int       @id @default(autoincrement())
+  hourSlot              DateTime  @unique @map("hour_slot")
+  receivedCount         Int       @default(0) @map("received_count")
+  processedCount        Int       @default(0) @map("processed_count")
+  avgProcessingTimeMs   Int       @default(0) @map("avg_processing_time_ms")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  
+  @@index([hourSlot], name: "idx_hour_slot")
+  @@map("gps_processing_stats")
 }

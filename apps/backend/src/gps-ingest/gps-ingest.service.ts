@@ -118,6 +118,18 @@ export class GpsIngestService {
         
         processed = result.count;
         
+        // Ažuriraj statistike za primljene podatke
+        const hourSlot = new Date();
+        hourSlot.setMinutes(0, 0, 0);
+        hourSlot.setMilliseconds(0);
+        await this.prisma.$executeRaw`
+          INSERT INTO gps_processing_stats (hour_slot, received_count, updated_at)
+          VALUES (${hourSlot}, ${processed}, NOW())
+          ON DUPLICATE KEY UPDATE
+            received_count = received_count + ${processed},
+            updated_at = NOW()
+        `;
+        
         this.logger.log(`✅ Buffered ${processed} GPS points u MySQL buffer iz ${source}`);
       }
 
