@@ -372,11 +372,31 @@ export class GpsSyncDashboardController {
       this.logger.warn(`Couldn't check active connections: ${error.message}`);
     }
     
+    // Proveri veličinu smart-city-gps-raw-log.txt fajlova za teltonika60 i teltonika61
+    let rawLogSizes: Map<number, string> = new Map();
+    try {
+      const { stdout } = await exec(
+        `ssh -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "for folder in teltonika60 teltonika61; do if [ -f /var/www/\\$folder/smart-city-gps-raw-log.txt ]; then instance=\\$(echo \\$folder | grep -oP '[0-9]+'); size=\\$(ls -lh /var/www/\\$folder/smart-city-gps-raw-log.txt | awk '{print \\$5}'); echo \\$instance:\\$size; fi; done"`,
+        { timeout: 5000 }
+      );
+      if (stdout) {
+        stdout.trim().split('\n').forEach(line => {
+          if (line) {
+            const [instance, size] = line.split(':');
+            rawLogSizes.set(parseInt(instance), size);
+          }
+        });
+      }
+    } catch (error) {
+      this.logger.warn(`Couldn't check raw log sizes: ${error.message}`);
+    }
+    
     // Sve potencijalne instance (60-76)
     for (let i = 60; i <= 76; i++) {
       const isScreenActive = activeScreenSessions.includes(i);
       const isCronActive = activeCronJobs.includes(i);
       const connectionCount = activeConnections.get(i) || 0;
+      const rawLogSize = rawLogSizes.get(i) || null;
       
       legacyProcessors.push({
         name: `Teltonika${i} GPS Processor`,
@@ -389,7 +409,8 @@ export class GpsSyncDashboardController {
         description: `Teltonika${i} folder - Port 120${i}`,
         instance: i,
         type: 'legacy',
-        activeDevices: connectionCount // Broj aktivnih GPS uređaja
+        activeDevices: connectionCount, // Broj aktivnih GPS uređaja
+        rawLogSize: rawLogSize // Veličina raw log fajla
       });
     }
     
@@ -686,6 +707,83 @@ export class GpsSyncDashboardController {
       return {
         success: false,
         message: 'Greška pri kontroli Smart City processor-a',
+        error: error.message
+      };
+    }
+  }
+
+  @Get('settings')
+  @RequirePermissions('dispatcher.manage_gps')
+  @ApiOperation({ summary: 'Dohvati GPS processor podešavanja' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'GPS processor podešavanja'
+  })
+  async getSettings() {
+    try {
+      const settings = await this.prisma.systemSettings.findMany({
+        where: { category: 'gps' }
+      });
+      
+      return {
+        success: true,
+        data: settings.reduce((acc, setting) => {
+          acc[setting.key] = {
+            value: setting.type === 'number' ? parseInt(setting.value) : setting.value,
+            type: setting.type,
+            description: setting.description
+          };
+          return acc;
+        }, {} as any)
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: 'Greška pri dohvatanju podešavanja',
+        error: error.message
+      };
+    }
+  }
+
+  @Post('settings')
+  @RequirePermissions('dispatcher.manage_gps')
+  @ApiOperation({ summary: 'Ažuriraj GPS processor podešavanja' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Podešavanja ažurirana'
+  })
+  async updateSettings(@Body() dto: { key: string, value: string | number }) {
+    try {
+      const existing = await this.prisma.systemSettings.findUnique({
+        where: { key: dto.key }
+      });
+      
+      if (!existing) {
+        return {
+          success: false,
+          message: `Podešavanje ${dto.key} ne postoji`
+        };
+      }
+      
+      await this.prisma.systemSettings.update({
+        where: { key: dto.key },
+        data: { 
+          value: dto.value.toString(),
+          updatedAt: new Date()
+        }
+      });
+      
+      this.logger.log(`⚙️ Ažurirano podešavanje ${dto.key} = ${dto.value}`);
+      
+      return {
+        success: true,
+        message: 'Podešavanje uspešno ažurirano'
+      };
+    } catch (error) {
+      this.logger.error(`Greška pri ažuriranju podešavanja: ${error.message}`);
+      return {
+        success: false,
+        message: 'Greška pri ažuriranju podešavanja',
         error: error.message
       };
     }

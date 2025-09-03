@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, Row, Col, Statistic, Progress, Typography, Space, Tag, Alert, Button, Table, Divider, Spin, Collapse, Badge, Popconfirm, message, Tooltip } from 'antd';
+import { Card, Row, Col, Statistic, Progress, Typography, Space, Tag, Alert, Button, Table, Divider, Spin, Collapse, Badge, Popconfirm, message, Tooltip, Modal, Form, InputNumber, Descriptions } from 'antd';
 import { 
   DatabaseOutlined, 
   ClockCircleOutlined, 
@@ -14,7 +14,8 @@ import {
   PauseCircleOutlined,
   RedoOutlined,
   StopOutlined,
-  ClearOutlined
+  ClearOutlined,
+  SettingOutlined
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../../services/api';
@@ -87,6 +88,7 @@ interface CronProcess {
   cronLastRun?: string | null; // Poslednje izvršavanje cron-a
   activeDevices?: number; // Broj aktivnih GPS uređaja
   isPaused?: boolean; // Da li je backend cron pauziran
+  rawLogSize?: string | null; // Veličina smart-city-gps-raw-log.txt fajla
 }
 
 interface CronStatus {
@@ -106,6 +108,10 @@ const GpsSyncDashboard: React.FC = () => {
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [controllingCron, setControllingCron] = useState<string | null>(null);
   const [resettingStats, setResettingStats] = useState(false);
+  const [settingsModalVisible, setSettingsModalVisible] = useState(false);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [currentSettings, setCurrentSettings] = useState<any>(null);
+  const [form] = Form.useForm();
 
   // Fetch buffer status
   const { data: bufferStatus, refetch: refetchBuffer, isLoading: isLoadingBuffer } = useQuery<BufferStatus>({
@@ -219,6 +225,68 @@ const GpsSyncDashboard: React.FC = () => {
     }
   }, [refetchCron]);
 
+  const loadSettings = useCallback(async () => {
+    setSettingsLoading(true);
+    try {
+      const response = await api.get('/api/gps-sync-dashboard/settings');
+      if (response.data.success) {
+        setCurrentSettings(response.data.data);
+        // Postavi form vrednosti
+        form.setFieldsValue({
+          batchSize: response.data.data['gps.processor.batch_size']?.value,
+          intervalSeconds: response.data.data['gps.processor.interval_seconds']?.value,
+          cleanupProcessedMinutes: response.data.data['gps.cleanup.processed_minutes']?.value,
+          cleanupFailedHours: response.data.data['gps.cleanup.failed_hours']?.value,
+          cleanupStatsDays: response.data.data['gps.cleanup.stats_days']?.value,
+        });
+      }
+    } catch (error) {
+      message.error('Greška pri učitavanju podešavanja');
+    } finally {
+      setSettingsLoading(false);
+    }
+  }, [form]);
+
+  const handleUpdateSetting = useCallback(async (key: string, value: number) => {
+    try {
+      const response = await api.post('/api/gps-sync-dashboard/settings', { key, value });
+      if (response.data.success) {
+        message.success('Podešavanje uspešno ažurirano');
+        await loadSettings(); // Osveži podešavanja
+      } else {
+        message.error(response.data.message || 'Greška pri ažuriranju');
+      }
+    } catch (error) {
+      message.error('Greška pri ažuriranju podešavanja');
+    }
+  }, [loadSettings]);
+
+  const handleOpenSettings = useCallback(() => {
+    setSettingsModalVisible(true);
+    loadSettings();
+  }, [loadSettings]);
+
+  const handleSaveSettings = useCallback(async () => {
+    try {
+      const values = await form.validateFields();
+      setSettingsLoading(true);
+      
+      // Ažuriraj svako podešavanje
+      await handleUpdateSetting('gps.processor.batch_size', values.batchSize);
+      await handleUpdateSetting('gps.processor.interval_seconds', values.intervalSeconds);
+      await handleUpdateSetting('gps.cleanup.processed_minutes', values.cleanupProcessedMinutes);
+      await handleUpdateSetting('gps.cleanup.failed_hours', values.cleanupFailedHours);
+      await handleUpdateSetting('gps.cleanup.stats_days', values.cleanupStatsDays);
+      
+      message.success('Sva podešavanja su uspešno ažurirana');
+      setSettingsModalVisible(false);
+    } catch (error) {
+      message.error('Greška pri čuvanju podešavanja');
+    } finally {
+      setSettingsLoading(false);
+    }
+  }, [form, handleUpdateSetting]);
+
   const handleResetStatistics = useCallback(async () => {
     setResettingStats(true);
     try {
@@ -305,6 +373,12 @@ const GpsSyncDashboard: React.FC = () => {
               onClick={() => setAutoRefresh(!autoRefresh)}
             >
               {autoRefresh ? 'Auto-osvežavanje ON' : 'Auto-osvežavanje OFF'}
+            </Button>
+            <Button
+              icon={<SettingOutlined />}
+              onClick={handleOpenSettings}
+            >
+              Podešavanja
             </Button>
           </Space>
         </Col>
@@ -715,6 +789,28 @@ const GpsSyncDashboard: React.FC = () => {
                             ),
                           },
                           {
+                            title: 'Raw-File-Size-Legacy',
+                            key: 'rawLogSize',
+                            width: 150,
+                            render: (record: CronProcess) => {
+                              if (!record.rawLogSize) {
+                                return <Text type="secondary">-</Text>;
+                              }
+                              // Proveri da li je fajl prevelik (preko 10MB)
+                              const sizeStr = record.rawLogSize;
+                              const isLarge = sizeStr.includes('M') && parseFloat(sizeStr) > 10;
+                              const isCritical = sizeStr.includes('M') && parseFloat(sizeStr) > 50;
+                              
+                              return (
+                                <Tooltip title={isCritical ? 'Kritično! Fajl je prevelik.' : isLarge ? 'Upozorenje: Fajl postaje prevelik' : 'Normalna veličina'}>
+                                  <Tag color={isCritical ? 'red' : isLarge ? 'orange' : 'green'}>
+                                    {record.rawLogSize}
+                                  </Tag>
+                                </Tooltip>
+                              );
+                            },
+                          },
+                          {
                             title: 'Screen Status Legacy',
                             dataIndex: 'isActive',
                             key: 'isActive',
@@ -821,6 +917,130 @@ const GpsSyncDashboard: React.FC = () => {
           />
         )}
       </Card>
+
+      {/* Settings Modal */}
+      <Modal
+        title="GPS Processor Podešavanja"
+        visible={settingsModalVisible}
+        onOk={handleSaveSettings}
+        onCancel={() => setSettingsModalVisible(false)}
+        width={600}
+        confirmLoading={settingsLoading}
+        okText="Sačuvaj"
+        cancelText="Otkaži"
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          initialValues={{
+            batchSize: 4000,
+            intervalSeconds: 30,
+            cleanupProcessedMinutes: 5,
+            cleanupFailedHours: 2,
+            cleanupStatsDays: 10
+          }}
+        >
+          <Divider orientation="left">Procesiranje</Divider>
+          
+          <Form.Item
+            label="Batch Size (broj GPS tačaka po ciklusu)"
+            name="batchSize"
+            rules={[
+              { required: true, message: 'Obavezno polje' },
+              { type: 'number', min: 100, max: 10000, message: 'Vrednost mora biti između 100 i 10000' }
+            ]}
+          >
+            <InputNumber 
+              min={100} 
+              max={10000} 
+              step={100}
+              style={{ width: '100%' }}
+              addonAfter="tačaka"
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="Interval procesiranja (sekunde)"
+            name="intervalSeconds"
+            rules={[
+              { required: true, message: 'Obavezno polje' },
+              { type: 'number', min: 10, max: 300, message: 'Vrednost mora biti između 10 i 300 sekundi' }
+            ]}
+            help="Napomena: Ova vrednost se trenutno ne primenjuje automatski. Cron je hardkodovan na 30 sekundi."
+          >
+            <InputNumber 
+              min={10} 
+              max={300} 
+              step={10}
+              style={{ width: '100%' }}
+              addonAfter="sekundi"
+              disabled
+            />
+          </Form.Item>
+
+          <Divider orientation="left">Čišćenje Buffer-a</Divider>
+
+          <Form.Item
+            label="Brisanje processed zapisa nakon (minuti)"
+            name="cleanupProcessedMinutes"
+            rules={[
+              { required: true, message: 'Obavezno polje' },
+              { type: 'number', min: 1, max: 60, message: 'Vrednost mora biti između 1 i 60 minuta' }
+            ]}
+          >
+            <InputNumber 
+              min={1} 
+              max={60} 
+              step={1}
+              style={{ width: '100%' }}
+              addonAfter="minuta"
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="Brisanje failed zapisa nakon (sati)"
+            name="cleanupFailedHours"
+            rules={[
+              { required: true, message: 'Obavezno polje' },
+              { type: 'number', min: 1, max: 48, message: 'Vrednost mora biti između 1 i 48 sati' }
+            ]}
+          >
+            <InputNumber 
+              min={1} 
+              max={48} 
+              step={1}
+              style={{ width: '100%' }}
+              addonAfter="sati"
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="Brisanje statistika starijih od (dana)"
+            name="cleanupStatsDays"
+            rules={[
+              { required: true, message: 'Obavezno polje' },
+              { type: 'number', min: 1, max: 365, message: 'Vrednost mora biti između 1 i 365 dana' }
+            ]}
+          >
+            <InputNumber 
+              min={1} 
+              max={365} 
+              step={1}
+              style={{ width: '100%' }}
+              addonAfter="dana"
+            />
+          </Form.Item>
+
+          {currentSettings && (
+            <Alert 
+              message="Trenutna podešavanja će biti primenjena pri sledećem ciklusu procesiranja" 
+              type="info" 
+              showIcon 
+              style={{ marginTop: 16 }}
+            />
+          )}
+        </Form>
+      </Modal>
     </div>
   );
 };

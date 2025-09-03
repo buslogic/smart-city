@@ -19,11 +19,60 @@ export class GpsProcessorService {
     cleanup: true,
     statsCleanup: true
   };
+  
+  // Dinamička podešavanja iz baze
+  private settings = {
+    batchSize: 4000,
+    intervalSeconds: 30,
+    cleanupProcessedMinutes: 5,
+    cleanupFailedHours: 2,
+    cleanupStatsDays: 10
+  };
 
   constructor(private prisma: PrismaService) {
     // Kreiraj konekciju na TimescaleDB
     this.timescalePool = createTimescalePool();
     this.logger.log('🚀 GPS Processor Service inicijalizovan');
+    
+    // Učitaj podešavanja pri pokretanju
+    this.loadSettings();
+  }
+  
+  /**
+   * Učitaj dinamička podešavanja iz baze
+   */
+  async loadSettings() {
+    try {
+      const settings = await this.prisma.systemSettings.findMany({
+        where: { category: 'gps' }
+      });
+      
+      settings.forEach(setting => {
+        const value = setting.type === 'number' ? parseInt(setting.value) : setting.value;
+        
+        switch(setting.key) {
+          case 'gps.processor.batch_size':
+            this.settings.batchSize = value as number;
+            break;
+          case 'gps.processor.interval_seconds':
+            this.settings.intervalSeconds = value as number;
+            break;
+          case 'gps.cleanup.processed_minutes':
+            this.settings.cleanupProcessedMinutes = value as number;
+            break;
+          case 'gps.cleanup.failed_hours':
+            this.settings.cleanupFailedHours = value as number;
+            break;
+          case 'gps.cleanup.stats_days':
+            this.settings.cleanupStatsDays = value as number;
+            break;
+        }
+      });
+      
+      this.logger.log(`📋 Učitana podešavanja: Batch=${this.settings.batchSize}, Interval=${this.settings.intervalSeconds}s`);
+    } catch (error) {
+      this.logger.warn('Greška pri učitavanju podešavanja, koriste se default vrednosti');
+    }
   }
 
   /**
@@ -48,13 +97,16 @@ export class GpsProcessorService {
     const startTime = Date.now();
 
     try {
+      // Osveži podešavanja pre svakog procesiranja
+      await this.loadSettings();
+      
       // 1. Dohvati batch podataka iz MySQL buffer-a
       const batch = await this.prisma.$queryRaw<any[]>`
         SELECT * FROM gps_raw_buffer 
         WHERE process_status = 'pending' 
         AND retry_count < 3
         ORDER BY received_at ASC
-        LIMIT 4000
+        LIMIT ${this.settings.batchSize}
         FOR UPDATE SKIP LOCKED
       `;
 
@@ -335,15 +387,15 @@ export class GpsProcessorService {
     }
     
     try {
-      // Briši processed zapise starije od 5 minuta (dovoljno za monitoring)
+      // Briši processed zapise starije od X minuta (iz settings)
       const result = await this.prisma.$executeRaw`
         DELETE FROM gps_raw_buffer 
         WHERE process_status = 'processed' 
-        AND processed_at < DATE_SUB(NOW(), INTERVAL 5 MINUTE)
+        AND processed_at < DATE_SUB(NOW(), INTERVAL ${this.settings.cleanupProcessedMinutes} MINUTE)
       `;
 
       if (result > 0) {
-        this.logger.log(`🧹 Obrisano ${result} processed GPS zapisa starijih od 5 minuta`);
+        this.logger.log(`🧹 Obrisano ${result} processed GPS zapisa starijih od ${this.settings.cleanupProcessedMinutes} minuta`);
       }
       
       // Ažuriraj vreme poslednjeg izvršavanja
@@ -370,16 +422,16 @@ export class GpsProcessorService {
     }
     
     try {
-      const tenDaysAgo = new Date();
-      tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
+      const daysAgo = new Date();
+      daysAgo.setDate(daysAgo.getDate() - this.settings.cleanupStatsDays);
       
       const result = await this.prisma.$executeRaw`
         DELETE FROM gps_processing_stats
-        WHERE hour_slot < ${tenDaysAgo}
+        WHERE hour_slot < ${daysAgo}
       `;
 
       if (result > 0) {
-        this.logger.log(`📊 Obrisano ${result} starih statistika (starije od 10 dana)`);
+        this.logger.log(`📊 Obrisano ${result} starih statistika (starije od ${this.settings.cleanupStatsDays} dana)`);
       }
       
       // Ažuriraj vreme poslednjeg izvršavanja

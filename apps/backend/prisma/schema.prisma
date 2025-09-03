@@ -380,3 +380,17 @@ model GpsProcessingStats {
   @@index([hourSlot], name: "idx_hour_slot")
   @@map("gps_processing_stats")
 }
+
+model SystemSettings {
+  id          Int       @id @default(autoincrement())
+  key         String    @unique @db.VarChar(100)
+  value       String    @db.Text
+  type        String    @default("string") @db.VarChar(20) // string | number | boolean | json
+  description String?   @db.Text
+  category    String    @default("general") @db.VarChar(50)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  
+  @@index([category], name: "idx_category")
+  @@map("system_settings")
+}
