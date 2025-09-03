@@ -73,7 +73,7 @@ export class GpsProcessorService {
         }
       });
       
-      this.logger.log(`📋 Učitana podešavanja: Batch=${this.settings.batchSize}, Interval=${this.settings.intervalSeconds}s`);
+      this.logger.debug(`📋 Učitana podešavanja: Batch=${this.settings.batchSize}, Interval=${this.settings.intervalSeconds}s`);
     } catch (error) {
       this.logger.warn('Greška pri učitavanju podešavanja, koriste se default vrednosti');
     }

@@ -325,8 +325,8 @@ export class GpsSyncDashboardController {
     let activeScreenSessions: number[] = [];
     try {
       const { stdout } = await exec(
-        `ssh -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "screen -ls | grep teltonika | grep -oP 'teltonika\\K[0-9]+'"`,
-        { timeout: 5000 }
+        `ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "screen -ls | grep teltonika | grep -oP 'teltonika\\K[0-9]+'"`,
+        { timeout: 15000 }
       );
       if (stdout) {
         activeScreenSessions = stdout.trim().split('\n')
@@ -342,8 +342,8 @@ export class GpsSyncDashboardController {
     let activeCronJobs: number[] = [];
     try {
       const { stdout } = await exec(
-        `ssh -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "crontab -l 2>/dev/null | grep 'smart-city-raw-processor.php' | grep -oP 'teltonika\\K[0-9]+'"`,
-        { timeout: 5000 }
+        `ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "crontab -l 2>/dev/null | grep 'smart-city-raw-processor.php' | grep -oP 'teltonika\\K[0-9]+'"`,
+        { timeout: 15000 }
       );
       if (stdout) {
         activeCronJobs = stdout.trim().split('\n')
@@ -359,8 +359,8 @@ export class GpsSyncDashboardController {
     let activeConnections: Map<number, number> = new Map();
     try {
       const { stdout } = await exec(
-        `ssh -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "for port in {60..76}; do count=\\$(ss -tan | grep :120\\$port | grep ESTAB | wc -l); echo \\$port:\\$count; done"`,
-        { timeout: 5000 }
+        `ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "for port in {60..76}; do count=\\$(ss -tan | grep :120\\$port | grep ESTAB | wc -l); echo \\$port:\\$count; done"`,
+        { timeout: 15000 }
       );
       if (stdout) {
         stdout.trim().split('\n').forEach(line => {
@@ -376,8 +376,8 @@ export class GpsSyncDashboardController {
     let rawLogSizes: Map<number, string> = new Map();
     try {
       const { stdout } = await exec(
-        `ssh -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "for folder in teltonika60 teltonika61 teltonika62 teltonika63 teltonika64; do if [ -f /var/www/\\$folder/smart-city-gps-raw-log.txt ]; then instance=\\$(echo \\$folder | grep -oP '[0-9]+'); size=\\$(ls -lh /var/www/\\$folder/smart-city-gps-raw-log.txt | awk '{print \\$5}'); echo \\$instance:\\$size; fi; done"`,
-        { timeout: 5000 }
+        `ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "for folder in teltonika60 teltonika61 teltonika62 teltonika63 teltonika64; do if [ -f /var/www/\\$folder/smart-city-gps-raw-log.txt ]; then instance=\\$(echo \\$folder | grep -oP '[0-9]+'); size=\\$(ls -lh /var/www/\\$folder/smart-city-gps-raw-log.txt | awk '{print \\$5}'); echo \\$instance:\\$size; fi; done"`,
+        { timeout: 15000 }
       );
       if (stdout) {
         stdout.trim().split('\n').forEach(line => {
