@@ -102,6 +102,7 @@ export class VehiclesController {
     return this.vehiclesService.findByLegacyId(legacyId);
   }
 
+
   @Patch(':id')
   @RequirePermissions('vehicles:update')
   @ApiOperation({ summary: 'Ažuriranje vozila' })

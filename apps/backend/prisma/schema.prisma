@@ -62,18 +62,24 @@ model Role {
 }
 
 model Permission {
-  id          Int              @id @default(autoincrement())
-  name        String           @unique
-  resource    String
-  action      String
-  description String?
-  createdAt   DateTime         @default(now()) @map("created_at")
-  updatedAt   DateTime         @updatedAt @map("updated_at")
+  id           Int              @id @default(autoincrement())
+  name         String           @unique
+  resource     String
+  action       String
+  description  String?
+  descriptionSr String?         @map("description_sr") @db.Text
+  uiRoute      String?          @map("ui_route") @db.VarChar(255)
+  category     String?          @db.VarChar(50)
+  requiredFor  String?          @map("required_for") @db.Text // JSON array of features
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
   
   // Relations
-  roles       RolePermission[]
+  roles        RolePermission[]
   
   @@unique([resource, action])
+  @@index([category])
+  @@index([uiRoute])
   @@map("permissions")
 }
 
@@ -326,4 +332,37 @@ model GpsSyncLog {
   @@index([vehicleGarageNo])
   @@index([startedAt])
   @@map("gps_sync_logs")
+}
+
+model GpsRawBuffer {
+  id                BigInt    @id @default(autoincrement())
+  
+  // GPS Data Fields
+  vehicleId         Int?      @map("vehicle_id")
+  garageNo          String    @map("garage_no") @db.VarChar(20)
+  imei              String?   @db.VarChar(50)
+  timestamp         DateTime
+  lat               Decimal   @db.Decimal(10, 8)
+  lng               Decimal   @db.Decimal(11, 8)
+  speed             Int       @default(0)
+  course            Int       @default(0)
+  altitude          Int       @default(0)
+  satellites        Int       @default(0)
+  state             Int       @default(0)
+  inRoute           Int       @default(0) @map("in_route")
+  
+  // Metadata Fields
+  receivedAt        DateTime  @default(now()) @map("received_at")
+  processedAt       DateTime? @map("processed_at")
+  processStatus     String    @default("pending") @map("process_status") // pending | processing | sent | failed
+  retryCount        Int       @default(0) @map("retry_count")
+  errorMessage      String?   @map("error_message") @db.Text
+  source            String    @default("legacy") @db.VarChar(50)
+  
+  @@index([processStatus, receivedAt], name: "idx_status_received")
+  @@index([vehicleId, timestamp], name: "idx_vehicle_timestamp")
+  @@index([processStatus, retryCount], name: "idx_processing")
+  @@index([garageNo, timestamp], name: "idx_garage_timestamp")
+  @@index([receivedAt], name: "idx_received_at")
+  @@map("gps_raw_buffer")
 }

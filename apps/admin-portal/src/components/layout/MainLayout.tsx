@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Outlet, useLocation, Link } from 'react-router-dom';
+import { Outlet, useLocation, Link, useNavigate } from 'react-router-dom';
 import { Avatar, Dropdown, Button, Space, Tag } from 'antd';
 import { LogoutOutlined, UserOutlined } from '@ant-design/icons';
 import {
@@ -22,6 +22,8 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth.store';
 import { usePermissions } from '../../hooks/usePermissions';
+import { getAvatarUrl } from '../../utils/avatar';
+import PermissionsDebugger from '../permissions/PermissionsDebugger';
 
 const MainLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -29,6 +31,7 @@ const MainLayout: React.FC = () => {
   const [transportMenuOpen, setTransportMenuOpen] = useState(true);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(true);
   const location = useLocation();
+  const navigate = useNavigate();
   const { user, logout } = useAuthStore();
   const { canReadUsers, canReadRoles, hasPermission } = usePermissions();
 
@@ -85,12 +88,12 @@ const MainLayout: React.FC = () => {
           href: '/transport/dispatcher/gps-sync',
           icon: RefreshCw,
         },
-        hasPermission('safety:view_aggressive_driving') && {
+        hasPermission('safety:view_aggressive') && {
           name: 'Bezbednost - Agresivna vožnja',
           href: '/transport/safety/aggressive-driving',
           icon: AlertTriangle,
         },
-        hasPermission('safety:view_monthly_report') && {
+        hasPermission('safety:view_report') && {
           name: 'Bezbednost - Mesečni izveštaj',
           href: '/transport/safety/monthly-report',
           icon: FileText,
@@ -269,7 +272,7 @@ const MainLayout: React.FC = () => {
                           key: 'profile',
                           icon: <UserOutlined />,
                           label: 'Profil',
-                          onClick: () => window.location.href = '/users/profile',
+                          onClick: () => navigate('/users/profile'),
                         },
                         {
                           type: 'divider',
@@ -284,7 +287,13 @@ const MainLayout: React.FC = () => {
                     }}
                     trigger={['click']}
                   >
-                    <Button type="text" icon={<Avatar size="small" icon={<UserOutlined />} />}>
+                    <Button type="text" icon={
+                      <Avatar 
+                        size="small" 
+                        src={getAvatarUrl(user?.avatar)} 
+                        icon={!user?.avatar && <UserOutlined />} 
+                      />
+                    }>
                       {user?.firstName}
                     </Button>
                   </Dropdown>
@@ -300,6 +309,9 @@ const MainLayout: React.FC = () => {
           </div>
         </main>
       </div>
+
+      {/* Permissions Debugger FAB */}
+      <PermissionsDebugger />
     </div>
   );
 };

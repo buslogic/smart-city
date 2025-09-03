@@ -235,4 +235,28 @@ export class VehiclesService {
       expiringRegistration: expiringRegistration,
     };
   }
+
+  async exportForGps() {
+    // Dohvati samo aktivna vozila sa potrebnim podacima za GPS
+    const vehicles = await this.prisma.busVehicle.findMany({
+      where: {
+        active: true,
+      },
+      select: {
+        id: true,
+        garageNumber: true,
+      },
+      orderBy: {
+        garageNumber: 'asc',
+      },
+    });
+
+    // Mapiraj u format potreban legacy sistemu, filtriraj null vrednosti
+    return vehicles
+      .filter(v => v.garageNumber !== null)
+      .map(v => ({
+        id: v.id,
+        garageNumber: v.garageNumber,
+      }));
+  }
 }

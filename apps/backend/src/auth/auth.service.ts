@@ -18,7 +18,14 @@ export class AuthService {
   async validateUser(email: string, password: string) {
     const user = await this.prisma.user.findUnique({
       where: { email },
-      include: {
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        password: true,
+        avatar: true,
+        isActive: true,
         roles: {
           include: {
             role: {
@@ -39,6 +46,7 @@ export class AuthService {
       return null;
     }
 
+
     if (!user.isActive) {
       throw new UnauthorizedException('Korisnički nalog je deaktiviran');
     }
@@ -54,19 +62,22 @@ export class AuthService {
       ur.role.permissions.map(rp => rp.permission.name)
     );
 
-    return {
+    const userResult = {
       id: user.id,
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
+      avatar: user.avatar || null,
       isActive: user.isActive,
       roles,
       permissions: [...new Set(permissions)],
     };
+    
+    return userResult;
   }
 
   async loginWithUser(user: any, ipAddress?: string, userAgent?: string): Promise<LoginResponseDto> {
-
+    
     // Kreiranje session-a
     const sessionId = uuidv4();
     const expiresAt = new Date();
@@ -135,7 +146,14 @@ export class AuthService {
       
       const user = await this.prisma.user.findUnique({
         where: { id: payload.sub },
-        include: {
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          avatar: true,
+          isActive: true,
+          refreshToken: true,
           roles: {
             include: {
               role: {
@@ -192,6 +210,7 @@ export class AuthService {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
+        avatar: user.avatar || null,
         isActive: user.isActive,
         roles,
         permissions: [...new Set(permissions)],

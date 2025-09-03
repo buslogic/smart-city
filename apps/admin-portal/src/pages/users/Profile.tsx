@@ -27,6 +27,7 @@ import {
   LoadingOutlined
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/auth.store';
+import { getAvatarUrl, isProduction } from '../../utils/avatar';
 import axios from 'axios';
 
 const { Title, Text } = Typography;
@@ -46,7 +47,7 @@ interface UserProfile {
 
 const Profile: React.FC = () => {
   const navigate = useNavigate();
-  const { user, logout, accessToken } = useAuthStore();
+  const { user, logout, accessToken, updateUser } = useAuthStore();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
@@ -144,32 +145,54 @@ const Profile: React.FC = () => {
     setIsUploading(true);
 
     try {
-      const compressedBase64 = await compressImage(file);
+      let avatarUrl: string;
       
-      const formData = new FormData();
-      // Konvertuj base64 u blob
-      const response = await fetch(compressedBase64);
-      const blob = await response.blob();
-      formData.append('file', blob, 'avatar.jpg');
-      formData.append('folder', 'avatars');
-      formData.append('isPublic', 'true');
-      
-      // Upload na Spaces
-      const uploadResponse = await axios.post(
-        `${import.meta.env.VITE_API_URL}/api/spaces/upload`,
-        formData,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'multipart/form-data',
-          },
-        }
-      );
+      if (isProduction()) {
+        // Production: koristi Spaces
+        const compressedBase64 = await compressImage(file);
+        const response = await fetch(compressedBase64);
+        const blob = await response.blob();
+        
+        const formData = new FormData();
+        formData.append('file', blob, 'avatar.jpg');
+        formData.append('folder', 'avatars');
+        formData.append('isPublic', 'true');
+        
+        const uploadResponse = await axios.post(
+          `${import.meta.env.VITE_API_URL}/api/spaces/upload`,
+          formData,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'multipart/form-data',
+            },
+          }
+        );
+        
+        avatarUrl = uploadResponse.data.file.url;
+      } else {
+        // Development: koristi lokalni upload
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const uploadResponse = await axios.post(
+          `${import.meta.env.VITE_API_URL}/api/uploads/avatar`,
+          formData,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'multipart/form-data',
+            },
+          }
+        );
+        
+        avatarUrl = uploadResponse.data.file.url;
+      }
 
       // Ažuriraj profil sa URL-om avatara
       const profileResponse = await axios.patch(
         `${import.meta.env.VITE_API_URL}/api/users/profile/avatar`,
-        { avatarUrl: uploadResponse.data.file.url },
+        { avatarUrl },
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -178,6 +201,8 @@ const Profile: React.FC = () => {
       );
       
       setProfile(profileResponse.data);
+      // Ažuriraj avatar u auth store
+      updateUser({ avatar: profileResponse.data.avatar });
       message.success('Avatar uspešno ažuriran');
       
       if (fileInputRef.current) {
@@ -191,31 +216,28 @@ const Profile: React.FC = () => {
     }
   };
 
-  const handleRemoveAvatar = () => {
-    Modal.confirm({
-      title: 'Uklanjanje avatara',
-      content: 'Da li ste sigurni da želite da uklonite avatar?',
-      okText: 'Da, ukloni',
-      cancelText: 'Otkaži',
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        try {
-          const response = await axios.delete(
-            `${import.meta.env.VITE_API_URL}/api/users/profile/avatar`,
-            {
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-              },
-            }
-          );
-          setProfile(response.data);
-          message.success('Avatar uspešno uklonjen');
-        } catch (err: any) {
-          message.error('Greška pri uklanjanju avatara');
-          console.error(err);
+  const handleRemoveAvatar = async () => {
+    // Direktno brisanje bez modal potvrde za testiranje
+    if (!window.confirm('Da li ste sigurni da želite da uklonite avatar?')) {
+      return;
+    }
+    
+    try {
+      const response = await axios.delete(
+        `${import.meta.env.VITE_API_URL}/api/users/profile/avatar`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
         }
-      },
-    });
+      );
+      setProfile(response.data);
+      // Ažuriraj avatar u auth store
+      updateUser({ avatar: null });
+      message.success('Avatar uspešno uklonjen');
+    } catch (err: any) {
+      message.error(err.response?.data?.message || 'Greška pri uklanjanju avatara');
+    }
   };
 
   const handleLogout = () => {
@@ -247,7 +269,7 @@ const Profile: React.FC = () => {
     );
   }
 
-  const avatarUrl = profile.avatar || undefined;
+  const avatarUrl = getAvatarUrl(profile.avatar);
   const memberSince = new Date(profile.createdAt).toLocaleDateString('sr-RS', {
     year: 'numeric',
     month: 'long',
@@ -282,7 +304,7 @@ const Profile: React.FC = () => {
                 icon={!avatarUrl && <UserOutlined />}
                 className="border-4 border-white shadow-lg"
               />
-              <div className="absolute bottom-0 right-0 flex space-x-1">
+              <div className="absolute bottom-0 right-0 flex gap-2" style={{ zIndex: 10 }}>
                 <Button
                   size="small"
                   type="primary"
@@ -291,6 +313,7 @@ const Profile: React.FC = () => {
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isUploading}
                   title="Promeni avatar"
+                  style={{ marginRight: '4px' }}
                 />
                 {profile.avatar && (
                   <Button

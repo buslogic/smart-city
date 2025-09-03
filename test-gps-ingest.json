@@ -1,0 +1,70 @@
+{
+  "data": [
+    {
+      "garageNo": "P93597",
+      "imei": "860517060123456",
+      "timestamp": "2024-09-02T10:00:00Z",
+      "lat": 44.8176,
+      "lng": 20.4633,
+      "speed": 35,
+      "course": 180,
+      "altitude": 125,
+      "satellites": 8,
+      "state": 1,
+      "inRoute": 1
+    },
+    {
+      "garageNo": "P93597",
+      "imei": "860517060123456",
+      "timestamp": "2024-09-02T10:00:30Z",
+      "lat": 44.8170,
+      "lng": 20.4635,
+      "speed": 42,
+      "course": 185,
+      "altitude": 126,
+      "satellites": 9,
+      "state": 1,
+      "inRoute": 1
+    },
+    {
+      "garageNo": "P93597",
+      "imei": "860517060123456",
+      "timestamp": "2024-09-02T10:01:00Z",
+      "lat": 44.8165,
+      "lng": 20.4637,
+      "speed": 38,
+      "course": 190,
+      "altitude": 127,
+      "satellites": 8,
+      "state": 1,
+      "inRoute": 1
+    },
+    {
+      "garageNo": "P93598",
+      "imei": "860517060123457",
+      "timestamp": "2024-09-02T10:00:00Z",
+      "lat": 44.7870,
+      "lng": 20.4481,
+      "speed": 0,
+      "course": 0,
+      "altitude": 110,
+      "satellites": 10,
+      "state": 0,
+      "inRoute": 0
+    },
+    {
+      "garageNo": "P93598",
+      "imei": "860517060123457",
+      "timestamp": "2024-09-02T10:00:30Z",
+      "lat": 44.7870,
+      "lng": 20.4481,
+      "speed": 0,
+      "course": 0,
+      "altitude": 110,
+      "satellites": 10,
+      "state": 0,
+      "inRoute": 0
+    }
+  ],
+  "source": "test"
+}

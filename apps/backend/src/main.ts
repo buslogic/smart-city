@@ -3,12 +3,22 @@ import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ValidationPipe, ClassSerializerInterceptor } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import * as express from 'express';
+import { join } from 'path';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   
-  // Global API prefix
+  // Global API prefix - MORA BITI PRE static files
   app.setGlobalPrefix('api');
+  
+  // Serve static files for uploads (samo u development)
+  // Ovo mora biti posle setGlobalPrefix da bi radilo na /uploads putanji
+  if (process.env.NODE_ENV === 'development') {
+    const uploadPath = join(process.cwd(), 'uploads');
+    app.use('/uploads', express.static(uploadPath));
+    console.log('Serving static files from:', uploadPath);
+  }
   
   // CORS
   app.enableCors({

@@ -11,6 +11,7 @@ build/
 
 # Personal configuration
 claude-personal.md
+claude-tips.md
 
 # IDE
 .vscode/

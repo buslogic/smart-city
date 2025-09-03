@@ -18,81 +18,48 @@ const PermissionsManagement: React.FC = () => {
   const fetchRoles = async () => {
     try {
       const response = await rbacService.getRoles(1, 100);
-      setRoles(response.data);
+      if (response.data && response.data.length > 0) {
+        setRoles(response.data);
+      } else {
+        console.error('Nema rola u bazi');
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'fixed top-4 right-4 bg-yellow-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
+        errorDiv.textContent = 'Upozorenje: Nema rola u bazi podataka';
+        document.body.appendChild(errorDiv);
+        setTimeout(() => errorDiv.remove(), 5000);
+      }
     } catch (error) {
       console.error('Greška pri učitavanju rola:', error);
-      // Mock podaci
-      setRoles([
-        { id: 1, name: 'SUPER_ADMIN', description: 'Administratorska uloga', createdAt: '', updatedAt: '' },
-        { id: 2, name: 'CITY_MANAGER', description: 'Menadžer gradskih resursa', createdAt: '', updatedAt: '' },
-        { id: 3, name: 'DEPARTMENT_HEAD', description: 'Šef departmana', createdAt: '', updatedAt: '' },
-        { id: 4, name: 'OPERATOR', description: 'Operater sistema', createdAt: '', updatedAt: '' },
-        { id: 5, name: 'ANALYST', description: 'Analitičar', createdAt: '', updatedAt: '' },
-        { id: 6, name: 'CITIZEN', description: 'Građanin', createdAt: '', updatedAt: '' },
-      ]);
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
+      errorDiv.textContent = 'Greška pri učitavanju rola. Proverite konekciju sa serverom.';
+      document.body.appendChild(errorDiv);
+      setTimeout(() => errorDiv.remove(), 5000);
     }
   };
 
   const fetchPermissions = async () => {
     try {
       const response = await rbacService.getPermissions();
-      setAllPermissions(response.data);
+      if (response.data && response.data.length > 0) {
+        setAllPermissions(response.data);
+      } else {
+        // Ako API vraća praznu listu, prikaži grešku
+        console.error('API vraća praznu listu permisija');
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
+        errorDiv.textContent = 'Greška: Nema permisija u bazi. Kontaktirajte administratora.';
+        document.body.appendChild(errorDiv);
+        setTimeout(() => errorDiv.remove(), 5000);
+      }
     } catch (error) {
       console.error('Greška pri učitavanju permisija:', error);
-      // Mock podaci
-      setAllPermissions([
-        // Users permissions
-        { id: 1, name: 'users.create', resource: 'users', action: 'create', description: 'Kreiranje korisnika', createdAt: '', updatedAt: '' },
-        { id: 2, name: 'users.read', resource: 'users', action: 'read', description: 'Pregled korisnika', createdAt: '', updatedAt: '' },
-        { id: 3, name: 'users.update', resource: 'users', action: 'update', description: 'Ažuriranje korisnika', createdAt: '', updatedAt: '' },
-        { id: 4, name: 'users.delete', resource: 'users', action: 'delete', description: 'Brisanje korisnika', createdAt: '', updatedAt: '' },
-        { id: 5, name: 'users.manage', resource: 'users', action: 'manage', description: 'Upravljanje korisnicima', createdAt: '', updatedAt: '' },
-        
-        // Roles permissions
-        { id: 6, name: 'roles.create', resource: 'roles', action: 'create', description: 'Kreiranje uloga', createdAt: '', updatedAt: '' },
-        { id: 7, name: 'roles.read', resource: 'roles', action: 'read', description: 'Pregled uloga', createdAt: '', updatedAt: '' },
-        { id: 8, name: 'roles.update', resource: 'roles', action: 'update', description: 'Ažuriranje uloga', createdAt: '', updatedAt: '' },
-        { id: 9, name: 'roles.delete', resource: 'roles', action: 'delete', description: 'Brisanje uloga', createdAt: '', updatedAt: '' },
-        { id: 10, name: 'roles.manage', resource: 'roles', action: 'manage', description: 'Upravljanje ulogama', createdAt: '', updatedAt: '' },
-        
-        // Dashboard permissions
-        { id: 11, name: 'dashboard.view', resource: 'dashboard', action: 'read', description: 'Pregled dashboard-a', createdAt: '', updatedAt: '' },
-        { id: 12, name: 'dashboard.analytics', resource: 'dashboard', action: 'read', description: 'Pregled analitike', createdAt: '', updatedAt: '' },
-        
-        // Reports permissions
-        { id: 13, name: 'reports.create', resource: 'reports', action: 'create', description: 'Kreiranje izveštaja', createdAt: '', updatedAt: '' },
-        { id: 14, name: 'reports.read', resource: 'reports', action: 'read', description: 'Pregled izveštaja', createdAt: '', updatedAt: '' },
-        { id: 15, name: 'reports.export', resource: 'reports', action: 'manage', description: 'Eksportovanje izveštaja', createdAt: '', updatedAt: '' },
-        
-        // Vehicles permissions
-        { id: 16, name: 'vehicles:create', resource: 'vehicles', action: 'create', description: 'Kreiranje vozila', createdAt: '', updatedAt: '' },
-        { id: 17, name: 'vehicles:read', resource: 'vehicles', action: 'read', description: 'Pregled vozila', createdAt: '', updatedAt: '' },
-        { id: 18, name: 'vehicles:update', resource: 'vehicles', action: 'update', description: 'Ažuriranje vozila', createdAt: '', updatedAt: '' },
-        { id: 19, name: 'vehicles:delete', resource: 'vehicles', action: 'delete', description: 'Brisanje vozila', createdAt: '', updatedAt: '' },
-        { id: 20, name: 'vehicles:manage', resource: 'vehicles', action: 'manage', description: 'Upravljanje vozilima', createdAt: '', updatedAt: '' },
-        { id: 21, name: 'vehicles:sync', resource: 'vehicles', action: 'sync', description: 'Sinhronizacija vozila', createdAt: '', updatedAt: '' },
-        
-        // Dispatcher Module permissions
-        { id: 22, name: 'dispatcher:read', resource: 'dispatcher', action: 'read', description: 'Pregled dispečerskog modula', createdAt: '', updatedAt: '' },
-        { id: 23, name: 'dispatcher:manage', resource: 'dispatcher', action: 'manage', description: 'Upravljanje dispečerskim modulom', createdAt: '', updatedAt: '' },
-        { id: 24, name: 'dispatcher:track_vehicles', resource: 'dispatcher', action: 'track_vehicles', description: 'Praćenje vozila na mapi', createdAt: '', updatedAt: '' },
-        { id: 25, name: 'dispatcher:send_commands', resource: 'dispatcher', action: 'send_commands', description: 'Slanje komandi vozačima', createdAt: '', updatedAt: '' },
-        { id: 26, name: 'dispatcher:view_map', resource: 'dispatcher_map', action: 'read', description: 'Pregled mape sa vozilima', createdAt: '', updatedAt: '' },
-        { id: 27, name: 'dispatcher:view_analytics', resource: 'dispatcher_analytics', action: 'read', description: 'Pregled analitike vozila', createdAt: '', updatedAt: '' },
-        { id: 28, name: 'dispatcher:manage_routes', resource: 'dispatcher_routes', action: 'manage', description: 'Upravljanje rutama', createdAt: '', updatedAt: '' },
-        { id: 29, name: 'dispatcher:emergency_actions', resource: 'dispatcher', action: 'emergency', description: 'Hitne akcije u dispečerskom modulu', createdAt: '', updatedAt: '' },
-        
-        // GPS Sync permission
-        { id: 30, name: 'dispatcher:sync_gps', resource: 'dispatcher', action: 'sync_gps', description: 'GPS sinhronizacija dispečerskog modula', createdAt: '', updatedAt: '' },
-        
-        // Safety/Bezbednost permissions
-        { id: 31, name: 'safety:view_aggressive_driving', resource: 'safety', action: 'view_aggressive', description: 'Pregled agresivne vožnje', createdAt: '', updatedAt: '' },
-        { id: 32, name: 'safety:view_monthly_report', resource: 'safety', action: 'view_report', description: 'Pregled mesečnog izveštaja bezbednosti', createdAt: '', updatedAt: '' },
-        
-        // Settings permissions
-        { id: 33, name: 'settings:general:read', resource: 'settings', action: 'read', description: 'Pregled opštih podešavanja', createdAt: '', updatedAt: '' },
-        { id: 34, name: 'settings:general:update', resource: 'settings', action: 'update', description: 'Ažuriranje opštih podešavanja', createdAt: '', updatedAt: '' },
-      ]);
+      // Prikaži grešku korisniku
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
+      errorDiv.textContent = 'Greška pri učitavanju permisija iz baze podataka';
+      document.body.appendChild(errorDiv);
+      setTimeout(() => errorDiv.remove(), 5000);
     }
   };
 
@@ -106,19 +73,15 @@ const PermissionsManagement: React.FC = () => {
       setHasChanges(false);
     } catch (error) {
       console.error('Greška pri učitavanju permisija role:', error);
-      // Mock podaci - različite permisije za različite role
-      const mockPermissions: Record<number, number[]> = {
-        1: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29], // SUPER_ADMIN - sve
-        2: [2, 3, 7, 11, 12, 14, 17, 18, 20, 21, 22, 23, 24, 25, 26, 27, 28], // CITY_MANAGER - korisnici, vozila, dispečer + analitika
-        3: [2, 7, 11, 14, 17, 22, 26, 27], // DEPARTMENT_HEAD - osnovno + pregled vozila, mape i analitike
-        4: [2, 11, 17, 22, 24, 26], // OPERATOR - pregled + praćenje vozila
-        5: [2, 7, 11, 12, 14, 15, 17, 22, 26, 27], // ANALYST - čitanje + mapa + analitika
-        6: [11], // CITIZEN - samo dashboard
-      };
-      const permissions = mockPermissions[roleId] || [];
-      setRolePermissions(permissions);
-      setOriginalPermissions(permissions);
+      setRolePermissions([]);
+      setOriginalPermissions([]);
       setHasChanges(false);
+      
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
+      errorDiv.textContent = 'Greška pri učitavanju permisija za ovu rolu';
+      document.body.appendChild(errorDiv);
+      setTimeout(() => errorDiv.remove(), 5000);
     } finally {
       setLoading(false);
     }
@@ -173,14 +136,11 @@ const PermissionsManagement: React.FC = () => {
       setTimeout(() => successDiv.remove(), 3000);
     } catch (error) {
       console.error('Greška pri čuvanju permisija:', error);
-      // Za testiranje
-      setOriginalPermissions(rolePermissions);
-      setHasChanges(false);
-      const successDiv = document.createElement('div');
-      successDiv.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
-      successDiv.textContent = 'Permisije uspešno ažurirane';
-      document.body.appendChild(successDiv);
-      setTimeout(() => successDiv.remove(), 3000);
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
+      errorDiv.textContent = 'Greška pri čuvanju permisija. Pokušajte ponovo.';
+      document.body.appendChild(errorDiv);
+      setTimeout(() => errorDiv.remove(), 3000);
     } finally {
       setSaving(false);
     }

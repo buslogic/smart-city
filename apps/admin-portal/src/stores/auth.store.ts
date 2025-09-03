@@ -120,6 +120,15 @@ export const useAuthStore = create<AuthStore>()(
         const { user } = get();
         return user?.roles?.includes(role) || false;
       },
+
+      updateUser: (updatedUser: Partial<User>) => {
+        const currentUser = get().user;
+        if (currentUser) {
+          set({
+            user: { ...currentUser, ...updatedUser }
+          });
+        }
+      },
     }),
     {
       name: 'auth-store',

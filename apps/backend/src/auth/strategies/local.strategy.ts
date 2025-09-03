@@ -16,7 +16,14 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
   async validate(email: string, password: string) {
     const user = await this.prisma.user.findUnique({
       where: { email },
-      include: {
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        password: true,
+        avatar: true,
+        isActive: true,
         roles: {
           include: {
             role: {
@@ -57,6 +64,7 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
+      avatar: user.avatar || null,
       isActive: user.isActive,
       roles,
       permissions: [...new Set(permissions)],

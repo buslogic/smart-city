@@ -22,7 +22,8 @@ import {
   Map,
   Navigation,
   RefreshCw,
-  AlertTriangle
+  AlertTriangle,
+  Sliders
 } from 'lucide-react';
 import type { Permission } from '../../../types/rbac.types';
 
@@ -149,144 +150,108 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
         children: [
           {
             id: 'administracija-vozila',
-            name: 'Administracija vozila',
-            type: 'submenu',
+            name: 'Administracija Vozila',
+            type: 'section',
             icon: <Car className="h-4 w-4" />,
-            color: 'text-green-600',
-            children: [
-              {
-                id: 'vehicles-crud',
-                name: 'Upravljanje vozilima',
-                type: 'section',
-                icon: <Car className="h-4 w-4" />,
-                children: allPermissions
-                  .filter(p => p.resource === 'vehicles')
-                  .map(p => ({
-                    id: `perm-${p.id}`,
-                    name: getPermissionLabel(p),
-                    type: 'permission' as const,
-                    permission: p,
-                    color: getPermissionColor(p.action),
-                  })),
-              },
-            ],
+            children: allPermissions
+              .filter(p => p.resource === 'vehicles' && p.action !== 'sync')
+              .map(p => ({
+                id: `perm-${p.id}`,
+                name: getPermissionLabel(p),
+                type: 'permission' as const,
+                permission: p,
+                color: getPermissionColor(p.action),
+              })),
           },
           {
             id: 'sinhronizacija-vozila',
             name: 'Sinhronizacija Vozila',
-            type: 'submenu',
+            type: 'section',
             icon: <RefreshCw className="h-4 w-4" />,
-            color: 'text-green-600',
-            children: [
-              {
-                id: 'vehicle-sync',
-                name: 'Sinhronizacija vozila',
-                type: 'section',
-                icon: <RefreshCw className="h-4 w-4" />,
-                children: allPermissions
-                  .filter(p => p.resource === 'vehicles' && p.action === 'sync')
-                  .map(p => ({
-                    id: `perm-${p.id}`,
-                    name: getPermissionLabel(p),
-                    type: 'permission' as const,
-                    permission: p,
-                    color: getPermissionColor(p.action),
-                  })),
-              },
-            ],
+            children: allPermissions
+              .filter(p => p.resource === 'vehicles' && p.action === 'sync')
+              .map(p => ({
+                id: `perm-${p.id}`,
+                name: getPermissionLabel(p),
+                type: 'permission' as const,
+                permission: p,
+                color: getPermissionColor(p.action),
+              })),
           },
           {
-            id: 'dispecerski-modul',
-            name: 'Dispečerski Modul',
-            type: 'submenu',
-            icon: <Navigation className="h-4 w-4" />,
-            color: 'text-indigo-600',
-            children: [
-              {
-                id: 'dispatcher-map',
-                name: 'Mapa i vozila',
-                type: 'section',
-                icon: <Map className="h-4 w-4" />,
-                children: allPermissions
-                  .filter(p => p.resource === 'dispatcher_map' || (p.resource === 'dispatcher' && p.action === 'track_vehicles'))
-                  .map(p => ({
-                    id: `perm-${p.id}`,
-                    name: getPermissionLabel(p),
-                    type: 'permission' as const,
-                    permission: p,
-                    color: getPermissionColor(p.action),
-                  })),
-              },
-              {
-                id: 'dispatcher-analytics',
-                name: 'Analiza',
-                type: 'section',
-                icon: <BarChart3 className="h-4 w-4" />,
-                children: allPermissions
-                  .filter(p => p.resource === 'dispatcher_analytics')
-                  .map(p => ({
-                    id: `perm-${p.id}`,
-                    name: getPermissionLabel(p),
-                    type: 'permission' as const,
-                    permission: p,
-                    color: getPermissionColor(p.action),
-                  })),
-              },
-              {
-                id: 'dispatcher-sync',
-                name: 'Sinhronizacija',
-                type: 'section',
-                icon: <RefreshCw className="h-4 w-4" />,
-                children: allPermissions
-                  .filter(p => p.resource === 'dispatcher' && p.action === 'sync_gps')
-                  .map(p => ({
-                    id: `perm-${p.id}`,
-                    name: getPermissionLabel(p),
-                    type: 'permission' as const,
-                    permission: p,
-                    color: getPermissionColor(p.action),
-                  })),
-              },
-            ],
+            id: 'dispatcher-map-vehicles',
+            name: 'Dispečerski Modul - Mapa i vozila',
+            type: 'section',
+            icon: <Map className="h-4 w-4" />,
+            children: allPermissions
+              .filter(p => p.resource === 'dispatcher_map' || p.name === 'dispatcher:view_map')
+              .map(p => ({
+                id: `perm-${p.id}`,
+                name: getPermissionLabel(p),
+                type: 'permission' as const,
+                permission: p,
+                color: getPermissionColor(p.action),
+              })),
           },
           {
-            id: 'bezbednost',
-            name: 'Bezbednost',
-            type: 'submenu',
+            id: 'dispatcher-analytics',
+            name: 'Dispečerski Modul - Analiza',
+            type: 'section',
+            icon: <BarChart3 className="h-4 w-4" />,
+            children: allPermissions
+              .filter(p => p.resource === 'dispatcher_analytics' || p.name === 'dispatcher:view_analytics')
+              .map(p => ({
+                id: `perm-${p.id}`,
+                name: getPermissionLabel(p),
+                type: 'permission' as const,
+                permission: p,
+                color: getPermissionColor(p.action),
+              })),
+          },
+          {
+            id: 'dispatcher-sync',
+            name: 'Dispečerski Modul - Sinhronizacija',
+            type: 'section',
+            icon: <RefreshCw className="h-4 w-4" />,
+            children: allPermissions
+              .filter(p => p.name === 'dispatcher:sync_gps')
+              .map(p => ({
+                id: `perm-${p.id}`,
+                name: getPermissionLabel(p),
+                type: 'permission' as const,
+                permission: p,
+                color: getPermissionColor(p.action),
+              })),
+          },
+          {
+            id: 'safety-aggressive',
+            name: 'Bezbednost - Agresivna vožnja',
+            type: 'section',
             icon: <AlertTriangle className="h-4 w-4" />,
-            color: 'text-red-600',
-            children: [
-              {
-                id: 'aggressive-driving',
-                name: 'Agresivna vožnja',
-                type: 'section',
-                icon: <AlertTriangle className="h-4 w-4" />,
-                children: allPermissions
-                  .filter(p => p.resource === 'safety' && (p.action === 'view_aggressive' || p.name.includes('aggressive')))
-                  .map(p => ({
-                    id: `perm-${p.id}`,
-                    name: getPermissionLabel(p),
-                    type: 'permission' as const,
-                    permission: p,
-                    color: getPermissionColor(p.action),
-                  })),
-              },
-              {
-                id: 'monthly-report',
-                name: 'Mesečni izveštaj',
-                type: 'section',
-                icon: <FileText className="h-4 w-4" />,
-                children: allPermissions
-                  .filter(p => p.resource === 'safety' && (p.action === 'view_report' || p.name.includes('report')))
-                  .map(p => ({
-                    id: `perm-${p.id}`,
-                    name: getPermissionLabel(p),
-                    type: 'permission' as const,
-                    permission: p,
-                    color: getPermissionColor(p.action),
-                  })),
-              },
-            ],
+            children: allPermissions
+              .filter(p => p.name === 'safety:view_aggressive' || p.name === 'safety:view_aggressive_driving')
+              .map(p => ({
+                id: `perm-${p.id}`,
+                name: getPermissionLabel(p),
+                type: 'permission' as const,
+                permission: p,
+                color: getPermissionColor(p.action),
+              })),
+          },
+          {
+            id: 'safety-report',
+            name: 'Bezbednost - Mesečni izveštaj',
+            type: 'section',
+            icon: <FileText className="h-4 w-4" />,
+            children: allPermissions
+              .filter(p => p.name === 'safety:view_report' || p.name === 'safety:view_monthly_report')
+              .map(p => ({
+                id: `perm-${p.id}`,
+                name: getPermissionLabel(p),
+                type: 'permission' as const,
+                permission: p,
+                color: getPermissionColor(p.action),
+              })),
           },
         ],
       },
@@ -300,91 +265,11 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
         children: [
           {
             id: 'opsta-podesavanja',
-            name: 'Opšta podešavanja',
-            type: 'submenu',
-            icon: <Settings className="h-4 w-4" />,
-            color: 'text-gray-600',
-            children: [
-              {
-                id: 'general-settings',
-                name: 'Opšta podešavanja',
-                type: 'section',
-                icon: <Settings className="h-4 w-4" />,
-                children: allPermissions
-                  .filter(p => p.resource === 'settings')
-                  .map(p => ({
-                    id: `perm-${p.id}`,
-                    name: getPermissionLabel(p),
-                    type: 'permission' as const,
-                    permission: p,
-                    color: getPermissionColor(p.action),
-                  })),
-              },
-              {
-                id: 'legacy-baze',
-                name: 'Legacy Baze',
-                type: 'section',
-                icon: <Database className="h-4 w-4" />,
-                children: allPermissions
-                  .filter(p => p.resource === 'legacy_databases')
-                  .map(p => ({
-                    id: `perm-${p.id}`,
-                    name: getPermissionLabel(p),
-                    type: 'permission' as const,
-                    permission: p,
-                    color: getPermissionColor(p.action),
-                  })),
-              },
-              {
-                id: 'legacy-tabele',
-                name: 'Legacy Tabele',
-                type: 'section',
-                icon: <Database className="h-4 w-4" />,
-                children: allPermissions
-                  .filter(p => p.resource === 'legacy_tables')
-                  .map(p => ({
-                    id: `perm-${p.id}`,
-                    name: getPermissionLabel(p),
-                    type: 'permission' as const,
-                    permission: p,
-                    color: getPermissionColor(p.action),
-                  })),
-              },
-            ],
-          },
-        ],
-      },
-      // Dodaj ostale permisije koje nisu grupisane
-      {
-        id: 'ostalo',
-        name: 'Ostalo',
-        type: 'menu',
-        icon: <FileText className="h-5 w-5" />,
-        color: 'text-purple-700',
-        bgColor: 'bg-purple-50',
-        children: [
-          {
-            id: 'dashboard-section',
-            name: 'Dashboard',
+            name: 'Opšta Podešavanja',
             type: 'section',
-            icon: <BarChart3 className="h-4 w-4" />,
+            icon: <Sliders className="h-4 w-4" />,
             children: allPermissions
-              .filter(p => p.resource === 'dashboard')
-              .map(p => ({
-                id: `perm-${p.id}`,
-                name: getPermissionLabel(p),
-                type: 'permission' as const,
-                permission: p,
-                color: getPermissionColor(p.action),
-              })),
-          },
-          {
-            id: 'reports-section',
-            name: 'Izveštaji',
-            type: 'section',
-            icon: <FileText className="h-4 w-4" />,
-            children: allPermissions
-              .filter(p => p.resource === 'reports')
+              .filter(p => p.resource === 'settings' || p.resource === 'legacy_databases' || p.resource === 'legacy_tables')
               .map(p => ({
                 id: `perm-${p.id}`,
                 name: getPermissionLabel(p),

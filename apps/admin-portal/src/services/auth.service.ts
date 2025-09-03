@@ -10,6 +10,8 @@ class AuthService {
     const response = await axios.post(`${API_URL}/api/auth/login`, credentials, {
       withCredentials: true,
     });
+    console.log('Auth service - Login response:', response.data);
+    console.log('Auth service - User avatar:', response.data.user?.avatar);
     return response.data;
   }
 
@@ -18,6 +20,8 @@ class AuthService {
     const response = await axios.post(`${API_URL}/api/auth/refresh`, {
       refreshToken,
     });
+    console.log('Auth service - Refresh response:', response.data);
+    console.log('Auth service - Refresh User avatar:', response.data.user?.avatar);
     return response.data;
   }
 

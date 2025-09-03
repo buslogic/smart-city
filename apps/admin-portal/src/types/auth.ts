@@ -3,6 +3,7 @@ export interface User {
   email: string;
   firstName: string;
   lastName: string;
+  avatar?: string | null;
   isActive: boolean;
   roles: string[];
   permissions: string[];
@@ -46,4 +47,5 @@ export interface AuthActions {
   clearError: () => void;
   checkPermission: (permission: string) => boolean;
   hasRole: (role: string) => boolean;
+  updateUser: (user: Partial<User>) => void;
 }

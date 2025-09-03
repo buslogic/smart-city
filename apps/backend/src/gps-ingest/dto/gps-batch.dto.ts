@@ -3,6 +3,11 @@ import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class GpsPointDto {
+  @ApiProperty({ description: 'IMEI uređaja', example: '352093084123456', required: false })
+  @IsOptional()
+  @IsString()
+  imei?: string;
+
   @ApiProperty({ description: 'Garažni broj vozila', example: 'P21001' })
   @IsString()
   garageNo: string;
@@ -68,13 +73,30 @@ export class GpsPointDto {
   @IsNumber()
   batteryStatus?: number;
 
-  @ApiProperty({ description: 'Vreme GPS očitavanja', example: '2024-01-15T10:30:00Z' })
-  @IsDateString()
-  captured: string;
+  @ApiProperty({ description: 'Broj satelita', example: 8, required: false })
+  @IsOptional()
+  @IsNumber()
+  satellites?: number;
 
-  @ApiProperty({ description: 'Vreme poslednje izmene', example: '2024-01-15T10:30:01Z' })
+  @ApiProperty({ description: 'Nadmorska visina (alternativno ime)', example: 120, required: false })
+  @IsOptional()
+  @IsNumber()
+  altitude?: number;
+
+  @ApiProperty({ description: 'Vreme GPS očitavanja', example: '2024-01-15T10:30:00Z', required: false })
+  @IsOptional()
   @IsDateString()
-  edited: string;
+  captured?: string;
+
+  @ApiProperty({ description: 'Vreme GPS očitavanja (alternativno ime)', example: '2024-01-15T10:30:00Z', required: false })
+  @IsOptional()
+  @IsDateString()
+  timestamp?: string;
+
+  @ApiProperty({ description: 'Vreme poslednje izmene', example: '2024-01-15T10:30:01Z', required: false })
+  @IsOptional()
+  @IsDateString()
+  edited?: string;
 }
 
 export class GpsBatchDto {

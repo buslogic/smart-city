@@ -53,6 +53,24 @@ export class UsersController {
     return this.usersService.findAll(pageNum, size, search);
   }
 
+  @Get('profile')
+  @ApiOperation({ summary: 'Get current user profile' })
+  @ApiResponse({ status: 200, description: 'Profile retrieved successfully' })
+  async getProfile(@Request() req: any) {
+    const user = await this.usersService.findOneWithDetails(req.user.id);
+    return {
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      avatar: user.avatar || null,
+      isActive: user.isActive,
+      createdAt: user.createdAt,
+      lastLoginAt: user.lastLoginAt,
+      roles: user.roles?.map(ur => ur.role.name) || [],
+    };
+  }
+
   @Get(':id')
   @RequirePermissions('users.read')
   @ApiOperation({ summary: 'Get user by ID' })
@@ -95,24 +113,6 @@ export class UsersController {
     @Body('isActive') isActive: boolean
   ): Promise<UserResponseDto> {
     return this.usersService.toggleStatus(id, isActive);
-  }
-
-  @Get('profile')
-  @ApiOperation({ summary: 'Get current user profile' })
-  @ApiResponse({ status: 200, description: 'Profile retrieved successfully' })
-  async getProfile(@Request() req: any) {
-    const user = await this.usersService.findOneWithDetails(req.user.id);
-    return {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      avatar: user.avatar || null,
-      isActive: user.isActive,
-      createdAt: user.createdAt,
-      lastLoginAt: user.lastLoginAt,
-      roles: user.roles?.map(ur => ur.role.name) || [],
-    };
   }
 
   @Patch('profile/avatar')

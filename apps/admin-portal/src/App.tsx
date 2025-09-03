@@ -116,7 +116,7 @@ function App() {
             <Route 
               path="transport/safety/aggressive-driving" 
               element={
-                <PermissionGuard permissions={['dispatcher:view_analytics']}>
+                <PermissionGuard permissions={['safety:view_aggressive']}>
                   <AggressiveDriving />
                 </PermissionGuard>
               } 
@@ -125,7 +125,7 @@ function App() {
             <Route 
               path="transport/safety/monthly-report" 
               element={
-                <PermissionGuard permissions={['dispatcher:view_analytics']}>
+                <PermissionGuard permissions={['safety:view_report']}>
                   <MonthlyReport />
                 </PermissionGuard>
               } 

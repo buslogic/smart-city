@@ -264,6 +264,26 @@ export class UsersService {
   }
 
   async updateProfile(id: number, data: { avatar?: string | null }) {
+    // Ako je development i briše se avatar, obriši i lokalnu sliku
+    if (process.env.NODE_ENV === 'development' && data.avatar === null) {
+      const user = await this.prisma.user.findUnique({
+        where: { id },
+        select: { avatar: true }
+      });
+      
+      if (user?.avatar && user.avatar.includes('/uploads/avatars/')) {
+        const filename = user.avatar.split('/').pop();
+        if (filename) {
+          const fs = require('fs');
+          const path = require('path');
+          const filePath = path.join(process.cwd(), 'uploads', 'avatars', filename);
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+          }
+        }
+      }
+    }
+    
     return this.prisma.user.update({
       where: { id },
       data: {

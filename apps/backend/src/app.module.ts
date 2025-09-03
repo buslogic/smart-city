@@ -20,12 +20,16 @@ import { GpsAnalyticsModule } from './gps-analytics/gps-analytics.module';
 import { GpsSyncModule } from './gps-sync/gps-sync.module';
 import { DrivingBehaviorModule } from './driving-behavior/driving-behavior.module';
 import { SpacesModule } from './spaces/spaces.module';
+import { UploadsModule } from './users/uploads/uploads.module';
+import { GpsProcessorModule } from './gps-processor/gps-processor.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    ScheduleModule.forRoot(),
     PrismaModule, 
     AuthModule,
     UsersModule, 
@@ -39,8 +43,10 @@ import { SpacesModule } from './spaces/spaces.module';
     GpsIngestModule,
     GpsAnalyticsModule,
     GpsSyncModule,
+    GpsProcessorModule,
     DrivingBehaviorModule,
     SpacesModule,
+    UploadsModule,
   ],
   controllers: [AppController],
   providers: [
