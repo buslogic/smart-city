@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
+import { DrivingBehaviorService } from '../driving-behavior/driving-behavior.service';
 import { Pool } from 'pg';
 import { createTimescalePool } from '../common/config/timescale.config';
 import { Prisma } from '@prisma/client';
@@ -29,7 +30,10 @@ export class GpsProcessorService {
     cleanupStatsDays: 10
   };
 
-  constructor(private prisma: PrismaService) {
+  constructor(
+    private prisma: PrismaService,
+    private drivingBehaviorService: DrivingBehaviorService
+  ) {
     // Kreiraj konekciju na TimescaleDB
     this.timescalePool = createTimescalePool();
     this.logger.log('🚀 GPS Processor Service inicijalizovan');
@@ -201,6 +205,11 @@ export class GpsProcessorService {
 
         const processingTime = Date.now() - startTime;
         const actualProcessed = valueStrings.length; // Broj stvarno procesiranih (nakon deduplikacije)
+
+        // 6. Detekcija agresivne vožnje (KRITIČNO - dodato!)
+        if (actualProcessed > 0) {
+          await this.detectAggressiveDriving(batch);
+        }
         this.processedCount += actualProcessed;
         this.lastProcessTime = new Date();
 
@@ -456,6 +465,60 @@ export class GpsProcessorService {
 
   static getCronStatus() {
     return this.cronEnabled;
+  }
+
+  /**
+   * Detekcija agresivne vožnje za batch podataka (NOVO!)
+   */
+  private async detectAggressiveDriving(batch: any[]) {
+    try {
+      // Grupiši po vehicle_id i vremenu
+      const vehicleGroups = new Map<number, { startTime: Date, endTime: Date, garageNo: string }>();
+      
+      batch.forEach(record => {
+        const vehicleId = record.vehicle_id;
+        // Buffer tabela koristi 'timestamp', ne 'record_time'
+        const recordTime = new Date(record.timestamp);
+        
+        // Validacija datuma
+        if (!recordTime || isNaN(recordTime.getTime())) {
+          this.logger.warn(`Invalid timestamp for vehicle ${vehicleId}: ${record.timestamp}`);
+          return; // Preskoči loš record
+        }
+        
+        if (!vehicleGroups.has(vehicleId)) {
+          vehicleGroups.set(vehicleId, {
+            startTime: recordTime,
+            endTime: recordTime,
+            garageNo: record.garage_no
+          });
+        } else {
+          const group = vehicleGroups.get(vehicleId)!;
+          if (recordTime < group.startTime) group.startTime = recordTime;
+          if (recordTime > group.endTime) group.endTime = recordTime;
+        }
+      });
+
+      // Pokreni detekciju za svako vozilo
+      const detectionPromises = Array.from(vehicleGroups.entries()).map(async ([vehicleId, timeRange]) => {
+        try {
+          await this.drivingBehaviorService.processGpsData(
+            vehicleId,
+            timeRange.startTime,
+            timeRange.endTime
+          );
+          this.logger.debug(`🔍 Agresivna vožnja detektovana za vozilo ${timeRange.garageNo} (${vehicleId})`);
+        } catch (error) {
+          this.logger.warn(`⚠️ Greška u detekciji za vozilo ${vehicleId}: ${error.message}`);
+        }
+      });
+
+      await Promise.all(detectionPromises);
+      this.logger.log(`🚗 Agresivna vožnja obrađena za ${vehicleGroups.size} vozila`);
+      
+    } catch (error) {
+      this.logger.error(`❌ Greška u batch detekciji agresivne vožnje: ${error.message}`);
+    }
   }
 
   /**

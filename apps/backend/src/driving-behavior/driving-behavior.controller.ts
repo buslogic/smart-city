@@ -1,5 +1,5 @@
-import { Controller, Get, Param, Query, ParseIntPipe, ValidationPipe, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Get, Post, Put, Body, Param, Query, ParseIntPipe, ValidationPipe, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { DrivingBehaviorService } from './driving-behavior.service';
 import {
   DrivingEventDto,
@@ -8,6 +8,7 @@ import {
   ChartDataDto,
 } from './dto/driving-events.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('Driving Behavior')
 @Controller('driving-behavior')
@@ -92,5 +93,126 @@ export class DrivingBehaviorController {
     @Query('endDate') endDate?: string,
   ): Promise<ChartDataDto> {
     return this.drivingBehaviorService.getVehicleChartData(vehicleId, startDate, endDate);
+  }
+
+  /**
+   * OPTIMIZED: Get statistics for multiple vehicles at once
+   */
+  @Post('batch-statistics')
+  @ApiOperation({ 
+    summary: 'Get statistics for multiple vehicles (BATCH)',
+    description: 'Returns aggregated statistics for multiple vehicles in a single request - optimized for monthly reports'
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        vehicleIds: {
+          type: 'array',
+          items: { type: 'number' },
+          description: 'Array of vehicle IDs',
+          example: [1, 2, 3, 4, 5]
+        },
+        startDate: {
+          type: 'string',
+          format: 'date',
+          description: 'Start date (YYYY-MM-DD)',
+          example: '2025-08-01'
+        },
+        endDate: {
+          type: 'string',
+          format: 'date',
+          description: 'End date (YYYY-MM-DD)',
+          example: '2025-08-31'
+        }
+      },
+      required: ['vehicleIds', 'startDate', 'endDate']
+    }
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Array of vehicle statistics',
+    type: [VehicleStatisticsDto],
+  })
+  async getBatchStatistics(
+    @Body() dto: { vehicleIds: number[]; startDate: string; endDate: string }
+  ): Promise<VehicleStatisticsDto[]> {
+    return this.drivingBehaviorService.getBatchMonthlyStatistics(
+      dto.vehicleIds,
+      dto.startDate,
+      dto.endDate
+    );
+  }
+
+  /**
+   * Get safety score configuration
+   */
+  @Get('safety-config')
+  @ApiOperation({ 
+    summary: 'Get safety score configuration',
+    description: 'Returns current safety score calculation parameters'
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Configuration retrieved successfully'
+  })
+  async getSafetyConfig() {
+    return this.drivingBehaviorService.getSafetyScoreConfig();
+  }
+
+  /**
+   * Update safety score configuration
+   */
+  @Put('safety-config')
+  @ApiOperation({ 
+    summary: 'Update safety score configuration',
+    description: 'Updates safety score calculation parameters'
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        configs: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              thresholdEvents: { type: 'number' },
+              thresholdDistanceKm: { type: 'number' },
+              penaltyPoints: { type: 'number' },
+              penaltyMultiplier: { type: 'number' },
+              maxPenalty: { type: 'number' }
+            }
+          }
+        }
+      }
+    }
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Configuration updated successfully'
+  })
+  async updateSafetyConfig(
+    @Body() dto: any,
+    @CurrentUser() user: any
+  ) {
+    return this.drivingBehaviorService.updateSafetyScoreConfig(dto.configs, user.id);
+  }
+
+  /**
+   * EMERGENCY: Force refresh continuous aggregates (LIVE SERVER)
+   */
+  @Post('force-refresh-aggregates')
+  @ApiOperation({ 
+    summary: 'EMERGENCY: Force refresh continuous aggregates',
+    description: 'Manually refresh all continuous aggregates - use only if needed on live server'
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Aggregates refreshed successfully'
+  })
+  async forceRefreshAggregates(@CurrentUser() user: any) {
+    return this.drivingBehaviorService.forceRefreshContinuousAggregates(user.id);
   }
 }

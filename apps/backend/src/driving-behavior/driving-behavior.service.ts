@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Pool } from 'pg';
+import { PrismaService } from '../prisma/prisma.service';
 import { createTimescalePool, testTimescaleConnection } from '../common/config/timescale.config';
 import {
   DrivingEventDto,
@@ -16,7 +17,7 @@ export class DrivingBehaviorService {
   private readonly logger = new Logger(DrivingBehaviorService.name);
   private pgPool: Pool;
 
-  constructor() {
+  constructor(private prisma: PrismaService) {
     // Initialize TimescaleDB connection pool using centralized config
     this.pgPool = createTimescalePool();
     
@@ -411,16 +412,368 @@ export class DrivingBehaviorService {
   }
 
   /**
+   * OPTIMIZED: Get statistics for multiple vehicles at once
+   * Much faster than individual queries!
+   */
+  async getBatchMonthlyStatistics(
+    vehicleIds: number[],
+    startDate: string,
+    endDate: string,
+  ): Promise<VehicleStatisticsDto[]> {
+    try {
+      // Batch query for all vehicles at once!
+      const batchQuery = `
+        WITH event_stats AS (
+          SELECT 
+            vehicle_id,
+            COUNT(*) FILTER (WHERE event_type = 'harsh_acceleration' AND severity >= 4) as severe_acc,
+            COUNT(*) FILTER (WHERE event_type = 'harsh_acceleration' AND severity = 3) as moderate_acc,
+            COUNT(*) FILTER (WHERE event_type = 'harsh_braking' AND severity >= 4) as severe_brake,
+            COUNT(*) FILTER (WHERE event_type = 'harsh_braking' AND severity = 3) as moderate_brake,
+            AVG(g_force)::NUMERIC(5,3) as avg_g_force,
+            MAX(g_force)::NUMERIC(5,3) as max_g_force,
+            COUNT(*) as total_events,
+            MODE() WITHIN GROUP (ORDER BY EXTRACT(HOUR FROM time))::INTEGER as most_common_hour
+          FROM driving_events
+          WHERE vehicle_id = ANY($1::int[])
+            AND time >= $2::date
+            AND time < $3::date + INTERVAL '1 day'
+          GROUP BY vehicle_id
+        ),
+        distance_stats AS (
+          -- Use pre-calculated hourly stats for distance (MUCH FASTER!)
+          SELECT 
+            vehicle_id,
+            COALESCE(SUM(distance_km), 0)::NUMERIC(10,2) as total_km,
+            COUNT(DISTINCT DATE(hour)) as active_days
+          FROM vehicle_hourly_stats
+          WHERE vehicle_id = ANY($1::int[])
+            AND hour >= $2::date
+            AND hour < $3::date + INTERVAL '1 day'
+          GROUP BY vehicle_id
+        ),
+        garage_names AS (
+          SELECT DISTINCT ON (vehicle_id)
+            vehicle_id,
+            garage_no
+          FROM gps_data
+          WHERE vehicle_id = ANY($1::int[])
+          ORDER BY vehicle_id, time DESC
+        )
+        SELECT 
+          COALESCE(e.vehicle_id, d.vehicle_id) as vehicle_id,
+          COALESCE(g.garage_no, 'V' || COALESCE(e.vehicle_id, d.vehicle_id)) as garage_no,
+          COALESCE(severe_acc, 0) as severe_accelerations,
+          COALESCE(moderate_acc, 0) as moderate_accelerations,
+          COALESCE(severe_brake, 0) as severe_brakings,
+          COALESCE(moderate_brake, 0) as moderate_brakings,
+          COALESCE(avg_g_force, 0) as avg_g_force,
+          COALESCE(max_g_force, 0) as max_g_force,
+          COALESCE(total_events, 0) as total_events,
+          COALESCE(total_km, 0) as total_distance_km,
+          COALESCE(active_days, 0) as active_days,
+          COALESCE(most_common_hour, 0) as most_common_hour,
+          CASE 
+            WHEN total_km > 0 AND total_events > 0 THEN 
+              (total_events::NUMERIC / total_km * 100)::NUMERIC(10,2)
+            ELSE 0
+          END as events_per_100km
+        FROM event_stats e
+        FULL OUTER JOIN distance_stats d ON e.vehicle_id = d.vehicle_id
+        LEFT JOIN garage_names g ON COALESCE(e.vehicle_id, d.vehicle_id) = g.vehicle_id
+        ORDER BY vehicle_id
+      `;
+
+      const result = await this.pgPool.query(batchQuery, [vehicleIds, startDate, endDate]);
+
+      // Calculate safety scores in application (flexible!)
+      return Promise.all(
+        result.rows.map(async row => ({
+          vehicleId: row.vehicle_id,
+          garageNo: row.garage_no,
+          totalEvents: row.total_events,
+          severeAccelerations: row.severe_accelerations,
+          moderateAccelerations: row.moderate_accelerations,
+          severeBrakings: row.severe_brakings,
+          moderateBrakings: row.moderate_brakings,
+          avgGForce: parseFloat(row.avg_g_force) || 0,
+          maxGForce: parseFloat(row.max_g_force) || 0,
+          totalDistanceKm: parseFloat(row.total_distance_km) || 0,
+          eventsPer100Km: parseFloat(row.events_per_100km) || 0,
+          mostCommonHour: row.most_common_hour || 0,
+          safetyScore: await this.calculateBatchSafetyScore(row),
+          startDate,
+          endDate,
+        }))
+      );
+    } catch (error) {
+      this.logger.error(`Error in batch monthly statistics: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Flexible safety score calculation using database configuration
+   */
+  private async calculateBatchSafetyScore(stats: any): Promise<number> {
+    const { 
+      severe_accelerations = 0, 
+      moderate_accelerations = 0,
+      severe_brakings = 0,
+      moderate_brakings = 0,
+      total_distance_km = 0 
+    } = stats;
+
+    // No driving = perfect score
+    if (total_distance_km === 0) return 100;
+
+    try {
+      // Get configuration from database
+      const [configs, globalConfig] = await Promise.all([
+        this.prisma.safetyScoreConfig.findMany({
+          where: { isActive: true }
+        }),
+        this.prisma.safetyScoreGlobalConfig.findMany()
+      ]);
+
+      // Convert global config to map
+      const globalParams = new Map(
+        globalConfig.map(g => [g.parameterName, Number(g.parameterValue)])
+      );
+
+      const baseScore = globalParams.get('base_score') ?? 100;
+      const minScore = globalParams.get('min_score') ?? 0;
+      const maxScore = globalParams.get('max_score') ?? 100;
+      const distanceNorm = globalParams.get('distance_normalization') ?? 100;
+
+      let totalPenalty = 0;
+
+      // Process each configuration rule
+      for (const config of configs) {
+        let eventCount = 0;
+
+        // Map database events to actual counts
+        if (config.eventType === 'harsh_acceleration') {
+          eventCount = config.severity === 'severe' ? severe_accelerations : moderate_accelerations;
+        } else if (config.eventType === 'harsh_braking') {
+          eventCount = config.severity === 'severe' ? severe_brakings : moderate_brakings;
+        }
+
+        // Calculate events per normalized distance
+        const thresholdDistance = Number(config.thresholdDistanceKm);
+        const normalizedDistance = Math.max(total_distance_km, 1) * (distanceNorm / thresholdDistance);
+        const eventsPer = (eventCount / normalizedDistance) * distanceNorm;
+
+        // Calculate penalty if threshold exceeded
+        if (eventsPer > Number(config.thresholdEvents)) {
+          const excess = eventsPer - Number(config.thresholdEvents);
+          let penalty = Number(config.penaltyPoints) + (excess * Number(config.penaltyMultiplier));
+          
+          // Apply max penalty if configured
+          if (config.maxPenalty) {
+            penalty = Math.min(penalty, Number(config.maxPenalty));
+          }
+          
+          totalPenalty += penalty;
+        }
+      }
+
+      // Calculate final score
+      const finalScore = baseScore - totalPenalty;
+      return Math.max(minScore, Math.min(maxScore, Math.round(finalScore)));
+
+    } catch (error) {
+      this.logger.warn(`Failed to load safety score config, using default: ${error.message}`);
+      // Fallback to simple calculation if config fails
+      const events = severe_accelerations + severe_brakings + moderate_accelerations + moderate_brakings;
+      const eventsPer100km = (events / Math.max(total_distance_km, 1)) * 100;
+      return Math.max(0, Math.min(100, Math.round(100 - Math.min(50, eventsPer100km))));
+    }
+  }
+
+  /**
+   * Get safety score configuration
+   */
+  async getSafetyScoreConfig() {
+    try {
+      const configs = await this.prisma.safetyScoreConfig.findMany({
+        where: { isActive: true },
+        orderBy: [
+          { eventType: 'asc' },
+          { severity: 'desc' }
+        ]
+      });
+
+      // Map to frontend-friendly format
+      return {
+        severeAccelThreshold: configs.find(c => c.eventType === 'harsh_acceleration' && c.severity === 'severe')?.thresholdEvents || 2,
+        severeAccelDistance: configs.find(c => c.eventType === 'harsh_acceleration' && c.severity === 'severe')?.thresholdDistanceKm || 100,
+        severeAccelPenalty: Number(configs.find(c => c.eventType === 'harsh_acceleration' && c.severity === 'severe')?.penaltyPoints) || 15,
+        
+        moderateAccelThreshold: configs.find(c => c.eventType === 'harsh_acceleration' && c.severity === 'moderate')?.thresholdEvents || 10,
+        moderateAccelDistance: configs.find(c => c.eventType === 'harsh_acceleration' && c.severity === 'moderate')?.thresholdDistanceKm || 100,
+        moderateAccelPenalty: Number(configs.find(c => c.eventType === 'harsh_acceleration' && c.severity === 'moderate')?.penaltyPoints) || 5,
+        
+        severeBrakeThreshold: configs.find(c => c.eventType === 'harsh_braking' && c.severity === 'severe')?.thresholdEvents || 2,
+        severeBrakeDistance: configs.find(c => c.eventType === 'harsh_braking' && c.severity === 'severe')?.thresholdDistanceKm || 100,
+        severeBrakePenalty: Number(configs.find(c => c.eventType === 'harsh_braking' && c.severity === 'severe')?.penaltyPoints) || 15,
+        
+        moderateBrakeThreshold: configs.find(c => c.eventType === 'harsh_braking' && c.severity === 'moderate')?.thresholdEvents || 10,
+        moderateBrakeDistance: configs.find(c => c.eventType === 'harsh_braking' && c.severity === 'moderate')?.thresholdDistanceKm || 100,
+        moderateBrakePenalty: Number(configs.find(c => c.eventType === 'harsh_braking' && c.severity === 'moderate')?.penaltyPoints) || 5,
+      };
+    } catch (error) {
+      this.logger.error(`Error fetching safety config: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Update safety score configuration
+   */
+  async updateSafetyScoreConfig(configs: any[], userId: number) {
+    try {
+      // Update each config in transaction
+      return await this.prisma.$transaction(async (tx) => {
+        const updates: Promise<any>[] = [];
+        
+        // Update severe acceleration
+        if (configs['severeAccel']) {
+          updates.push(
+            tx.safetyScoreConfig.updateMany({
+              where: {
+                eventType: 'harsh_acceleration',
+                severity: 'severe'
+              },
+              data: {
+                thresholdEvents: configs['severeAccel'].threshold,
+                thresholdDistanceKm: configs['severeAccel'].distance,
+                penaltyPoints: configs['severeAccel'].penalty,
+              }
+            })
+          );
+        }
+        
+        // Update moderate acceleration
+        if (configs['moderateAccel']) {
+          updates.push(
+            tx.safetyScoreConfig.updateMany({
+              where: {
+                eventType: 'harsh_acceleration',
+                severity: 'moderate'
+              },
+              data: {
+                thresholdEvents: configs['moderateAccel'].threshold,
+                thresholdDistanceKm: configs['moderateAccel'].distance,
+                penaltyPoints: configs['moderateAccel'].penalty,
+              }
+            })
+          );
+        }
+        
+        // Update severe braking
+        if (configs['severeBrake']) {
+          updates.push(
+            tx.safetyScoreConfig.updateMany({
+              where: {
+                eventType: 'harsh_braking',
+                severity: 'severe'
+              },
+              data: {
+                thresholdEvents: configs['severeBrake'].threshold,
+                thresholdDistanceKm: configs['severeBrake'].distance,
+                penaltyPoints: configs['severeBrake'].penalty,
+              }
+            })
+          );
+        }
+        
+        // Update moderate braking
+        if (configs['moderateBrake']) {
+          updates.push(
+            tx.safetyScoreConfig.updateMany({
+              where: {
+                eventType: 'harsh_braking',
+                severity: 'moderate'
+              },
+              data: {
+                thresholdEvents: configs['moderateBrake'].threshold,
+                thresholdDistanceKm: configs['moderateBrake'].distance,
+                penaltyPoints: configs['moderateBrake'].penalty,
+              }
+            })
+          );
+        }
+        
+        await Promise.all(updates);
+        return { success: true, message: 'Configuration updated successfully' };
+      });
+    } catch (error) {
+      this.logger.error(`Error updating safety config: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * EMERGENCY: Force refresh continuous aggregates (LIVE SERVER)
+   */
+  async forceRefreshContinuousAggregates(userId: number) {
+    try {
+      this.logger.warn(`🚨 EMERGENCY: Force refresh pokrenuo korisnik ${userId}`);
+      
+      // 1. Refresh vehicle_hourly_stats
+      await this.pgPool.query(`CALL refresh_continuous_aggregate('vehicle_hourly_stats', NULL, NULL)`);
+      this.logger.log('✅ vehicle_hourly_stats refreshovan');
+      
+      // 2. Refresh daily_vehicle_stats  
+      await this.pgPool.query(`CALL refresh_continuous_aggregate('daily_vehicle_stats', NULL, NULL)`);
+      this.logger.log('✅ daily_vehicle_stats refreshovan');
+      
+      // 3. Update statistike
+      await this.pgPool.query(`ANALYZE vehicle_hourly_stats`);
+      await this.pgPool.query(`ANALYZE daily_vehicle_stats`);
+      this.logger.log('✅ Statistike ažurirane');
+      
+      return { 
+        success: true, 
+        message: 'Continuous aggregates su uspešno refreshovani',
+        timestamp: new Date().toISOString(),
+        refreshedBy: userId
+      };
+      
+    } catch (error) {
+      this.logger.error(`❌ Greška u force refresh: ${error.message}`);
+      throw new Error(`Force refresh failed: ${error.message}`);
+    }
+  }
+
+  /**
    * Process new GPS data for aggressive driving detection
    * This will be called from GPS Sync service
    */
   async processGpsData(vehicleId: number, startTime: Date, endTime: Date): Promise<void> {
     try {
+      // First get garage_no for this vehicle
+      const garageQuery = `
+        SELECT garage_no FROM gps_data 
+        WHERE vehicle_id = $1 
+        ORDER BY time DESC 
+        LIMIT 1
+      `;
+      const garageResult = await this.pgPool.query(garageQuery, [vehicleId]);
+      
+      if (garageResult.rows.length === 0) {
+        this.logger.warn(`No GPS data found for vehicle ${vehicleId}, skipping aggressive driving detection`);
+        return;
+      }
+      
+      const garageNo = garageResult.rows[0].garage_no;
+      
       const query = `
-        SELECT * FROM detect_aggressive_driving_batch($1, $2, $3)
+        SELECT * FROM detect_aggressive_driving_batch($1, $2, $3, $4)
       `;
       
-      const result = await this.pgPool.query(query, [vehicleId, startTime, endTime]);
+      const result = await this.pgPool.query(query, [vehicleId, garageNo, startTime, endTime]);
       
       if (result.rows[0].detected_events > 0) {
         this.logger.log(

@@ -1,0 +1,184 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { Pool } from 'pg';
+import { createTimescalePool } from '../common/config/timescale.config';
+import { VehicleStatisticsDto } from './dto/driving-events.dto';
+
+interface MonthlyStatsRaw {
+  vehicleId: number;
+  severeAccelerations: number;
+  moderateAccelerations: number;
+  severeBrakings: number;
+  moderateBrakings: number;
+  avgGForce: number;
+  maxGForce: number;
+  totalEvents: number;
+  totalDistanceKm: number;
+  activeDays: number;
+}
+
+@Injectable()
+export class DrivingBehaviorService {
+  private readonly logger = new Logger(DrivingBehaviorService.name);
+  private pgPool: Pool;
+
+  constructor() {
+    this.pgPool = createTimescalePool();
+  }
+
+  /**
+   * OPTIMIZED: Get statistics for multiple vehicles at once
+   */
+  async getBatchMonthlyStatistics(
+    vehicleIds: number[],
+    startDate: string,
+    endDate: string,
+  ): Promise<VehicleStatisticsDto[]> {
+    try {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+
+      // Batch query for all vehicles at once!
+      const batchQuery = `
+        WITH event_stats AS (
+          SELECT 
+            vehicle_id,
+            COUNT(*) FILTER (WHERE event_type = 'harsh_acceleration' AND severity >= 4) as severe_acc,
+            COUNT(*) FILTER (WHERE event_type = 'harsh_acceleration' AND severity = 3) as moderate_acc,
+            COUNT(*) FILTER (WHERE event_type = 'harsh_braking' AND severity >= 4) as severe_brake,
+            COUNT(*) FILTER (WHERE event_type = 'harsh_braking' AND severity = 3) as moderate_brake,
+            AVG(g_force)::NUMERIC(5,3) as avg_g_force,
+            MAX(g_force)::NUMERIC(5,3) as max_g_force,
+            COUNT(*) as total_events,
+            MODE() WITHIN GROUP (ORDER BY EXTRACT(HOUR FROM time))::INTEGER as most_common_hour
+          FROM driving_events
+          WHERE vehicle_id = ANY($1::int[])
+            AND time >= $2::date
+            AND time < $3::date + INTERVAL '1 day'
+          GROUP BY vehicle_id
+        ),
+        distance_stats AS (
+          -- Use pre-calculated hourly stats for distance (MUCH FASTER!)
+          SELECT 
+            vehicle_id,
+            COALESCE(SUM(distance_km), 0)::NUMERIC(10,2) as total_km,
+            COUNT(DISTINCT DATE(hour)) as active_days
+          FROM vehicle_hourly_stats
+          WHERE vehicle_id = ANY($1::int[])
+            AND hour >= $2::date
+            AND hour < $3::date + INTERVAL '1 day'
+          GROUP BY vehicle_id
+        ),
+        garage_names AS (
+          SELECT DISTINCT ON (vehicle_id)
+            vehicle_id,
+            garage_no
+          FROM gps_data
+          WHERE vehicle_id = ANY($1::int[])
+          ORDER BY vehicle_id, time DESC
+        )
+        SELECT 
+          COALESCE(e.vehicle_id, d.vehicle_id) as vehicle_id,
+          COALESCE(g.garage_no, 'V' || COALESCE(e.vehicle_id, d.vehicle_id)) as garage_no,
+          COALESCE(severe_acc, 0) as severe_accelerations,
+          COALESCE(moderate_acc, 0) as moderate_accelerations,
+          COALESCE(severe_brake, 0) as severe_brakings,
+          COALESCE(moderate_brake, 0) as moderate_brakings,
+          COALESCE(avg_g_force, 0) as avg_g_force,
+          COALESCE(max_g_force, 0) as max_g_force,
+          COALESCE(total_events, 0) as total_events,
+          COALESCE(total_km, 0) as total_distance_km,
+          COALESCE(active_days, 0) as active_days,
+          COALESCE(most_common_hour, 0) as most_common_hour,
+          CASE 
+            WHEN total_km > 0 AND total_events > 0 THEN 
+              (total_events::NUMERIC / total_km * 100)::NUMERIC(10,2)
+            ELSE 0
+          END as events_per_100km
+        FROM event_stats e
+        FULL OUTER JOIN distance_stats d ON e.vehicle_id = d.vehicle_id
+        LEFT JOIN garage_names g ON COALESCE(e.vehicle_id, d.vehicle_id) = g.vehicle_id
+        ORDER BY vehicle_id
+      `;
+
+      const result = await this.pgPool.query(batchQuery, [vehicleIds, startDate, endDate]);
+
+      // Calculate safety scores in application (flexible!)
+      return result.rows.map(row => ({
+        vehicleId: row.vehicle_id,
+        garageNo: row.garage_no,
+        totalEvents: row.total_events,
+        severeAccelerations: row.severe_accelerations,
+        moderateAccelerations: row.moderate_accelerations,
+        severeBrakings: row.severe_brakings,
+        moderateBrakings: row.moderate_brakings,
+        avgGForce: parseFloat(row.avg_g_force) || 0,
+        maxGForce: parseFloat(row.max_g_force) || 0,
+        totalDistanceKm: parseFloat(row.total_distance_km) || 0,
+        eventsPer100Km: parseFloat(row.events_per_100km) || 0,
+        mostCommonHour: row.most_common_hour || 0,
+        safetyScore: this.calculateSafetyScore(row),
+        startDate,
+        endDate,
+      }));
+    } catch (error) {
+      this.logger.error(`Error in batch monthly statistics: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Flexible safety score calculation - can be changed without DB changes!
+   */
+  private calculateSafetyScore(stats: any): number {
+    const { 
+      severe_accelerations = 0, 
+      moderate_accelerations = 0,
+      severe_brakings = 0,
+      moderate_brakings = 0,
+      total_distance_km = 0 
+    } = stats;
+
+    // No driving or no events = perfect score
+    if (total_distance_km === 0) return 100;
+
+    const severeEvents = severe_accelerations + severe_brakings;
+    const moderateEvents = moderate_accelerations + moderate_brakings;
+
+    // Current formula (can be easily changed!)
+    const severePenalty = (severeEvents / Math.max(total_distance_km, 1)) * 100 * 3;
+    const moderatePenalty = (moderateEvents / Math.max(total_distance_km, 1)) * 100 * 1;
+    const totalPenalty = Math.min(40, severePenalty + moderatePenalty);
+
+    return Math.max(50, Math.round(100 - totalPenalty));
+  }
+
+  // Keep existing single vehicle method for backward compatibility
+  async getVehicleStatistics(
+    vehicleId: number,
+    startDate?: string,
+    endDate?: string,
+  ): Promise<VehicleStatisticsDto> {
+    const results = await this.getBatchMonthlyStatistics([vehicleId], startDate, endDate);
+    return results[0] || this.getEmptyStatistics(vehicleId, startDate, endDate);
+  }
+
+  private getEmptyStatistics(vehicleId: number, startDate: string, endDate: string): VehicleStatisticsDto {
+    return {
+      totalEvents: 0,
+      severeAccelerations: 0,
+      moderateAccelerations: 0,
+      severeBrakings: 0,
+      moderateBrakings: 0,
+      avgGForce: 0,
+      maxGForce: 0,
+      totalDistanceKm: 0,
+      eventsPer100Km: 0,
+      mostCommonHour: 0,
+      safetyScore: 100,
+      startDate,
+      endDate,
+      vehicleId,
+      garageNo: `V${vehicleId}`,
+    };
+  }
+}

@@ -25,6 +25,7 @@ model User {
   sessions          Session[]
   vehicleSyncLogs   VehicleSyncLog[]
   gpsSyncLogs       GpsSyncLog[]
+  safetyScoreConfigHistory SafetyScoreConfigHistory[]
   
   @@index([email])
   @@map("users")
@@ -393,4 +394,50 @@ model SystemSettings {
   
   @@index([category], name: "idx_category")
   @@map("system_settings")
+}
+
+// Safety Score Configuration
+model SafetyScoreConfig {
+  id                 Int      @id @default(autoincrement())
+  eventType          String   @map("event_type") @db.VarChar(50)
+  severity           String   @db.VarChar(20)
+  thresholdEvents    Int      @map("threshold_events")
+  thresholdDistanceKm Int     @map("threshold_distance_km")
+  penaltyPoints      Decimal  @map("penalty_points") @db.Decimal(5, 2)
+  penaltyMultiplier  Decimal  @map("penalty_multiplier") @db.Decimal(5, 2)
+  maxPenalty         Decimal? @map("max_penalty") @db.Decimal(5, 2)
+  description        String?  @db.Text
+  isActive           Boolean  @default(true) @map("is_active")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+  
+  history            SafetyScoreConfigHistory[]
+
+  @@unique([eventType, severity])
+  @@map("safety_score_config")
+}
+
+model SafetyScoreConfigHistory {
+  id         Int      @id @default(autoincrement())
+  configId   Int      @map("config_id")
+  changedBy  Int?     @map("changed_by")
+  changeType String   @map("change_type") @db.VarChar(20)
+  oldValues  Json?    @map("old_values")
+  newValues  Json?    @map("new_values")
+  changedAt  DateTime @default(now()) @map("changed_at")
+
+  config     SafetyScoreConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  user       User?             @relation(fields: [changedBy], references: [id], onDelete: SetNull)
+
+  @@map("safety_score_config_history")
+}
+
+model SafetyScoreGlobalConfig {
+  id              Int      @id @default(autoincrement())
+  parameterName   String   @unique @map("parameter_name") @db.VarChar(100)
+  parameterValue  Decimal  @map("parameter_value") @db.Decimal(10, 2)
+  description     String?  @db.Text
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("safety_score_global_config")
 }
