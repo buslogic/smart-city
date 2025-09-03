@@ -307,6 +307,10 @@ export class GpsSyncDashboardController {
     const legacyLastRun = lastLegacyActivity[0]?.last_received;
     const processorLastRun = lastProcessedActivity[0]?.last_processed;
     
+    // Proveri backend cron status
+    const { GpsProcessorService } = require('../gps-processor/gps-processor.service');
+    const backendCronStatus = GpsProcessorService.getCronStatus();
+    
     // Cron se smatra aktivnim ako je radio u zadnjih X minuta
     const isActive = (lastRun: Date | null, intervalMinutes: number) => {
       if (!lastRun) return false;
@@ -396,7 +400,8 @@ export class GpsSyncDashboardController {
           location: 'Backend NestJS',
           schedule: 'Svakih 30 sekundi',
           lastRun: processorLastRun,
-          isActive: isActive(processorLastRun, 0.5),
+          isActive: backendCronStatus.processor && isActive(processorLastRun, 0.5),
+          isPaused: !backendCronStatus.processor,
           description: 'Prebacuje podatke iz buffer-a u TimescaleDB',
           type: 'backend'
         },
@@ -405,7 +410,8 @@ export class GpsSyncDashboardController {
           location: 'Backend NestJS',
           schedule: 'Svakih 2 minuta',
           lastRun: GpsSyncDashboardController.cronLastRun.cleanup,
-          isActive: isActive(GpsSyncDashboardController.cronLastRun.cleanup, 2),
+          isActive: backendCronStatus.cleanup && isActive(GpsSyncDashboardController.cronLastRun.cleanup, 2),
+          isPaused: !backendCronStatus.cleanup,
           description: 'Briše stare processed zapise iz buffer-a',
           type: 'backend'
         },
@@ -414,7 +420,8 @@ export class GpsSyncDashboardController {
           location: 'Backend NestJS',
           schedule: 'Jednom dnevno u 3:00',
           lastRun: GpsSyncDashboardController.cronLastRun.statsCleanup,
-          isActive: isActive(GpsSyncDashboardController.cronLastRun.statsCleanup, 1440), // 24 sata
+          isActive: backendCronStatus.statsCleanup && isActive(GpsSyncDashboardController.cronLastRun.statsCleanup, 1440), // 24 sata
+          isPaused: !backendCronStatus.statsCleanup,
           description: 'Briše statistike starije od 10 dana',
           type: 'backend'
         }
@@ -446,6 +453,50 @@ export class GpsSyncDashboardController {
     const logger = new Logger('CronControl');
     
     try {
+      // Za Backend cron-ove
+      if (dto.cronName === 'Backend GPS Processor') {
+        const { GpsProcessorService } = require('../gps-processor/gps-processor.service');
+        GpsProcessorService.setCronEnabled('processor', dto.action === 'start');
+        
+        if (dto.action === 'start') {
+          // Ažuriraj i lastRun da bi se prikazao kao aktivan
+          GpsSyncDashboardController.updateCronLastRun('processor');
+        }
+        
+        return {
+          success: true,
+          message: `Backend GPS Processor ${dto.action === 'start' ? 'pokrenut' : 'zaustavljen'}`
+        };
+      }
+      
+      if (dto.cronName === 'Buffer Cleanup') {
+        const { GpsProcessorService } = require('../gps-processor/gps-processor.service');
+        GpsProcessorService.setCronEnabled('cleanup', dto.action === 'start');
+        
+        if (dto.action === 'start') {
+          GpsSyncDashboardController.updateCronLastRun('cleanup');
+        }
+        
+        return {
+          success: true,
+          message: `Buffer Cleanup ${dto.action === 'start' ? 'pokrenut' : 'zaustavljen'}`
+        };
+      }
+      
+      if (dto.cronName === 'Stats Cleanup') {
+        const { GpsProcessorService } = require('../gps-processor/gps-processor.service');
+        GpsProcessorService.setCronEnabled('statsCleanup', dto.action === 'start');
+        
+        if (dto.action === 'start') {
+          GpsSyncDashboardController.updateCronLastRun('statsCleanup');
+        }
+        
+        return {
+          success: true,
+          message: `Stats Cleanup ${dto.action === 'start' ? 'pokrenut' : 'zaustavljen'}`
+        };
+      }
+      
       // Za Legacy GPS procesore
       if (dto.cronName.includes('Teltonika')) {
         const instanceNum = dto.instance || 60;

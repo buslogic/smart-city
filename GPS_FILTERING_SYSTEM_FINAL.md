@@ -2,9 +2,26 @@
 
 ## 📅 Implementirano: 03.09.2025
 ## ✅ Status: PRODUKCIJSKI SPREMAN
-## 🔄 Poslednje ažuriranje: 03.09.2025 13:10
+## 🔄 Poslednje ažuriranje: 03.09.2025 16:30
 
 ---
+
+## 🔐 RBAC Permisije (NOVO - 03.09.2025)
+
+### Dispatcher modul permisije:
+- `dispatcher.manage_cron` - Upravljanje cron procesima
+- `dispatcher.view_dashboard` - Pregled dispečerskog dashboard-a  
+- `dispatcher.manage_gps` - Upravljanje GPS sistemom (uključuje reset statistika)
+- `dispatcher.view_sync_dashboard` - Pregled GPS sync dashboard-a
+
+### Dodavanje permisija:
+```bash
+# Kreiraj Prisma migraciju
+npx prisma migrate dev --name add-dispatcher-permissions
+
+# Ažuriraj UI tree
+# Fajl: /apps/admin-portal/src/pages/users/components/PermissionsTree.tsx
+```
 
 ## 🎯 Pregled Sistema
 
@@ -81,6 +98,79 @@ Teltonika → Legacy Server → Raw Log → Filter → Batch Processor → API �
 - Unique constraint na `(vehicle_id, time)`
 
 ---
+
+## 🎛️ Dashboard Kontrole (NOVO - 03.09.2025)
+
+### GPS Sync Dashboard (`/transport/dispatcher/gps-sync-dashboard`)
+
+#### Funkcionalnosti:
+1. **Screen Process kontrole** (Legacy Server):
+   - Start/Stop/Restart screen sesija za teltonika60-76
+   - Real-time status prikaz (Aktivan/Neaktivan)
+   - Automatska provera screen sesija preko SSH
+
+2. **Cron Process kontrole** (Legacy Server):
+   - Pause/Run kontrole za Smart City cron procesore
+   - Dostupno samo za teltonika60 i teltonika61
+   - Ručno pokretanje procesiranja
+
+3. **GPS Uređaji monitoring**:
+   - Real-time broj aktivnih GPS uređaja po portu
+   - Prikaz bez ograničenja (overflowCount: 999999)
+   - Refresh svakih 30 sekundi
+
+4. **Reset Statistika**:
+   - Brisanje svih podataka iz `gps_processing_stats`
+   - Resetovanje buffer statusa
+   - Popconfirm dijalog za sigurnost
+
+#### Backend Endpoints:
+```bash
+# Kontrola screen sesija
+POST /api/gps-sync-dashboard/cron-control
+{
+  "action": "start" | "stop",
+  "cronName": "Teltonika60 GPS Processor",
+  "instance": 60
+}
+
+# Kontrola cron procesa
+POST /api/gps-sync-dashboard/cron-process-control
+{
+  "action": "start" | "stop" | "run",
+  "instance": 60 | 61
+}
+
+# Reset statistika
+POST /api/gps-sync-dashboard/reset-statistics
+```
+
+#### SSH Komande (automatski izvršavaju se iz dashboard-a):
+```bash
+# Start screen sesije
+screen -dmS teltonika60 /var/www/teltonika60/start_teltonika.sh
+
+# Stop screen sesije
+screen -S teltonika60 -X quit
+
+# Proveri aktivne screen sesije
+screen -ls | grep teltonika
+
+# Broj aktivnih GPS konekcija
+ss -tan | grep :12060 | grep ESTAB | wc -l
+```
+
+### Teltonika61 Setup (NOVO):
+```bash
+/var/www/teltonika61/
+├── smart-city-config.php         # Konfiguracija
+├── smart-city-raw-processor.php  # Processor
+├── smart-city-gps-vehicles.json  # Filter (978 vozila)
+└── smart-city-gps-raw-log.txt    # Raw log
+
+# Cron job za teltonika61
+*/2 * * * * /usr/bin/php /var/www/teltonika61/smart-city-raw-processor.php
+```
 
 ## 🔧 Konfiguracija i Deployment
 
@@ -242,6 +332,12 @@ ssh root@79.101.48.11 'tail -20 /var/www/teltonika60/smart-city-errors.log'
 - [x] Error logging
 - [x] API key autentifikacija
 - [x] Cleanup cron jobs (2 min, 10 dana)
+- [x] Dashboard kontrole za screen sesije (Start/Stop/Restart)
+- [x] Dashboard kontrole za cron procese (Pause/Run)
+- [x] Real-time broj GPS uređaja po portu
+- [x] Reset statistika funkcionalnost
+- [x] RBAC permisije za dispatcher modul
+- [x] Teltonika61 setup sa Smart City integracijom
 
 ### U planu:
 - [ ] Automatska sinhronizacija filtera (6h)
@@ -348,5 +444,5 @@ ssh root@79.101.48.11 "sed -i \"s/define('TEST_ENABLED', false)/define('TEST_ENA
 ---
 
 *Dokumentacija kreirana: 03.09.2025*  
-*Poslednje ažuriranje: 03.09.2025 13:15*  
+*Poslednje ažuriranje: 03.09.2025 16:30*  
 *Autor: Smart City Development Tim*

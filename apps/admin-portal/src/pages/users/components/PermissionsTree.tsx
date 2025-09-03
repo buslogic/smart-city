@@ -318,7 +318,7 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
       'manage': 'Upravljanje',
     };
     
-    return permission.descriptionSr || permission.description || labels[permission.action] || permission.name;
+    return permission.description || labels[permission.action] || permission.name;
   };
 
   const toggleNode = (nodeId: string) => {

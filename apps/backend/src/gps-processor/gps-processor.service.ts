@@ -12,6 +12,13 @@ export class GpsProcessorService {
   private timescalePool: Pool;
   private processedCount = 0;
   private lastProcessTime: Date | null = null;
+  
+  // Kontrola za cron jobove
+  private static cronEnabled = {
+    processor: true,
+    cleanup: true,
+    statsCleanup: true
+  };
 
   constructor(private prisma: PrismaService) {
     // Kreiraj konekciju na TimescaleDB
@@ -25,6 +32,12 @@ export class GpsProcessorService {
    */
   @Cron('*/30 * * * * *')
   async processGpsBuffer() {
+    // Skip ako je cron isključen
+    if (!GpsProcessorService.cronEnabled.processor) {
+      this.logger.debug('⏸️ GPS Processor cron je pauziran');
+      return;
+    }
+    
     // Skip ako već procesira
     if (this.isProcessing) {
       this.logger.debug('⏭️ Preskačem - procesiranje već u toku');
@@ -315,6 +328,12 @@ export class GpsProcessorService {
    */
   @Cron('*/2 * * * *') // Svakih 2 minuta
   async cleanupProcessedRecords() {
+    // Skip ako je cron isključen
+    if (!GpsProcessorService.cronEnabled.cleanup) {
+      this.logger.debug('⏸️ Buffer Cleanup cron je pauziran');
+      return;
+    }
+    
     try {
       // Briši processed zapise starije od 5 minuta (dovoljno za monitoring)
       const result = await this.prisma.$executeRaw`
@@ -344,6 +363,12 @@ export class GpsProcessorService {
    */
   @Cron('0 3 * * *') // Svaki dan u 3 ujutru
   async cleanupOldStats() {
+    // Skip ako je cron isključen
+    if (!GpsProcessorService.cronEnabled.statsCleanup) {
+      this.logger.debug('⏸️ Stats Cleanup cron je pauziran');
+      return;
+    }
+    
     try {
       const tenDaysAgo = new Date();
       tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
@@ -366,6 +391,19 @@ export class GpsProcessorService {
       this.logger.error('Greška pri čišćenju starih statistika:', error);
       return 0;
     }
+  }
+
+  /**
+   * Kontrola cron jobova
+   */
+  static setCronEnabled(cronName: 'processor' | 'cleanup' | 'statsCleanup', enabled: boolean) {
+    this.cronEnabled[cronName] = enabled;
+    const logger = new Logger('GpsProcessorService');
+    logger.log(`${enabled ? '▶️' : '⏸️'} Cron ${cronName} je ${enabled ? 'pokrenut' : 'pauziran'}`);
+  }
+
+  static getCronStatus() {
+    return this.cronEnabled;
   }
 
   /**

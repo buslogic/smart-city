@@ -86,6 +86,7 @@ interface CronProcess {
   cronActive?: boolean; // Da li cron proces radi
   cronLastRun?: string | null; // Poslednje izvršavanje cron-a
   activeDevices?: number; // Broj aktivnih GPS uređaja
+  isPaused?: boolean; // Da li je backend cron pauziran
 }
 
 interface CronStatus {
@@ -606,11 +607,16 @@ const GpsSyncDashboard: React.FC = () => {
                   dataIndex: 'isActive',
                   key: 'isActive',
                   width: 100,
-                  render: (isActive: boolean) => (
-                    <Tag color={isActive ? 'green' : 'red'}>
-                      {isActive ? 'Aktivan' : 'Neaktivan'}
-                    </Tag>
-                  ),
+                  render: (isActive: boolean, record: CronProcess) => {
+                    if (record.isPaused) {
+                      return <Tag color="orange">Pauziran</Tag>;
+                    }
+                    return (
+                      <Tag color={isActive ? 'green' : 'red'}>
+                        {isActive ? 'Aktivan' : 'Neaktivan'}
+                      </Tag>
+                    );
+                  },
                 },
                 {
                   title: 'Opis',
@@ -627,12 +633,12 @@ const GpsSyncDashboard: React.FC = () => {
                     <Space size="small">
                       <Button
                         size="small"
-                        type={record.isActive ? 'default' : 'primary'}
-                        icon={record.isActive ? <StopOutlined /> : <PlayCircleOutlined />}
-                        loading={controllingCron === `${record.name}-${record.isActive ? 'stop' : 'start'}`}
-                        onClick={() => handleCronControl(record.isActive ? 'stop' : 'start', record.name)}
+                        type={record.isPaused ? 'primary' : 'default'}
+                        icon={record.isPaused ? <PlayCircleOutlined /> : <StopOutlined />}
+                        loading={controllingCron === `${record.name}-${record.isPaused ? 'start' : 'stop'}`}
+                        onClick={() => handleCronControl(record.isPaused ? 'start' : 'stop', record.name)}
                       >
-                        {record.isActive ? 'Stop' : 'Start'}
+                        {record.isPaused ? 'Start' : 'Stop'}
                       </Button>
                       <Button
                         size="small"
@@ -777,7 +783,7 @@ const GpsSyncDashboard: React.FC = () => {
                                     type={record.cronActive ? 'default' : 'primary'}
                                     icon={record.cronActive ? <PauseCircleOutlined /> : <PlayCircleOutlined />}
                                     loading={controllingCron === `${record.name}-cron-${record.cronActive ? 'stop' : 'start'}`}
-                                    onClick={() => handleCronProcessControl(record.cronActive ? 'stop' : 'start', record.instance)}
+                                    onClick={() => handleCronProcessControl(record.cronActive ? 'stop' : 'start', record.instance!)}
                                   >
                                     {record.cronActive ? 'Pause' : 'Run'}
                                   </Button>
@@ -785,7 +791,7 @@ const GpsSyncDashboard: React.FC = () => {
                                     size="small"
                                     icon={<RedoOutlined />}
                                     loading={controllingCron === `${record.name}-cron-run`}
-                                    onClick={() => handleCronProcessControl('run', record.instance)}
+                                    onClick={() => handleCronProcessControl('run', record.instance!)}
                                     title="Run Now"
                                   />
                                 </Space>
