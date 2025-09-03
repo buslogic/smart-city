@@ -78,6 +78,33 @@ class DrivingBehaviorService {
   }
 
   /**
+   * OPTIMIZED: Get statistics for multiple vehicles in a single request
+   */
+  async getBatchStatistics(
+    vehicleIds: number[],
+    startDate: string,
+    endDate: string
+  ): Promise<VehicleStatistics[]> {
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/api/driving-behavior/batch-statistics`,
+        {
+          vehicleIds,
+          startDate,
+          endDate
+        },
+        {
+          headers: this.getAuthHeaders(),
+        }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching batch statistics:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get driving events for a specific vehicle by ID
    */
   async getVehicleEvents(
@@ -218,6 +245,43 @@ class DrivingBehaviorService {
     if (score >= 60) return 'Prosečan';
     if (score >= 40) return 'Loš';
     return 'Kritičan';
+  }
+
+  /**
+   * Get safety score configuration
+   */
+  async getSafetyScoreConfig(): Promise<any> {
+    try {
+      const response = await axios.get(
+        `${API_BASE_URL}/api/driving-behavior/safety-config`,
+        {
+          headers: this.getAuthHeaders(),
+        }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching safety config:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update safety score configuration
+   */
+  async updateSafetyScoreConfig(configs: any): Promise<any> {
+    try {
+      const response = await axios.put(
+        `${API_BASE_URL}/api/driving-behavior/safety-config`,
+        { configs },
+        {
+          headers: this.getAuthHeaders(),
+        }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error updating safety config:', error);
+      throw error;
+    }
   }
 }
 

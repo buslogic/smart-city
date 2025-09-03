@@ -12,6 +12,11 @@ import {
   Statistic,
   Spin,
   message,
+  Modal,
+  Form,
+  InputNumber,
+  Divider,
+  Tooltip,
 } from 'antd';
 import {
   FilePdfOutlined,
@@ -20,6 +25,8 @@ import {
   DownloadOutlined,
   PrinterOutlined,
   SafetyOutlined,
+  SettingOutlined,
+  InfoCircleOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
@@ -61,6 +68,9 @@ const MonthlyReport: React.FC = () => {
   ]);
   const [reportData, setReportData] = useState<VehicleReportData[]>([]);
   const [loading, setLoading] = useState(false);
+  const [configModalVisible, setConfigModalVisible] = useState(false);
+  const [configForm] = Form.useForm();
+  const [savingConfig, setSavingConfig] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
 
   // Fetch all vehicles
@@ -82,7 +92,7 @@ const MonthlyReport: React.FC = () => {
     }
   };
 
-  // Generate report
+  // Generate report - OPTIMIZED WITH BATCH API
   const generateReport = async () => {
     if (selectedVehicles.length === 0) {
       message.warning('Molimo odaberite bar jedno vozilo');
@@ -93,29 +103,32 @@ const MonthlyReport: React.FC = () => {
     const reportDataArray: VehicleReportData[] = [];
 
     try {
-      // Fetch statistics for each selected vehicle
-      for (const vehicleId of selectedVehicles) {
-        const vehicle = vehiclesData?.find(v => v.id === vehicleId);
-        if (!vehicle) continue;
+      // OPTIMIZED: Fetch ALL statistics in ONE request!
+      const startDate = dateRange[0].format('YYYY-MM-DD');
+      const endDate = dateRange[1].format('YYYY-MM-DD');
+      
+      console.log(`Fetching batch statistics for ${selectedVehicles.length} vehicles...`);
+      const startTime = performance.now();
+      
+      const allStats = await drivingBehaviorService.getBatchStatistics(
+        selectedVehicles,
+        startDate,
+        endDate
+      );
+      
+      const endTime = performance.now();
+      console.log(`Batch statistics fetched in ${((endTime - startTime) / 1000).toFixed(2)} seconds`);
 
-        // Use ID for API call (not legacyId) because TimescaleDB uses the same ID
-        const apiVehicleId = vehicle.id;
-        // console.log(`Fetching stats for vehicle ${vehicle.garageNumber} (ID: ${apiVehicleId}) from ${dateRange[0].format('YYYY-MM-DD')} to ${dateRange[1].format('YYYY-MM-DD')}`);
-        
-        const stats = await drivingBehaviorService.getVehicleStatistics(
-          apiVehicleId,
-          dateRange[0].format('YYYY-MM-DD'),
-          dateRange[1].format('YYYY-MM-DD')
-        );
-        
-        // console.log(`Stats received for ${vehicle.garageNumber}:`, stats);
+      // Process batch results
+      for (const stats of allStats) {
+        const vehicle = vehiclesData?.find(v => v.id === stats.vehicleId);
+        if (!vehicle) continue;
 
         // Skip if no data (no distance traveled)
         if (!stats.totalDistanceKm || stats.totalDistanceKm === 0) {
-          // console.log(`No data for ${vehicle.garageNumber} - skipping`);
           // Still add to report but with zero values
           reportDataArray.push({
-            vehicleId: apiVehicleId,
+            vehicleId: stats.vehicleId,
             garageNumber: vehicle.garageNumber,
             severeAccelerations: 0,
             moderateAccelerations: 0,
@@ -159,7 +172,7 @@ const MonthlyReport: React.FC = () => {
           : 0;
 
         reportDataArray.push({
-          vehicleId: apiVehicleId,
+          vehicleId: stats.vehicleId,
           garageNumber: vehicle.garageNumber,
           severeAccelerations: stats.severeAccelerations || 0,
           moderateAccelerations: stats.moderateAccelerations || 0,
@@ -487,6 +500,21 @@ const MonthlyReport: React.FC = () => {
                 Generiši izveštaj
               </Button>
               <Button
+                icon={<SettingOutlined />}
+                onClick={async () => {
+                  try {
+                    setConfigModalVisible(true);
+                    // Load current configuration
+                    const config = await drivingBehaviorService.getSafetyScoreConfig();
+                    configForm.setFieldsValue(config);
+                  } catch (error) {
+                    message.error('Greška pri učitavanju konfiguracije');
+                  }
+                }}
+              >
+                Podešavanja
+              </Button>
+              <Button
                 icon={<DownloadOutlined />}
                 onClick={exportToPDF}
                 disabled={reportData.length === 0}
@@ -642,6 +670,230 @@ const MonthlyReport: React.FC = () => {
           />
         )}
       </Card>
+      {/* Configuration Modal */}
+      <Modal
+        title={
+          <span>
+            <SettingOutlined className="mr-2" />
+            Podešavanje Safety Score parametara
+          </span>
+        }
+        open={configModalVisible}
+        onCancel={() => setConfigModalVisible(false)}
+        width={800}
+        footer={[
+          <Button key="cancel" onClick={() => setConfigModalVisible(false)}>
+            Otkaži
+          </Button>,
+          <Button
+            key="save"
+            type="primary"
+            loading={savingConfig}
+            onClick={async () => {
+              try {
+                const values = await configForm.validateFields();
+                setSavingConfig(true);
+                
+                // Save configuration to API
+                await drivingBehaviorService.updateSafetyScoreConfig({
+                  severeAccel: {
+                    threshold: values.severeAccelThreshold,
+                    distance: values.severeAccelDistance,
+                    penalty: values.severeAccelPenalty,
+                  },
+                  moderateAccel: {
+                    threshold: values.moderateAccelThreshold,
+                    distance: values.moderateAccelDistance,
+                    penalty: values.moderateAccelPenalty,
+                  },
+                  severeBrake: {
+                    threshold: values.severeBrakeThreshold,
+                    distance: values.severeBrakeDistance,
+                    penalty: values.severeBrakePenalty,
+                  },
+                  moderateBrake: {
+                    threshold: values.moderateBrakeThreshold,
+                    distance: values.moderateBrakeDistance,
+                    penalty: values.moderateBrakePenalty,
+                  },
+                });
+                
+                message.success('Konfiguracija je sačuvana! Novi safety score će biti primenjen na sledeći izveštaj.');
+                
+                setSavingConfig(false);
+                setConfigModalVisible(false);
+              } catch (error) {
+                console.error('Validation error:', error);
+              }
+            }}
+          >
+            Sačuvaj
+          </Button>,
+        ]}
+      >
+        <Form
+          form={configForm}
+          layout="vertical"
+          initialValues={{
+            // Ozbiljna ubrzanja
+            severeAccelThreshold: 2,
+            severeAccelDistance: 100,
+            severeAccelPenalty: 15,
+            severeAccelMultiplier: 2,
+            severeAccelMax: 25,
+            
+            // Umerena ubrzanja
+            moderateAccelThreshold: 10,
+            moderateAccelDistance: 100,
+            moderateAccelPenalty: 5,
+            moderateAccelMultiplier: 1.5,
+            moderateAccelMax: 15,
+            
+            // Ozbiljna kočenja
+            severeBrakeThreshold: 2,
+            severeBrakeDistance: 100,
+            severeBrakePenalty: 15,
+            severeBrakeMultiplier: 2,
+            severeBrakeMax: 25,
+            
+            // Umerena kočenja
+            moderateBrakeThreshold: 10,
+            moderateBrakeDistance: 100,
+            moderateBrakePenalty: 5,
+            moderateBrakeMultiplier: 1.5,
+            moderateBrakeMax: 15,
+          }}
+        >
+          {/* Ozbiljna ubrzanja */}
+          <Divider orientation="left">
+            <Tag color="red">Ozbiljna ubrzanja</Tag>
+          </Divider>
+          <Row gutter={16}>
+            <Col span={8}>
+              <Form.Item
+                name="severeAccelThreshold"
+                label={
+                  <span>
+                    Prag događaja
+                    <Tooltip title="Broj događaja koji se tolerišu pre kažnjavanja">
+                      <InfoCircleOutlined className="ml-1" />
+                    </Tooltip>
+                  </span>
+                }
+              >
+                <InputNumber min={0} max={100} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                name="severeAccelDistance"
+                label={
+                  <span>
+                    Distanca (km)
+                    <Tooltip title="Distanca za računanje (npr. 100km)">
+                      <InfoCircleOutlined className="ml-1" />
+                    </Tooltip>
+                  </span>
+                }
+              >
+                <InputNumber min={1} max={1000} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                name="severeAccelPenalty"
+                label={
+                  <span>
+                    Kazna (poeni)
+                    <Tooltip title="Koliko poena se oduzima kada se prekorači prag">
+                      <InfoCircleOutlined className="ml-1" />
+                    </Tooltip>
+                  </span>
+                }
+              >
+                <InputNumber min={0} max={100} step={0.5} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          {/* Umerena ubrzanja */}
+          <Divider orientation="left">
+            <Tag color="orange">Umerena ubrzanja</Tag>
+          </Divider>
+          <Row gutter={16}>
+            <Col span={8}>
+              <Form.Item name="moderateAccelThreshold" label="Prag događaja">
+                <InputNumber min={0} max={100} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="moderateAccelDistance" label="Distanca (km)">
+                <InputNumber min={1} max={1000} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="moderateAccelPenalty" label="Kazna (poeni)">
+                <InputNumber min={0} max={100} step={0.5} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          {/* Ozbiljna kočenja */}
+          <Divider orientation="left">
+            <Tag color="red">Ozbiljna kočenja</Tag>
+          </Divider>
+          <Row gutter={16}>
+            <Col span={8}>
+              <Form.Item name="severeBrakeThreshold" label="Prag događaja">
+                <InputNumber min={0} max={100} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="severeBrakeDistance" label="Distanca (km)">
+                <InputNumber min={1} max={1000} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="severeBrakePenalty" label="Kazna (poeni)">
+                <InputNumber min={0} max={100} step={0.5} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          {/* Umerena kočenja */}
+          <Divider orientation="left">
+            <Tag color="orange">Umerena kočenja</Tag>
+          </Divider>
+          <Row gutter={16}>
+            <Col span={8}>
+              <Form.Item name="moderateBrakeThreshold" label="Prag događaja">
+                <InputNumber min={0} max={100} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="moderateBrakeDistance" label="Distanca (km)">
+                <InputNumber min={1} max={1000} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="moderateBrakePenalty" label="Kazna (poeni)">
+                <InputNumber min={0} max={100} step={0.5} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Divider />
+          <div style={{ background: '#f0f2f5', padding: '12px', borderRadius: '4px' }}>
+            <p className="text-sm text-gray-600 mb-0">
+              <InfoCircleOutlined className="mr-1" />
+              Formula: Safety Score = 100 - Σ(kazne za prekoračenja pragova)
+            </p>
+            <p className="text-sm text-gray-600 mb-0 mt-2">
+              Primer: Ako vozilo ima 5 ozbiljnih ubrzanja na 100km (prag=2), kazna = 15 + (5-2) × 2 = 21 poena
+            </p>
+          </div>
+        </Form>
+      </Modal>
     </div>
   );
 };

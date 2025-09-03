@@ -172,6 +172,56 @@ ss -tan | grep :12060 | grep ESTAB | wc -l
 */2 * * * * /usr/bin/php /var/www/teltonika61/smart-city-raw-processor.php
 ```
 
+## 🛡️ Sigurnosni Processor sa Retry Mehanizmom (NOVO - 03.09.2025 19:30)
+
+### Problem koji je rešen:
+Stari processor je **BRISAO podatke čak i kada server nije bio dostupan**, što je dovodilo do gubitka GPS podataka. Novi processor implementira:
+
+1. **Retry mehanizam** - 3 pokušaja sa eksponencijalnim backoff (2s, 4s, 8s)
+2. **Failed logs folder** - čuva neuspešne batch-eve za kasniji recovery
+3. **NE BRIŠE raw log** ako slanje nije uspelo
+4. **Recovery skripta** - omogućava ponovno slanje failed logova
+
+### Implementirani fajlovi:
+```
+/var/www/teltonika60-64/
+├── smart-city-raw-processor.php      # NOVI safe processor sa retry
+├── smart-city-raw-processor.php.old-unsafe  # Backup starog processor-a
+├── smart-city-recovery.php           # Recovery skripta za failed logs
+├── failed_logs/                      # Direktorijum za neuspešne batch-eve
+│   └── failed_YYYYMMDD_HHMMSS_*.json
+└── smart-city-tests/                 # Test scenariji
+    ├── test-scenario-1-server-available.sh
+    ├── test-scenario-2-server-unavailable.sh
+    ├── test-scenario-3-intermittent.sh
+    ├── test-scenario-4-recovery.sh
+    └── run-all-tests.sh
+```
+
+### Testiranje (teltonika60):
+```bash
+# Scenario 1: Server dostupan ✅
+# Rezultat: Podaci uspešno poslati, raw log obrisan
+
+# Scenario 2: Server nedostupan ✅
+# Rezultat: 3 pokušaja sa retry, raw log SAČUVAN, failed logs kreirani
+
+# Scenario 3: Retry mehanizam ✅
+# Rezultat: Eksponencijalni backoff radi (2s, 4s, 8s između pokušaja)
+
+# Scenario 4: Failed logs recovery ✅
+# Rezultat: Recovery skripta uspešno šalje failed logs kada server postane dostupan
+```
+
+### Recovery proces:
+```bash
+# Ručno pokreni recovery za failed logs
+ssh root@79.101.48.11 'php /var/www/teltonika60/smart-city-recovery.php'
+
+# Automatski recovery (dodati u cron)
+*/10 * * * * /usr/bin/php /var/www/teltonika60/smart-city-recovery.php
+```
+
 ## 🔧 Konfiguracija i Deployment
 
 ### 🖥️ Local Development Setup
@@ -315,35 +365,39 @@ ssh root@79.101.48.11 'tail -20 /var/www/teltonika60/smart-city-errors.log'
 
 ---
 
-## ✅ Checklist za Produkciju
+## 📋 Implementacijski Status
 
-### Implementirano:
-- [x] Vehicle filter sa 978 vozila
-- [x] Dual-send arhitektura (Production + Test)
-- [x] Centralizovana konfiguracija (smart-city-config.php)
-- [x] Batch procesiranje (200 tačaka)
-- [x] Processor filtrira vozila koja nisu u bazi
-- [x] Timestamp konverzija ispravna
-- [x] Boolean konverzija za in_route
-- [x] Deduplicacija duplikata u TimescaleDB
-- [x] Cron job svakih 2 minuta
-- [x] Monitoring skripta
-- [x] Backup sistem za procesirane logove
-- [x] Error logging
-- [x] API key autentifikacija
-- [x] Cleanup cron jobs (2 min, 10 dana)
-- [x] Dashboard kontrole za screen sesije (Start/Stop/Restart)
-- [x] Dashboard kontrole za cron procese (Pause/Run)
-- [x] Real-time broj GPS uređaja po portu
-- [x] Reset statistika funkcionalnost
-- [x] RBAC permisije za dispatcher modul
-- [x] Teltonika61 setup sa Smart City integracijom
+### ✅ Potpuno implementirano:
+- Vehicle filter sa 978 vozila
+- Dual-send arhitektura (Production + Test)
+- Centralizovana konfiguracija (smart-city-config.php)
+- Batch procesiranje (200 tačaka)
+- Processor filtrira vozila koja nisu u bazi
+- Timestamp konverzija ispravna (GPS vreme, ne server vreme)
+- Boolean konverzija za in_route
+- Deduplicacija duplikata u TimescaleDB po vehicle_id + timestamp
+- Cron job svakih 2 minuta
+- Monitoring skripta
+- Backup sistem za procesirane logove (YYYY/MM/DD struktura)
+- Error logging
+- API key autentifikacija
+- Cleanup cron jobs (2 min za processed, 10 dana za stats)
+- Dashboard kontrole za screen sesije (Start/Stop/Restart)
+- Dashboard kontrole za cron procese (Pause/Run)
+- Real-time broj GPS uređaja po portu
+- Reset statistika funkcionalnost
+- RBAC permisije za dispatcher modul
+- Teltonika60-64 setup sa Smart City integracijom
+- **Safe processor sa retry mehanizmom (NOVO)**
+- **Failed logs recovery sistem (NOVO)**
+- **Test scenariji za sve slučajeve (NOVO)**
 
-### U planu:
-- [ ] Automatska sinhronizacija filtera (6h)
-- [ ] Alerting sistem za greške
-- [ ] Log rotacija za processor log
-- [ ] Grafana dashboard
+### 🔄 U planu:
+- Automatska sinhronizacija filtera (6h)
+- Alerting sistem za greške
+- Log rotacija za processor log
+- Grafana dashboard
+- Automatski recovery cron job
 
 ---
 
@@ -434,15 +488,24 @@ ssh root@79.101.48.11 'php /var/www/teltonika60/smart-city-raw-processor.php'
 # Sinhronizuj vehicle filter
 ssh root@79.101.48.11 'php /var/www/teltonika60/smart-city-gsp-vehicles-sync-filter.php'
 
+# Recovery failed logs
+ssh root@79.101.48.11 'php /var/www/teltonika60/smart-city-recovery.php'
+
+# Pokreni svi test scenariji
+ssh root@79.101.48.11 'cd /var/www/teltonika60/smart-city-tests && ./run-all-tests.sh'
+
 # Promeni na PROD-only mode
 ssh root@79.101.48.11 "sed -i \"s/define('TEST_ENABLED', true)/define('TEST_ENABLED', false)/\" /var/www/teltonika60/smart-city-config.php"
 
 # Promeni na DEV+PROD mode
 ssh root@79.101.48.11 "sed -i \"s/define('TEST_ENABLED', false)/define('TEST_ENABLED', true)/\" /var/www/teltonika60/smart-city-config.php"
+
+# Proveri failed logs
+ssh root@79.101.48.11 'ls -la /var/www/teltonika60/failed_logs/'
 ```
 
 ---
 
 *Dokumentacija kreirana: 03.09.2025*  
-*Poslednje ažuriranje: 03.09.2025 16:30*  
+*Poslednje ažuriranje: 03.09.2025 19:35 - Dodato: Safe Processor sa Retry*  
 *Autor: Smart City Development Tim*
