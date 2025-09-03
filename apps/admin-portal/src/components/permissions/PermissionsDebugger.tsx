@@ -149,7 +149,7 @@ const PermissionsDebugger: React.FC = () => {
             <>
               <Progress 
                 percent={Math.round((optional.filter(p => p.hasAccess).length / optional.length) * 100)}
-                status={allOptional ? 'success' : 'active'}
+                status={allOptional ? 'success' : 'normal'}
                 className="mb-3"
               />
               {optional.map(renderPermissionItem)}

@@ -113,7 +113,7 @@ export class GpsSyncDashboardController {
     });
 
     // Računanje prosečnog vremena procesiranja (zadnjih 100 procesiranih)
-    const avgProcessingTime = await this.prisma.$queryRaw<{ avg_time: number }[]>`
+    const avgProcessingTime = await this.prisma.$queryRaw<{ avg_time: number | null }[]>`
       SELECT AVG(TIMESTAMPDIFF(MICROSECOND, received_at, processed_at)) / 1000 as avg_time
       FROM (
         SELECT received_at, processed_at 
@@ -125,6 +125,17 @@ export class GpsSyncDashboardController {
       ) as recent_processed
     `;
 
+    // Konvertuj avg_time u broj
+    let avgTime = 0;
+    if (avgProcessingTime[0]?.avg_time !== null) {
+      avgTime = parseFloat(avgProcessingTime[0].avg_time.toString());
+      if (!isNaN(avgTime)) {
+        avgTime = Math.round(avgTime);
+      } else {
+        avgTime = 0;
+      }
+    }
+
     return {
       totalRecords: Number(totalCount[0]?.count || 0),
       pendingRecords: recordsByStatus.pending,
@@ -135,7 +146,7 @@ export class GpsSyncDashboardController {
       lastProcessedAt: lastProcessed[0]?.processed_at || null,
       recordsByStatus,
       vehicleCount: Number(vehicleCount[0]?.count || 0),
-      averageProcessingTime: avgProcessingTime[0]?.avg_time || 0,
+      averageProcessingTime: avgTime,
       timestamp: new Date()
     };
   }

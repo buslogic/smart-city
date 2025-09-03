@@ -126,9 +126,11 @@ export class GpsProcessorService {
 
         await this.timescalePool.query(insertQuery, values);
 
-        // 5. Obriši uspešno procesirane iz MySQL buffer-a
+        // 5. Označi kao processed u MySQL buffer-u
         await this.prisma.$executeRaw`
-          DELETE FROM gps_raw_buffer 
+          UPDATE gps_raw_buffer 
+          SET process_status = 'processed',
+              processed_at = NOW()
           WHERE id IN (${Prisma.join(ids)})
         `;
 
@@ -221,6 +223,31 @@ export class GpsProcessorService {
       return result;
     } catch (error) {
       this.logger.error('Greška pri čišćenju failed zapisa:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Počisti stare processed zapise
+   * Pokreće se periodično da oslobodi prostor
+   */
+  @Cron('0 */10 * * *') // Svakih 10 minuta
+  async cleanupProcessedRecords() {
+    try {
+      // Briši processed zapise starije od 1 sata
+      const result = await this.prisma.$executeRaw`
+        DELETE FROM gps_raw_buffer 
+        WHERE process_status = 'processed' 
+        AND processed_at < DATE_SUB(NOW(), INTERVAL 1 HOUR)
+      `;
+
+      if (result > 0) {
+        this.logger.log(`🧹 Obrisano ${result} processed GPS zapisa starijih od 1h`);
+      }
+      
+      return result;
+    } catch (error) {
+      this.logger.error('Greška pri čišćenju processed zapisa:', error);
       return 0;
     }
   }
