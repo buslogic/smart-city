@@ -41,7 +41,7 @@ export class GpsProcessorService {
         WHERE process_status = 'pending' 
         AND retry_count < 3
         ORDER BY received_at ASC
-        LIMIT 1000
+        LIMIT 4000
         FOR UPDATE SKIP LOCKED
       `;
 
