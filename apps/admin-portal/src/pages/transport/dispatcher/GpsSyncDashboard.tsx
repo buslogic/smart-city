@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, Row, Col, Statistic, Progress, Typography, Space, Tag, Alert, Button, Table, Divider, Spin } from 'antd';
+import { Card, Row, Col, Statistic, Progress, Typography, Space, Tag, Alert, Button, Table, Divider, Spin, Collapse, Badge, Popconfirm, message, Tooltip } from 'antd';
 import { 
   DatabaseOutlined, 
   ClockCircleOutlined, 
@@ -9,7 +9,12 @@ import {
   ExclamationCircleOutlined,
   WarningOutlined,
   ReloadOutlined,
-  DashboardOutlined
+  DashboardOutlined,
+  PlayCircleOutlined,
+  PauseCircleOutlined,
+  RedoOutlined,
+  StopOutlined,
+  ClearOutlined
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../../services/api';
@@ -76,14 +81,21 @@ interface CronProcess {
   lastRun: string | null;
   isActive: boolean;
   description: string;
+  type?: string;
+  instance?: number;
+  cronActive?: boolean; // Da li cron proces radi
+  cronLastRun?: string | null; // Poslednje izvršavanje cron-a
+  activeDevices?: number; // Broj aktivnih GPS uređaja
 }
 
 interface CronStatus {
   cronProcesses: CronProcess[];
+  legacyProcessors?: CronProcess[];
   summary: {
     totalCrons: number;
     activeCrons: number;
     dataFlowStatus: string;
+    activeLegacyInstances?: number[];
   };
   timestamp: string;
 }
@@ -91,6 +103,8 @@ interface CronStatus {
 const GpsSyncDashboard: React.FC = () => {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [controllingCron, setControllingCron] = useState<string | null>(null);
+  const [resettingStats, setResettingStats] = useState(false);
 
   // Fetch buffer status
   const { data: bufferStatus, refetch: refetchBuffer, isLoading: isLoadingBuffer } = useQuery<BufferStatus>({
@@ -142,6 +156,89 @@ const GpsSyncDashboard: React.FC = () => {
     refetchStats();
     refetchTimescale();
     refetchCron();
+  }, [refetchBuffer, refetchStats, refetchTimescale, refetchCron]);
+
+  const handleCronControl = useCallback(async (action: 'start' | 'stop', cronName: string, instance?: number) => {
+    setControllingCron(`${cronName}-${action}`);
+    try {
+      await api.post('/api/gps-sync-dashboard/cron-control', { 
+        action, 
+        cronName,
+        instance 
+      });
+      message.success(`Cron ${cronName} ${action === 'start' ? 'pokrenut' : 'stopiran'} uspešno`);
+      // Sačekaj malo da se status ažurira na backend-u
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      await refetchCron();
+    } catch (error) {
+      message.error(`Greška pri ${action === 'start' ? 'pokretanju' : 'stopiranju'} cron-a`);
+    } finally {
+      setControllingCron(null);
+    }
+  }, [refetchCron]);
+
+  const handleCronRestart = useCallback(async (cronName: string, instance?: number) => {
+    setControllingCron(`${cronName}-restart`);
+    try {
+      await handleCronControl('stop', cronName, instance);
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2s
+      await handleCronControl('start', cronName, instance);
+      message.success(`Cron ${cronName} restartovan uspešno`);
+    } catch (error) {
+      message.error('Greška pri restartovanju cron-a');
+    } finally {
+      setControllingCron(null);
+    }
+  }, [handleCronControl]);
+
+  const handleCronProcessControl = useCallback(async (action: 'start' | 'stop' | 'run', instance: number) => {
+    setControllingCron(`teltonika${instance}-cron-${action}`);
+    try {
+      await api.post('/api/gps-sync-dashboard/cron-process-control', { 
+        action, 
+        instance 
+      });
+      
+      let successMessage = '';
+      if (action === 'run') {
+        successMessage = `Smart City processor za teltonika${instance} je ručno pokrenut`;
+      } else {
+        successMessage = `Smart City processor za teltonika${instance} je ${action === 'start' ? 'startovan' : 'zaustavljen'}`;
+      }
+      
+      message.success(successMessage);
+      
+      // Sačekaj malo da se status ažurira
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      await refetchCron();
+    } catch (error) {
+      message.error(`Greška pri kontroli Smart City processor-a`);
+    } finally {
+      setControllingCron(null);
+    }
+  }, [refetchCron]);
+
+  const handleResetStatistics = useCallback(async () => {
+    setResettingStats(true);
+    try {
+      const response = await api.post('/api/gps-sync-dashboard/reset-statistics');
+      if (response.data.success) {
+        message.success(`Statistike resetovane! Obrisano ${response.data.deletedRows || 0} redova.`);
+        // Osveži sve podatke
+        await Promise.all([
+          refetchBuffer(),
+          refetchStats(),
+          refetchTimescale(),
+          refetchCron()
+        ]);
+      } else {
+        message.error(response.data.message || 'Greška pri resetovanju statistika');
+      }
+    } catch (error) {
+      message.error('Greška pri resetovanju statistika');
+    } finally {
+      setResettingStats(false);
+    }
   }, [refetchBuffer, refetchStats, refetchTimescale, refetchCron]);
 
   const getStatusColor = (status: string) => {
@@ -308,7 +405,29 @@ const GpsSyncDashboard: React.FC = () => {
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={12}>
           {/* 24h Statistics */}
-          <Card title="Statistike (24h)" style={{ marginBottom: 16 }}>
+          <Card 
+            title="Statistike (24h)" 
+            style={{ marginBottom: 16 }}
+            extra={
+              <Popconfirm
+                title="Reset statistika"
+                description="Da li ste sigurni da želite da resetujete sve statistike? Ovo će obrisati sve podatke o procesiranju."
+                onConfirm={handleResetStatistics}
+                okText="Da, resetuj"
+                cancelText="Otkaži"
+                okButtonProps={{ danger: true }}
+              >
+                <Button 
+                  danger 
+                  size="small" 
+                  icon={<ClearOutlined />}
+                  loading={resettingStats}
+                >
+                  Reset statistika
+                </Button>
+              </Popconfirm>
+            }
+          >
             <Row gutter={[16, 16]}>
               <Col span={12}>
                 <Statistic
@@ -443,63 +562,244 @@ const GpsSyncDashboard: React.FC = () => {
         }
       >
         {cronStatus ? (
-          <Table
-            dataSource={cronStatus.cronProcesses}
-            rowKey="name"
-            pagination={false}
-            columns={[
-              {
-                title: 'Proces',
-                dataIndex: 'name',
-                key: 'name',
-                render: (text: string, record: CronProcess) => (
-                  <Space direction="vertical" size={0}>
-                    <Text strong>{text}</Text>
-                    <Text type="secondary" style={{ fontSize: 12 }}>{record.location}</Text>
-                  </Space>
-                ),
-              },
-              {
-                title: 'Raspored',
-                dataIndex: 'schedule',
-                key: 'schedule',
-                width: 150,
-                render: (text: string) => <Tag>{text}</Tag>,
-              },
-              {
-                title: 'Poslednje izvršavanje',
-                dataIndex: 'lastRun',
-                key: 'lastRun',
-                width: 200,
-                render: (text: string | null) => text ? (
-                  <Space direction="vertical" size={0}>
-                    <Text>{dayjs(text).format('HH:mm:ss')}</Text>
-                    <Text type="secondary" style={{ fontSize: 12 }}>{dayjs(text).fromNow()}</Text>
-                  </Space>
-                ) : (
-                  <Text type="secondary">N/A</Text>
-                ),
-              },
-              {
-                title: 'Status',
-                dataIndex: 'isActive',
-                key: 'isActive',
-                width: 100,
-                render: (isActive: boolean) => (
-                  <Tag color={isActive ? 'green' : 'red'}>
-                    {isActive ? 'Aktivan' : 'Neaktivan'}
-                  </Tag>
-                ),
-              },
-              {
-                title: 'Opis',
-                dataIndex: 'description',
-                key: 'description',
-                ellipsis: true,
-                render: (text: string) => <Text type="secondary" style={{ fontSize: 12 }}>{text}</Text>,
-              },
-            ]}
-          />
+          <>
+            {/* Backend Procesi */}
+            <Table
+              dataSource={cronStatus.cronProcesses}
+              rowKey="name"
+              pagination={false}
+              columns={[
+                {
+                  title: 'Proces',
+                  dataIndex: 'name',
+                  key: 'name',
+                  render: (text: string, record: CronProcess) => (
+                    <Space direction="vertical" size={0}>
+                      <Text strong>{text}</Text>
+                      <Text type="secondary" style={{ fontSize: 12 }}>{record.location}</Text>
+                    </Space>
+                  ),
+                },
+                {
+                  title: 'Raspored',
+                  dataIndex: 'schedule',
+                  key: 'schedule',
+                  width: 150,
+                  render: (text: string) => <Tag>{text}</Tag>,
+                },
+                {
+                  title: 'Poslednje izvršavanje',
+                  dataIndex: 'lastRun',
+                  key: 'lastRun',
+                  width: 200,
+                  render: (text: string | null) => text ? (
+                    <Space direction="vertical" size={0}>
+                      <Text>{dayjs(text).format('HH:mm:ss')}</Text>
+                      <Text type="secondary" style={{ fontSize: 12 }}>{dayjs(text).fromNow()}</Text>
+                    </Space>
+                  ) : (
+                    <Text type="secondary">N/A</Text>
+                  ),
+                },
+                {
+                  title: 'Status',
+                  dataIndex: 'isActive',
+                  key: 'isActive',
+                  width: 100,
+                  render: (isActive: boolean) => (
+                    <Tag color={isActive ? 'green' : 'red'}>
+                      {isActive ? 'Aktivan' : 'Neaktivan'}
+                    </Tag>
+                  ),
+                },
+                {
+                  title: 'Opis',
+                  dataIndex: 'description',
+                  key: 'description',
+                  ellipsis: true,
+                  render: (text: string) => <Text type="secondary" style={{ fontSize: 12 }}>{text}</Text>,
+                },
+                {
+                  title: 'Akcije',
+                  key: 'actions',
+                  width: 200,
+                  render: (_: any, record: CronProcess) => (
+                    <Space size="small">
+                      <Button
+                        size="small"
+                        type={record.isActive ? 'default' : 'primary'}
+                        icon={record.isActive ? <StopOutlined /> : <PlayCircleOutlined />}
+                        loading={controllingCron === `${record.name}-${record.isActive ? 'stop' : 'start'}`}
+                        onClick={() => handleCronControl(record.isActive ? 'stop' : 'start', record.name)}
+                      >
+                        {record.isActive ? 'Stop' : 'Start'}
+                      </Button>
+                      <Button
+                        size="small"
+                        icon={<ReloadOutlined />}
+                        loading={controllingCron === `${record.name}-restart`}
+                        onClick={() => handleCronRestart(record.name)}
+                      >
+                        Restart
+                      </Button>
+                    </Space>
+                  ),
+                },
+              ]}
+            />
+            
+            {/* Legacy GPS Procesori - Collapsible */}
+            {cronStatus.legacyProcessors && cronStatus.legacyProcessors.length > 0 && (
+              <Collapse 
+                style={{ marginTop: 16 }}
+                items={[
+                  {
+                    key: 'legacy',
+                    label: (
+                      <Space>
+                        <span>Legacy GPS Procesori (Teltonika 60-76)</span>
+                        <Badge 
+                          count={cronStatus.legacyProcessors.filter(p => p.isActive).length} 
+                          style={{ backgroundColor: '#52c41a' }}
+                        />
+                        <Text type="secondary">
+                          / {cronStatus.legacyProcessors.length} instanci
+                        </Text>
+                      </Space>
+                    ),
+                    children: (
+                      <Table
+                        dataSource={cronStatus.legacyProcessors}
+                        rowKey="name"
+                        pagination={false}
+                        size="small"
+                        columns={[
+                          {
+                            title: 'Instance',
+                            dataIndex: 'name',
+                            key: 'name',
+                            render: (text: string, record: CronProcess) => (
+                              <Space>
+                                <Text strong>{text}</Text>
+                                {record.isActive && <Badge status="processing" />}
+                              </Space>
+                            ),
+                          },
+                          {
+                            title: 'Port',
+                            key: 'port',
+                            width: 80,
+                            render: (record: CronProcess) => (
+                              <Tag>{`120${record.instance || 60}`}</Tag>
+                            ),
+                          },
+                          {
+                            title: 'GPS Uređaji Legacy',
+                            key: 'devices',
+                            width: 130,
+                            render: (record: CronProcess) => (
+                              <Badge 
+                                count={record.activeDevices || 0} 
+                                showZero
+                                overflowCount={999999}
+                                style={{ 
+                                  backgroundColor: record.activeDevices && record.activeDevices > 0 ? '#52c41a' : '#d9d9d9' 
+                                }}
+                              />
+                            ),
+                          },
+                          {
+                            title: 'Screen Status Legacy',
+                            dataIndex: 'isActive',
+                            key: 'isActive',
+                            width: 150,
+                            render: (isActive: boolean) => (
+                              <Tag color={isActive ? 'green' : 'default'}>
+                                {isActive ? 'Aktivan' : 'Neaktivan'}
+                              </Tag>
+                            ),
+                          },
+                          {
+                            title: 'Poslednje izvršavanje',
+                            dataIndex: 'lastRun',
+                            key: 'lastRun',
+                            render: (text: string | null) => text ? (
+                              <Text type="secondary">{dayjs(text).fromNow()}</Text>
+                            ) : (
+                              <Text type="secondary">-</Text>
+                            ),
+                          },
+                          {
+                            title: 'Opis',
+                            dataIndex: 'description',
+                            key: 'description',
+                            ellipsis: true,
+                          },
+                          {
+                            title: 'Screen Proces',
+                            key: 'screen_process',
+                            width: 180,
+                            render: (_: any, record: CronProcess) => (
+                              <Space size="small">
+                                <Button
+                                  size="small"
+                                  type={record.isActive ? 'default' : 'primary'}
+                                  icon={record.isActive ? <StopOutlined /> : <PlayCircleOutlined />}
+                                  loading={controllingCron === `${record.name}-${record.isActive ? 'stop' : 'start'}`}
+                                  onClick={() => handleCronControl(record.isActive ? 'stop' : 'start', record.name, record.instance)}
+                                >
+                                  {record.isActive ? 'Stop' : 'Start'}
+                                </Button>
+                                <Button
+                                  size="small"
+                                  icon={<ReloadOutlined />}
+                                  loading={controllingCron === `${record.name}-restart`}
+                                  onClick={() => handleCronRestart(record.name, record.instance)}
+                                  title="Restart"
+                                />
+                              </Space>
+                            ),
+                          },
+                          {
+                            title: 'Cron Process Legacy Server',
+                            key: 'cron_process',
+                            width: 200,
+                            render: (_: any, record: CronProcess) => {
+                              // Prikaži samo za teltonika60 i 61 koji imaju Smart City setup
+                              if (record.instance !== 60 && record.instance !== 61) {
+                                return <span style={{ color: '#ccc' }}>N/A</span>;
+                              }
+                              
+                              return (
+                                <Space size="small">
+                                  <Button
+                                    size="small"
+                                    type={record.cronActive ? 'default' : 'primary'}
+                                    icon={record.cronActive ? <PauseCircleOutlined /> : <PlayCircleOutlined />}
+                                    loading={controllingCron === `${record.name}-cron-${record.cronActive ? 'stop' : 'start'}`}
+                                    onClick={() => handleCronProcessControl(record.cronActive ? 'stop' : 'start', record.instance)}
+                                  >
+                                    {record.cronActive ? 'Pause' : 'Run'}
+                                  </Button>
+                                  <Button
+                                    size="small"
+                                    icon={<RedoOutlined />}
+                                    loading={controllingCron === `${record.name}-cron-run`}
+                                    onClick={() => handleCronProcessControl('run', record.instance)}
+                                    title="Run Now"
+                                  />
+                                </Space>
+                              );
+                            },
+                          },
+                        ]}
+                      />
+                    ),
+                  },
+                ]}
+              />
+            )}
+          </>
         ) : (
           <Spin />
         )}

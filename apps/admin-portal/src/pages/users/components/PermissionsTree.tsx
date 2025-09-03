@@ -214,7 +214,10 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
             type: 'section',
             icon: <RefreshCw className="h-4 w-4" />,
             children: allPermissions
-              .filter(p => p.name === 'dispatcher:sync_gps')
+              .filter(p => 
+                p.name === 'dispatcher:sync_gps' || 
+                p.resource === 'dispatcher' // Dodaj sve dispatcher permisije
+              )
               .map(p => ({
                 id: `perm-${p.id}`,
                 name: getPermissionLabel(p),
@@ -295,6 +298,18 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
   };
 
   const getPermissionLabel = (permission: Permission): string => {
+    // Specifični labeli za dispatcher permisije
+    if (permission.resource === 'dispatcher') {
+      const dispatcherLabels: Record<string, string> = {
+        'manage_cron': 'Upravljanje cron procesima',
+        'view_dashboard': 'Pregled dashboard-a',
+        'manage_gps': 'Upravljanje GPS sistemom',
+      };
+      if (dispatcherLabels[permission.action]) {
+        return dispatcherLabels[permission.action];
+      }
+    }
+    
     const labels: Record<string, string> = {
       'create': 'Kreiranje',
       'read': 'Pregled',
@@ -303,7 +318,7 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
       'manage': 'Upravljanje',
     };
     
-    return permission.description || labels[permission.action] || permission.name;
+    return permission.descriptionSr || permission.description || labels[permission.action] || permission.name;
   };
 
   const toggleNode = (nodeId: string) => {

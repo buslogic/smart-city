@@ -1,6 +1,8 @@
 import { 
   Controller, 
   Get, 
+  Post,
+  Body,
   UseGuards,
   Logger,
 } from '@nestjs/common';
@@ -9,6 +11,10 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 import { PrismaService } from '../prisma/prisma.service';
+import * as child_process from 'child_process';
+import { promisify } from 'util';
+
+const exec = promisify(child_process.exec);
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -308,23 +314,91 @@ export class GpsSyncDashboardController {
       return diffMinutes < intervalMinutes * 2; // Duplo vreme kao tolerancija
     };
     
+    // Generiši legacy procesore za teltonika60-76
+    const legacyProcessors: any[] = [];
+    
+    // Proveri koje screen sesije su aktivne
+    let activeScreenSessions: number[] = [];
+    try {
+      const { stdout } = await exec(
+        `ssh -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "screen -ls | grep teltonika | grep -oP 'teltonika\\K[0-9]+'"`,
+        { timeout: 5000 }
+      );
+      if (stdout) {
+        activeScreenSessions = stdout.trim().split('\n')
+          .map(num => parseInt(num))
+          .filter(num => !isNaN(num));
+      }
+    } catch (error) {
+      // Ako nema aktivnih sesija ili greška, ostavi prazan niz
+      this.logger.warn(`Couldn't check screen sessions: ${error.message}`);
+    }
+    
+    // Proveri koji cron jobovi postoje
+    let activeCronJobs: number[] = [];
+    try {
+      const { stdout } = await exec(
+        `ssh -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "crontab -l 2>/dev/null | grep 'smart-city-raw-processor.php' | grep -oP 'teltonika\\K[0-9]+'"`,
+        { timeout: 5000 }
+      );
+      if (stdout) {
+        activeCronJobs = stdout.trim().split('\n')
+          .map(num => parseInt(num))
+          .filter(num => !isNaN(num));
+      }
+    } catch (error) {
+      // Ako nema cron jobova ili greška
+      this.logger.warn(`Couldn't check cron jobs: ${error.message}`);
+    }
+    
+    // Proveri broj aktivnih GPS konekcija po portu
+    let activeConnections: Map<number, number> = new Map();
+    try {
+      const { stdout } = await exec(
+        `ssh -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "for port in {60..76}; do count=\\$(ss -tan | grep :120\\$port | grep ESTAB | wc -l); echo \\$port:\\$count; done"`,
+        { timeout: 5000 }
+      );
+      if (stdout) {
+        stdout.trim().split('\n').forEach(line => {
+          const [port, count] = line.split(':');
+          activeConnections.set(parseInt(port), parseInt(count));
+        });
+      }
+    } catch (error) {
+      this.logger.warn(`Couldn't check active connections: ${error.message}`);
+    }
+    
+    // Sve potencijalne instance (60-76)
+    for (let i = 60; i <= 76; i++) {
+      const isScreenActive = activeScreenSessions.includes(i);
+      const isCronActive = activeCronJobs.includes(i);
+      const connectionCount = activeConnections.get(i) || 0;
+      
+      legacyProcessors.push({
+        name: `Teltonika${i} GPS Processor`,
+        location: `Legacy Server (79.101.48.11)`,
+        schedule: 'Svakih 2 minuta',
+        lastRun: isScreenActive ? legacyLastRun : null,
+        isActive: isScreenActive, // Screen sesija status
+        cronActive: isCronActive, // Cron job status
+        cronLastRun: isCronActive ? legacyLastRun : null,
+        description: `Teltonika${i} folder - Port 120${i}`,
+        instance: i,
+        type: 'legacy',
+        activeDevices: connectionCount // Broj aktivnih GPS uređaja
+      });
+    }
+    
     return {
       cronProcesses: [
-        {
-          name: 'Legacy GPS Processor',
-          location: 'Legacy Server (79.101.48.11)',
-          schedule: 'Svakih 2 minuta',
-          lastRun: legacyLastRun,
-          isActive: isActive(legacyLastRun, 2),
-          description: 'Filtrira i šalje GPS podatke u MySQL buffer'
-        },
         {
           name: 'Backend GPS Processor',
           location: 'Backend NestJS',
           schedule: 'Svakih 30 sekundi',
           lastRun: processorLastRun,
           isActive: isActive(processorLastRun, 0.5),
-          description: 'Prebacuje podatke iz buffer-a u TimescaleDB'
+          description: 'Prebacuje podatke iz buffer-a u TimescaleDB',
+          type: 'backend'
         },
         {
           name: 'Buffer Cleanup',
@@ -332,7 +406,8 @@ export class GpsSyncDashboardController {
           schedule: 'Svakih 2 minuta',
           lastRun: GpsSyncDashboardController.cronLastRun.cleanup,
           isActive: isActive(GpsSyncDashboardController.cronLastRun.cleanup, 2),
-          description: 'Briše stare processed zapise iz buffer-a'
+          description: 'Briše stare processed zapise iz buffer-a',
+          type: 'backend'
         },
         {
           name: 'Stats Cleanup',
@@ -340,15 +415,277 @@ export class GpsSyncDashboardController {
           schedule: 'Jednom dnevno u 3:00',
           lastRun: GpsSyncDashboardController.cronLastRun.statsCleanup,
           isActive: isActive(GpsSyncDashboardController.cronLastRun.statsCleanup, 1440), // 24 sata
-          description: 'Briše statistike starije od 10 dana'
+          description: 'Briše statistike starije od 10 dana',
+          type: 'backend'
         }
       ],
+      legacyProcessors,
       summary: {
-        totalCrons: 4,
-        activeCrons: 0, // Će se računati na frontu
-        dataFlowStatus: 'operational', // ili 'degraded', 'down'
+        totalCrons: 3 + legacyProcessors.length,
+        activeCrons: [
+          isActive(processorLastRun, 0.5),
+          isActive(GpsSyncDashboardController.cronLastRun.cleanup, 2),
+          isActive(GpsSyncDashboardController.cronLastRun.statsCleanup, 1440),
+          ...legacyProcessors.map(p => p.isActive)
+        ].filter(Boolean).length,
+        dataFlowStatus: legacyProcessors.some(p => p.isActive) && isActive(processorLastRun, 0.5) ? 'operational' : 'degraded',
+        activeLegacyInstances: activeScreenSessions
       },
       timestamp: new Date()
     };
+  }
+
+  @Post('cron-control')
+  @RequirePermissions('dispatcher.manage_cron')
+  @ApiOperation({ summary: 'Kontrola cron procesa (start/stop)' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Cron proces kontrolisan'
+  })
+  async controlCron(@Body() dto: { action: 'start' | 'stop', cronName: string, instance?: number }) {
+    const logger = new Logger('CronControl');
+    
+    try {
+      // Za Legacy GPS procesore
+      if (dto.cronName.includes('Teltonika')) {
+        const instanceNum = dto.instance || 60;
+        
+        if (dto.action === 'stop') {
+          // Stop teltonika screen session
+          const { stdout, stderr } = await exec(
+            `ssh -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "screen -XS teltonika${instanceNum}.bgnaplata quit"`,
+            { timeout: 10000 }
+          );
+          
+          logger.log(`Stopiran Teltonika${instanceNum}: ${stdout}`);
+          
+          return {
+            success: true,
+            message: `Teltonika${instanceNum} stopiran`,
+            details: stdout
+          };
+        } else {
+          // Start teltonika screen session
+          const { stdout, stderr } = await exec(
+            `ssh -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "screen -m -d -S teltonika${instanceNum}.bgnaplata /var/www/teltonika${instanceNum}/start_teltonika.sh"`,
+            { timeout: 10000 }
+          );
+          
+          logger.log(`Pokrenut Teltonika${instanceNum}: ${stdout}`);
+          
+          return {
+            success: true,
+            message: `Teltonika${instanceNum} pokrenut`,
+            details: stdout
+          };
+        }
+      }
+      
+      // Za Backend GPS Processor
+      if (dto.cronName === 'Backend GPS Processor') {
+        // Ovo kontroliše NestJS cron - potrebna je drugačija logika
+        // Za sada samo vraćamo poruku
+        return {
+          success: false,
+          message: 'Backend cron procesi se ne mogu kontrolisati preko ovog interfejsa',
+          details: 'Koristite systemctl ili docker komande'
+        };
+      }
+      
+      return {
+        success: false,
+        message: `Nepoznat cron proces: ${dto.cronName}`
+      };
+      
+    } catch (error) {
+      logger.error(`Greška pri kontroli cron procesa: ${error.message}`);
+      return {
+        success: false,
+        message: 'Greška pri kontroli cron procesa',
+        error: error.message
+      };
+    }
+  }
+
+  @Post('cron-restart')
+  @RequirePermissions('dispatcher.manage_cron')
+  @ApiOperation({ summary: 'Restart cron procesa' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Cron proces restartovan'
+  })
+  async restartCron(@Body() dto: { cronName: string, instance?: number }) {
+    const logger = new Logger('CronRestart');
+    
+    try {
+      // Za Legacy GPS procesore
+      if (dto.cronName.includes('Teltonika')) {
+        const instanceNum = dto.instance || 60;
+        
+        // Stop then start
+        await exec(
+          `ssh -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "screen -XS teltonika${instanceNum}.bgnaplata quit"`,
+          { timeout: 10000 }
+        );
+        
+        // Wait a bit
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        const { stdout, stderr } = await exec(
+          `ssh -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "screen -m -d -S teltonika${instanceNum}.bgnaplata /var/www/teltonika${instanceNum}/start_teltonika.sh"`,
+          { timeout: 10000 }
+        );
+        
+        logger.log(`Restartovan Teltonika${instanceNum}`);
+        
+        return {
+          success: true,
+          message: `Teltonika${instanceNum} restartovan`,
+          details: stdout
+        };
+      }
+      
+      return {
+        success: false,
+        message: `Nepoznat cron proces: ${dto.cronName}`
+      };
+      
+    } catch (error) {
+      logger.error(`Greška pri restartovanju cron procesa: ${error.message}`);
+      return {
+        success: false,
+        message: 'Greška pri restartovanju cron procesa',
+        error: error.message
+      };
+    }
+  }
+
+  @Post('cron-process-control')
+  @RequirePermissions('dispatcher.manage_cron')
+  @ApiOperation({ summary: 'Kontrola Smart City cron procesora (raw file processor)' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Cron processor kontrolisan'
+  })
+  async controlCronProcess(@Body() dto: { action: 'start' | 'stop' | 'run', instance: number }) {
+    const logger = new Logger('CronProcessControl');
+    
+    try {
+      // Samo za teltonika60 i teltonika61 koji imaju Smart City setup
+      if (dto.instance !== 60 && dto.instance !== 61) {
+        return {
+          success: false,
+          message: `Teltonika${dto.instance} nema Smart City processor`
+        };
+      }
+      
+      if (dto.action === 'stop') {
+        // Zaustavi cron za procesiranje
+        const { stdout } = await exec(
+          `ssh -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "crontab -l | grep -v 'teltonika${dto.instance}/smart-city-raw-processor.php' | crontab -"`,
+          { timeout: 10000 }
+        );
+        
+        logger.log(`Zaustavljen Smart City processor za teltonika${dto.instance}`);
+        
+        return {
+          success: true,
+          message: `Smart City processor za teltonika${dto.instance} je zaustavljen`,
+          details: 'Cron job uklonjen'
+        };
+        
+      } else if (dto.action === 'start') {
+        // Pokreni cron za procesiranje
+        const { stdout } = await exec(
+          `ssh -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "(crontab -l 2>/dev/null; echo '*/2 * * * * /usr/bin/php /var/www/teltonika${dto.instance}/smart-city-raw-processor.php >> /var/log/smart-city-raw-processor-${dto.instance}.log 2>&1') | crontab -"`,
+          { timeout: 10000 }
+        );
+        
+        logger.log(`Pokrenut Smart City processor cron za teltonika${dto.instance}`);
+        
+        return {
+          success: true,
+          message: `Smart City processor za teltonika${dto.instance} je pokrenut`,
+          details: 'Cron job dodat (svakih 2 minuta)'
+        };
+        
+      } else if (dto.action === 'run') {
+        // Ručno pokreni procesiranje odmah
+        const { stdout, stderr } = await exec(
+          `ssh -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "php /var/www/teltonika${dto.instance}/smart-city-raw-processor.php"`,
+          { timeout: 30000 }
+        );
+        
+        logger.log(`Ručno pokrenut Smart City processor za teltonika${dto.instance}: ${stdout}`);
+        
+        return {
+          success: true,
+          message: `Smart City processor za teltonika${dto.instance} je ručno pokrenut`,
+          details: stdout || 'Procesiranje završeno'
+        };
+      }
+      
+      return {
+        success: false,
+        message: `Nepoznata akcija: ${dto.action}`
+      };
+      
+    } catch (error) {
+      logger.error(`Greška pri kontroli Smart City processor-a: ${error.message}`);
+      return {
+        success: false,
+        message: 'Greška pri kontroli Smart City processor-a',
+        error: error.message
+      };
+    }
+  }
+
+  @Post('reset-statistics')
+  @RequirePermissions('dispatcher.manage_gps')
+  @ApiOperation({ summary: 'Reset GPS processing statistics' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Statistike su resetovane',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+        deletedRows: { type: 'number' }
+      }
+    }
+  })
+  async resetStatistics() {
+    const logger = this.logger;
+    
+    try {
+      // Obriši sve statistike iz tabele gps_processing_stats
+      const result = await this.prisma.$executeRaw`
+        DELETE FROM gps_processing_stats
+      `;
+      
+      // Resetuj i buffer statistike na 0
+      await this.prisma.$executeRaw`
+        UPDATE gps_raw_buffer 
+        SET process_status = 'processed'
+        WHERE process_status IN ('pending', 'error')
+      `;
+      
+      logger.log(`🔄 Resetovane statistike - obrisano ${result} redova iz gps_processing_stats`);
+      
+      return {
+        success: true,
+        message: 'Statistike su uspešno resetovane',
+        deletedRows: result
+      };
+      
+    } catch (error) {
+      logger.error(`Greška pri resetovanju statistika: ${error.message}`);
+      return {
+        success: false,
+        message: 'Greška pri resetovanju statistika',
+        error: error.message
+      };
+    }
   }
 }
