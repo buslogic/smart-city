@@ -334,6 +334,7 @@ export class GpsSyncDashboardController {
     let activeCronJobs: number[] = [];
     let activeConnections: Map<number, number> = new Map();
     let rawLogSizes: Map<number, string> = new Map();
+    let lastCronRuns: Map<number, Date | null> = new Map();
     
     // Koristi helper metodu za SSH komandu
     const sshBaseCommand = this.getSSHCommand();
@@ -383,7 +384,7 @@ export class GpsSyncDashboardController {
       }
       
       // 4. Proveri veličine raw log fajlova za Smart City instance
-      const folders = ['teltonika60', 'teltonika61', 'teltonika62', 'teltonika63', 'teltonika64'];
+      const folders = ['teltonika60', 'teltonika61', 'teltonika62', 'teltonika63', 'teltonika64', 'teltonika65', 'teltonika66', 'teltonika67', 'teltonika68', 'teltonika69', 'teltonika70'];
       for (const folder of folders) {
         try {
           const { stdout: sizeOutput } = await exec(
@@ -399,6 +400,30 @@ export class GpsSyncDashboardController {
         }
       }
       
+      // 5. Proveri poslednje izvršavanje cron job-a za svaki processor
+      for (const folder of folders) {
+        try {
+          const instance = parseInt(folder.replace('teltonika', ''));
+          const { stdout: lastRunOutput } = await exec(
+            `${sshBaseCommand} "tail -1 /var/log/smart-city-raw-processor-${instance}.log 2>/dev/null"`,
+            { timeout: 5000 }
+          );
+          if (lastRunOutput && lastRunOutput.trim()) {
+            // Pokušaj da izvučemo vreme iz log linije
+            // Format: [2025-09-04 19:10:01] Processing...
+            const timeMatch = lastRunOutput.match(/\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]/);
+            if (timeMatch) {
+              const lastRunDate = new Date(timeMatch[1]);
+              if (!isNaN(lastRunDate.getTime())) {
+                lastCronRuns.set(instance, lastRunDate);
+              }
+            }
+          }
+        } catch (err) {
+          // Ignoriši grešku za pojedinačni log
+        }
+      }
+      
       this.logger.debug(`✅ SSH komande uspešne: ${activeScreenSessions.length} screen sesija, ${activeCronJobs.length} cron jobova`);
     } catch (error) {
       this.logger.warn(`Couldn't fetch legacy server data via SSH: ${error.message}`);
@@ -410,15 +435,16 @@ export class GpsSyncDashboardController {
       const isCronActive = activeCronJobs.includes(i);
       const connectionCount = activeConnections.get(i) || 0;
       const rawLogSize = rawLogSizes.get(i) || null;
+      const cronLastRun = lastCronRuns.get(i) || null;
       
       legacyProcessors.push({
         name: `Teltonika${i} GPS Processor`,
         location: `Legacy Server (79.101.48.11)`,
         schedule: 'Svakih 2 minuta',
-        lastRun: isScreenActive ? legacyLastRun : null,
+        lastRun: cronLastRun || (isScreenActive ? legacyLastRun : null),
         isActive: isScreenActive, // Screen sesija status
         cronActive: isCronActive, // Cron job status
-        cronLastRun: isCronActive ? legacyLastRun : null,
+        cronLastRun: cronLastRun, // Stvarno vreme poslednjeg cron izvršavanja
         description: `Teltonika${i} folder - Port 120${i}`,
         instance: i,
         type: 'legacy',
@@ -656,8 +682,8 @@ export class GpsSyncDashboardController {
     const logger = new Logger('CronProcessControl');
     
     try {
-      // Samo za teltonika60, teltonika61, teltonika62, teltonika63 i teltonika64 koji imaju Smart City setup
-      if (dto.instance !== 60 && dto.instance !== 61 && dto.instance !== 62 && dto.instance !== 63 && dto.instance !== 64) {
+      // Samo za teltonika60-70 koji imaju Smart City setup
+      if (dto.instance < 60 || dto.instance > 70) {
         return {
           success: false,
           message: `Teltonika${dto.instance} nema Smart City processor`

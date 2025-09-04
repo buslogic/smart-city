@@ -867,8 +867,8 @@ const GpsSyncDashboard: React.FC = () => {
                             key: 'cron_process',
                             width: 200,
                             render: (_: any, record: CronProcess) => {
-                              // Prikaži samo za teltonika60, 61, 62, 63 i 64 koji imaju Smart City setup
-                              if (record.instance !== 60 && record.instance !== 61 && record.instance !== 62 && record.instance !== 63 && record.instance !== 64) {
+                              // Prikaži samo za teltonika60-70 koji imaju Smart City setup
+                              if (record.instance < 60 || record.instance > 70) {
                                 return <span style={{ color: '#ccc' }}>N/A</span>;
                               }
                               
