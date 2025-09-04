@@ -8,8 +8,6 @@
 
 -- migrate:up
 
-RAISE NOTICE 'Kreiram monthly_vehicle_raw_stats continuous aggregate...';
-
 -- 1. Kreiraj monthly_vehicle_raw_stats continuous aggregate
 -- (isto kao na lokalnoj bazi - čita iz driving_events)
 CREATE MATERIALIZED VIEW IF NOT EXISTS monthly_vehicle_raw_stats
@@ -22,12 +20,8 @@ FROM driving_events
 GROUP BY time_bucket('1 mon'::interval, time), vehicle_id
 WITH NO DATA;
 
-RAISE NOTICE '✅ monthly_vehicle_raw_stats continuous aggregate kreiran';
-
 -- 2. Dodaj automatsku refresh politiku za monthly_vehicle_raw_stats
 -- Osvežava svaki sat, gleda 3 meseca unazad
-RAISE NOTICE 'Dodajem automatsku refresh politiku...';
-
 SELECT add_continuous_aggregate_policy(
     'monthly_vehicle_raw_stats',
     start_offset => INTERVAL '3 months',
@@ -36,18 +30,8 @@ SELECT add_continuous_aggregate_policy(
     if_not_exists => true
 );
 
-RAISE NOTICE '✅ Automatska refresh politika dodana';
-
--- 3. Inicijalni refresh da popuni podatke
-RAISE NOTICE 'Pokrećem inicijalni refresh za poslednja 3 meseca...';
-
-CALL refresh_continuous_aggregate(
-    'monthly_vehicle_raw_stats',
-    CURRENT_DATE - INTERVAL '3 months',
-    NULL
-);
-
-RAISE NOTICE '✅ Inicijalni refresh završen';
+-- 3. Napomena: Inicijalni refresh će se pokrenuti automatski
+-- kroz add_continuous_aggregate_policy job u narednom satu
 
 -- 4. Proveri da li je sve uspešno kreirano
 DO $$
@@ -81,19 +65,19 @@ BEGIN
     -- Proveri da li imamo podatke
     SELECT COUNT(*) INTO aggregate_count FROM monthly_vehicle_raw_stats;
     RAISE NOTICE '   - Monthly stats records: %', aggregate_count;
+    
+    RAISE NOTICE '🚀 monthly_vehicle_raw_stats sa automatskim refresh-om spreman!';
 END $$;
 
-RAISE NOTICE '🚀 monthly_vehicle_raw_stats sa automatskim refresh-om spreman!';
-
 -- migrate:down
-
-RAISE NOTICE 'Rollback: Brisanje monthly_vehicle_raw_stats...';
 
 -- 1. Ukloni automatsku refresh politiku
 DO $$
 DECLARE
     job_record RECORD;
 BEGIN
+    RAISE NOTICE 'Rollback: Brisanje monthly_vehicle_raw_stats...';
+    
     FOR job_record IN 
         SELECT job_id 
         FROM timescaledb_information.jobs 
@@ -103,9 +87,9 @@ BEGIN
         PERFORM remove_job(job_record.job_id);
         RAISE NOTICE 'Uklonjen job ID: %', job_record.job_id;
     END LOOP;
+    
+    RAISE NOTICE '✅ monthly_vehicle_raw_stats uklonjen';
 END $$;
 
 -- 2. Obriši continuous aggregate
 DROP MATERIALIZED VIEW IF EXISTS monthly_vehicle_raw_stats;
-
-RAISE NOTICE '✅ monthly_vehicle_raw_stats uklonjen';
