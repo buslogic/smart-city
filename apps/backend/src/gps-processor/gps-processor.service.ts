@@ -209,6 +209,42 @@ export class GpsProcessorService {
         // 6. Detekcija agresivne vožnje (KRITIČNO - dodato!)
         if (actualProcessed > 0) {
           await this.detectAggressiveDriving(batch);
+          
+          // 7. Refresh continuous aggregates za optimalne performanse Monthly Report-a
+          // Ovo omogućava 20x brže generisanje izveštaja
+          try {
+            // Pronađi vremenski opseg obrađenih podataka
+            const timeRange = batch.reduce((acc, record) => {
+              const recordTime = new Date(record.timestamp);
+              if (!acc.min || recordTime < acc.min) acc.min = recordTime;
+              if (!acc.max || recordTime > acc.max) acc.max = recordTime;
+              return acc;
+            }, { min: null as Date | null, max: null as Date | null });
+            
+            if (timeRange.min && timeRange.max) {
+              // Refresh samo za period koji je obrađen
+              await this.timescalePool.query(`
+                CALL refresh_continuous_aggregate(
+                  'vehicle_hourly_stats',
+                  $1::TIMESTAMPTZ,
+                  $2::TIMESTAMPTZ
+                )
+              `, [timeRange.min, timeRange.max]);
+              
+              await this.timescalePool.query(`
+                CALL refresh_continuous_aggregate(
+                  'daily_vehicle_stats',
+                  $1::TIMESTAMPTZ,
+                  $2::TIMESTAMPTZ
+                )
+              `, [timeRange.min, timeRange.max]);
+              
+              this.logger.debug(`🔄 Continuous aggregates osveženi za period ${timeRange.min.toISOString()} - ${timeRange.max.toISOString()}`);
+            }
+          } catch (refreshError) {
+            // Nije kritična greška - nastavi dalje
+            this.logger.warn(`⚠️ Refresh agregata nije uspeo: ${refreshError.message}`);
+          }
         }
         this.processedCount += actualProcessed;
         this.lastProcessTime = new Date();

@@ -13,6 +13,7 @@ import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import * as child_process from 'child_process';
 import { promisify } from 'util';
+import axios from 'axios';
 
 const exec = promisify(child_process.exec);
 import * as fs from 'fs';
@@ -321,74 +322,53 @@ export class GpsSyncDashboardController {
     // Generiši legacy procesore za teltonika60-76
     const legacyProcessors: any[] = [];
     
-    // Proveri koje screen sesije su aktivne
+    // HTTP poziv prema legacy server API umesto SSH
     let activeScreenSessions: number[] = [];
-    try {
-      const { stdout } = await exec(
-        `ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "screen -ls | grep teltonika | grep -oP 'teltonika\\K[0-9]+'"`,
-        { timeout: 15000 }
-      );
-      if (stdout) {
-        activeScreenSessions = stdout.trim().split('\n')
-          .map(num => parseInt(num))
-          .filter(num => !isNaN(num));
-      }
-    } catch (error) {
-      // Ako nema aktivnih sesija ili greška, ostavi prazan niz
-      this.logger.warn(`Couldn't check screen sessions: ${error.message}`);
-    }
-    
-    // Proveri koji cron jobovi postoje
     let activeCronJobs: number[] = [];
-    try {
-      const { stdout } = await exec(
-        `ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "crontab -l 2>/dev/null | grep 'smart-city-raw-processor.php' | grep -oP 'teltonika\\K[0-9]+'"`,
-        { timeout: 15000 }
-      );
-      if (stdout) {
-        activeCronJobs = stdout.trim().split('\n')
-          .map(num => parseInt(num))
-          .filter(num => !isNaN(num));
-      }
-    } catch (error) {
-      // Ako nema cron jobova ili greška
-      this.logger.warn(`Couldn't check cron jobs: ${error.message}`);
-    }
-    
-    // Proveri broj aktivnih GPS konekcija po portu
     let activeConnections: Map<number, number> = new Map();
-    try {
-      const { stdout } = await exec(
-        `ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "for port in {60..76}; do count=\\$(ss -tan | grep :120\\$port | grep ESTAB | wc -l); echo \\$port:\\$count; done"`,
-        { timeout: 15000 }
-      );
-      if (stdout) {
-        stdout.trim().split('\n').forEach(line => {
-          const [port, count] = line.split(':');
-          activeConnections.set(parseInt(port), parseInt(count));
-        });
-      }
-    } catch (error) {
-      this.logger.warn(`Couldn't check active connections: ${error.message}`);
-    }
-    
-    // Proveri veličinu smart-city-gps-raw-log.txt fajlova za teltonika60, teltonika61, teltonika62, teltonika63 i teltonika64
     let rawLogSizes: Map<number, string> = new Map();
+    
     try {
-      const { stdout } = await exec(
-        `ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "for folder in teltonika60 teltonika61 teltonika62 teltonika63 teltonika64; do if [ -f /var/www/\\$folder/smart-city-gps-raw-log.txt ]; then instance=\\$(echo \\$folder | grep -oP '[0-9]+'); size=\\$(ls -lh /var/www/\\$folder/smart-city-gps-raw-log.txt | awk '{print \\$5}'); echo \\$instance:\\$size; fi; done"`,
-        { timeout: 15000 }
-      );
-      if (stdout) {
-        stdout.trim().split('\n').forEach(line => {
-          if (line) {
-            const [instance, size] = line.split(':');
-            rawLogSizes.set(parseInt(instance), size);
-          }
-        });
+      const response = await axios.get('http://79.101.48.11/teltonika60/smart-city-dashboard-api.php', {
+        timeout: 10000,
+        headers: {
+          'User-Agent': 'Smart-City-Backend/1.0'
+        },
+        // Ignorisati SSL sertifikat probleme (samo za development/legacy servere)
+        httpsAgent: new (require('https').Agent)({
+          rejectUnauthorized: false
+        })
+      });
+      
+      if (response.data && response.data.success) {
+        const data = response.data;
+        
+        // Screen sesije
+        activeScreenSessions = data.screenSessions || [];
+        
+        // Cron jobovi
+        activeCronJobs = data.cronJobs || [];
+        
+        // Aktivne konekcije
+        if (data.activeConnections) {
+          Object.entries(data.activeConnections).forEach(([port, count]) => {
+            activeConnections.set(parseInt(port), count as number);
+          });
+        }
+        
+        // Raw log sizes
+        if (data.rawLogSizes) {
+          Object.entries(data.rawLogSizes).forEach(([instance, size]) => {
+            rawLogSizes.set(parseInt(instance), size as string);
+          });
+        }
+        
+        this.logger.debug(`✅ Legacy API poziv uspešan: ${activeScreenSessions.length} screen sesija, ${activeCronJobs.length} cron jobova`);
+      } else {
+        this.logger.warn('Legacy API vratio neuspešan odgovor');
       }
     } catch (error) {
-      this.logger.warn(`Couldn't check raw log sizes: ${error.message}`);
+      this.logger.warn(`Couldn't fetch legacy server data via HTTP: ${error.message}`);
     }
     
     // Sve potencijalne instance (60-76)

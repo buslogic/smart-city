@@ -17,6 +17,7 @@ import {
   InputNumber,
   Divider,
   Tooltip,
+  Switch,
 } from 'antd';
 import {
   FilePdfOutlined,
@@ -27,6 +28,8 @@ import {
   SafetyOutlined,
   SettingOutlined,
   InfoCircleOutlined,
+  DashboardOutlined,
+  TableOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
@@ -35,9 +38,234 @@ import { vehiclesService } from '../../../services/vehicles.service';
 import { drivingBehaviorService } from '../../../services/driving-behavior.service';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import html2canvas from 'html2canvas';
+import { exportExecutivePDFWithUnicode, exportDetailedPDFWithUnicode } from './MonthlyReportPdfMake';
 
 const { Option } = Select;
 const { RangePicker } = DatePicker;
+
+// Helper function to format large numbers
+const formatLargeNumber = (num: number): string => {
+  if (num >= 1000000000) {
+    return (num / 1000000000).toFixed(1) + 'B';
+  }
+  if (num >= 1000000) {
+    return (num / 1000000).toFixed(1) + 'M';
+  }
+  if (num >= 1000) {
+    return (num / 1000).toFixed(1) + 'K';
+  }
+  return num.toString();
+};
+
+// Executive Summary View Component Props
+interface ExecutiveSummaryViewProps {
+  reportData: VehicleReportData[];
+  loading: boolean;
+  avgScore: number;
+  totalKm: number;
+  totalEvents: number;
+}
+
+// Executive Summary View Component
+const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
+  reportData,
+  loading,
+  avgScore,
+  totalKm,
+  totalEvents
+}) => {
+  if (loading) {
+    return (
+      <div className="text-center py-8">
+        <Spin size="large" tip="Generisanje izvršnog pregleda..." />
+      </div>
+    );
+  }
+
+  if (reportData.length === 0) {
+    return null;
+  }
+
+  // Calculate metrics for executive summary LOCALLY (not from props)
+  const totalVehicles = reportData.length;
+  const excellentVehicles = reportData.filter(v => v.safetyScore >= 80).length;
+  const goodVehicles = reportData.filter(v => v.safetyScore >= 60 && v.safetyScore < 80).length;
+  const riskVehicles = reportData.filter(v => v.safetyScore < 60).length;
+  
+  // Calculate locally from reportData
+  const localTotalKm = reportData.reduce((sum, v) => sum + v.totalDistanceKm, 0);
+  const localAvgScore = totalVehicles > 0 
+    ? reportData.reduce((sum, v) => sum + v.safetyScore, 0) / totalVehicles 
+    : 0;
+  const localTotalEvents = reportData.reduce((sum, v) => {
+    const severeAccel = Number(v.severeAccelerations) || 0;
+    const severeBraking = Number(v.severeBrakings) || 0;
+    const aggressive = severeAccel + severeBraking;
+    return sum + aggressive;
+  }, 0);
+  
+  // Calculate moderate events
+  const localModerateEvents = reportData.reduce((sum, v) => {
+    const moderateAccel = Number(v.moderateAccelerations) || 0;
+    const moderateBraking = Number(v.moderateBrakings) || 0;
+    return sum + moderateAccel + moderateBraking;
+  }, 0);
+  
+  const avgEventsPerVehicle = totalVehicles > 0 ? localTotalEvents / totalVehicles : 0;
+  const avgKmPerVehicle = totalVehicles > 0 ? localTotalKm / totalVehicles : 0;
+
+  return (
+    <div className="executive-summary">
+      {/* Key Performance Indicators */}
+      <Card title="Ključni indikatori performansi" className="mb-4">
+        <Row gutter={16}>
+          <Col span={4}>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-blue-600">{totalVehicles}</div>
+              <div className="text-sm text-gray-500">Ukupno vozila</div>
+            </div>
+          </Col>
+          <Col span={4}>
+            <div className="text-center">
+              <div className="text-3xl font-bold" style={{ color: localAvgScore >= 80 ? '#52c41a' : localAvgScore >= 60 ? '#faad14' : '#ff4d4f' }}>
+                {localAvgScore.toFixed(1)}
+              </div>
+              <div className="text-sm text-gray-500">Prosečan Safety Score</div>
+            </div>
+          </Col>
+          <Col span={4}>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-green-600">{formatLargeNumber(localTotalKm)}</div>
+              <div className="text-sm text-gray-500">Ukupna kilometraža (km)</div>
+            </div>
+          </Col>
+          <Col span={4}>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-yellow-600">{formatLargeNumber(localModerateEvents)}</div>
+              <div className="text-sm text-gray-500">Umereni događaji</div>
+            </div>
+          </Col>
+          <Col span={4}>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-orange-600">{formatLargeNumber(localTotalEvents)}</div>
+              <div className="text-sm text-gray-500">Agresivni događaji</div>
+            </div>
+          </Col>
+          <Col span={4}>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-purple-600">{formatLargeNumber(localModerateEvents + localTotalEvents)}</div>
+              <div className="text-sm text-gray-500">Ukupno prekršaja</div>
+            </div>
+          </Col>
+        </Row>
+      </Card>
+
+      {/* Performance Distribution */}
+      <Row gutter={16} className="mb-4">
+        <Col span={8}>
+          <Card title="Distribucija Safety Score">
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="flex items-center">
+                  <div className="w-4 h-4 bg-green-500 rounded mr-2"></div>
+                  Odličan (80-100)
+                </span>
+                <span className="font-semibold">
+                  {excellentVehicles} ({((excellentVehicles / totalVehicles) * 100).toFixed(1)}%)
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="flex items-center">
+                  <div className="w-4 h-4 bg-yellow-500 rounded mr-2"></div>
+                  Dobar (60-79)
+                </span>
+                <span className="font-semibold">
+                  {goodVehicles} ({((goodVehicles / totalVehicles) * 100).toFixed(1)}%)
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="flex items-center">
+                  <div className="w-4 h-4 bg-red-500 rounded mr-2"></div>
+                  Rizičan (&lt;60)
+                </span>
+                <span className="font-semibold">
+                  {riskVehicles} ({((riskVehicles / totalVehicles) * 100).toFixed(1)}%)
+                </span>
+              </div>
+            </div>
+          </Card>
+        </Col>
+        <Col span={8}>
+          <Card title="Analiza umerenih performansi">
+            <div className="space-y-3">
+              <div className="flex justify-between">
+                <span>Prosečno umerenih po vozilu:</span>
+                <span className="font-semibold">{totalVehicles > 0 ? (localModerateEvents / totalVehicles).toFixed(1) : '0.0'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Prosečna kilometraža po vozilu:</span>
+                <span className="font-semibold">{avgKmPerVehicle.toFixed(0)} km</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Umereni na 100km:</span>
+                <span className="font-semibold">{localTotalKm > 0 ? (localModerateEvents / (localTotalKm / 100)).toFixed(1) : '0.0'}</span>
+              </div>
+            </div>
+          </Card>
+        </Col>
+        <Col span={8}>
+          <Card title="Analiza agresivnih performansi">
+            <div className="space-y-3">
+              <div className="flex justify-between">
+                <span>Prosečno agresivnih po vozilu:</span>
+                <span className="font-semibold">{avgEventsPerVehicle.toFixed(1)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Prosečna kilometraža po vozilu:</span>
+                <span className="font-semibold">{avgKmPerVehicle.toFixed(0)} km</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Agresivni na 100km:</span>
+                <span className="font-semibold">{localTotalKm > 0 ? (localTotalEvents / (localTotalKm / 100)).toFixed(1) : '0.0'}</span>
+              </div>
+            </div>
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Key Insights */}
+      <Card title="Ključni uvidi i preporuke" className="mb-4">
+        <Row gutter={16}>
+          <Col span={8}>
+            <div className="p-4 bg-green-50 rounded-lg border-l-4 border-green-500">
+              <h4 className="font-semibold text-green-800 mb-2">🏆 Odličnost</h4>
+              <p className="text-sm text-green-700">
+                {((excellentVehicles / totalVehicles) * 100).toFixed(0)}% vozila postiže odličan Safety Score (&gt;80)
+              </p>
+            </div>
+          </Col>
+          <Col span={8}>
+            <div className="p-4 bg-yellow-50 rounded-lg border-l-4 border-yellow-500">
+              <h4 className="font-semibold text-yellow-800 mb-2">⚠️ Upozorenje</h4>
+              <p className="text-sm text-yellow-700">
+                {riskVehicles} vozila zahteva dodatnu obuku zbog niskog Safety Score-a
+              </p>
+            </div>
+          </Col>
+          <Col span={8}>
+            <div className="p-4 bg-blue-50 rounded-lg border-l-4 border-blue-500">
+              <h4 className="font-semibold text-blue-800 mb-2">📈 Fokus</h4>
+              <p className="text-sm text-blue-700">
+                Prosek od {avgEventsPerVehicle.toFixed(1)} agresivnih događaja po vozilu
+              </p>
+            </div>
+          </Col>
+        </Row>
+      </Card>
+    </div>
+  );
+};
 
 interface VehicleReportData {
   vehicleId: number;
@@ -72,6 +300,7 @@ const MonthlyReport: React.FC = () => {
   const [configForm] = Form.useForm();
   const [savingConfig, setSavingConfig] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
+  const [isExecutiveView, setIsExecutiveView] = useState(false); // Toggle između detaljnog i izvršnog prikaza
 
   // Fetch all vehicles
   const { data: vehiclesResponse, isLoading: vehiclesLoading } = useQuery({
@@ -118,6 +347,7 @@ const MonthlyReport: React.FC = () => {
       
       const endTime = performance.now();
       console.log(`Batch statistics fetched in ${((endTime - startTime) / 1000).toFixed(2)} seconds`);
+      console.log(`Backend returned statistics for ${allStats.length} vehicles:`, allStats.map(s => `${s.vehicleId}(${vehiclesData?.find(v => v.id === s.vehicleId)?.garageNumber})`).join(', '));
 
       // Process batch results
       for (const stats of allStats) {
@@ -148,9 +378,8 @@ const MonthlyReport: React.FC = () => {
           continue;
         }
 
-        // Estimate total number of acceleration/braking events based on distance
-        // Assuming average of 30 acceleration/braking events per km in city driving
-        const estimatedTotalEvents = Math.floor(stats.totalDistanceKm * 30);
+        // More realistic estimate: ~3 acceleration/braking events per km in city driving
+        const estimatedTotalEvents = Math.floor(stats.totalDistanceKm * 3);
         
         // Calculate aggressive events
         const aggressiveAccel = stats.severeAccelerations + stats.moderateAccelerations;
@@ -191,6 +420,7 @@ const MonthlyReport: React.FC = () => {
         });
       }
 
+      console.log(`Frontend processed ${reportDataArray.length} vehicles for table:`, reportDataArray.map(r => `${r.vehicleId}(${r.garageNumber})`).join(', '));
       setReportData(reportDataArray);
       message.success(`Izveštaj generisan za ${reportDataArray.length} vozila`);
     } catch (error) {
@@ -201,18 +431,54 @@ const MonthlyReport: React.FC = () => {
     }
   };
 
-  // Export to PDF
+  // Export to PDF - supports both Executive and Detailed views
   const exportToPDF = async () => {
     if (reportData.length === 0) {
       message.warning('Prvo generiši izveštaj');
       return;
     }
 
+    if (isExecutiveView) {
+      // Generate Executive Summary PDF with Unicode support
+      exportExecutivePDF();
+      message.success('Izvršni PDF izveštaj je uspešno kreiran');
+    } else {
+      // Generate Detailed Table PDF
+      exportDetailedPDF();
+    }
+  };
+
+  // Helper function - no longer needed with pdfMake as it supports Unicode
+  const serbianToPdfText = (text: string): string => {
+    return text; // pdfMake podržava Unicode, ne treba konverzija!
+  };
+
+  // Executive Summary PDF Export je premešten u MonthlyReportPdfMake.tsx
+  // jer podržava Unicode karaktere kroz pdfMake biblioteku
+  
+  // Ova funkcija više nije potrebna - koristi se exportExecutivePDFWithUnicode
+  // Stara exportExecutivePDF funkcija je uklonjena
+  // Koristi se nova verzija iz MonthlyReportPdfMake.tsx
+  
+  /* Stari kod uklonjen - sada koristi pdfMake */
+  
+  // Nova funkcija koja poziva pdfMake verziju
+  const exportExecutivePDF = () => {
+    exportExecutivePDFWithUnicode(reportData, dateRange);
+  };
+
+  // Detailed Table PDF Export - koristi pdfMake za Unicode podršku
+  const exportDetailedPDF = () => {
+    exportDetailedPDFWithUnicode(reportData, dateRange);
+    return; // Prekidamo izvršavanje stare implementacije
+    
+    // Stari kod sa jsPDF (zadržan kao komentar):
+    /*
     const pdf = new jsPDF('landscape', 'mm', 'a4');
     
     // Add title
     pdf.setFontSize(20);
-    pdf.text('Mesečni izveštaj - Bezbednost vožnje', pdf.internal.pageSize.width / 2, 15, { align: 'center' });
+    pdf.text(serbianToPdfText('Mesečni izveštaj - Bezbednost vožnje'), pdf.internal.pageSize.width / 2, 15, { align: 'center' });
     
     // Add date range
     pdf.setFontSize(12);
@@ -245,19 +511,19 @@ const MonthlyReport: React.FC = () => {
     autoTable(pdf, {
       head: [[
         'Vozilo',
-        'Ozbiljno\nkočenje',
-        'Umereno\nkočenje',
-        'Normalno\nkočenje',
-        'Bez\nprekoračenja',
+        serbianToPdfText('Ozbiljno\nkočenje'),
+        serbianToPdfText('Umereno\nkočenje'),
+        serbianToPdfText('Normalno\nkočenje'),
+        serbianToPdfText('Bez\nprekoračenja'),
         'Normalno\nubrzanje',
         'Umereno\nubrzanje',
         'Ozbiljno\nubrzanje',
         'Safety\nScore',
-        'Kilometraža',
-        'Događaji\n/100km',
+        serbianToPdfText('Kilometraža'),
+        serbianToPdfText('Događaji\n/100km'),
         'Normalno\n%',
         'Agr.Ubrzanje\n%',
-        'Agr.Kočenje\n%',
+        serbianToPdfText('Agr.Kočenje\n%'),
       ]],
       body: tableData,
       startY: 35,
@@ -282,17 +548,19 @@ const MonthlyReport: React.FC = () => {
     // Add summary statistics
     const avgScore = reportData.reduce((sum, v) => sum + v.safetyScore, 0) / reportData.length;
     const totalKm = reportData.reduce((sum, v) => sum + v.totalDistanceKm, 0);
-    const totalEvents = reportData.reduce((sum, v) => sum + v.totalEvents, 0);
+    const totalEvents = reportData.reduce((sum, v) => 
+      sum + (Number(v.severeAccelerations) || 0) + (Number(v.severeBrakings) || 0), 0);
 
     const finalY = (pdf as any).lastAutoTable?.finalY || 35;
     pdf.setFontSize(10);
-    pdf.text(`Prosečan Safety Score: ${avgScore.toFixed(1)}`, 14, finalY + 10);
-    pdf.text(`Ukupna kilometraža: ${totalKm.toFixed(2)} km`, 14, finalY + 15);
-    pdf.text(`Ukupan broj događaja: ${totalEvents}`, 14, finalY + 20);
+    pdf.text(serbianToPdfText(`Prosečan Safety Score: ${avgScore.toFixed(1)}`), 14, finalY + 10);
+    pdf.text(serbianToPdfText(`Ukupna kilometraža: ${totalKm.toFixed(2)} km`), 14, finalY + 15);
+    pdf.text(serbianToPdfText(`Ukupan broj događaja: ${totalEvents}`), 14, finalY + 20);
 
     // Save PDF
     pdf.save(`izvestaj-bezbednost-${dateRange[0].format('YYYY-MM')}.pdf`);
     message.success('PDF izveštaj je uspešno kreiran');
+    */
   };
 
   // Helper function to render value with percentage
@@ -432,7 +700,8 @@ const MonthlyReport: React.FC = () => {
     ? reportData.reduce((sum, v) => sum + v.safetyScore, 0) / reportData.length
     : 0;
   const totalKm = reportData.reduce((sum, v) => sum + v.totalDistanceKm, 0);
-  const totalEvents = reportData.reduce((sum, v) => sum + v.totalEvents, 0);
+  const totalEvents = reportData.reduce((sum, v) => 
+    sum + (Number(v.severeAccelerations) || 0) + (Number(v.severeBrakings) || 0), 0);
 
   return (
     <div className="p-6">
@@ -524,6 +793,27 @@ const MonthlyReport: React.FC = () => {
             </Space>
           </Col>
         </Row>
+        <Row gutter={16} align="middle" className="mt-4">
+          <Col span={24}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <label className="text-sm font-medium">Tip prikaza:</label>
+                <Switch
+                  checked={isExecutiveView}
+                  onChange={setIsExecutiveView}
+                  checkedChildren={<><DashboardOutlined /> Izvršni pregled</>}
+                  unCheckedChildren={<><TableOutlined /> Detaljni prikaz</>}
+                  size="default"
+                />
+              </div>
+              {isExecutiveView && (
+                <div className="text-xs text-gray-500">
+                  Kompaktni izveštaj optimizovan za upravu i štampu
+                </div>
+              )}
+            </div>
+          </Col>
+        </Row>
       </Card>
 
       {/* Summary Statistics */}
@@ -567,26 +857,41 @@ const MonthlyReport: React.FC = () => {
               <Statistic
                 title="Ukupno događaja"
                 value={totalEvents}
+                formatter={(value) => {
+                  const num = typeof value === 'string' ? parseInt(value) : Number(value) || 0;
+                  return num.toLocaleString('en-US');
+                }}
               />
             </Card>
           </Col>
         </Row>
       )}
 
-      {/* Report Table */}
-      <Card 
-        title="Tabela izveštaja"
-        ref={reportRef}
-        extra={
-          <Space>
-            {reportData.length > 0 && (
-              <Tag color="blue">
-                {reportData.length} vozila
-              </Tag>
-            )}
-          </Space>
-        }
-      >
+      {/* Report Content - Conditional based on view type */}
+      {isExecutiveView ? (
+        /* Executive Summary View */
+        <ExecutiveSummaryView 
+          reportData={reportData}
+          loading={loading}
+          avgScore={avgScore}
+          totalKm={totalKm}
+          totalEvents={totalEvents}
+        />
+      ) : (
+        /* Detailed Table View */
+        <Card 
+          title="Tabela izveštaja"
+          ref={reportRef}
+          extra={
+            <Space>
+              {reportData.length > 0 && (
+                <Tag color="blue">
+                  {reportData.length} vozila
+                </Tag>
+              )}
+            </Space>
+          }
+        >
         {loading ? (
           <div className="text-center py-8">
             <Spin size="large" tip="Generisanje izveštaja..." />
@@ -670,6 +975,7 @@ const MonthlyReport: React.FC = () => {
           />
         )}
       </Card>
+      )}
       {/* Configuration Modal */}
       <Modal
         title={

@@ -591,6 +591,48 @@ export class GpsSyncService {
         }
       }
 
+      // KRITIČNO: Refresh continuous aggregates nakon uvoza podataka
+      // Ovo je potrebno za brzo generisanje Monthly Report-a (20x brže)
+      if (totalInserted > 0 || totalUpdated > 0) {
+        try {
+          this.logger.log('🔄 Osvežavam continuous aggregates za brže izveštaje...');
+          
+          // Refresh vehicle_hourly_stats za period sinhronizacije
+          const refreshHourlyResult = await this.pgPool.query(`
+            CALL refresh_continuous_aggregate(
+              'vehicle_hourly_stats',
+              $1::TIMESTAMPTZ,
+              $2::TIMESTAMPTZ
+            )
+          `, [params.startDate, params.endDate]);
+          
+          this.logger.log('✅ vehicle_hourly_stats osvežen');
+          
+          // Refresh daily_vehicle_stats za period sinhronizacije
+          const refreshDailyResult = await this.pgPool.query(`
+            CALL refresh_continuous_aggregate(
+              'daily_vehicle_stats', 
+              $1::TIMESTAMPTZ,
+              $2::TIMESTAMPTZ
+            )
+          `, [params.startDate, params.endDate]);
+          
+          this.logger.log('✅ daily_vehicle_stats osvežen');
+          
+          // Ažuriraj statistike za bolje performanse
+          await this.pgPool.query('ANALYZE gps_data');
+          await this.pgPool.query('ANALYZE driving_events');
+          await this.pgPool.query('ANALYZE vehicle_hourly_stats');
+          await this.pgPool.query('ANALYZE daily_vehicle_stats');
+          
+          this.logger.log('✅ Statistike ažurirane - Monthly Report će raditi optimalno!');
+          
+        } catch (refreshError) {
+          this.logger.error('⚠️ Greška pri refresh agregata (nije kritično):', refreshError.message);
+          // Nastavi dalje - ovo nije kritična greška
+        }
+      }
+
       // Finalno ažuriranje
       await this.prisma.gpsSyncLog.update({
         where: { id: syncId },
