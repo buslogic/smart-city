@@ -33,6 +33,13 @@ export class GpsSyncDashboardController {
   
   constructor(private readonly prisma: PrismaService) {}
   
+  // Helper metoda za SSH komandu
+  private getSSHCommand(): string {
+    const legacyHost = process.env.LEGACY_SERVER_HOST || '79.101.48.11';
+    const sshKeyPath = process.env.LEGACY_SSH_KEY_PATH || '~/.ssh/hp-notebook-2025-buslogic';
+    return `ssh -i ${sshKeyPath} root@${legacyHost}`;
+  }
+  
   // Metoda koju će pozivati cron servisi da ažuriraju svoje vreme
   static updateCronLastRun(cronName: 'processor' | 'cleanup' | 'statsCleanup') {
     this.cronLastRun[cronName] = new Date();
@@ -328,10 +335,14 @@ export class GpsSyncDashboardController {
     let activeConnections: Map<number, number> = new Map();
     let rawLogSizes: Map<number, string> = new Map();
     
+    // Koristi helper metodu za SSH komandu
+    const sshBaseCommand = this.getSSHCommand();
+    this.logger.debug(`🔑 SSH komanda: ${sshBaseCommand}`);
+    
     try {
       // 1. Proveri screen sesije
       const { stdout: screenOutput } = await exec(
-        `ssh -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "screen -ls 2>/dev/null | grep teltonika"`,
+        `${sshBaseCommand} "screen -ls 2>/dev/null | grep teltonika"`,
         { timeout: 10000 }
       );
       
@@ -344,7 +355,7 @@ export class GpsSyncDashboardController {
       
       // 2. Proveri cron jobove
       const { stdout: cronOutput } = await exec(
-        `ssh -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "crontab -l 2>/dev/null | grep smart-city-raw-processor.php"`,
+        `${sshBaseCommand} "crontab -l 2>/dev/null | grep smart-city-raw-processor.php"`,
         { timeout: 10000 }
       );
       
@@ -359,7 +370,7 @@ export class GpsSyncDashboardController {
       for (let port = 60; port <= 76; port++) {
         try {
           const { stdout: connCount } = await exec(
-            `ssh -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "ss -tan 2>/dev/null | grep :120${port} | grep ESTAB | wc -l"`,
+            `${sshBaseCommand} "ss -tan 2>/dev/null | grep :120${port} | grep ESTAB | wc -l"`,
             { timeout: 5000 }
           );
           const count = parseInt(connCount.trim()) || 0;
@@ -376,7 +387,7 @@ export class GpsSyncDashboardController {
       for (const folder of folders) {
         try {
           const { stdout: sizeOutput } = await exec(
-            `ssh -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "ls -lh /var/www/${folder}/smart-city-gps-raw-log.txt 2>/dev/null | awk '{print \\$5}'"`,
+            `${sshBaseCommand} "ls -lh /var/www/${folder}/smart-city-gps-raw-log.txt 2>/dev/null | awk '{print \\$5}'"`,
             { timeout: 5000 }
           );
           if (sizeOutput && sizeOutput.trim()) {
@@ -527,7 +538,7 @@ export class GpsSyncDashboardController {
         if (dto.action === 'stop') {
           // Stop teltonika screen session
           const { stdout, stderr } = await exec(
-            `ssh -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "screen -XS teltonika${instanceNum}.bgnaplata quit"`,
+            `${this.getSSHCommand()} "screen -XS teltonika${instanceNum}.bgnaplata quit"`,
             { timeout: 10000 }
           );
           
@@ -541,7 +552,7 @@ export class GpsSyncDashboardController {
         } else {
           // Start teltonika screen session
           const { stdout, stderr } = await exec(
-            `ssh -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "screen -m -d -S teltonika${instanceNum}.bgnaplata /var/www/teltonika${instanceNum}/start_teltonika.sh"`,
+            `${this.getSSHCommand()} "screen -m -d -S teltonika${instanceNum}.bgnaplata /var/www/teltonika${instanceNum}/start_teltonika.sh"`,
             { timeout: 10000 }
           );
           
@@ -598,7 +609,7 @@ export class GpsSyncDashboardController {
         
         // Stop then start
         await exec(
-          `ssh -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "screen -XS teltonika${instanceNum}.bgnaplata quit"`,
+          `${this.getSSHCommand()} "screen -XS teltonika${instanceNum}.bgnaplata quit"`,
           { timeout: 10000 }
         );
         
@@ -606,7 +617,7 @@ export class GpsSyncDashboardController {
         await new Promise(resolve => setTimeout(resolve, 2000));
         
         const { stdout, stderr } = await exec(
-          `ssh -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "screen -m -d -S teltonika${instanceNum}.bgnaplata /var/www/teltonika${instanceNum}/start_teltonika.sh"`,
+          `${this.getSSHCommand()} "screen -m -d -S teltonika${instanceNum}.bgnaplata /var/www/teltonika${instanceNum}/start_teltonika.sh"`,
           { timeout: 10000 }
         );
         
@@ -656,7 +667,7 @@ export class GpsSyncDashboardController {
       if (dto.action === 'stop') {
         // Zaustavi cron za procesiranje
         const { stdout } = await exec(
-          `ssh -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "crontab -l | grep -v 'teltonika${dto.instance}/smart-city-raw-processor.php' | crontab -"`,
+          `${this.getSSHCommand()} "crontab -l | grep -v 'teltonika${dto.instance}/smart-city-raw-processor.php' | crontab -"`,
           { timeout: 10000 }
         );
         
@@ -671,7 +682,7 @@ export class GpsSyncDashboardController {
       } else if (dto.action === 'start') {
         // Pokreni cron za procesiranje
         const { stdout } = await exec(
-          `ssh -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "(crontab -l 2>/dev/null; echo '*/2 * * * * /usr/bin/php /var/www/teltonika${dto.instance}/smart-city-raw-processor.php >> /var/log/smart-city-raw-processor-${dto.instance}.log 2>&1') | crontab -"`,
+          `${this.getSSHCommand()} "(crontab -l 2>/dev/null; echo '*/2 * * * * /usr/bin/php /var/www/teltonika${dto.instance}/smart-city-raw-processor.php >> /var/log/smart-city-raw-processor-${dto.instance}.log 2>&1') | crontab -"`,
           { timeout: 10000 }
         );
         
@@ -686,7 +697,7 @@ export class GpsSyncDashboardController {
       } else if (dto.action === 'run') {
         // Ručno pokreni procesiranje odmah
         const { stdout, stderr } = await exec(
-          `ssh -i ~/.ssh/hp-notebook-2025-buslogic root@79.101.48.11 "php /var/www/teltonika${dto.instance}/smart-city-raw-processor.php"`,
+          `${this.getSSHCommand()} "php /var/www/teltonika${dto.instance}/smart-city-raw-processor.php"`,
           { timeout: 30000 }
         );
         
