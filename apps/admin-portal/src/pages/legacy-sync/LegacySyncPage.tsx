@@ -72,6 +72,9 @@ const LegacySyncPage: React.FC = () => {
     message: string;
   } | null>(null);
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const [syncModal, setSyncModal] = useState(false);
+  const [syncLogs, setSyncLogs] = useState<string[]>([]);
+  const [overallProgress, setOverallProgress] = useState(0);
 
   // Učitaj vozila pri mount-u
   useEffect(() => {
@@ -144,11 +147,48 @@ const LegacySyncPage: React.FC = () => {
       const response = await api.get(`/api/legacy-sync/progress?job_id=${currentJobId}`);
       const progressMap = new Map<number, SyncProgress>();
       
+      let totalProcessed = 0;
+      let totalRecords = 0;
+      let completedVehicles = 0;
+      let errorVehicles = 0;
+      
       response.data.forEach((progress: SyncProgress) => {
         progressMap.set(progress.vehicle_id, progress);
+        totalProcessed += progress.processed_records;
+        totalRecords += progress.total_records;
+        
+        if (progress.status === 'completed') completedVehicles++;
+        if (progress.status === 'error') errorVehicles++;
       });
       
       setSyncProgress(progressMap);
+      
+      // Ažuriraj overall progress
+      const calculatedProgress = totalRecords > 0 ? (totalProcessed / totalRecords) * 100 : 0;
+      setOverallProgress(Math.min(calculatedProgress, 95));
+      
+      // Ažuriraj log sa trenutnim statusom
+      setSyncLogs(prev => {
+        const newLogs = [...prev];
+        const lastLog = newLogs[newLogs.length - 1];
+        const progressMsg = `⏳ Procesiranje: ${totalProcessed}/${totalRecords} GPS tačaka (${Math.round(calculatedProgress)}%) - ${completedVehicles}/${response.data.length} vozila završeno`;
+        
+        // Ažuriraj poslednji log ako je progress update
+        if (lastLog && lastLog.includes('⏳ Procesiranje:')) {
+          newLogs[newLogs.length - 1] = progressMsg;
+        } else {
+          newLogs.push(progressMsg);
+        }
+        
+        if (errorVehicles > 0) {
+          const errorMsg = `⚠️ Greške na ${errorVehicles} vozila`;
+          if (!newLogs.some(log => log.includes(errorMsg))) {
+            newLogs.push(errorMsg);
+          }
+        }
+        
+        return newLogs;
+      });
       
       // Proveri da li su svi završeni
       const allCompleted = response.data.every(
@@ -158,6 +198,8 @@ const LegacySyncPage: React.FC = () => {
       if (allCompleted && response.data.length > 0) {
         setSyncing(false);
         setCurrentJobId(null);
+        setOverallProgress(100);
+        setSyncLogs(prev => [...prev, `✅ Sinhronizacija završena! Procesirano ${totalProcessed} GPS tačaka za ${completedVehicles} vozila.`]);
         message.success('Sinhronizacija završena');
         fetchVehicles(); // Osvježi listu
       }
@@ -177,40 +219,47 @@ const LegacySyncPage: React.FC = () => {
       return;
     }
     
-    Modal.confirm({
-      title: 'Potvrda sinhronizacije',
-      content: (
-        <div>
-          <p>Da li ste sigurni da želite da pokrenete sinhronizaciju za:</p>
-          <ul>
-            <li>{selectedVehicles.length} vozila</li>
-            <li>Period: {dateRange[0].format('DD.MM.YYYY')} - {dateRange[1].format('DD.MM.YYYY')}</li>
-          </ul>
-          <Alert
-            message="Napomena"
-            description="Proces može potrajati nekoliko minuta u zavisnosti od količine podataka."
-            type="info"
-            showIcon
-          />
-        </div>
-      ),
-      onOk: async () => {
-        setSyncing(true);
-        try {
-          const response = await api.post('/api/legacy-sync/start', {
-            vehicle_ids: selectedVehicles,
-            sync_from: dateRange[0].toISOString(),
-            sync_to: dateRange[1].toISOString(),
-          });
-          
-          setCurrentJobId(response.data.job_id);
-          message.success(response.data.message);
-        } catch (error) {
-          message.error('Greška pri pokretanju sinhronizacije');
-          setSyncing(false);
-        }
-      },
-    });
+    // Resetuj state i otvori modal
+    setSyncLogs([]);
+    setOverallProgress(0);
+    setSyncModal(true);
+    setSyncing(true);
+    
+    // Prikaži početne log poruke
+    const selectedVehicleDetails = vehicles
+      .filter(v => selectedVehicles.includes(v.id))
+      .map(v => v.garage_number);
+    
+    setSyncLogs([
+      `🚀 Pokretanje sinhronizacije za ${selectedVehicles.length} vozila...`,
+      `🚗 Vozila: ${selectedVehicleDetails.slice(0, 3).join(', ')}${selectedVehicles.length > 3 ? '...' : ''}`,
+      `📅 Period: ${dateRange[0].format('DD.MM.YYYY')} - ${dateRange[1].format('DD.MM.YYYY')}`,
+      `🔄 Slanje zahteva na server...`
+    ]);
+    
+    try {
+      setSyncLogs(prev => [...prev, '📡 Povezivanje sa legacy bazom podataka...']);
+      setOverallProgress(10);
+      
+      const response = await api.post('/api/legacy-sync/start', {
+        vehicle_ids: selectedVehicles,
+        sync_from: dateRange[0].toISOString(),
+        sync_to: dateRange[1].toISOString(),
+      });
+      
+      setCurrentJobId(response.data.job_id);
+      setSyncLogs(prev => [...prev, `✅ ${response.data.message}`]);
+      setSyncLogs(prev => [...prev, `🔍 Job ID: ${response.data.job_id}`]);
+      setOverallProgress(20);
+      
+      // Započni praćenje progresa
+      setSyncLogs(prev => [...prev, '📊 Praćenje progresa sinhronizacije...']);
+    } catch (error: any) {
+      setSyncLogs(prev => [...prev, `❌ Greška: ${error.response?.data?.message || 'Nepoznata greška'}`]);
+      message.error('Greška pri pokretanju sinhronizacije');
+      setSyncing(false);
+      setOverallProgress(0);
+    }
   };
 
   const handleStopSync = async () => {
@@ -472,6 +521,118 @@ const LegacySyncPage: React.FC = () => {
           />
         </Space>
       </Card>
+
+      {/* Modal za prikaz progresa sinhronizacije */}
+      <Modal
+        title={
+          <Space>
+            <SyncOutlined spin />
+            <span>Legacy Sinhronizacija u toku</span>
+          </Space>
+        }
+        open={syncModal}
+        onCancel={() => setSyncModal(false)}
+        footer={[
+          <Button 
+            key="close" 
+            onClick={() => setSyncModal(false)}
+            disabled={syncing && overallProgress < 100}
+          >
+            {overallProgress >= 100 ? 'Zatvori' : 'Sakrij'}
+          </Button>,
+          syncing && overallProgress < 100 && (
+            <Button 
+              key="stop"
+              danger
+              onClick={async () => {
+                await handleStopSync();
+                setSyncModal(false);
+              }}
+            >
+              Zaustavi sinhronizaciju
+            </Button>
+          )
+        ]}
+        width={700}
+      >
+        <div className="space-y-4">
+          {/* Progress bar */}
+          <div>
+            <div className="mb-2 flex justify-between text-sm">
+              <span>Ukupan progres sinhronizacije</span>
+              <span className="font-medium">{overallProgress.toFixed(1)}%</span>
+            </div>
+            <Progress 
+              percent={overallProgress} 
+              status={overallProgress >= 100 ? 'success' : 'active'}
+              strokeColor={{
+                '0%': '#108ee9',
+                '100%': '#87d068',
+              }}
+            />
+          </div>
+
+          {/* Log poruke */}
+          <div className="border rounded-lg p-4 bg-gray-50 max-h-64 overflow-y-auto">
+            <div className="space-y-2 font-mono text-sm">
+              {syncLogs.length === 0 ? (
+                <div className="text-gray-500">Priprema sinhronizacije...</div>
+              ) : (
+                syncLogs.map((log, index) => (
+                  <div 
+                    key={index} 
+                    className={`
+                      ${log.includes('✅') ? 'text-green-600' : ''}
+                      ${log.includes('❌') ? 'text-red-600' : ''}
+                      ${log.includes('⚠️') ? 'text-yellow-600' : ''}
+                      ${log.includes('⏳') ? 'text-blue-600' : ''}
+                      ${log.includes('🔄') || log.includes('📡') || log.includes('📊') ? 'text-gray-700' : ''}
+                      ${log.includes('🚀') || log.includes('🚗') ? 'font-semibold' : ''}
+                    `}
+                  >
+                    {log}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Detaljan progres po vozilu */}
+          {syncProgress.size > 0 && (
+            <div>
+              <div className="text-sm font-medium mb-2">Progres po vozilu:</div>
+              <div className="space-y-2 max-h-32 overflow-y-auto">
+                {Array.from(syncProgress.entries()).map(([vehicleId, progress]) => {
+                  const vehicle = vehicles.find(v => v.id === vehicleId);
+                  return (
+                    <div key={vehicleId} className="flex items-center justify-between text-sm">
+                      <span className="font-mono">{vehicle?.garage_number || `ID: ${vehicleId}`}</span>
+                      <div className="flex items-center gap-2">
+                        {progress.status === 'completed' && <CheckCircleOutlined className="text-green-500" />}
+                        {progress.status === 'error' && <CloseCircleOutlined className="text-red-500" />}
+                        {progress.status === 'running' && <LoadingOutlined className="text-blue-500" />}
+                        <Progress 
+                          percent={progress.progress_percentage} 
+                          size="small" 
+                          style={{ width: 100 }}
+                          status={
+                            progress.status === 'completed' ? 'success' :
+                            progress.status === 'error' ? 'exception' :
+                            'active'
+                          }
+                        />
+                        <span className="text-xs text-gray-500">
+                          {progress.processed_records}/{progress.total_records}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 };

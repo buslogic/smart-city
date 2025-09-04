@@ -336,6 +336,37 @@ export class GpsSyncDashboardController {
     let rawLogSizes: Map<number, string> = new Map();
     let lastCronRuns: Map<number, Date | null> = new Map();
     
+    // Proveri da li su SSH komande omogućene (disabled u Docker kontejnerima)
+    const sshEnabled = process.env.ENABLE_SSH_COMMANDS !== 'false';
+    
+    if (!sshEnabled) {
+      this.logger.warn('SSH commands are disabled in this environment');
+      // Vrati prazne podatke za SSH-based info
+      for (let i = 60; i <= 76; i++) {
+        legacyProcessors.push({
+          name: `Teltonika${i} GPS Processor`,
+          location: `Legacy Server (79.101.48.11)`,
+          schedule: 'Svakih 2 minuta',
+          lastRun: null,
+          status: 'unknown',
+          activeConnections: 0,
+          logSize: 'N/A',
+          port: 12000 + i,
+          cronActive: false,
+          smartCityActive: false,
+        });
+      }
+      
+      return {
+        rawBuffer,
+        stats,
+        crons,
+        legacyProcessors,
+        pendingTransfer,
+        recentErrors
+      };
+    }
+    
     // Koristi helper metodu za SSH komandu
     const sshBaseCommand = this.getSSHCommand();
     this.logger.debug(`🔑 SSH komanda: ${sshBaseCommand}`);
