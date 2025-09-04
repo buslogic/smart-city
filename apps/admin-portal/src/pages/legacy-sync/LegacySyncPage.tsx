@@ -53,6 +53,8 @@ interface SyncProgress {
   error_message?: string;
   started_at?: Date;
   completed_at?: Date;
+  logs?: string[];
+  currentStep?: string;
 }
 
 const LegacySyncPage: React.FC = () => {
@@ -167,27 +169,25 @@ const LegacySyncPage: React.FC = () => {
       const calculatedProgress = totalRecords > 0 ? (totalProcessed / totalRecords) * 100 : 0;
       setOverallProgress(Math.min(calculatedProgress, 95));
       
-      // Ažuriraj log sa trenutnim statusom
+      // Ažuriraj log sa backend porukama
       setSyncLogs(prev => {
-        const newLogs = [...prev];
-        const lastLog = newLogs[newLogs.length - 1];
-        const progressMsg = `⏳ Procesiranje: ${totalProcessed}/${totalRecords} GPS tačaka (${Math.round(calculatedProgress)}%) - ${completedVehicles}/${response.data.length} vozila završeno`;
+        // Sakupi sve logove iz backend-a
+        const allLogs: string[] = [];
         
-        // Ažuriraj poslednji log ako je progress update
-        if (lastLog && lastLog.includes('⏳ Procesiranje:')) {
-          newLogs[newLogs.length - 1] = progressMsg;
-        } else {
-          newLogs.push(progressMsg);
-        }
-        
-        if (errorVehicles > 0) {
-          const errorMsg = `⚠️ Greške na ${errorVehicles} vozila`;
-          if (!newLogs.some(log => log.includes(errorMsg))) {
-            newLogs.push(errorMsg);
+        response.data.forEach((progress: SyncProgress) => {
+          if (progress.logs && progress.logs.length > 0) {
+            allLogs.push(...progress.logs);
           }
+        });
+        
+        // Ako imamo backend logove, potpuno zameni postojeće
+        // Backend sada čuva kompletan log history uključujući "žive" ažurirane logove
+        if (allLogs.length > 0) {
+          return allLogs;
         }
         
-        return newLogs;
+        // Ako nema backend logova, zadrži postojeće
+        return prev;
       });
       
       // Proveri da li su svi završeni
@@ -573,26 +573,40 @@ const LegacySyncPage: React.FC = () => {
           </div>
 
           {/* Log poruke */}
-          <div className="border rounded-lg p-4 bg-gray-50 max-h-64 overflow-y-auto">
+          <div 
+            className="border rounded-lg p-4 bg-gray-50 max-h-64 overflow-y-auto"
+            ref={(el) => {
+              // Auto-scroll do dna kada se dodaju novi logovi
+              if (el && syncLogs.length > 0) {
+                el.scrollTop = el.scrollHeight;
+              }
+            }}
+          >
             <div className="space-y-2 font-mono text-sm">
               {syncLogs.length === 0 ? (
                 <div className="text-gray-500">Priprema sinhronizacije...</div>
               ) : (
-                syncLogs.map((log, index) => (
-                  <div 
-                    key={index} 
-                    className={`
-                      ${log.includes('✅') ? 'text-green-600' : ''}
-                      ${log.includes('❌') ? 'text-red-600' : ''}
-                      ${log.includes('⚠️') ? 'text-yellow-600' : ''}
-                      ${log.includes('⏳') ? 'text-blue-600' : ''}
-                      ${log.includes('🔄') || log.includes('📡') || log.includes('📊') ? 'text-gray-700' : ''}
-                      ${log.includes('🚀') || log.includes('🚗') ? 'font-semibold' : ''}
-                    `}
-                  >
-                    {log}
-                  </div>
-                ))
+                syncLogs.map((log, index) => {
+                  // Proveri da li je ovo "živi" log koji se ažurira (sadrži Batch ili Dan info)
+                  const isLiveLog = log.includes('[Batch') || log.includes('Dan ') || log.includes('Procesiranje');
+                  
+                  return (
+                    <div 
+                      key={index} 
+                      className={`
+                        ${log.includes('✅') ? 'text-green-600' : ''}
+                        ${log.includes('❌') ? 'text-red-600' : ''}
+                        ${log.includes('⚠️') ? 'text-yellow-600' : ''}
+                        ${log.includes('⏳') ? 'text-blue-600 animate-pulse' : ''}
+                        ${log.includes('🔄') || log.includes('📡') || log.includes('📊') ? 'text-gray-700' : ''}
+                        ${log.includes('🚀') || log.includes('🚗') ? 'font-semibold' : ''}
+                        ${isLiveLog ? 'bg-blue-50 px-2 py-1 rounded' : ''}
+                      `}
+                    >
+                      {log}
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>
