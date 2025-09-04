@@ -12,6 +12,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 import { LegacySyncService } from './legacy-sync.service';
+import { IsArray, IsDateString, IsNumber } from 'class-validator';
 
 class VehicleWithSyncStatusDto {
   id: number;
@@ -27,8 +28,14 @@ class VehicleWithSyncStatusDto {
 }
 
 class StartSyncDto {
+  @IsArray()
+  @IsNumber({}, { each: true })
   vehicle_ids: number[];
+  
+  @IsDateString()
   sync_from: string;
+  
+  @IsDateString()
   sync_to: string;
 }
 

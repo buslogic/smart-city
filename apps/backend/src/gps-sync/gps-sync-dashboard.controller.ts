@@ -348,22 +348,63 @@ export class GpsSyncDashboardController {
           location: `Legacy Server (79.101.48.11)`,
           schedule: 'Svakih 2 minuta',
           lastRun: null,
-          status: 'unknown',
-          activeConnections: 0,
-          logSize: 'N/A',
-          port: 12000 + i,
+          isActive: false,
           cronActive: false,
-          smartCityActive: false,
+          cronLastRun: null,
+          description: `Teltonika${i} folder - Port 120${i}`,
+          instance: i,
+          type: 'legacy',
+          activeDevices: 0,
+          rawLogSize: 'N/A'
         });
       }
       
       return {
-        rawBuffer,
-        stats,
-        crons,
+        cronProcesses: [
+          {
+            name: 'Backend GPS Processor',
+            location: 'Backend NestJS',
+            schedule: 'Svakih 30 sekundi',
+            lastRun: processorLastRun,
+            isActive: backendCronStatus.processor && isActive(processorLastRun, 0.5),
+            isPaused: !backendCronStatus.processor,
+            description: 'Prebacuje podatke iz buffer-a u TimescaleDB',
+            type: 'backend'
+          },
+          {
+            name: 'Buffer Cleanup',
+            location: 'Backend NestJS',
+            schedule: 'Svakih 2 minuta',
+            lastRun: GpsSyncDashboardController.cronLastRun.cleanup,
+            isActive: backendCronStatus.cleanup && isActive(GpsSyncDashboardController.cronLastRun.cleanup, 2),
+            isPaused: !backendCronStatus.cleanup,
+            description: 'Briše stare processed zapise iz buffer-a',
+            type: 'backend'
+          },
+          {
+            name: 'Stats Cleanup',
+            location: 'Backend NestJS',
+            schedule: 'Jednom dnevno u 3:00',
+            lastRun: GpsSyncDashboardController.cronLastRun.statsCleanup,
+            isActive: backendCronStatus.statsCleanup && isActive(GpsSyncDashboardController.cronLastRun.statsCleanup, 1440),
+            isPaused: !backendCronStatus.statsCleanup,
+            description: 'Briše statistike starije od 10 dana',
+            type: 'backend'
+          }
+        ],
         legacyProcessors,
-        pendingTransfer,
-        recentErrors
+        summary: {
+          totalCrons: 3 + legacyProcessors.length,
+          activeCrons: [
+            isActive(processorLastRun, 0.5),
+            isActive(GpsSyncDashboardController.cronLastRun.cleanup, 2),
+            isActive(GpsSyncDashboardController.cronLastRun.statsCleanup, 1440),
+            ...legacyProcessors.map(p => p.isActive)
+          ].filter(Boolean).length,
+          dataFlowStatus: isActive(processorLastRun, 0.5) ? 'operational' : 'degraded',
+          activeLegacyInstances: []
+        },
+        timestamp: new Date()
       };
     }
     
