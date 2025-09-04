@@ -66,6 +66,9 @@ const GpsSync: React.FC = () => {
   const [batchSize, setBatchSize] = useState(1000);
   const [delay, setDelay] = useState(3000);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [syncModal, setSyncModal] = useState(false);
+  const [syncLogs, setSyncLogs] = useState<string[]>([]);
+  const [syncProgress, setSyncProgress] = useState(0);
   
   const { hasPermission } = usePermissions();
   const canSync = hasPermission('dispatcher:sync_gps');
@@ -160,6 +163,11 @@ const GpsSync: React.FC = () => {
       return;
     }
 
+    // Resetuj modal state
+    setSyncLogs([]);
+    setSyncProgress(0);
+    setSyncModal(true);
+
     // Pripremi listu vozila - sada šaljemo vehicle IDs
     let vehicleList: number[] | null = null;
     let syncDescription = '';
@@ -167,28 +175,28 @@ const GpsSync: React.FC = () => {
     if (selectionMode === 'all') {
       vehicleList = null;
       syncDescription = 'sva vozila';
+      setSyncLogs(prev => [...prev, '🚀 Pokretanje sinhronizacije za sva vozila...']);
     } else if (selectionMode === 'single' && selectedVehicle) {
       vehicleList = [selectedVehicle];
       // Dohvati garage number za prikaz
       const garageNo = await VehicleMapper.idToGarageNumber(selectedVehicle);
       syncDescription = `vozilo ${garageNo}`;
+      setSyncLogs(prev => [...prev, `🚗 Pokretanje sinhronizacije za vozilo ${garageNo}...`]);
     } else if (selectionMode === 'multiple') {
       vehicleList = selectedVehicles;
       // Dohvati garage numbers za prikaz
       const garageNumbers = await VehicleMapper.mapIdsToGarageNumbers(selectedVehicles);
       const displayNames = selectedVehicles.slice(0, 3).map(id => garageNumbers.get(id) || `ID:${id}`);
       syncDescription = `${selectedVehicles.length} vozila (${displayNames.join(', ')}${selectedVehicles.length > 3 ? '...' : ''})`;
+      setSyncLogs(prev => [...prev, `🚙 Pokretanje sinhronizacije za ${selectedVehicles.length} vozila...`]);
     }
 
-    const confirmed = window.confirm(
-      `Da li ste sigurni da želite da pokrenete GPS sinhronizaciju za ${syncDescription}?\n\nPeriod: ${dateRange[0].format('DD.MM.YYYY')} - ${dateRange[1].format('DD.MM.YYYY')}`
-    );
-    
-    if (!confirmed) {
-      return;
-    }
+    setSyncLogs(prev => [...prev, `📅 Period: ${dateRange[0].format('DD.MM.YYYY')} - ${dateRange[1].format('DD.MM.YYYY')}`]);
+    setSyncLogs(prev => [...prev, `⚙️ Batch size: ${batchSize}, Delay: ${delay}ms`]);
     
     setLoading(true);
+    setSyncLogs(prev => [...prev, '🔄 Slanje zahteva na server...']);
+    
     try {
       // Formiraj datume sa početkom i krajem dana
       const startDate = dateRange[0].startOf('day').toISOString();
@@ -202,19 +210,17 @@ const GpsSync: React.FC = () => {
         delay,
       };
       
-      // Loguj parametre koji se šalju - zakomentarisano
-      // console.log('🚀 GPS Sync parametri:', {
-      //   vehicleIds: params.vehicleIds,
-      //   startDate: params.startDate,
-      //   endDate: params.endDate,
-      //   batchSize: params.batchSize,
-      //   delay: params.delay,
-      //   startDateLocal: dateRange[0].format('YYYY-MM-DD HH:mm:ss'),
-      //   endDateLocal: dateRange[1].format('YYYY-MM-DD HH:mm:ss'),
-      // });
+      setSyncLogs(prev => [...prev, '📡 Povezivanje sa legacy bazom...']);
+      setSyncProgress(10);
       
       const result = await gpsSyncService.startSync(params);
-      message.success(result.message);
+      setSyncLogs(prev => [...prev, `✅ ${result.message}`]);
+      setSyncProgress(20);
+      
+      // Započni praćenje progresa
+      setSyncLogs(prev => [...prev, '📊 Praćenje progresa sinhronizacije...']);
+      startProgressTracking();
+      
       loadStatus();
     } catch (error: any) {
       // Proveri da li je greška zbog nemapiranja
@@ -238,11 +244,60 @@ const GpsSync: React.FC = () => {
           width: 520,
         });
       } else {
+        setSyncLogs(prev => [...prev, `❌ Greška: ${error.response?.data?.message || 'Nepoznata greška'}`]);
         message.error(error.response?.data?.message || 'Greška pri pokretanju sinhronizacije');
       }
     } finally {
       setLoading(false);
     }
+  };
+  
+  const startProgressTracking = () => {
+    const progressInterval = setInterval(async () => {
+      try {
+        const status = await gpsSyncService.getStatus();
+        if (status.syncLog) {
+          const log = status.syncLog;
+          const progress = log.processedPoints / (log.totalPoints || 1) * 100;
+          setSyncProgress(Math.min(progress, 95));
+          
+          // Dodaj log poruke na osnovu statusa
+          if (log.status === 'in_progress') {
+            setSyncLogs(prev => {
+              const newLogs = [...prev];
+              const lastLog = newLogs[newLogs.length - 1];
+              const progressMsg = `⏳ Procesiranje: ${log.processedPoints}/${log.totalPoints} tačaka (${Math.round(progress)}%)`;
+              
+              // Ažuriraj poslednji log ako je progress update
+              if (lastLog && lastLog.includes('⏳ Procesiranje:')) {
+                newLogs[newLogs.length - 1] = progressMsg;
+              } else {
+                newLogs.push(progressMsg);
+              }
+              return newLogs;
+            });
+          } else if (log.status === 'completed') {
+            setSyncLogs(prev => [...prev, `✅ Sinhronizacija završena! Procesirano ${log.processedPoints} GPS tačaka.`]);
+            setSyncProgress(100);
+            clearInterval(progressInterval);
+            setTimeout(() => {
+              loadHistory();
+              setIsRunning(false);
+              // Ne zatvaraj modal automatski - dozvoli korisniku da pregleda rezultate
+            }, 2000);
+          } else if (log.status === 'failed') {
+            setSyncLogs(prev => [...prev, `❌ Sinhronizacija neuspešna: ${log.error || 'Nepoznata greška'}`]);
+            setSyncProgress(0);
+            clearInterval(progressInterval);
+          }
+        } else {
+          // Nema aktivne sinhronizacije
+          clearInterval(progressInterval);
+        }
+      } catch (error) {
+        console.error('Error tracking progress:', error);
+      }
+    }, 2000); // Proveri svakih 2 sekunde
   };
 
   const handleStopSync = async () => {
@@ -841,6 +896,114 @@ const GpsSync: React.FC = () => {
           }}
         />
       </Card>
+
+      {/* Modal za prikaz progresa sinhronizacije */}
+      <Modal
+        title={
+          <Space>
+            <SyncOutlined spin />
+            <span>GPS Sinhronizacija u toku</span>
+          </Space>
+        }
+        open={syncModal}
+        onCancel={() => setSyncModal(false)}
+        footer={[
+          <Button 
+            key="close" 
+            onClick={() => setSyncModal(false)}
+            disabled={syncProgress < 100 && syncProgress > 0}
+          >
+            {syncProgress >= 100 ? 'Zatvori' : 'Sakrij'}
+          </Button>,
+          syncProgress > 0 && syncProgress < 100 && (
+            <Button 
+              key="stop"
+              danger
+              onClick={async () => {
+                await handleStopSync();
+                setSyncModal(false);
+              }}
+            >
+              Zaustavi sinhronizaciju
+            </Button>
+          )
+        ]}
+        width={600}
+      >
+        <div className="space-y-4">
+          {/* Progress bar */}
+          <div>
+            <div className="mb-2 flex justify-between text-sm">
+              <span>Progres sinhronizacije</span>
+              <span className="font-medium">{syncProgress.toFixed(1)}%</span>
+            </div>
+            <Progress 
+              percent={syncProgress} 
+              status={syncProgress >= 100 ? 'success' : 'active'}
+              strokeColor={{
+                '0%': '#108ee9',
+                '100%': '#87d068',
+              }}
+            />
+          </div>
+
+          {/* Log poruke */}
+          <div className="border rounded-lg p-4 bg-gray-50 max-h-64 overflow-y-auto">
+            <div className="space-y-2 font-mono text-sm">
+              {syncLogs.length === 0 ? (
+                <div className="text-gray-500">Priprema sinhronizacije...</div>
+              ) : (
+                syncLogs.map((log, index) => (
+                  <div 
+                    key={index} 
+                    className={`
+                      ${log.includes('✅') ? 'text-green-600' : ''}
+                      ${log.includes('❌') ? 'text-red-600' : ''}
+                      ${log.includes('⚠️') ? 'text-yellow-600' : ''}
+                      ${log.includes('⏳') ? 'text-blue-600' : ''}
+                      ${log.includes('🔄') || log.includes('📡') || log.includes('📊') ? 'text-gray-700' : ''}
+                      ${log.includes('🚀') || log.includes('🚗') || log.includes('🚙') ? 'font-semibold' : ''}
+                    `}
+                  >
+                    {log}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Statistika ako je sinhronizacija u toku */}
+          {currentSync && syncProgress > 0 && syncProgress < 100 && (
+            <div className="grid grid-cols-2 gap-4 pt-2 border-t">
+              <div>
+                <div className="text-sm text-gray-500">Obrađeno tačaka</div>
+                <div className="text-lg font-medium">
+                  {formatNumber(currentSync.processedPoints)} / {formatNumber(currentSync.totalPoints)}
+                </div>
+              </div>
+              <div>
+                <div className="text-sm text-gray-500">Brzina obrade</div>
+                <div className="text-lg font-medium">
+                  {Math.round(currentSync.processedPoints / 
+                    ((new Date().getTime() - new Date(currentSync.startedAt).getTime()) / 1000) || 1)} tačaka/s
+                </div>
+              </div>
+              <div>
+                <div className="text-sm text-gray-500">Novo ubačeno</div>
+                <div className="text-lg font-medium text-green-600">
+                  {formatNumber(currentSync.insertedPoints)}
+                </div>
+              </div>
+              <div>
+                <div className="text-sm text-gray-500">Kilometraža</div>
+                <div className="text-lg font-medium text-purple-600">
+                  {currentSync.totalDistance?.toFixed(2) || '0'} km
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 };

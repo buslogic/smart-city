@@ -94,6 +94,11 @@ const MainLayout: React.FC = () => {
           href: '/transport/dispatcher/gps-sync-dashboard',
           icon: Activity,
         },
+        hasPermission('legacy_sync.view') && {
+          name: 'Legacy GPS Sinhronizacija',
+          href: '/transport/legacy-sync',
+          icon: RefreshCw,
+        },
         hasPermission('safety:view_aggressive') && {
           name: 'Bezbednost - Agresivna vožnja',
           href: '/transport/safety/aggressive-driving',

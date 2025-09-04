@@ -216,8 +216,26 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
             children: allPermissions
               .filter(p => 
                 p.name === 'dispatcher:sync_gps' || 
-                p.resource === 'dispatcher' // Dodaj sve dispatcher permisije
+                p.name === 'dispatcher:view_sync_dashboard' ||
+                p.name === 'dispatcher.manage_cron' ||
+                p.name === 'dispatcher.manage_gps' ||
+                p.name === 'dispatcher.view_dashboard'
               )
+              .map(p => ({
+                id: `perm-${p.id}`,
+                name: getPermissionLabel(p),
+                type: 'permission' as const,
+                permission: p,
+                color: getPermissionColor(p.action),
+              })),
+          },
+          {
+            id: 'legacy-sync',
+            name: 'Legacy GPS Sinhronizacija',
+            type: 'section',
+            icon: <Database className="h-4 w-4" />,
+            children: allPermissions
+              .filter(p => p.resource === 'legacy_sync')
               .map(p => ({
                 id: `perm-${p.id}`,
                 name: getPermissionLabel(p),
@@ -307,6 +325,19 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
       };
       if (dispatcherLabels[permission.action]) {
         return dispatcherLabels[permission.action];
+      }
+    }
+    
+    // Specifični labeli za legacy_sync permisije
+    if (permission.resource === 'legacy_sync') {
+      const legacySyncLabels: Record<string, string> = {
+        'view': 'Pregled Legacy sinhronizacije',
+        'manage': 'Upravljanje Legacy sinhronizacijom',
+        'start': 'Pokretanje Legacy sinhronizacije',
+        'stop': 'Zaustavljanje Legacy sinhronizacije',
+      };
+      if (legacySyncLabels[permission.action]) {
+        return legacySyncLabels[permission.action];
       }
     }
     

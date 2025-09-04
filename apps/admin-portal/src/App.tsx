@@ -16,6 +16,7 @@ import GpsSync from './pages/transport/dispatcher/GpsSync';
 import GpsSyncDashboard from './pages/transport/dispatcher/GpsSyncDashboard';
 import AggressiveDriving from './pages/transport/safety/AggressiveDriving';
 import MonthlyReport from './pages/transport/safety/MonthlyReport';
+import { LegacySyncPage } from './pages/legacy-sync/LegacySyncPage';
 import Profile from './pages/users/Profile';
 
 function App() {
@@ -119,6 +120,15 @@ function App() {
               element={
                 <PermissionGuard permissions={['dispatcher:view_sync_dashboard']}>
                   <GpsSyncDashboard />
+                </PermissionGuard>
+              } 
+            />
+
+            <Route 
+              path="transport/legacy-sync" 
+              element={
+                <PermissionGuard permissions={['legacy_sync.view']}>
+                  <LegacySyncPage />
                 </PermissionGuard>
               } 
             />
