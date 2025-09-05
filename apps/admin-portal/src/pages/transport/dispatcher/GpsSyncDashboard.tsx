@@ -478,7 +478,7 @@ const GpsSyncDashboard: React.FC = () => {
               title="TimescaleDB insert"
               value={bufferStatus?.averageTimescaleInsertTime || 0}
               suffix="ms"
-              valueStyle={{ color: bufferStatus?.averageTimescaleInsertTime > 1000 ? '#faad14' : '#52c41a' }}
+              valueStyle={{ color: (bufferStatus?.averageTimescaleInsertTime || 0) > 1000 ? '#faad14' : '#52c41a' }}
             />
           </Col>
           <Col span={6}>
