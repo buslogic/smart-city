@@ -525,8 +525,8 @@ export class LegacySyncWorkerPoolService {
           }
           
           // Debug log za prvih par redova
-          if (importedCount < 5) {
-            this.logger.log(`Parsed row ${importedCount}: ${cols.length} columns - ${cols.join('|')}`);
+          if (batch.length < 5) {
+            this.logger.log(`Parsed row ${batch.length}: ${cols.length} columns - ${cols.join('|')}`);
           }
           
           // Preskoci ako nema dovoljno kolona
@@ -591,14 +591,17 @@ export class LegacySyncWorkerPoolService {
    * Umeće batch GPS podataka u TimescaleDB
    */
   private async insertBatch(pool: any, batch: any[]): Promise<void> {
+    this.logger.log(`Inserting batch of ${batch.length} records`);
+    
     const client = await pool.connect();
     
     try {
       await client.query('BEGIN');
       
       // Pripremi values za bulk insert
+      // Imamo 11 vrednosti po redu (12 sa location koja se računa iz lng/lat)
       const values = batch.map((row, i) => {
-        const offset = i * 11;
+        const offset = i * 11; // 11 parametara po redu
         return `($${offset+1}, $${offset+2}, $${offset+3}, $${offset+4}, $${offset+5}, 
                  ST_SetSRID(ST_MakePoint($${offset+5}, $${offset+4}), 4326),
                  $${offset+6}, $${offset+7}, $${offset+8}, $${offset+9}, $${offset+10}, $${offset+11})`;
@@ -630,6 +633,8 @@ export class LegacySyncWorkerPoolService {
           course = EXCLUDED.course,
           alt = EXCLUDED.alt
       `;
+      
+      this.logger.log(`Query has ${values.split('$').length - 1} placeholders, sending ${params.length} parameters`);
       
       await client.query(query, params);
       await client.query('COMMIT');
