@@ -312,7 +312,8 @@ export class LegacySyncService {
       // Sada inicijalizuj varijable
       exportFileName = `${garageNo}_${Date.now()}.sql.gz`;
       const exportPath = `/tmp/${exportFileName}`;
-      localPath = path.join('/home/kocev/smart-city/scripts', exportFileName);
+      // Koristi /tmp direktorijum koji uvek postoji
+      localPath = path.join('/tmp', exportFileName);
       // Step 1: Export podataka sa legacy servera
       job.logs.push(`📅 Period: ${syncFrom.toISOString().split('T')[0]} do ${syncTo.toISOString().split('T')[0]}`);
       
@@ -368,7 +369,10 @@ export class LegacySyncService {
       // Step 3: Pokreni fast-import skriptu
       job.logs.push(`🗄️ Import podataka u TimescaleDB bazu...`);
       job.currentStep = 'Import u bazu';
-      const importScript = '/home/kocev/smart-city/scripts/fast-import-gps-to-timescale-docker.sh';
+      // Na produkciji, skripta je u /app/scripts direktorijumu
+      const importScript = process.env.NODE_ENV === 'production' 
+        ? '/app/scripts/fast-import-gps-to-timescale-docker.sh'
+        : '/home/kocev/smart-city/scripts/fast-import-gps-to-timescale-docker.sh';
       const importCmd = `${importScript} ${localPath} ${garageNo}`;
       
       // Postavi progress na 60% pre importa

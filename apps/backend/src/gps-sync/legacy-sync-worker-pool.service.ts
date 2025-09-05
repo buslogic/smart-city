@@ -279,7 +279,8 @@ export class LegacySyncWorkerPoolService {
       // Step 2: EXPORT podataka
       updateWorkerStatus('exporting', 'Export podataka', 30);
       const exportFileName = `${garageNo}_worker${workerId}_${Date.now()}.sql.gz`;
-      const localPath = path.join('/home/kocev/smart-city/scripts', exportFileName);
+      // Koristi /tmp direktorijum koji uvek postoji
+      const localPath = path.join('/tmp', exportFileName);
       
       const sshExportCmd = `ssh -i ${this.SSH_KEY_PATH} root@${this.LEGACY_HOST} "
         cd /tmp && 
@@ -300,7 +301,10 @@ export class LegacySyncWorkerPoolService {
       
       // Step 4: IMPORT u TimescaleDB
       updateWorkerStatus('importing', 'Import u bazu', 70);
-      const importScript = '/home/kocev/smart-city/scripts/fast-import-gps-to-timescale-docker.sh';
+      // Na produkciji, skripta je u /app/scripts direktorijumu
+      const importScript = process.env.NODE_ENV === 'production' 
+        ? '/app/scripts/fast-import-gps-to-timescale-docker.sh'
+        : '/home/kocev/smart-city/scripts/fast-import-gps-to-timescale-docker.sh';
       const importCmd = `${importScript} ${localPath} ${garageNo}`;
       
       const { stdout: importOutput } = await execAsync(importCmd);
