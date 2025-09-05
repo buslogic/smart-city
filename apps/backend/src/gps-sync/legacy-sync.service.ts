@@ -7,6 +7,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { Client } from 'pg';
+import { LegacySyncWorkerPoolService } from './legacy-sync-worker-pool.service';
 
 const execAsync = promisify(exec);
 
@@ -50,7 +51,10 @@ export class LegacySyncService {
   private readonly LEGACY_DB = 'pib100065430gps'; // Gradska GPS Ticketing Baza
   private readonly LEGACY_USER = 'root';
   
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly workerPoolService: LegacySyncWorkerPoolService
+  ) {}
 
   async getVehiclesWithSyncStatus(): Promise<VehicleWithSyncStatus[]> {
     try {
@@ -173,17 +177,88 @@ export class LegacySyncService {
 
       this.syncJobs.set(jobId, jobs);
 
-      // Pokreni asinhroni sync proces u pozadini (ne čeka se)
-      // Ali to omogućava da se prati progres kroz polling
-      this.runSyncProcess(jobId, vehicles, syncFrom, syncTo)
-        .catch(error => {
-          this.logger.error(`Sync process failed for job ${jobId}:`, error);
-        });
+      // Proveri da li koristiti Worker Pool
+      const useWorkerPool = await this.shouldUseWorkerPool();
+      
+      if (useWorkerPool) {
+        // NOVO: Koristi Worker Pool za paralelno procesiranje
+        this.logger.log(`🚀 Koristi se Worker Pool za ${vehicleIds.length} vozila`);
+        this.runSyncProcessWithWorkerPool(jobId, vehicleIds, syncFrom, syncTo)
+          .catch(error => {
+            this.logger.error(`Worker Pool sync failed for job ${jobId}:`, error);
+          });
+      } else {
+        // STARO: Sekvencijalno procesiranje
+        this.logger.log(`📝 Koristi se standardno sekvencijalno procesiranje`);
+        this.runSyncProcess(jobId, vehicles, syncFrom, syncTo)
+          .catch(error => {
+            this.logger.error(`Sync process failed for job ${jobId}:`, error);
+          });
+      }
 
       return jobId;
     } catch (error) {
       this.logger.error('Error starting legacy sync', error);
       throw error;
+    }
+  }
+  
+  private async shouldUseWorkerPool(): Promise<boolean> {
+    try {
+      const setting = await this.prisma.systemSettings.findFirst({
+        where: { 
+          key: 'legacy_sync.worker_pool.enabled',
+          category: 'legacy_sync'
+        }
+      });
+      return setting?.value === 'true';
+    } catch {
+      return false; // Default na staro ponašanje ako nema podešavanja
+    }
+  }
+  
+  private async runSyncProcessWithWorkerPool(
+    jobId: string,
+    vehicleIds: number[],
+    syncFrom: Date,
+    syncTo: Date
+  ) {
+    const jobs = this.syncJobs.get(jobId);
+    if (!jobs) return;
+
+    try {
+      // Pokreni Worker Pool
+      const results = await this.workerPoolService.startWorkerPoolSync(
+        vehicleIds,
+        syncFrom,
+        syncTo,
+        jobId
+      );
+      
+      // Ažuriraj job statuse prema rezultatima
+      results.forEach((result, vehicleId) => {
+        const job = jobs.find(j => j.vehicle_id === vehicleId);
+        if (job) {
+          job.status = result.status === 'failed' ? 'error' : result.status;
+          job.processed_records = result.processedRecords;
+          job.total_records = result.totalRecords;
+          job.completed_at = result.endTime;
+          job.progress_percentage = 100;
+          job.logs = [...job.logs, ...result.logs];
+          if (result.error) {
+            job.error_message = result.error;
+          }
+        }
+      });
+      
+      this.logger.log(`✅ Worker Pool sinhronizacija završena za job ${jobId}`);
+    } catch (error) {
+      this.logger.error(`Worker Pool greška za job ${jobId}:`, error);
+      jobs.forEach(job => {
+        job.status = 'error';
+        job.error_message = error.message;
+        job.completed_at = new Date();
+      });
     }
   }
 

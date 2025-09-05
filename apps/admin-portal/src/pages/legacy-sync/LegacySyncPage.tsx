@@ -13,6 +13,11 @@ import {
   Alert,
   Badge,
   Input,
+  Switch,
+  Divider,
+  Statistic,
+  Row,
+  Col,
 } from 'antd';
 import {
   SyncOutlined,
@@ -23,6 +28,9 @@ import {
   DatabaseOutlined,
   WarningOutlined,
   SearchOutlined,
+  ThunderboltOutlined,
+  TeamOutlined,
+  RocketOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
@@ -57,6 +65,23 @@ interface SyncProgress {
   currentStep?: string;
 }
 
+interface WorkerStatus {
+  workerId: number;
+  vehicleId?: number;
+  garageNumber?: string;
+  status: 'idle' | 'exporting' | 'transferring' | 'importing' | 'completed' | 'failed';
+  progress: number;
+  currentStep?: string;
+  startTime?: Date;
+}
+
+interface WorkerPoolStatus {
+  enabled: boolean;
+  activeWorkers: number;
+  maxWorkers: number;
+  workers: WorkerStatus[];
+}
+
 const LegacySyncPage: React.FC = () => {
   const [vehicles, setVehicles] = useState<VehicleWithSyncStatus[]>([]);
   const [filteredVehicles, setFilteredVehicles] = useState<VehicleWithSyncStatus[]>([]);
@@ -77,11 +102,19 @@ const LegacySyncPage: React.FC = () => {
   const [syncModal, setSyncModal] = useState(false);
   const [syncLogs, setSyncLogs] = useState<string[]>([]);
   const [overallProgress, setOverallProgress] = useState(0);
+  const [workerPoolStatus, setWorkerPoolStatus] = useState<WorkerPoolStatus>({
+    enabled: false,
+    activeWorkers: 0,
+    maxWorkers: 3,
+    workers: []
+  });
+  const [workerPoolLoading, setWorkerPoolLoading] = useState(false);
 
   // Učitaj vozila pri mount-u
   useEffect(() => {
     fetchVehicles();
     testLegacyConnection();
+    fetchWorkerPoolStatus();
   }, []);
 
   // Polling za progress kada je sync aktivan
@@ -91,6 +124,7 @@ const LegacySyncPage: React.FC = () => {
     if (syncing && currentJobId) {
       intervalId = setInterval(() => {
         fetchSyncProgress();
+        fetchWorkerPoolStatus(); // Ažuriraj i Worker Pool status
       }, 2000); // Svake 2 sekunde
     }
     
@@ -139,6 +173,29 @@ const LegacySyncPage: React.FC = () => {
         connected: false,
         message: 'Nije moguće povezati se sa legacy serverom',
       });
+    }
+  };
+
+  const fetchWorkerPoolStatus = async () => {
+    try {
+      const response = await api.get('/api/legacy-sync/worker-status');
+      setWorkerPoolStatus(response.data);
+    } catch (error) {
+      console.error('Error fetching worker pool status:', error);
+    }
+  };
+
+  const toggleWorkerPool = async (enabled: boolean) => {
+    setWorkerPoolLoading(true);
+    try {
+      const response = await api.post('/api/legacy-sync/worker-pool/toggle', { enabled });
+      message.success(response.data.message);
+      setWorkerPoolStatus(prev => ({ ...prev, enabled }));
+      await fetchWorkerPoolStatus(); // Refresh full status
+    } catch (error: any) {
+      message.error(`Greška: ${error.response?.data?.message || 'Nepoznata greška'}`);
+    } finally {
+      setWorkerPoolLoading(false);
     }
   };
 
@@ -413,6 +470,31 @@ const LegacySyncPage: React.FC = () => {
                 text={connectionStatus.connected ? 'Povezano' : 'Nije povezano'}
               />
             )}
+            <Divider type="vertical" />
+            <Space size="small">
+              <ThunderboltOutlined 
+                style={{ 
+                  color: workerPoolStatus.enabled ? '#52c41a' : '#d9d9d9' 
+                }} 
+              />
+              <span style={{ fontSize: '14px', color: '#666' }}>Worker Pool:</span>
+              <Switch
+                size="small"
+                checked={workerPoolStatus.enabled}
+                loading={workerPoolLoading}
+                onChange={toggleWorkerPool}
+                checkedChildren="ON"
+                unCheckedChildren="OFF"
+              />
+              {workerPoolStatus.enabled && (
+                <Tag 
+                  icon={<TeamOutlined />} 
+                  color={workerPoolStatus.activeWorkers > 0 ? 'processing' : 'default'}
+                >
+                  {workerPoolStatus.activeWorkers}/{workerPoolStatus.maxWorkers}
+                </Tag>
+              )}
+            </Space>
           </Space>
         }
         extra={
@@ -441,6 +523,58 @@ const LegacySyncPage: React.FC = () => {
               type="error"
               showIcon
             />
+          )}
+          
+          {/* Worker Pool Status Cards */}
+          {workerPoolStatus.enabled && workerPoolStatus.workers.length > 0 && (
+            <Card size="small" title={
+              <Space>
+                <RocketOutlined />
+                <span>Worker Pool Status</span>
+              </Space>
+            }>
+              <Row gutter={16}>
+                <Col span={6}>
+                  <Statistic
+                    title="Aktivni Worker-i"
+                    value={workerPoolStatus.activeWorkers}
+                    suffix={`/ ${workerPoolStatus.maxWorkers}`}
+                    prefix={<TeamOutlined />}
+                  />
+                </Col>
+                <Col span={18}>
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    {workerPoolStatus.workers.map((worker) => (
+                      <div key={worker.workerId} style={{
+                        padding: '8px 12px',
+                        border: '1px solid #d9d9d9',
+                        borderRadius: '6px',
+                        backgroundColor: worker.status === 'idle' ? '#f6f6f6' : '#e6f7ff',
+                        minWidth: '120px'
+                      }}>
+                        <div style={{ fontSize: '12px', fontWeight: 'bold' }}>
+                          Worker {worker.workerId}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#666' }}>
+                          {worker.garageNumber ? `${worker.garageNumber}` : 'Idle'}
+                        </div>
+                        <div style={{ fontSize: '10px', color: '#999' }}>
+                          {worker.currentStep || worker.status}
+                        </div>
+                        {worker.status !== 'idle' && (
+                          <Progress 
+                            percent={worker.progress} 
+                            size="small" 
+                            strokeWidth={3}
+                            showInfo={false}
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </Col>
+              </Row>
+            </Card>
           )}
           
           <Space size="large" wrap>
@@ -476,12 +610,19 @@ const LegacySyncPage: React.FC = () => {
             
             <Button
               type="primary"
-              icon={<SyncOutlined />}
+              icon={workerPoolStatus.enabled ? <ThunderboltOutlined /> : <SyncOutlined />}
               onClick={handleStartSync}
               disabled={selectedVehicles.length === 0 || syncing}
               loading={syncing}
+              style={{
+                background: workerPoolStatus.enabled ? '#52c41a' : undefined,
+                borderColor: workerPoolStatus.enabled ? '#52c41a' : undefined,
+              }}
             >
-              {syncing ? 'Sinhronizuje se...' : `Sinhronizuj (${selectedVehicles.length})`}
+              {syncing 
+                ? (workerPoolStatus.enabled ? `Worker Pool radi...` : 'Sinhronizuje se...')
+                : `${workerPoolStatus.enabled ? 'Paralelno' : 'Sinhronizuj'} (${selectedVehicles.length})`
+              }
             </Button>
             
             {syncing && (

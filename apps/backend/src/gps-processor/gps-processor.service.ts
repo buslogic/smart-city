@@ -80,8 +80,6 @@ export class GpsProcessorService {
             break;
         }
       });
-      
-      this.logger.debug(`📋 Učitana podešavanja: Batch=${this.settings.batchSize}, Interval=${this.settings.intervalSeconds}s, WorkerPool=${this.settings.useWorkerPool}, Workers=${this.settings.workerCount}`);
     } catch (error) {
       this.logger.warn('Greška pri učitavanju podešavanja, koriste se default vrednosti');
     }

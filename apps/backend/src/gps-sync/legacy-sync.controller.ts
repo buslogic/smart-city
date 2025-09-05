@@ -12,6 +12,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 import { LegacySyncService } from './legacy-sync.service';
+import { LegacySyncWorkerPoolService } from './legacy-sync-worker-pool.service';
 import { IsArray, IsDateString, IsNumber } from 'class-validator';
 
 class VehicleWithSyncStatusDto {
@@ -58,7 +59,10 @@ class SyncProgressDto {
 export class LegacySyncController {
   private readonly logger = new Logger(LegacySyncController.name);
 
-  constructor(private readonly legacySyncService: LegacySyncService) {}
+  constructor(
+    private readonly legacySyncService: LegacySyncService,
+    private readonly workerPoolService: LegacySyncWorkerPoolService
+  ) {}
 
   @Get('vehicles')
   @RequirePermissions('legacy_sync.view')
@@ -167,6 +171,77 @@ export class LegacySyncController {
         database: 'unknown', 
         message: error.message || 'Connection failed'
       };
+    }
+  }
+
+  @Get('worker-status')
+  @RequirePermissions('legacy_sync.view')
+  @ApiOperation({ summary: 'Dobavi status Worker Pool-a' })
+  @ApiResponse({
+    status: 200,
+    description: 'Status aktivnih worker-a',
+  })
+  async getWorkerStatus(): Promise<{ 
+    enabled: boolean;
+    activeWorkers: number;
+    maxWorkers: number;
+    workers: any[];
+  }> {
+    try {
+      const isEnabled = await this.legacySyncService['shouldUseWorkerPool']();
+      const workers = this.workerPoolService.getWorkerStatuses();
+      const activeCount = this.workerPoolService.getActiveWorkerCount();
+      
+      return {
+        enabled: isEnabled,
+        activeWorkers: activeCount,
+        maxWorkers: 3, // TODO: Učitati iz konfiguracije
+        workers: workers
+      };
+    } catch (error) {
+      this.logger.error('Error getting worker status', error);
+      return {
+        enabled: false,
+        activeWorkers: 0,
+        maxWorkers: 0,
+        workers: []
+      };
+    }
+  }
+
+  @Post('worker-pool/toggle')
+  @RequirePermissions('legacy_sync.manage')
+  @ApiOperation({ summary: 'Uključi/isključi Worker Pool' })
+  @ApiBody({ schema: { properties: { enabled: { type: 'boolean' } } } })
+  @ApiResponse({
+    status: 200,
+    description: 'Worker Pool status promenjen',
+  })
+  async toggleWorkerPool(@Body() dto: { enabled: boolean }): Promise<{ 
+    message: string; 
+    enabled: boolean 
+  }> {
+    try {
+      // Ažuriraj SystemSettings
+      await this.legacySyncService['prisma'].systemSettings.upsert({
+        where: { key: 'legacy_sync.worker_pool.enabled' },
+        update: { value: dto.enabled ? 'true' : 'false' },
+        create: {
+          key: 'legacy_sync.worker_pool.enabled',
+          value: dto.enabled ? 'true' : 'false',
+          type: 'boolean',
+          category: 'legacy_sync',
+          description: 'Enable Worker Pool for parallel vehicle sync'
+        }
+      });
+
+      return {
+        message: `Worker Pool je ${dto.enabled ? 'uključen' : 'isključen'}`,
+        enabled: dto.enabled
+      };
+    } catch (error) {
+      this.logger.error('Error toggling worker pool', error);
+      throw error;
     }
   }
 }

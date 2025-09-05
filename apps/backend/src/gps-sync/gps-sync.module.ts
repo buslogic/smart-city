@@ -4,13 +4,14 @@ import { GpsSyncDashboardController } from './gps-sync-dashboard.controller';
 import { LegacySyncController } from './legacy-sync.controller';
 import { GpsSyncService } from './gps-sync.service';
 import { LegacySyncService } from './legacy-sync.service';
+import { LegacySyncWorkerPoolService } from './legacy-sync-worker-pool.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { CommonModule } from '../common/common.module';
 
 @Module({
   imports: [PrismaModule, CommonModule],
   controllers: [GpsSyncController, GpsSyncDashboardController, LegacySyncController],
-  providers: [GpsSyncService, LegacySyncService],
-  exports: [GpsSyncService, LegacySyncService],
+  providers: [GpsSyncService, LegacySyncService, LegacySyncWorkerPoolService],
+  exports: [GpsSyncService, LegacySyncService, LegacySyncWorkerPoolService],
 })
 export class GpsSyncModule {}
