@@ -6,6 +6,8 @@ import {
   UseGuards,
   Logger,
   Query,
+  Patch,
+  Delete,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -13,7 +15,8 @@ import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 import { LegacySyncService } from './legacy-sync.service';
 import { LegacySyncWorkerPoolService } from './legacy-sync-worker-pool.service';
-import { IsArray, IsDateString, IsNumber } from 'class-validator';
+import { SmartSlowSyncService, SlowSyncPreset, SlowSyncConfig, SlowSyncProgress } from './smart-slow-sync.service';
+import { IsArray, IsDateString, IsNumber, IsEnum, IsOptional, IsBoolean } from 'class-validator';
 
 class VehicleWithSyncStatusDto {
   id: number;
@@ -52,6 +55,32 @@ class SyncProgressDto {
   completed_at?: Date;
 }
 
+class SlowSyncConfigDto {
+  @IsEnum(SlowSyncPreset)
+  @IsOptional()
+  preset?: SlowSyncPreset;
+
+  @IsNumber()
+  @IsOptional()
+  vehiclesPerBatch?: number;
+
+  @IsNumber()
+  @IsOptional()
+  workersPerBatch?: number;
+
+  @IsNumber()
+  @IsOptional()
+  batchDelayMinutes?: number;
+
+  @IsNumber()
+  @IsOptional()
+  syncDaysBack?: number;
+
+  @IsBoolean()
+  @IsOptional()
+  autoCleanup?: boolean;
+}
+
 @ApiTags('Legacy GPS Sync')
 @ApiBearerAuth()
 @Controller('legacy-sync')
@@ -61,7 +90,8 @@ export class LegacySyncController {
 
   constructor(
     private readonly legacySyncService: LegacySyncService,
-    private readonly workerPoolService: LegacySyncWorkerPoolService
+    private readonly workerPoolService: LegacySyncWorkerPoolService,
+    private readonly slowSyncService: SmartSlowSyncService
   ) {}
 
   @Get('vehicles')
@@ -241,6 +271,163 @@ export class LegacySyncController {
       };
     } catch (error) {
       this.logger.error('Error toggling worker pool', error);
+      throw error;
+    }
+  }
+
+  // ============= SMART SLOW SYNC ENDPOINTS =============
+
+  @Post('slow-sync/start')
+  @RequirePermissions('legacy_sync.manage')
+  @ApiOperation({ summary: 'Pokreni Smart Slow Sync za sva vozila' })
+  @ApiBody({ type: SlowSyncConfigDto, required: false })
+  @ApiResponse({
+    status: 200,
+    description: 'Smart Slow Sync pokrenut',
+  })
+  async startSlowSync(@Body() config?: SlowSyncConfigDto): Promise<SlowSyncProgress> {
+    try {
+      this.logger.log('Starting Smart Slow Sync');
+      return await this.slowSyncService.startSlowSync(config);
+    } catch (error) {
+      this.logger.error('Error starting slow sync', error);
+      throw error;
+    }
+  }
+
+  @Post('slow-sync/pause')
+  @RequirePermissions('legacy_sync.manage')
+  @ApiOperation({ summary: 'Pauziraj Smart Slow Sync' })
+  @ApiResponse({
+    status: 200,
+    description: 'Smart Slow Sync pauziran',
+  })
+  async pauseSlowSync(): Promise<SlowSyncProgress> {
+    try {
+      this.logger.log('Pausing Smart Slow Sync');
+      return await this.slowSyncService.pauseSlowSync();
+    } catch (error) {
+      this.logger.error('Error pausing slow sync', error);
+      throw error;
+    }
+  }
+
+  @Post('slow-sync/resume')
+  @RequirePermissions('legacy_sync.manage')
+  @ApiOperation({ summary: 'Nastavi Smart Slow Sync' })
+  @ApiResponse({
+    status: 200,
+    description: 'Smart Slow Sync nastavljen',
+  })
+  async resumeSlowSync(): Promise<SlowSyncProgress> {
+    try {
+      this.logger.log('Resuming Smart Slow Sync');
+      return await this.slowSyncService.resumeSlowSync();
+    } catch (error) {
+      this.logger.error('Error resuming slow sync', error);
+      throw error;
+    }
+  }
+
+  @Post('slow-sync/stop')
+  @RequirePermissions('legacy_sync.manage')
+  @ApiOperation({ summary: 'Zaustavi Smart Slow Sync' })
+  @ApiResponse({
+    status: 200,
+    description: 'Smart Slow Sync zaustavljen',
+  })
+  async stopSlowSync(): Promise<SlowSyncProgress> {
+    try {
+      this.logger.log('Stopping Smart Slow Sync');
+      return await this.slowSyncService.stopSlowSync();
+    } catch (error) {
+      this.logger.error('Error stopping slow sync', error);
+      throw error;
+    }
+  }
+
+  @Get('slow-sync/progress')
+  @RequirePermissions('legacy_sync.view')
+  @ApiOperation({ summary: 'Dobavi progress Smart Slow Sync-a' })
+  @ApiResponse({
+    status: 200,
+    description: 'Progress Smart Slow Sync-a',
+  })
+  async getSlowSyncProgress(): Promise<SlowSyncProgress> {
+    try {
+      return await this.slowSyncService.getProgress();
+    } catch (error) {
+      this.logger.error('Error getting slow sync progress', error);
+      throw error;
+    }
+  }
+
+  @Get('slow-sync/config')
+  @RequirePermissions('legacy_sync.view')
+  @ApiOperation({ summary: 'Dobavi trenutnu konfiguraciju Smart Slow Sync-a' })
+  @ApiResponse({
+    status: 200,
+    description: 'Konfiguracija Smart Slow Sync-a',
+  })
+  async getSlowSyncConfig(): Promise<SlowSyncConfig> {
+    try {
+      return await this.slowSyncService['currentConfig'];
+    } catch (error) {
+      this.logger.error('Error getting slow sync config', error);
+      throw error;
+    }
+  }
+
+  @Patch('slow-sync/config')
+  @RequirePermissions('legacy_sync.manage')
+  @ApiOperation({ summary: 'Ažuriraj konfiguraciju Smart Slow Sync-a' })
+  @ApiBody({ type: SlowSyncConfigDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Konfiguracija ažurirana',
+  })
+  async updateSlowSyncConfig(@Body() config: SlowSyncConfigDto): Promise<SlowSyncConfig> {
+    try {
+      this.logger.log('Updating Smart Slow Sync config', config);
+      return await this.slowSyncService.updateConfig(config);
+    } catch (error) {
+      this.logger.error('Error updating slow sync config', error);
+      throw error;
+    }
+  }
+
+  @Delete('slow-sync/reset')
+  @RequirePermissions('legacy_sync.manage')
+  @ApiOperation({ summary: 'Resetuj progress Smart Slow Sync-a' })
+  @ApiResponse({
+    status: 200,
+    description: 'Progress resetovan',
+  })
+  async resetSlowSyncProgress(): Promise<{ message: string }> {
+    try {
+      this.logger.log('Resetting Smart Slow Sync progress');
+      await this.slowSyncService.resetProgress();
+      return { message: 'Smart Slow Sync progress je resetovan' };
+    } catch (error) {
+      this.logger.error('Error resetting slow sync progress', error);
+      throw error;
+    }
+  }
+
+  @Post('slow-sync/process-batch')
+  @RequirePermissions('legacy_sync.manage')
+  @ApiOperation({ summary: 'Ručno pokreni jedan batch (za testiranje)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Batch procesiran',
+  })
+  async processSlowSyncBatch(): Promise<{ message: string }> {
+    try {
+      this.logger.log('Manually triggering batch processing');
+      await this.slowSyncService.processBatch();
+      return { message: 'Batch je procesiran' };
+    } catch (error) {
+      this.logger.error('Error processing batch', error);
       throw error;
     }
   }

@@ -443,10 +443,22 @@ export class LegacySyncWorkerPoolService {
     garageNo: string,
     vehicleId: number
   ): Promise<{ success: boolean; count: number }> {
+    this.logger.log(`Starting executeProductionImport for ${garageNo} (vehicleId: ${vehicleId})`);
+    this.logger.log(`Dump file: ${dumpFilePath}`);
+    
     const { Pool } = require('pg');
     const fs = require('fs');
     const zlib = require('zlib');
     const readline = require('readline');
+    
+    // Proveri da li fajl postoji
+    if (!fs.existsSync(dumpFilePath)) {
+      this.logger.error(`Dump file not found: ${dumpFilePath}`);
+      return { success: false, count: 0 };
+    }
+    
+    const fileStats = fs.statSync(dumpFilePath);
+    this.logger.log(`Dump file size: ${fileStats.size} bytes`);
     
     // Kreiraj konekciju ka TimescaleDB
     const pool = new Pool({
@@ -457,8 +469,14 @@ export class LegacySyncWorkerPoolService {
     let importedCount = 0;
     const batchSize = 10000;
     let batch: any[] = [];
+    let lineCount = 0;
 
     try {
+      // Test konekcije
+      const testClient = await pool.connect();
+      await testClient.query('SELECT 1');
+      testClient.release();
+      this.logger.log('TimescaleDB connection successful');
       // Čitaj i parsuj dump fajl
       const gunzip = zlib.createGunzip();
       const stream = fs.createReadStream(dumpFilePath).pipe(gunzip);
@@ -468,11 +486,21 @@ export class LegacySyncWorkerPoolService {
       });
 
       for await (const line of rl) {
+        lineCount++;
+        
         if (!line.startsWith('INSERT INTO')) continue;
+        
+        // Log prvih par INSERT linija za debug
+        if (importedCount < 10) {
+          this.logger.log(`Line ${lineCount}: ${line.substring(0, 200)}...`);
+        }
         
         // Parsuj INSERT statement
         const valuesMatch = line.match(/VALUES\s*(.+);?$/);
-        if (!valuesMatch) continue;
+        if (!valuesMatch) {
+          this.logger.warn(`Could not parse VALUES from line ${lineCount}`);
+          continue;
+        }
         
         // Ekstraktuj values
         const valuesStr = valuesMatch[1];
@@ -512,13 +540,27 @@ export class LegacySyncWorkerPoolService {
         importedCount += batch.length;
       }
       
+      this.logger.log(`Import completed: ${importedCount} records imported from ${lineCount} lines`);
       return { success: true, count: importedCount };
       
     } catch (error) {
       this.logger.error(`Production import error: ${error.message}`);
+      this.logger.error(`Error stack: ${error.stack}`);
+      
+      // Dodatno logovanje za debug
+      if (!process.env.TIMESCALE_DATABASE_URL) {
+        this.logger.error('TIMESCALE_DATABASE_URL nije postavljen!');
+      }
+      
       return { success: false, count: importedCount };
     } finally {
-      await pool.end();
+      if (pool) {
+        try {
+          await pool.end();
+        } catch (endError) {
+          this.logger.error(`Error closing pool: ${endError.message}`);
+        }
+      }
     }
   }
 
@@ -575,5 +617,98 @@ export class LegacySyncWorkerPoolService {
     } finally {
       client.release();
     }
+  }
+
+  /**
+   * Sinhronizuje batch vozila sa zadatim parametrima
+   * Koristi se za Smart Slow Sync
+   */
+  async syncVehiclesBatch(
+    vehicleIds: number[], 
+    syncDaysBack: number = 30,
+    maxWorkers: number = 2
+  ): Promise<{
+    successCount: number;
+    failedVehicles: number[];
+    totalGpsPoints?: number;
+  }> {
+    this.logger.log(`Starting batch sync for ${vehicleIds.length} vehicles with ${maxWorkers} workers`);
+    
+    let successCount = 0;
+    const failedVehicles: number[] = [];
+    let totalGpsPoints = 0;
+
+    // Podeli vozila na batch-ove za worker-e
+    const batchSize = Math.ceil(vehicleIds.length / maxWorkers);
+    const batches: number[][] = [];
+    
+    for (let i = 0; i < vehicleIds.length; i += batchSize) {
+      batches.push(vehicleIds.slice(i, i + batchSize));
+    }
+
+    // Pokreni worker-e paralelno
+    const promises = batches.map(async (batch, index) => {
+      const workerId = `slow-sync-worker-${index + 1}`;
+      
+      for (const vehicleId of batch) {
+        try {
+          const vehicle = await this.prisma.busVehicle.findUnique({
+            where: { id: vehicleId },
+            select: {
+              id: true,
+              garageNumber: true,
+              legacyId: true,
+            }
+          });
+
+          if (!vehicle || !vehicle.garageNumber) {
+            this.logger.warn(`Vehicle ${vehicleId} not found or missing garage number`);
+            failedVehicles.push(vehicleId);
+            continue;
+          }
+
+          const endDate = new Date();
+          const startDate = new Date();
+          startDate.setDate(startDate.getDate() - syncDaysBack);
+
+          // Pripremi vehicle objekat za postojeću metodu
+          const vehicleData = {
+            id: vehicle.id,
+            garage_number: vehicle.garageNumber,
+            legacy_id: vehicle.legacyId
+          };
+
+          const result = await this.syncVehicleWithWorker(
+            index + 1, // workerId as number
+            vehicleData,
+            startDate,
+            endDate
+          );
+
+          if (result.status === 'completed') {
+            successCount++;
+            totalGpsPoints += result.processedRecords || 0;
+            this.logger.log(`[${workerId}] Vehicle ${vehicle.garageNumber} synced successfully`);
+          } else {
+            failedVehicles.push(vehicleId);
+            this.logger.error(`[${workerId}] Vehicle ${vehicle.garageNumber} sync failed`);
+          }
+
+        } catch (error) {
+          this.logger.error(`[${workerId}] Error syncing vehicle ${vehicleId}: ${error.message}`);
+          failedVehicles.push(vehicleId);
+        }
+      }
+    });
+
+    await Promise.all(promises);
+
+    this.logger.log(`Batch sync completed: ${successCount} success, ${failedVehicles.length} failed`);
+
+    return {
+      successCount,
+      failedVehicles,
+      totalGpsPoints
+    };
   }
 }
