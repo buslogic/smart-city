@@ -85,12 +85,14 @@ export class GpsSyncDashboardController {
       vehicleCount,
       lastProcessed
     ] = await Promise.all([
-      // Ukupan broj slogova
-      this.prisma.$queryRaw<{ count: bigint }[]>`
-        SELECT COUNT(*) as count FROM gps_raw_buffer
+      // Ukupan broj slogova - koristimo GROUP BY koji već radimo
+      this.prisma.$queryRaw<Array<{ process_status: string; count: bigint }>>`
+        SELECT process_status, COUNT(*) as count 
+        FROM gps_raw_buffer 
+        GROUP BY process_status
       `,
       
-      // Broj slogova po statusu
+      // Isti query kao gore - koristićemo ga dvaput
       this.prisma.$queryRaw<Array<{ process_status: string; count: bigint }>>`
         SELECT process_status, COUNT(*) as count 
         FROM gps_raw_buffer 
@@ -129,7 +131,7 @@ export class GpsSyncDashboardController {
       `
     ]);
 
-    // Organizovanje statusa
+    // Organizovanje statusa iz prvog query-ja
     const recordsByStatus = {
       pending: 0,
       processing: 0,
@@ -137,21 +139,22 @@ export class GpsSyncDashboardController {
       error: 0
     };
 
-    statusCounts.forEach((status) => {
+    // Računaj ukupan broj iz statusCounts (prvi query)
+    let totalRecords = 0;
+    totalCount.forEach((status) => {
       recordsByStatus[status.process_status] = Number(status.count);
+      totalRecords += Number(status.count);
     });
 
-    // Računanje prosečnog vremena procesiranja (zadnjih 100 procesiranih)
+    // Računanje prosečnog vremena procesiranja - pojednostaviti
+    // Umesto subquery, samo uzimamo prosek poslednjeg sata
     const avgProcessingTime = await this.prisma.$queryRaw<{ avg_time: number | null }[]>`
       SELECT AVG(TIMESTAMPDIFF(MICROSECOND, received_at, processed_at)) / 1000 as avg_time
-      FROM (
-        SELECT received_at, processed_at 
-        FROM gps_raw_buffer 
-        WHERE process_status = 'processed' 
+      FROM gps_raw_buffer 
+      WHERE process_status = 'processed' 
         AND processed_at IS NOT NULL
-        ORDER BY processed_at DESC 
-        LIMIT 100
-      ) as recent_processed
+        AND processed_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)
+      LIMIT 1000
     `;
 
     // Konvertuj avg_time u broj
@@ -166,7 +169,7 @@ export class GpsSyncDashboardController {
     }
 
     return {
-      totalRecords: Number(totalCount[0]?.count || 0),
+      totalRecords: totalRecords,
       pendingRecords: recordsByStatus.pending,
       processedRecords: recordsByStatus.processed,
       errorRecords: recordsByStatus.error,
