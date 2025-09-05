@@ -45,6 +45,9 @@ interface BufferStatus {
   };
   vehicleCount: number;
   averageProcessingTime: number;
+  totalProcessedLastHour: number;
+  averageTimescaleInsertTime: number;
+  processingPercent: number;
   timestamp: string;
 }
 
@@ -444,9 +447,9 @@ const GpsSyncDashboard: React.FC = () => {
       <Card title="Status Procesiranja" style={{ marginBottom: 24 }}>
         <Row gutter={[16, 16]}>
           <Col span={24}>
-            {bufferStatus && bufferStatus.totalRecords > 0 && (
+            {bufferStatus && (
               <Progress
-                percent={Math.round((bufferStatus.processedRecords / bufferStatus.totalRecords) * 100)}
+                percent={bufferStatus.processingPercent || 0}
                 status={getProgressStatus()}
                 format={(percent) => `${percent}%`}
                 strokeColor={{
@@ -456,21 +459,29 @@ const GpsSyncDashboard: React.FC = () => {
               />
             )}
           </Col>
-          <Col span={8}>
+          <Col span={6}>
             <Statistic
               title="Jedinstvenih vozila"
               value={bufferStatus?.vehicleCount || 0}
               prefix={<CarOutlined />}
             />
           </Col>
-          <Col span={8}>
+          <Col span={6}>
             <Statistic
-              title="Prosečno vreme procesiranja"
+              title="Buffer → Processed"
               value={bufferStatus?.averageProcessingTime || 0}
               suffix="ms"
             />
           </Col>
-          <Col span={8}>
+          <Col span={6}>
+            <Statistic
+              title="TimescaleDB insert"
+              value={bufferStatus?.averageTimescaleInsertTime || 0}
+              suffix="ms"
+              valueStyle={{ color: bufferStatus?.averageTimescaleInsertTime > 1000 ? '#faad14' : '#52c41a' }}
+            />
+          </Col>
+          <Col span={6}>
             <Statistic
               title="Poslednje procesiranje"
               value={bufferStatus?.lastProcessedAt ? dayjs(bufferStatus.lastProcessedAt).fromNow() : 'N/A'}

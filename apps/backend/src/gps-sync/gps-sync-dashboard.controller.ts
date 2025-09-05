@@ -167,6 +167,35 @@ export class GpsSyncDashboardController {
         avgTime = 0;
       }
     }
+    
+    // Dodaj statistike procesiranja za procentualni prikaz
+    // Gledamo poslednji sat za realističnije brojeve
+    const lastHour = new Date(new Date().getTime() - 60 * 60 * 1000);
+    const hourStats = await this.prisma.$queryRaw<{ 
+      total_processed: bigint;
+      avg_timescale_time: number;
+    }[]>`
+      SELECT 
+        COALESCE(SUM(processed_count), 0) as total_processed,
+        COALESCE(AVG(avg_processing_time_ms), 0) as avg_timescale_time
+      FROM gps_processing_stats
+      WHERE hour_slot >= ${lastHour}
+    `;
+    
+    const totalProcessedHour = Number(hourStats[0]?.total_processed || 0);
+    const avgTimescaleTime = Math.round(hourStats[0]?.avg_timescale_time || 0);
+    
+    // Računaj procenat procesiranja (pendingRecords vs processed u zadnjem satu)
+    let processingPercent = 0;
+    if (totalRecords > 0) {
+      // Ako imamo pending, pokazujemo koliko je ostalo za procesiranje
+      if (recordsByStatus.pending > 0) {
+        processingPercent = Math.round(((totalRecords - recordsByStatus.pending) / totalRecords) * 100);
+      } else {
+        // Ako nema pending, sve je procesirano
+        processingPercent = 100;
+      }
+    }
 
     return {
       totalRecords: totalRecords,
@@ -179,6 +208,9 @@ export class GpsSyncDashboardController {
       recordsByStatus,
       vehicleCount: Number(vehicleCount[0]?.count || 0),
       averageProcessingTime: avgTime,
+      totalProcessedLastHour: totalProcessedHour,
+      averageTimescaleInsertTime: avgTimescaleTime,
+      processingPercent: processingPercent,
       timestamp: new Date()
     };
   }
