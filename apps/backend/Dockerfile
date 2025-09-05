@@ -26,18 +26,20 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install dumb-init for proper signal handling and openssh-client for legacy server communication
-RUN apk add --no-cache dumb-init openssh-client
+# Install dumb-init for proper signal handling, openssh-client for legacy server, and postgresql-client
+RUN apk add --no-cache dumb-init openssh-client postgresql-client mysql-client bash
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nestjs -u 1001
 
-# Create uploads directory and SSH directory for legacy server key
-RUN mkdir -p /app/uploads /home/nestjs/.ssh && \
+# Create required directories
+RUN mkdir -p /app/uploads /app/scripts /home/nestjs/.ssh && \
     chown -R nestjs:nodejs /app/uploads && \
+    chown -R nestjs:nodejs /app/scripts && \
     chown -R nestjs:nodejs /home/nestjs/.ssh && \
-    chmod 700 /home/nestjs/.ssh
+    chmod 700 /home/nestjs/.ssh && \
+    chmod 755 /app/scripts
 
 # Copy built application from builder
 COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
@@ -45,6 +47,10 @@ COPY --from=builder --chown=nestjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nestjs:nodejs /app/package*.json ./
 COPY --from=builder --chown=nestjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nestjs:nodejs /app/tsconfig.json ./tsconfig.json
+
+# Copy import scripts
+COPY --chown=nestjs:nodejs scripts/fast-import-gps-to-timescale-production.sh /app/scripts/
+RUN chmod +x /app/scripts/*.sh
 
 # Switch to non-root user
 USER nestjs

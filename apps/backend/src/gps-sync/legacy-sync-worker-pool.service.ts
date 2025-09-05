@@ -301,19 +301,41 @@ export class LegacySyncWorkerPoolService {
       
       // Step 4: IMPORT u TimescaleDB
       updateWorkerStatus('importing', 'Import u bazu', 70);
-      // Na produkciji, skripta je u /app/scripts direktorijumu
-      const importScript = process.env.NODE_ENV === 'production' 
-        ? '/app/scripts/fast-import-gps-to-timescale-docker.sh'
-        : '/home/kocev/smart-city/scripts/fast-import-gps-to-timescale-docker.sh';
-      const importCmd = `${importScript} ${localPath} ${garageNo}`;
       
-      const { stdout: importOutput } = await execAsync(importCmd);
+      // Detektuj okruženje i koristi odgovarajuću metodu
+      let importSuccess = false;
+      let importedCount = 0;
       
-      // Parse imported count
-      const importedMatch = importOutput.match(/Importovano GPS tačaka:\s*(\d+)/);
-      const processedRecords = importedMatch ? parseInt(importedMatch[1]) : totalRecords;
+      if (process.env.NODE_ENV === 'production' && process.env.TIMESCALE_DATABASE_URL) {
+        // Produkcija: Izvršava import direktno kroz Node.js
+        logs.push(`[Worker ${workerId}] 🔄 Izvršavam import direktno kroz Node.js...`);
+        try {
+          const result = await this.executeProductionImport(localPath, garageNo, vehicle.id);
+          importSuccess = result.success;
+          importedCount = result.count;
+        } catch (error) {
+          logs.push(`[Worker ${workerId}] ❌ Import greška: ${error.message}`);
+        }
+      } else {
+        // Development/Test: Koristi shell skriptu
+        const importScript = '/home/kocev/smart-city/scripts/fast-import-gps-to-timescale-docker.sh';
+        const importCmd = `${importScript} ${localPath} ${garageNo}`;
+        
+        try {
+          const { stdout: importOutput } = await execAsync(importCmd);
+          const importedMatch = importOutput.match(/Importovano GPS tačaka:\s*(\d+)/);
+          importedCount = importedMatch ? parseInt(importedMatch[1]) : totalRecords;
+          importSuccess = true;
+        } catch (error) {
+          logs.push(`[Worker ${workerId}] ❌ Import greška: ${error.message}`);
+        }
+      }
       
-      logs.push(`[Worker ${workerId}] ✅ Import završen: ${processedRecords.toLocaleString()} tačaka`);
+      if (!importSuccess) {
+        throw new Error('Import neuspešan');
+      }
+      
+      const processedRecords = importedCount;
       
       // Step 5: CLEANUP
       updateWorkerStatus('completed', 'Čišćenje', 90);
@@ -411,5 +433,147 @@ export class LegacySyncWorkerPoolService {
       worker.currentStep = 'Prekinuto od strane korisnika';
     });
     this.activeWorkers = 0;
+  }
+
+  /**
+   * Izvršava import na produkciji direktno kroz Node.js
+   */
+  private async executeProductionImport(
+    dumpFilePath: string,
+    garageNo: string,
+    vehicleId: number
+  ): Promise<{ success: boolean; count: number }> {
+    const { Pool } = require('pg');
+    const fs = require('fs');
+    const zlib = require('zlib');
+    const readline = require('readline');
+    
+    // Kreiraj konekciju ka TimescaleDB
+    const pool = new Pool({
+      connectionString: process.env.TIMESCALE_DATABASE_URL,
+      ssl: { rejectUnauthorized: false }
+    });
+
+    let importedCount = 0;
+    const batchSize = 10000;
+    let batch: any[] = [];
+
+    try {
+      // Čitaj i parsuj dump fajl
+      const gunzip = zlib.createGunzip();
+      const stream = fs.createReadStream(dumpFilePath).pipe(gunzip);
+      const rl = readline.createInterface({
+        input: stream,
+        crlfDelay: Infinity
+      });
+
+      for await (const line of rl) {
+        if (!line.startsWith('INSERT INTO')) continue;
+        
+        // Parsuj INSERT statement
+        const valuesMatch = line.match(/VALUES\s*(.+);?$/);
+        if (!valuesMatch) continue;
+        
+        // Ekstraktuj values
+        const valuesStr = valuesMatch[1];
+        const rows = valuesStr.split('),(').map(row => {
+          return row.replace(/^\(/, '').replace(/\)$/, '');
+        });
+        
+        for (const row of rows) {
+          // Parsuj kolone (edited,captured,lat,lng,course,speed,alt,inroute,state)
+          const cols = row.split(',').map(col => col.replace(/'/g, ''));
+          
+          batch.push({
+            time: cols[1], // captured
+            vehicle_id: vehicleId,
+            garage_no: garageNo,
+            lat: parseFloat(cols[2]),
+            lng: parseFloat(cols[3]),
+            speed: parseFloat(cols[5]) || 0,
+            course: parseFloat(cols[4]) || 0,
+            alt: parseFloat(cols[6]) || 0,
+            state: parseInt(cols[8]) || 0,
+            in_route: parseInt(cols[7]) > 0
+          });
+          
+          // Kada batch dostigne veličinu, umetni u bazu
+          if (batch.length >= batchSize) {
+            await this.insertBatch(pool, batch);
+            importedCount += batch.length;
+            batch = [];
+          }
+        }
+      }
+      
+      // Umetni poslednji batch
+      if (batch.length > 0) {
+        await this.insertBatch(pool, batch);
+        importedCount += batch.length;
+      }
+      
+      return { success: true, count: importedCount };
+      
+    } catch (error) {
+      this.logger.error(`Production import error: ${error.message}`);
+      return { success: false, count: importedCount };
+    } finally {
+      await pool.end();
+    }
+  }
+
+  /**
+   * Umeće batch GPS podataka u TimescaleDB
+   */
+  private async insertBatch(pool: any, batch: any[]): Promise<void> {
+    const client = await pool.connect();
+    
+    try {
+      await client.query('BEGIN');
+      
+      // Pripremi values za bulk insert
+      const values = batch.map((row, i) => {
+        const offset = i * 11;
+        return `($${offset+1}, $${offset+2}, $${offset+3}, $${offset+4}, $${offset+5}, 
+                 ST_SetSRID(ST_MakePoint($${offset+5}, $${offset+4}), 4326),
+                 $${offset+6}, $${offset+7}, $${offset+8}, $${offset+9}, $${offset+10}, $${offset+11})`;
+      }).join(',');
+      
+      const params = batch.flatMap(row => [
+        row.time,
+        row.vehicle_id,
+        row.garage_no,
+        row.lat,
+        row.lng,
+        row.speed,
+        row.course,
+        row.alt,
+        row.state,
+        row.in_route,
+        'historical_import'
+      ]);
+      
+      const query = `
+        INSERT INTO gps_data (time, vehicle_id, garage_no, lat, lng, location, speed, course, alt, state, in_route, data_source)
+        VALUES ${values}
+        ON CONFLICT (vehicle_id, time) DO UPDATE SET
+          garage_no = EXCLUDED.garage_no,
+          lat = EXCLUDED.lat,
+          lng = EXCLUDED.lng,
+          location = EXCLUDED.location,
+          speed = EXCLUDED.speed,
+          course = EXCLUDED.course,
+          alt = EXCLUDED.alt
+      `;
+      
+      await client.query(query, params);
+      await client.query('COMMIT');
+      
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 }

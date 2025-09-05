@@ -366,14 +366,21 @@ export class LegacySyncService {
       job.logs.push(`✅ Fajl preuzet za ${transferTime}s`);
       job.progress_percentage = 50;
       
-      // Step 3: Pokreni fast-import skriptu
+      // Step 3: Import podataka
       job.logs.push(`🗄️ Import podataka u TimescaleDB bazu...`);
       job.currentStep = 'Import u bazu';
-      // Na produkciji, skripta je u /app/scripts direktorijumu
-      const importScript = process.env.NODE_ENV === 'production' 
-        ? '/app/scripts/fast-import-gps-to-timescale-docker.sh'
-        : '/home/kocev/smart-city/scripts/fast-import-gps-to-timescale-docker.sh';
-      const importCmd = `${importScript} ${localPath} ${garageNo}`;
+      
+      // Odaberi skriptu na osnovu okruženja
+      let importCmd: string;
+      if (process.env.NODE_ENV === 'production' && process.env.TIMESCALE_DATABASE_URL) {
+        job.logs.push(`📥 Koristi se produkcijski import metod...`);
+        // Na produkciji koristi skriptu koja se kreira runtime
+        importCmd = `bash /app/scripts/fast-import-gps-to-timescale-production.sh ${localPath} ${garageNo}`;
+      } else {
+        // Development: koristi Docker skriptu
+        const importScript = '/home/kocev/smart-city/scripts/fast-import-gps-to-timescale-docker.sh';
+        importCmd = `${importScript} ${localPath} ${garageNo}`;
+      }
       
       // Postavi progress na 60% pre importa
       job.progress_percentage = 60;

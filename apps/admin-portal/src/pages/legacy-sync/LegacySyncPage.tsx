@@ -18,6 +18,11 @@ import {
   Statistic,
   Row,
   Col,
+  Tabs,
+  Radio,
+  InputNumber,
+  Timeline,
+  Descriptions,
 } from 'antd';
 import {
   SyncOutlined,
@@ -31,6 +36,11 @@ import {
   ThunderboltOutlined,
   TeamOutlined,
   RocketOutlined,
+  ClockCircleOutlined,
+  SettingOutlined,
+  PlayCircleOutlined,
+  PauseCircleOutlined,
+  StopOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
@@ -81,6 +91,66 @@ interface WorkerPoolStatus {
   maxWorkers: number;
   workers: WorkerStatus[];
 }
+
+// Smart Slow Sync interfejsi
+interface SlowSyncConfig {
+  enabled: boolean;
+  vehiclesPerBatch: number;
+  workersPerBatch: number;
+  batchDelayMinutes: number;
+  nightHoursStart: number;
+  nightHoursEnd: number;
+  syncDaysBack: number;
+  autoCleanup: boolean;
+  compressAfterBatches: number;
+  maxDailyBatches: number;
+  preset: 'fast' | 'balanced' | 'conservative' | 'custom';
+}
+
+interface SlowSyncProgress {
+  totalVehicles: number;
+  processedVehicles: number;
+  currentBatch: number;
+  totalBatches: number;
+  startedAt: Date;
+  estimatedCompletion: Date;
+  totalPointsProcessed: number;
+  lastBatchDuration: number;
+  status: 'idle' | 'running' | 'paused' | 'completed';
+}
+
+const SYNC_PRESETS = {
+  fast: {
+    name: 'Brza (3-5 dana)',
+    vehiclesPerBatch: 30,
+    workersPerBatch: 6,
+    batchDelayMinutes: 15,
+    nightHoursStart: 20,
+    nightHoursEnd: 8,
+    maxDailyBatches: 30,
+    description: 'Agresivni parametri za brzu sinhronizaciju. Zahteva više resursa.'
+  },
+  balanced: {
+    name: 'Balansirana (7-10 dana)',
+    vehiclesPerBatch: 15,
+    workersPerBatch: 3,
+    batchDelayMinutes: 20,
+    nightHoursStart: 22,
+    nightHoursEnd: 6,
+    maxDailyBatches: 15,
+    description: 'Optimalan balans između brzine i resursa.'
+  },
+  conservative: {
+    name: 'Konzervativna (12-15 dana)',
+    vehiclesPerBatch: 10,
+    workersPerBatch: 2,
+    batchDelayMinutes: 30,
+    nightHoursStart: 23,
+    nightHoursEnd: 5,
+    maxDailyBatches: 10,
+    description: 'Sigurna opcija sa minimalnim opterećenjem servera.'
+  }
+};
 
 const LegacySyncPage: React.FC = () => {
   const [vehicles, setVehicles] = useState<VehicleWithSyncStatus[]>([]);
