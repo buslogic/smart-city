@@ -158,12 +158,24 @@ const GpsSyncDashboard: React.FC = () => {
     refetchIntervalInBackground: false,
   });
 
+  // Fetch Connection status
+  const { data: connectionStatus, refetch: refetchConnection } = useQuery<any>({
+    queryKey: ['connection-status'],
+    queryFn: async () => {
+      const response = await api.get('/api/gps-sync-dashboard/connection-status');
+      return response.data;
+    },
+    refetchInterval: autoRefresh ? 30000 : false,
+    refetchIntervalInBackground: false,
+  });
+
   const handleManualRefresh = useCallback(() => {
     refetchBuffer();
     refetchStats();
     refetchTimescale();
     refetchCron();
-  }, [refetchBuffer, refetchStats, refetchTimescale, refetchCron]);
+    refetchConnection();
+  }, [refetchBuffer, refetchStats, refetchTimescale, refetchCron, refetchConnection]);
 
   const handleCronControl = useCallback(async (action: 'start' | 'stop', cronName: string, instance?: number) => {
     setControllingCron(`${cronName}-${action}`);
@@ -475,6 +487,94 @@ const GpsSyncDashboard: React.FC = () => {
           />
         )}
       </Card>
+
+      {/* MySQL Connection Pool Status */}
+      {connectionStatus && (
+        <Card 
+          title={
+            <div className="flex items-center justify-between">
+              <span>MySQL Connection Pool</span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-normal">
+                  {connectionStatus.pool?.currentConnections || 0} / {connectionStatus.pool?.maxConnections || 20} konekcija
+                </span>
+                <Progress 
+                  type="circle" 
+                  percent={connectionStatus.pool?.utilizationPercent || 0} 
+                  width={40}
+                  strokeColor={
+                    connectionStatus.pool?.utilizationPercent > 90 ? '#ff4d4f' : 
+                    connectionStatus.pool?.utilizationPercent > 75 ? '#faad14' : 
+                    '#52c41a'
+                  }
+                />
+              </div>
+            </div>
+          }
+          style={{ marginBottom: 16 }}
+        >
+          <Row gutter={16}>
+            <Col span={6}>
+              <Statistic
+                title="Aktivne konekcije"
+                value={connectionStatus.connections?.active || 0}
+                valueStyle={{ color: '#52c41a' }}
+              />
+            </Col>
+            <Col span={6}>
+              <Statistic
+                title="Sleep konekcije"
+                value={connectionStatus.connections?.sleeping || 0}
+                valueStyle={{ color: '#faad14' }}
+              />
+            </Col>
+            <Col span={6}>
+              <Statistic
+                title="Izvršavanje"
+                value={connectionStatus.connections?.executing || 0}
+                valueStyle={{ color: '#1890ff' }}
+              />
+            </Col>
+            <Col span={6}>
+              <Statistic
+                title="Dugotrajna (>60s)"
+                value={connectionStatus.connections?.longRunning || 0}
+                valueStyle={{ color: connectionStatus.connections?.longRunning > 0 ? '#ff4d4f' : '#000' }}
+              />
+            </Col>
+          </Row>
+
+          {connectionStatus.longestConnections?.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                Najduže konekcije:
+              </Typography.Text>
+              <div style={{ marginTop: 8 }}>
+                {connectionStatus.longestConnections.map((conn: any, idx: number) => (
+                  <div key={idx} className="flex items-center justify-between text-xs py-1">
+                    <span>{conn.command} - {conn.time}s</span>
+                    {conn.query && (
+                      <Tooltip title={conn.query}>
+                        <span className="text-gray-400">{conn.query.substring(0, 50)}...</span>
+                      </Tooltip>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {connectionStatus.pool?.utilizationPercent > 85 && (
+            <Alert
+              message={`Upozorenje: Iskorišćeno ${connectionStatus.pool.utilizationPercent}% connection pool-a`}
+              type="warning"
+              icon={<WarningOutlined />}
+              style={{ marginTop: 16 }}
+              showIcon
+            />
+          )}
+        </Card>
+      )}
 
       {/* Two column layout for stats */}
       <Row gutter={[16, 16]}>

@@ -903,6 +903,86 @@ export class GpsSyncDashboardController {
     }
   }
 
+  /**
+   * Dobavi status MySQL konekcija
+   */
+  @Get('connection-status')
+  @RequirePermissions('dispatcher.view_sync_dashboard')
+  @ApiOperation({ summary: 'Dobavi status MySQL connection pool-a' })
+  async getConnectionStatus() {
+    try {
+      // Dobavi PROCESSLIST iz MySQL-a
+      const processList = await this.prisma.$queryRaw<Array<{
+        Id: number;
+        User: string;
+        Host: string;
+        db: string | null;
+        Command: string;
+        Time: number;
+        State: string | null;
+        Info: string | null;
+      }>>`SHOW PROCESSLIST`;
+      
+      // Filtriraj samo naše konekcije
+      const ourConnections = processList.filter(p => 
+        p.User === 'gsp-user' && p.Host?.includes('157.230.119.11')
+      );
+      
+      // Analiziraj stanje konekcija
+      const connectionStats = {
+        total: ourConnections.length,
+        active: ourConnections.filter(c => c.Command !== 'Sleep').length,
+        sleeping: ourConnections.filter(c => c.Command === 'Sleep').length,
+        executing: ourConnections.filter(c => c.Command === 'Execute').length,
+        longRunning: ourConnections.filter(c => c.Time > 60).length,
+      };
+      
+      // Grupiši po tipu komande
+      const byCommand = ourConnections.reduce((acc, conn) => {
+        acc[conn.Command] = (acc[conn.Command] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      
+      // Top 5 najdužih konekcija
+      const longestConnections = ourConnections
+        .sort((a, b) => b.Time - a.Time)
+        .slice(0, 5)
+        .map(c => ({
+          id: c.Id,
+          command: c.Command,
+          time: c.Time,
+          state: c.State,
+          query: c.Info ? c.Info.substring(0, 100) + '...' : null
+        }));
+      
+      // Connection pool info iz environment-a
+      const dbUrl = process.env.DATABASE_URL || '';
+      const connectionLimit = dbUrl.match(/connection_limit=(\d+)/)?.[1] || '3';
+      const poolTimeout = dbUrl.match(/pool_timeout=(\d+)/)?.[1] || '10';
+      
+      return {
+        pool: {
+          maxConnections: parseInt(connectionLimit),
+          currentConnections: connectionStats.total,
+          availableConnections: parseInt(connectionLimit) - connectionStats.total,
+          utilizationPercent: Math.round((connectionStats.total / parseInt(connectionLimit)) * 100),
+          poolTimeout: parseInt(poolTimeout)
+        },
+        connections: connectionStats,
+        byCommand,
+        longestConnections,
+        timestamp: new Date()
+      };
+      
+    } catch (error) {
+      this.logger.error('Error getting connection status:', error);
+      return {
+        error: 'Failed to get connection status',
+        timestamp: new Date()
+      };
+    }
+  }
+
   @Post('reset-statistics')
   @RequirePermissions('dispatcher.manage_gps')
   @ApiOperation({ summary: 'Reset GPS processing statistics' })
