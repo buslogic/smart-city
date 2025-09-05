@@ -141,49 +141,51 @@ export class GpsProcessorService {
       }
 
       // 4. Pripremi podatke za TimescaleDB
-      const values: any[] = [];
-      const valueStrings: string[] = [];
-      let paramIndex = 1;
-
-      for (const point of uniquePoints.values()) {
-        // Kreiraj placeholder string za ovaj red
-        valueStrings.push(
-          `($${paramIndex}, $${paramIndex+1}, $${paramIndex+2}, ` +
-          `$${paramIndex+3}, $${paramIndex+4}, ` +
-          `ST_SetSRID(ST_MakePoint($${paramIndex+5}, $${paramIndex+6}), 4326), ` +
-          `$${paramIndex+7}, $${paramIndex+8}, $${paramIndex+9}, ` +
-          `$${paramIndex+10}, $${paramIndex+11}, $${paramIndex+12})`
-        );
-
-        // Dodaj vrednosti
-        values.push(
-          point.timestamp,                    // time
-          point.vehicle_id || point.vehicleId, // vehicle_id
-          point.garage_no || point.garageNo,   // garage_no
-          parseFloat(point.lat),              // lat
-          parseFloat(point.lng),              // lng
-          parseFloat(point.lng),              // lng za ST_MakePoint
-          parseFloat(point.lat),              // lat za ST_MakePoint
-          parseInt(point.speed) || 0,         // speed
-          parseInt(point.course) || 0,        // course
-          parseInt(point.altitude) || 0,      // alt
-          parseInt(point.state) || 0,         // state
-          Boolean(parseInt(point.in_route || point.inRoute || 0)), // in_route - konvertuj u boolean
-          'mysql_buffer'                      // data_source
-        );
-
-        paramIndex += 13;
-      }
-
+      const allPoints = Array.from(uniquePoints.values());
+      
       // 4. Bulk insert u TimescaleDB - podeli na manje batch-ove zbog PostgreSQL limita
-      if (valueStrings.length > 0) {
+      if (allPoints.length > 0) {
         // PostgreSQL ima limit od 65535 parametara, a mi koristimo 13 po zapisu
         // Zato delimo na batch-ove od 1000 zapisa (13,000 parametara)
         const BATCH_SIZE = 1000;
         
-        for (let i = 0; i < valueStrings.length; i += BATCH_SIZE) {
-          const batchStrings = valueStrings.slice(i, i + BATCH_SIZE);
-          const batchValues = values.slice(i * 13, (i + BATCH_SIZE) * 13);
+        for (let batchStart = 0; batchStart < allPoints.length; batchStart += BATCH_SIZE) {
+          const batchPoints = allPoints.slice(batchStart, Math.min(batchStart + BATCH_SIZE, allPoints.length));
+          
+          // Generiši parametre za ovaj batch
+          const batchValues: any[] = [];
+          const batchStrings: string[] = [];
+          let paramIndex = 1;
+          
+          for (const point of batchPoints) {
+            // Kreiraj placeholder string za ovaj red
+            batchStrings.push(
+              `($${paramIndex}, $${paramIndex+1}, $${paramIndex+2}, ` +
+              `$${paramIndex+3}, $${paramIndex+4}, ` +
+              `ST_SetSRID(ST_MakePoint($${paramIndex+5}, $${paramIndex+6}), 4326), ` +
+              `$${paramIndex+7}, $${paramIndex+8}, $${paramIndex+9}, ` +
+              `$${paramIndex+10}, $${paramIndex+11}, $${paramIndex+12})`
+            );
+
+            // Dodaj vrednosti
+            batchValues.push(
+              point.timestamp,                    // time
+              point.vehicle_id || point.vehicleId, // vehicle_id
+              point.garage_no || point.garageNo,   // garage_no
+              parseFloat(point.lat),              // lat
+              parseFloat(point.lng),              // lng
+              parseFloat(point.lng),              // lng za ST_MakePoint
+              parseFloat(point.lat),              // lat za ST_MakePoint
+              parseInt(point.speed) || 0,         // speed
+              parseInt(point.course) || 0,        // course
+              parseInt(point.altitude) || 0,      // alt
+              parseInt(point.state) || 0,         // state
+              Boolean(parseInt(point.in_route || point.inRoute || 0)), // in_route - konvertuj u boolean
+              'mysql_buffer'                      // data_source
+            );
+
+            paramIndex += 13;
+          }
           
           const insertQuery = `
             INSERT INTO gps_data (
@@ -213,8 +215,8 @@ export class GpsProcessorService {
         `;
 
         const processingTime = Date.now() - startTime;
-        const actualProcessed = valueStrings.length; // Broj stvarno procesiranih (nakon deduplikacije)
-        const batchesProcessed = Math.ceil(valueStrings.length / 1000); // Broj TimescaleDB batch-ova
+        const actualProcessed = allPoints.length; // Broj stvarno procesiranih (nakon deduplikacije)
+        const batchesProcessed = Math.ceil(allPoints.length / 1000); // Broj TimescaleDB batch-ova
 
         // 6. Detekcija agresivne vožnje (KRITIČNO - dodato!)
         if (actualProcessed > 0) {
