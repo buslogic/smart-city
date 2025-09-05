@@ -599,12 +599,24 @@ export class LegacySyncWorkerPoolService {
       await client.query('BEGIN');
       
       // Pripremi values za bulk insert
-      // Imamo 11 vrednosti po redu (12 sa location koja se računa iz lng/lat)
+      // Imamo 11 parametara po redu, location se računa iz lng (param 5) i lat (param 4)
       const values = batch.map((row, i) => {
         const offset = i * 11; // 11 parametara po redu
-        return `($${offset+1}, $${offset+2}, $${offset+3}, $${offset+4}, $${offset+5}, 
-                 ST_SetSRID(ST_MakePoint($${offset+5}, $${offset+4}), 4326),
-                 $${offset+6}, $${offset+7}, $${offset+8}, $${offset+9}, $${offset+10}, $${offset+11})`;
+        // Parametri: time, vehicle_id, garage_no, lat, lng, speed, course, alt, state, in_route, data_source
+        return `(
+          $${offset+1}, 
+          $${offset+2}, 
+          $${offset+3}, 
+          $${offset+4}, 
+          $${offset+5}, 
+          ST_SetSRID(ST_MakePoint($${offset+5}, $${offset+4}), 4326),
+          $${offset+6}, 
+          $${offset+7}, 
+          $${offset+8}, 
+          $${offset+9}, 
+          $${offset+10}, 
+          $${offset+11}
+        )`;
       }).join(',');
       
       const params = batch.flatMap(row => [
