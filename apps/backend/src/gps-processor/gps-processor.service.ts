@@ -175,25 +175,34 @@ export class GpsProcessorService {
         paramIndex += 13;
       }
 
-      // 4. Bulk insert u TimescaleDB
+      // 4. Bulk insert u TimescaleDB - podeli na manje batch-ove zbog PostgreSQL limita
       if (valueStrings.length > 0) {
-        const insertQuery = `
-          INSERT INTO gps_data (
-            time, vehicle_id, garage_no, lat, lng, location,
-            speed, course, alt, state, in_route, data_source
-          ) VALUES ${valueStrings.join(', ')}
-          ON CONFLICT (vehicle_id, time) DO UPDATE SET
-            garage_no = EXCLUDED.garage_no,
-            lat = EXCLUDED.lat,
-            lng = EXCLUDED.lng,
-            location = EXCLUDED.location,
-            speed = EXCLUDED.speed,
-            course = EXCLUDED.course,
-            state = EXCLUDED.state,
-            in_route = EXCLUDED.in_route
-        `;
+        // PostgreSQL ima limit od 65535 parametara, a mi koristimo 13 po zapisu
+        // Zato delimo na batch-ove od 1000 zapisa (13,000 parametara)
+        const BATCH_SIZE = 1000;
+        
+        for (let i = 0; i < valueStrings.length; i += BATCH_SIZE) {
+          const batchStrings = valueStrings.slice(i, i + BATCH_SIZE);
+          const batchValues = values.slice(i * 13, (i + BATCH_SIZE) * 13);
+          
+          const insertQuery = `
+            INSERT INTO gps_data (
+              time, vehicle_id, garage_no, lat, lng, location,
+              speed, course, alt, state, in_route, data_source
+            ) VALUES ${batchStrings.join(', ')}
+            ON CONFLICT (vehicle_id, time) DO UPDATE SET
+              garage_no = EXCLUDED.garage_no,
+              lat = EXCLUDED.lat,
+              lng = EXCLUDED.lng,
+              location = EXCLUDED.location,
+              speed = EXCLUDED.speed,
+              course = EXCLUDED.course,
+              state = EXCLUDED.state,
+              in_route = EXCLUDED.in_route
+          `;
 
-        await this.timescalePool.query(insertQuery, values);
+          await this.timescalePool.query(insertQuery, batchValues);
+        }
 
         // 5. Označi kao processed u MySQL buffer-u
         await this.prisma.$executeRaw`
@@ -205,6 +214,7 @@ export class GpsProcessorService {
 
         const processingTime = Date.now() - startTime;
         const actualProcessed = valueStrings.length; // Broj stvarno procesiranih (nakon deduplikacije)
+        const batchesProcessed = Math.ceil(valueStrings.length / 1000); // Broj TimescaleDB batch-ova
 
         // 6. Detekcija agresivne vožnje (KRITIČNO - dodato!)
         if (actualProcessed > 0) {
@@ -250,7 +260,7 @@ export class GpsProcessorService {
         this.lastProcessTime = new Date();
 
         this.logger.log(
-          `✅ Procesirano ${actualProcessed} GPS tačaka u TimescaleDB za ${processingTime}ms (od ${batch.length} iz buffer-a)`
+          `✅ Procesirano ${actualProcessed} GPS tačaka u TimescaleDB za ${processingTime}ms (${batchesProcessed} batch-ova, od ${batch.length} iz buffer-a)`
         );
         
         // Ažuriraj statistike
