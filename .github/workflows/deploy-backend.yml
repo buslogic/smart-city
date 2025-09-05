@@ -96,13 +96,18 @@ jobs:
             # Pull latest image
             docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
             
-            # Run new container
+            # Run new container with host network for Redis connection
             docker run -d \
               --name backend-app \
               --restart unless-stopped \
-              -p 3010:3010 \
+              --network host \
               --env-file /root/apps/backend/.env.production \
               ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            
+            # Copy SSH key for legacy server communication
+            docker cp /root/.ssh/gsp-to-legacy backend-app:/home/nestjs/.ssh/gsp-to-legacy || echo "SSH key copy failed, continuing..."
+            docker exec -u root backend-app chown nestjs:nodejs /home/nestjs/.ssh/gsp-to-legacy || echo "Chown failed, continuing..."
+            docker exec -u root backend-app chmod 600 /home/nestjs/.ssh/gsp-to-legacy || echo "Chmod failed, continuing..."
             
             # Wait for container to be ready
             sleep 10

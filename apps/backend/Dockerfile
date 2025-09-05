@@ -26,16 +26,18 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install dumb-init for proper signal handling
-RUN apk add --no-cache dumb-init
+# Install dumb-init for proper signal handling and openssh-client for legacy server communication
+RUN apk add --no-cache dumb-init openssh-client
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nestjs -u 1001
 
-# Create uploads directory
-RUN mkdir -p /app/uploads && \
-    chown -R nestjs:nodejs /app/uploads
+# Create uploads directory and SSH directory for legacy server key
+RUN mkdir -p /app/uploads /home/nestjs/.ssh && \
+    chown -R nestjs:nodejs /app/uploads && \
+    chown -R nestjs:nodejs /home/nestjs/.ssh && \
+    chmod 700 /home/nestjs/.ssh
 
 # Copy built application from builder
 COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
