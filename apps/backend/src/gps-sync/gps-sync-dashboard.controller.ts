@@ -37,7 +37,7 @@ export class GpsSyncDashboardController {
   private getSSHCommand(): string {
     const legacyHost = process.env.LEGACY_SERVER_HOST || '79.101.48.11';
     const sshKeyPath = process.env.LEGACY_SSH_KEY_PATH || '~/.ssh/hp-notebook-2025-buslogic';
-    return `ssh -i ${sshKeyPath} root@${legacyHost}`;
+    return `ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${sshKeyPath} root@${legacyHost}`;
   }
   
   // Metoda koju će pozivati cron servisi da ažuriraju svoje vreme

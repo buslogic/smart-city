@@ -432,24 +432,53 @@ export class GpsProcessorService {
     }
     
     try {
-      // Briši processed zapise starije od X minuta (iz settings)
-      const result = await this.prisma.$executeRaw`
-        DELETE FROM gps_raw_buffer 
-        WHERE process_status = 'processed' 
-        AND processed_at < DATE_SUB(NOW(), INTERVAL ${this.settings.cleanupProcessedMinutes} MINUTE)
-      `;
-
-      if (result > 0) {
-        this.logger.log(`🧹 Obrisano ${result} processed GPS zapisa starijih od ${this.settings.cleanupProcessedMinutes} minuta`);
+      let totalDeleted = 0;
+      
+      // 1. Briši processed zapise (batch delete sa LIMIT)
+      let deletedProcessed = 0;
+      for (let i = 0; i < 5; i++) { // Maksimalno 5 batch-eva po 10000
+        const result = await this.prisma.$executeRaw`
+          DELETE FROM gps_raw_buffer 
+          WHERE process_status = 'processed' 
+          AND processed_at < DATE_SUB(NOW(), INTERVAL ${this.settings.cleanupProcessedMinutes} MINUTE)
+          LIMIT 10000
+        `;
+        
+        deletedProcessed += result;
+        if (result < 10000) break; // Nema više za brisanje
       }
+      
+      if (deletedProcessed > 0) {
+        this.logger.log(`🧹 Obrisano ${deletedProcessed} processed GPS zapisa`);
+      }
+      
+      // 2. Briši failed zapise starije od X sati (batch delete sa LIMIT)
+      let deletedFailed = 0;
+      for (let i = 0; i < 5; i++) { // Maksimalno 5 batch-eva po 10000
+        const result = await this.prisma.$executeRaw`
+          DELETE FROM gps_raw_buffer 
+          WHERE process_status = 'failed' 
+          AND received_at < DATE_SUB(NOW(), INTERVAL ${this.settings.cleanupFailedHours} HOUR)
+          LIMIT 10000
+        `;
+        
+        deletedFailed += result;
+        if (result < 10000) break; // Nema više za brisanje
+      }
+      
+      if (deletedFailed > 0) {
+        this.logger.log(`🧹 Obrisano ${deletedFailed} failed GPS zapisa starijih od ${this.settings.cleanupFailedHours}h`);
+      }
+      
+      totalDeleted = deletedProcessed + deletedFailed;
       
       // Ažuriraj vreme poslednjeg izvršavanja
       const { GpsSyncDashboardController } = require('../gps-sync/gps-sync-dashboard.controller');
       GpsSyncDashboardController.updateCronLastRun('cleanup');
       
-      return result;
+      return totalDeleted;
     } catch (error) {
-      this.logger.error('Greška pri čišćenju processed zapisa:', error);
+      this.logger.error('Greška pri čišćenju buffer zapisa:', error);
       return 0;
     }
   }

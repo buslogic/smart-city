@@ -109,6 +109,10 @@ jobs:
             docker exec -u root backend-app chown nestjs:nodejs /home/nestjs/.ssh/gsp-to-legacy || echo "Chown failed, continuing..."
             docker exec -u root backend-app chmod 600 /home/nestjs/.ssh/gsp-to-legacy || echo "Chmod failed, continuing..."
             
+            # Add legacy server to known_hosts to prevent SSH prompt
+            docker exec -u root backend-app sh -c 'ssh-keyscan -H 79.101.48.11 >> /home/nestjs/.ssh/known_hosts 2>/dev/null' || echo "Known hosts failed, continuing..."
+            docker exec -u root backend-app chown nestjs:nodejs /home/nestjs/.ssh/known_hosts || echo "Chown known_hosts failed, continuing..."
+            
             # Wait for container to be ready
             sleep 10
             
