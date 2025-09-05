@@ -907,7 +907,7 @@ export class GpsSyncDashboardController {
    * Dobavi status MySQL konekcija
    */
   @Get('connection-status')
-  @RequirePermissions('dispatcher.view_sync_dashboard')
+  @RequirePermissions('dispatcher:view_sync_dashboard')
   @ApiOperation({ summary: 'Dobavi status MySQL connection pool-a' })
   async getConnectionStatus() {
     try {
