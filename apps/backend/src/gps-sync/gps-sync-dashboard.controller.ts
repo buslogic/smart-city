@@ -912,19 +912,32 @@ export class GpsSyncDashboardController {
   async getConnectionStatus() {
     try {
       // Dobavi PROCESSLIST iz MySQL-a
+      // Prisma vraća kolone kao f0, f1, f2... umesto pravih imena
       const processList = await this.prisma.$queryRaw<Array<{
-        Id: number;
-        User: string;
-        Host: string;
-        db: string | null;
-        Command: string;
-        Time: number;
-        State: string | null;
-        Info: string | null;
+        f0: bigint;  // Id
+        f1: string;  // User
+        f2: string;  // Host  
+        f3: string | null;  // db
+        f4: string;  // Command
+        f5: number;  // Time
+        f6: string | null;  // State
+        f7: string | null;  // Info
       }>>`SHOW PROCESSLIST`;
       
+      // Mapiraj na prava imena polja
+      const mappedProcessList = processList.map(p => ({
+        Id: Number(p.f0),
+        User: p.f1,
+        Host: p.f2,
+        db: p.f3,
+        Command: p.f4,
+        Time: p.f5,
+        State: p.f6,
+        Info: p.f7
+      }));
+      
       // Filtriraj samo naše konekcije (Host format je IP:port)
-      const ourConnections = processList.filter(p => 
+      const ourConnections = mappedProcessList.filter(p => 
         p.User === 'gsp-user' && p.Host?.startsWith('157.230.119.11')
       );
       
