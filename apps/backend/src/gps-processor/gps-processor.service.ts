@@ -23,11 +23,13 @@ export class GpsProcessorService {
   
   // Dinamička podešavanja iz baze
   private settings = {
-    batchSize: 4000,
+    batchSize: 10000, // Povećan batch size sa 4000 na 10000
     intervalSeconds: 30,
     cleanupProcessedMinutes: 5,
     cleanupFailedHours: 2,
-    cleanupStatsDays: 10
+    cleanupStatsDays: 10,
+    useWorkerPool: true, // Omogućen Worker Pool Pattern
+    workerCount: 4
   };
 
   constructor(
@@ -61,6 +63,12 @@ export class GpsProcessorService {
           case 'gps.processor.interval_seconds':
             this.settings.intervalSeconds = value as number;
             break;
+          case 'gps.processor.use_worker_pool':
+            this.settings.useWorkerPool = value === 'true' || value === 1;
+            break;
+          case 'gps.processor.worker_count':
+            this.settings.workerCount = value as number;
+            break;
           case 'gps.cleanup.processed_minutes':
             this.settings.cleanupProcessedMinutes = value as number;
             break;
@@ -73,7 +81,7 @@ export class GpsProcessorService {
         }
       });
       
-      this.logger.debug(`📋 Učitana podešavanja: Batch=${this.settings.batchSize}, Interval=${this.settings.intervalSeconds}s`);
+      this.logger.debug(`📋 Učitana podešavanja: Batch=${this.settings.batchSize}, Interval=${this.settings.intervalSeconds}s, WorkerPool=${this.settings.useWorkerPool}, Workers=${this.settings.workerCount}`);
     } catch (error) {
       this.logger.warn('Greška pri učitavanju podešavanja, koriste se default vrednosti');
     }
@@ -82,6 +90,7 @@ export class GpsProcessorService {
   /**
    * Cron job koji se pokreće svakih 30 sekundi
    * Prebacuje podatke iz MySQL buffer-a u TimescaleDB
+   * Koristi Worker Pool Pattern za paralelno procesiranje
    */
   @Cron('*/30 * * * * *')
   async processGpsBuffer() {
@@ -104,6 +113,172 @@ export class GpsProcessorService {
       // Osveži podešavanja pre svakog procesiranja
       await this.loadSettings();
       
+      // Odluči da li koristiti worker pool ili stari način
+      const useWorkerPool = this.settings.useWorkerPool ?? true;
+      const workerCount = this.settings.workerCount || 4;
+      
+      if (useWorkerPool) {
+        await this.processWithWorkerPool(workerCount);
+      } else {
+        // Stari način - jedan worker
+        await this.processSingleBatch();
+      }
+    } catch (error) {
+      this.logger.error('❌ Greška pri procesiranju GPS buffer-a:', error);
+    } finally {
+      this.isProcessing = false;
+    }
+  }
+
+  /**
+   * Novi Worker Pool pristup - paralelno procesiranje
+   */
+  private async processWithWorkerPool(workerCount: number) {
+    const startTime = Date.now();
+    
+    // Proveri koliko ima pending zapisa
+    const pendingCount = await this.prisma.$queryRaw<[{ count: bigint }]>`
+      SELECT COUNT(*) as count 
+      FROM gps_raw_buffer 
+      WHERE process_status = 'pending' 
+      AND retry_count < 3
+    `;
+    
+    const totalPending = Number(pendingCount[0]?.count || 0);
+    
+    if (totalPending === 0) {
+      return; // Nema podataka
+    }
+    
+    this.logger.log(`🚀 Pokrećem Worker Pool sa ${workerCount} worker-a za ${totalPending} zapisa`);
+    
+    // Podeli posao na worker-e
+    const chunkSize = Math.ceil(this.settings.batchSize / workerCount);
+    const workerPromises: Promise<any>[] = [];
+    
+    for (let i = 0; i < workerCount; i++) {
+      const offset = i * chunkSize;
+      const limit = Math.min(chunkSize, this.settings.batchSize - offset);
+      
+      if (limit <= 0) break; // Nema više podataka za ovaj worker
+      
+      workerPromises.push(
+        this.processWorkerChunk(i + 1, offset, limit)
+      );
+    }
+    
+    // Čekaj da svi worker-i završe
+    const workerResults = await Promise.allSettled(workerPromises);
+    
+    // Agregiraj rezultate
+    let totalProcessed = 0;
+    let totalFailed = 0;
+    const timeRanges: { min: Date; max: Date }[] = [];
+    
+    workerResults.forEach((result, index) => {
+      if (result.status === 'fulfilled' && result.value) {
+        totalProcessed += result.value.processed;
+        totalFailed += result.value.failed;
+        if (result.value.timeRange) {
+          timeRanges.push(result.value.timeRange);
+        }
+      } else if (result.status === 'rejected') {
+        this.logger.error(`Worker ${index + 1} je pao:`, result.reason);
+        totalFailed += chunkSize; // Pretpostavi da je ceo chunk failed
+      }
+    });
+    
+    // Centralizovan refresh continuous aggregates
+    if (timeRanges.length > 0) {
+      const overallMin = timeRanges.reduce((min, r) => r.min < min ? r.min : min, timeRanges[0].min);
+      const overallMax = timeRanges.reduce((max, r) => r.max > max ? r.max : max, timeRanges[0].max);
+      
+      await this.refreshContinuousAggregates(overallMin, overallMax);
+    }
+    
+    const totalTime = Date.now() - startTime;
+    this.logger.log(
+      `✅ Worker Pool završen: ${totalProcessed} procesirano, ${totalFailed} failed za ${totalTime}ms`
+    );
+    
+    // Ažuriraj statistike
+    await this.updateProcessingStats(totalProcessed, totalTime);
+  }
+
+  /**
+   * Procesira jedan chunk podataka (worker)
+   */
+  private async processWorkerChunk(
+    workerId: number, 
+    offset: number, 
+    limit: number
+  ): Promise<{ processed: number; failed: number; timeRange?: { min: Date; max: Date } }> {
+    const workerStart = Date.now();
+    
+    try {
+      // Dohvati svoj deo podataka sa FOR UPDATE SKIP LOCKED
+      const batch = await this.prisma.$queryRaw<any[]>`
+        SELECT * FROM gps_raw_buffer 
+        WHERE process_status = 'pending' 
+        AND retry_count < 3
+        ORDER BY received_at ASC
+        LIMIT ${limit}
+        FOR UPDATE SKIP LOCKED
+      `;
+      
+      if (!batch || batch.length === 0) {
+        this.logger.debug(`Worker ${workerId}: Nema podataka`);
+        return { processed: 0, failed: 0 };
+      }
+      
+      this.logger.debug(`Worker ${workerId}: Procesira ${batch.length} zapisa`);
+      
+      // Označi kao processing
+      const ids = batch.map(r => r.id);
+      await this.prisma.$executeRaw`
+        UPDATE gps_raw_buffer 
+        SET process_status = 'processing',
+            processed_at = NOW()
+        WHERE id IN (${Prisma.join(ids)})
+      `;
+      
+      // Procesira i ubaci u TimescaleDB
+      const result = await this.insertBatchToTimescaleDB(batch);
+      
+      // Označi kao processed
+      if (result.processedCount > 0) {
+        await this.prisma.$executeRaw`
+          UPDATE gps_raw_buffer 
+          SET process_status = 'processed',
+              processed_at = NOW()
+          WHERE id IN (${Prisma.join(ids)})
+        `;
+      }
+      
+      const workerTime = Date.now() - workerStart;
+      this.logger.debug(
+        `Worker ${workerId}: Završen - ${result.processedCount} procesirano za ${workerTime}ms`
+      );
+      
+      return {
+        processed: result.processedCount,
+        failed: batch.length - result.processedCount,
+        timeRange: result.timeRange
+      };
+      
+    } catch (error) {
+      this.logger.error(`Worker ${workerId} greška:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Stari način - procesira jedan veliki batch
+   */
+  private async processSingleBatch() {
+    try {
+      const startTime = Date.now();
+      
       // 1. Dohvati batch podataka iz MySQL buffer-a
       const batch = await this.prisma.$queryRaw<any[]>`
         SELECT * FROM gps_raw_buffer 
@@ -125,88 +300,15 @@ export class GpsProcessorService {
       // 2. Označi kao processing
       await this.prisma.$executeRaw`
         UPDATE gps_raw_buffer 
-        SET process_status = 'processing',
-            processed_at = NOW()
+        SET process_status = 'processing'
         WHERE id IN (${Prisma.join(ids)})
       `;
 
-      // 3. Deduplicuj po vehicle_id i timestamp
-      const uniquePoints = new Map<string, any>();
-      for (const point of batch) {
-        const vehicleId = point.vehicle_id || point.vehicleId;
-        const key = `${vehicleId}_${point.timestamp}`;
-        if (!uniquePoints.has(key)) {
-          uniquePoints.set(key, point);
-        }
-      }
-
-      // 4. Pripremi podatke za TimescaleDB
-      const allPoints = Array.from(uniquePoints.values());
+      // 3. Ubaci u TimescaleDB
+      const result = await this.insertBatchToTimescaleDB(batch);
       
-      // 4. Bulk insert u TimescaleDB - podeli na manje batch-ove zbog PostgreSQL limita
-      if (allPoints.length > 0) {
-        // PostgreSQL ima limit od 65535 parametara, a mi koristimo 13 po zapisu
-        // Zato delimo na batch-ove od 1000 zapisa (13,000 parametara)
-        const BATCH_SIZE = 1000;
-        
-        for (let batchStart = 0; batchStart < allPoints.length; batchStart += BATCH_SIZE) {
-          const batchPoints = allPoints.slice(batchStart, Math.min(batchStart + BATCH_SIZE, allPoints.length));
-          
-          // Generiši parametre za ovaj batch
-          const batchValues: any[] = [];
-          const batchStrings: string[] = [];
-          let paramIndex = 1;
-          
-          for (const point of batchPoints) {
-            // Kreiraj placeholder string za ovaj red
-            batchStrings.push(
-              `($${paramIndex}, $${paramIndex+1}, $${paramIndex+2}, ` +
-              `$${paramIndex+3}, $${paramIndex+4}, ` +
-              `ST_SetSRID(ST_MakePoint($${paramIndex+5}, $${paramIndex+6}), 4326), ` +
-              `$${paramIndex+7}, $${paramIndex+8}, $${paramIndex+9}, ` +
-              `$${paramIndex+10}, $${paramIndex+11}, $${paramIndex+12})`
-            );
-
-            // Dodaj vrednosti
-            batchValues.push(
-              point.timestamp,                    // time
-              point.vehicle_id || point.vehicleId, // vehicle_id
-              point.garage_no || point.garageNo,   // garage_no
-              parseFloat(point.lat),              // lat
-              parseFloat(point.lng),              // lng
-              parseFloat(point.lng),              // lng za ST_MakePoint
-              parseFloat(point.lat),              // lat za ST_MakePoint
-              parseInt(point.speed) || 0,         // speed
-              parseInt(point.course) || 0,        // course
-              parseInt(point.altitude) || 0,      // alt
-              parseInt(point.state) || 0,         // state
-              Boolean(parseInt(point.in_route || point.inRoute || 0)), // in_route - konvertuj u boolean
-              'mysql_buffer'                      // data_source
-            );
-
-            paramIndex += 13;
-          }
-          
-          const insertQuery = `
-            INSERT INTO gps_data (
-              time, vehicle_id, garage_no, lat, lng, location,
-              speed, course, alt, state, in_route, data_source
-            ) VALUES ${batchStrings.join(', ')}
-            ON CONFLICT (vehicle_id, time) DO UPDATE SET
-              garage_no = EXCLUDED.garage_no,
-              lat = EXCLUDED.lat,
-              lng = EXCLUDED.lng,
-              location = EXCLUDED.location,
-              speed = EXCLUDED.speed,
-              course = EXCLUDED.course,
-              state = EXCLUDED.state,
-              in_route = EXCLUDED.in_route
-          `;
-
-          await this.timescalePool.query(insertQuery, batchValues);
-        }
-
-        // 5. Označi kao processed u MySQL buffer-u
+      // 4. Označi kao processed u MySQL buffer-u
+      if (result && result.processedCount > 0) {
         await this.prisma.$executeRaw`
           UPDATE gps_raw_buffer 
           SET process_status = 'processed',
@@ -214,74 +316,25 @@ export class GpsProcessorService {
           WHERE id IN (${Prisma.join(ids)})
         `;
 
-        const processingTime = Date.now() - startTime;
-        const actualProcessed = allPoints.length; // Broj stvarno procesiranih (nakon deduplikacije)
-        const batchesProcessed = Math.ceil(allPoints.length / 1000); // Broj TimescaleDB batch-ova
-
-        // 6. Detekcija agresivne vožnje (KRITIČNO - dodato!)
-        if (actualProcessed > 0) {
-          await this.detectAggressiveDriving(batch);
-          
-          // 7. Refresh continuous aggregates za optimalne performanse Monthly Report-a
-          // Ovo omogućava 20x brže generisanje izveštaja
-          try {
-            // Pronađi vremenski opseg obrađenih podataka
-            const timeRange = batch.reduce((acc, record) => {
-              const recordTime = new Date(record.timestamp);
-              if (!acc.min || recordTime < acc.min) acc.min = recordTime;
-              if (!acc.max || recordTime > acc.max) acc.max = recordTime;
-              return acc;
-            }, { min: null as Date | null, max: null as Date | null });
-            
-            if (timeRange.min && timeRange.max) {
-              // Refresh samo za period koji je obrađen
-              await this.timescalePool.query(`
-                CALL refresh_continuous_aggregate(
-                  'vehicle_hourly_stats',
-                  $1::TIMESTAMPTZ,
-                  $2::TIMESTAMPTZ
-                )
-              `, [timeRange.min, timeRange.max]);
-              
-              await this.timescalePool.query(`
-                CALL refresh_continuous_aggregate(
-                  'daily_vehicle_stats',
-                  $1::TIMESTAMPTZ,
-                  $2::TIMESTAMPTZ
-                )
-              `, [timeRange.min, timeRange.max]);
-              
-              this.logger.debug(`🔄 Continuous aggregates osveženi za period ${timeRange.min.toISOString()} - ${timeRange.max.toISOString()}`);
-            }
-          } catch (refreshError) {
-            // Nije kritična greška - nastavi dalje
-            this.logger.warn(`⚠️ Refresh agregata nije uspeo: ${refreshError.message}`);
-          }
+        // 5. Detekcija agresivne vožnje
+        await this.detectAggressiveDriving(batch);
+        
+        // 6. Refresh continuous aggregates
+        if (result.timeRange) {
+          await this.refreshContinuousAggregates(result.timeRange.min, result.timeRange.max);
         }
-        this.processedCount += actualProcessed;
-        this.lastProcessTime = new Date();
-
-        this.logger.log(
-          `✅ Procesirano ${actualProcessed} GPS tačaka u TimescaleDB za ${processingTime}ms (${batchesProcessed} batch-ova, od ${batch.length} iz buffer-a)`
-        );
-        
-        // Ažuriraj statistike
-        const hourSlot = new Date();
-        hourSlot.setMinutes(0, 0, 0);
-        hourSlot.setMilliseconds(0);
-        await this.prisma.$executeRaw`
-          INSERT INTO gps_processing_stats (hour_slot, processed_count, avg_processing_time_ms, updated_at)
-          VALUES (${hourSlot}, ${actualProcessed}, ${Math.round(processingTime)}, NOW())
-          ON DUPLICATE KEY UPDATE
-            processed_count = processed_count + ${actualProcessed},
-            avg_processing_time_ms = (avg_processing_time_ms + ${Math.round(processingTime)}) / 2,
-            updated_at = NOW()
-        `;
-        
-        // Ažuriraj vreme poslednjeg izvršavanja
-        const { GpsSyncDashboardController } = require('../gps-sync/gps-sync-dashboard.controller');
-        GpsSyncDashboardController.updateCronLastRun('processor');
       }
+      
+      const processingTime = Date.now() - startTime;
+      this.processedCount += result.processedCount;
+      this.lastProcessTime = new Date();
+
+      this.logger.log(
+        `✅ Procesirano ${result.processedCount} GPS tačaka za ${processingTime}ms (od ${batch.length} iz buffer-a)`
+      );
+      
+      // Ažuriraj statistike
+      await this.updateProcessingStats(result.processedCount, processingTime);
 
     } catch (error) {
       this.logger.error('❌ Greška pri procesiranju GPS buffer-a:', error);
@@ -298,8 +351,6 @@ export class GpsProcessorService {
       } catch (updateError) {
         this.logger.error('Greška pri ažuriranju statusa:', updateError);
       }
-    } finally {
-      this.isProcessing = false;
     }
   }
 
@@ -307,7 +358,7 @@ export class GpsProcessorService {
    * Procesira batch podataka sa legacy sistema
    * Koristi se iz GpsLegacyController
    */
-  async processLegacyBatch(points: any[]): Promise<{ processed: number; failed: number }> {
+  public async processLegacyBatch(points: any[]): Promise<{ processed: number; failed: number }> {
     let processed = 0;
     let failed = 0;
 
@@ -544,8 +595,171 @@ export class GpsProcessorService {
     return this.cronEnabled;
   }
 
+
   /**
-   * Detekcija agresivne vožnje za batch podataka (NOVO!)
+   * Ubacuje batch podataka u TimescaleDB
+   * Koristi se od strane worker-a i starog pristupa
+   */
+  private async insertBatchToTimescaleDB(batch: any[]): Promise<{
+    processedCount: number;
+    timeRange?: { min: Date; max: Date };
+  }> {
+    if (!batch || batch.length === 0) {
+      return { processedCount: 0 };
+    }
+
+    // Dedupliciranje po vehicle_id i timestamp
+    const uniquePoints = new Map<string, any>();
+    for (const point of batch) {
+      const vehicleId = point.vehicle_id || point.vehicleId;
+      const key = `${vehicleId}_${point.timestamp}`;
+      if (!uniquePoints.has(key)) {
+        uniquePoints.set(key, point);
+      }
+    }
+
+    const allPoints = Array.from(uniquePoints.values());
+    
+    if (allPoints.length === 0) {
+      return { processedCount: 0 };
+    }
+
+    // Tracking time range za continuous aggregates
+    let minTime: Date | null = null;
+    let maxTime: Date | null = null;
+
+    // Bulk insert u TimescaleDB - podeli na manje batch-ove zbog PostgreSQL limita
+    const BATCH_SIZE = 1000;
+    let totalInserted = 0;
+    
+    for (let batchStart = 0; batchStart < allPoints.length; batchStart += BATCH_SIZE) {
+      const batchPoints = allPoints.slice(batchStart, Math.min(batchStart + BATCH_SIZE, allPoints.length));
+      
+      // Generiši parametre za ovaj batch
+      const batchValues: any[] = [];
+      const batchStrings: string[] = [];
+      let paramIndex = 1;
+      
+      for (const point of batchPoints) {
+        // Track time range
+        const pointTime = new Date(point.timestamp);
+        if (!minTime || pointTime < minTime) minTime = pointTime;
+        if (!maxTime || pointTime > maxTime) maxTime = pointTime;
+
+        // Kreiraj placeholder string za ovaj red
+        batchStrings.push(
+          `($${paramIndex}, $${paramIndex+1}, $${paramIndex+2}, ` +
+          `$${paramIndex+3}, $${paramIndex+4}, ` +
+          `ST_SetSRID(ST_MakePoint($${paramIndex+5}, $${paramIndex+6}), 4326), ` +
+          `$${paramIndex+7}, $${paramIndex+8}, $${paramIndex+9}, ` +
+          `$${paramIndex+10}, $${paramIndex+11}, $${paramIndex+12})`
+        );
+
+        // Dodaj vrednosti
+        batchValues.push(
+          point.timestamp,                    // time
+          point.vehicle_id || point.vehicleId, // vehicle_id
+          point.garage_no || point.garageNo,   // garage_no
+          parseFloat(point.lat),              // lat
+          parseFloat(point.lng),              // lng
+          parseFloat(point.lng),              // lng za ST_MakePoint
+          parseFloat(point.lat),              // lat za ST_MakePoint
+          parseInt(point.speed) || 0,         // speed
+          parseInt(point.course) || 0,        // course
+          parseInt(point.altitude) || 0,      // alt
+          parseInt(point.state) || 0,         // state
+          Boolean(parseInt(point.in_route || point.inRoute || 0)), // in_route
+          'mysql_buffer'                      // data_source
+        );
+
+        paramIndex += 13;
+      }
+      
+      const insertQuery = `
+        INSERT INTO gps_data (
+          time, vehicle_id, garage_no, lat, lng, location,
+          speed, course, alt, state, in_route, data_source
+        ) VALUES ${batchStrings.join(', ')}
+        ON CONFLICT (vehicle_id, time) DO UPDATE SET
+          garage_no = EXCLUDED.garage_no,
+          lat = EXCLUDED.lat,
+          lng = EXCLUDED.lng,
+          location = EXCLUDED.location,
+          speed = EXCLUDED.speed,
+          course = EXCLUDED.course,
+          state = EXCLUDED.state,
+          in_route = EXCLUDED.in_route
+      `;
+
+      await this.timescalePool.query(insertQuery, batchValues);
+      totalInserted += batchPoints.length;
+    }
+
+    return {
+      processedCount: totalInserted,
+      timeRange: minTime && maxTime ? { min: minTime, max: maxTime } : undefined
+    };
+  }
+
+  /**
+   * Centralizovan refresh continuous aggregates
+   */
+  private async refreshContinuousAggregates(minTime: Date, maxTime: Date) {
+    try {
+      this.logger.debug(`🔄 Refresh aggregates za period ${minTime.toISOString()} - ${maxTime.toISOString()}`);
+      
+      // Refresh hourly aggregates
+      await this.timescalePool.query(`
+        CALL refresh_continuous_aggregate(
+          'vehicle_hourly_stats',
+          $1::TIMESTAMPTZ,
+          $2::TIMESTAMPTZ
+        )
+      `, [minTime, maxTime]);
+      
+      // Refresh daily aggregates
+      await this.timescalePool.query(`
+        CALL refresh_continuous_aggregate(
+          'daily_vehicle_stats',
+          $1::TIMESTAMPTZ,
+          $2::TIMESTAMPTZ
+        )
+      `, [minTime, maxTime]);
+      
+      this.logger.debug(`✅ Aggregates osveženi`);
+    } catch (error) {
+      this.logger.warn(`⚠️ Refresh agregata nije uspeo: ${error.message}`);
+    }
+  }
+
+  /**
+   * Ažurira statistike procesiranja
+   */
+  private async updateProcessingStats(processedCount: number, processingTime: number) {
+    try {
+      const hourSlot = new Date();
+      hourSlot.setMinutes(0, 0, 0);
+      hourSlot.setMilliseconds(0);
+      
+      await this.prisma.$executeRaw`
+        INSERT INTO gps_processing_stats (hour_slot, processed_count, avg_processing_time_ms, updated_at)
+        VALUES (${hourSlot}, ${processedCount}, ${Math.round(processingTime)}, NOW())
+        ON DUPLICATE KEY UPDATE
+          processed_count = processed_count + ${processedCount},
+          avg_processing_time_ms = (avg_processing_time_ms + ${Math.round(processingTime)}) / 2,
+          updated_at = NOW()
+      `;
+      
+      // Ažuriraj vreme poslednjeg izvršavanja
+      const { GpsSyncDashboardController } = require('../gps-sync/gps-sync-dashboard.controller');
+      GpsSyncDashboardController.updateCronLastRun('processor');
+    } catch (error) {
+      this.logger.warn(`Greška pri ažuriranju statistika: ${error.message}`);
+    }
+  }
+
+  /**
+   * Detekcija agresivne vožnje za batch podataka
    */
   private async detectAggressiveDriving(batch: any[]) {
     try {
@@ -553,7 +767,7 @@ export class GpsProcessorService {
       const vehicleGroups = new Map<number, { startTime: Date, endTime: Date, garageNo: string }>();
       
       batch.forEach(record => {
-        const vehicleId = record.vehicle_id;
+        const vehicleId = record.vehicle_id || record.vehicleId;
         // Buffer tabela koristi 'timestamp', ne 'record_time'
         const recordTime = new Date(record.timestamp);
         
@@ -567,7 +781,7 @@ export class GpsProcessorService {
           vehicleGroups.set(vehicleId, {
             startTime: recordTime,
             endTime: recordTime,
-            garageNo: record.garage_no
+            garageNo: record.garage_no || record.garageNo
           });
         } else {
           const group = vehicleGroups.get(vehicleId)!;

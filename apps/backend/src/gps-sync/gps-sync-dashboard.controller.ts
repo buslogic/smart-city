@@ -491,7 +491,7 @@ export class GpsSyncDashboardController {
       }
       
       // 4. Proveri veličine raw log fajlova za Smart City instance
-      const folders = ['teltonika60', 'teltonika61', 'teltonika62', 'teltonika63', 'teltonika64', 'teltonika65', 'teltonika66', 'teltonika67', 'teltonika68', 'teltonika69', 'teltonika70'];
+      const folders = ['teltonika60', 'teltonika61', 'teltonika62', 'teltonika63', 'teltonika64', 'teltonika65', 'teltonika66', 'teltonika67', 'teltonika68', 'teltonika69', 'teltonika70', 'teltonika71', 'teltonika72', 'teltonika73', 'teltonika74', 'teltonika75', 'teltonika76'];
       for (const folder of folders) {
         try {
           const { stdout: sizeOutput } = await exec(
@@ -789,8 +789,8 @@ export class GpsSyncDashboardController {
     const logger = new Logger('CronProcessControl');
     
     try {
-      // Samo za teltonika60-70 koji imaju Smart City setup
-      if (dto.instance < 60 || dto.instance > 70) {
+      // Samo za teltonika60-76 koji imaju Smart City setup
+      if (dto.instance < 60 || dto.instance > 76) {
         return {
           success: false,
           message: `Teltonika${dto.instance} nema Smart City processor`

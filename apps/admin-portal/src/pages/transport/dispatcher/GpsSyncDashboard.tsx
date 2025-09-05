@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, Row, Col, Statistic, Progress, Typography, Space, Tag, Alert, Button, Table, Divider, Spin, Collapse, Badge, Popconfirm, message, Tooltip, Modal, Form, InputNumber, Descriptions } from 'antd';
+import { Card, Row, Col, Statistic, Progress, Typography, Space, Tag, Alert, Button, Table, Divider, Spin, Collapse, Badge, Popconfirm, message, Tooltip, Modal, Form, InputNumber, Descriptions, Switch } from 'antd';
 import { 
   DatabaseOutlined, 
   ClockCircleOutlined, 
@@ -250,6 +250,8 @@ const GpsSyncDashboard: React.FC = () => {
         form.setFieldsValue({
           batchSize: response.data.data['gps.processor.batch_size']?.value,
           intervalSeconds: response.data.data['gps.processor.interval_seconds']?.value,
+          useWorkerPool: response.data.data['gps.processor.use_worker_pool']?.value === 'true' || response.data.data['gps.processor.use_worker_pool']?.value === true,
+          workerCount: response.data.data['gps.processor.worker_count']?.value || 4,
           cleanupProcessedMinutes: response.data.data['gps.cleanup.processed_minutes']?.value,
           cleanupFailedHours: response.data.data['gps.cleanup.failed_hours']?.value,
           cleanupStatsDays: response.data.data['gps.cleanup.stats_days']?.value,
@@ -262,7 +264,7 @@ const GpsSyncDashboard: React.FC = () => {
     }
   }, [form]);
 
-  const handleUpdateSetting = useCallback(async (key: string, value: number) => {
+  const handleUpdateSetting = useCallback(async (key: string, value: string | number) => {
     try {
       const response = await api.post('/api/gps-sync-dashboard/settings', { key, value });
       if (response.data.success) {
@@ -289,6 +291,8 @@ const GpsSyncDashboard: React.FC = () => {
       // Ažuriraj svako podešavanje
       await handleUpdateSetting('gps.processor.batch_size', values.batchSize);
       await handleUpdateSetting('gps.processor.interval_seconds', values.intervalSeconds);
+      await handleUpdateSetting('gps.processor.use_worker_pool', values.useWorkerPool ? 'true' : 'false');
+      await handleUpdateSetting('gps.processor.worker_count', values.workerCount);
       await handleUpdateSetting('gps.cleanup.processed_minutes', values.cleanupProcessedMinutes);
       await handleUpdateSetting('gps.cleanup.failed_hours', values.cleanupFailedHours);
       await handleUpdateSetting('gps.cleanup.stats_days', values.cleanupStatsDays);
@@ -978,8 +982,8 @@ const GpsSyncDashboard: React.FC = () => {
                             key: 'cron_process',
                             width: 200,
                             render: (_: any, record: CronProcess) => {
-                              // Prikaži samo za teltonika60-70 koji imaju Smart City setup
-                              if (!record.instance || record.instance < 60 || record.instance > 70) {
+                              // Prikaži samo za teltonika60-74 koji imaju Smart City setup
+                              if (!record.instance || record.instance < 60 || record.instance > 76) {
                                 return <span style={{ color: '#ccc' }}>N/A</span>;
                               }
                               
@@ -1044,8 +1048,10 @@ const GpsSyncDashboard: React.FC = () => {
           form={form}
           layout="vertical"
           initialValues={{
-            batchSize: 4000,
+            batchSize: 10000,
             intervalSeconds: 30,
+            useWorkerPool: true,
+            workerCount: 4,
             cleanupProcessedMinutes: 5,
             cleanupFailedHours: 2,
             cleanupStatsDays: 10
@@ -1058,13 +1064,13 @@ const GpsSyncDashboard: React.FC = () => {
             name="batchSize"
             rules={[
               { required: true, message: 'Obavezno polje' },
-              { type: 'number', min: 100, max: 10000, message: 'Vrednost mora biti između 100 i 10000' }
+              { type: 'number', min: 100, max: 20000, message: 'Vrednost mora biti između 100 i 20000' }
             ]}
           >
             <InputNumber 
               min={100} 
-              max={10000} 
-              step={100}
+              max={20000} 
+              step={1000}
               style={{ width: '100%' }}
               addonAfter="tačaka"
             />
@@ -1086,6 +1092,38 @@ const GpsSyncDashboard: React.FC = () => {
               style={{ width: '100%' }}
               addonAfter="sekundi"
               disabled
+            />
+          </Form.Item>
+
+          <Divider orientation="left">Worker Pool Podešavanja</Divider>
+          
+          <Form.Item
+            label="Koristi Worker Pool Pattern"
+            name="useWorkerPool"
+            valuePropName="checked"
+            tooltip="Omogućava paralelno procesiranje sa više worker-a za 3-4x bolju brzinu"
+          >
+            <Switch 
+              checkedChildren="Omogućeno" 
+              unCheckedChildren="Onemogućeno"
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="Broj Worker-a"
+            name="workerCount"
+            rules={[
+              { required: true, message: 'Obavezno polje' },
+              { type: 'number', min: 1, max: 8, message: 'Vrednost mora biti između 1 i 8' }
+            ]}
+            tooltip="Broj paralelnih worker-a koji će procesirati podatke (preporučeno: 4)"
+          >
+            <InputNumber 
+              min={1} 
+              max={8} 
+              step={1}
+              style={{ width: '100%' }}
+              addonAfter="worker-a"
             />
           </Form.Item>
 
