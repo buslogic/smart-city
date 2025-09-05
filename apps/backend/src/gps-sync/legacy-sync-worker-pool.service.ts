@@ -504,16 +504,39 @@ export class LegacySyncWorkerPoolService {
         
         // Ekstraktuj values
         const valuesStr = valuesMatch[1];
-        const rows = valuesStr.split('),(').map(row => {
-          return row.replace(/^\(/, '').replace(/\)$/, '');
-        });
         
-        for (const row of rows) {
-          // Parsuj kolone (edited,captured,lat,lng,course,speed,alt,inroute,state)
-          const cols = row.split(',').map(col => col.replace(/'/g, ''));
+        // Regex za parsiranje pojedinačnih redova iz VALUES
+        // Matches: ('2025-08-28 22:00:27','2025-08-29 00:00:01',44.81432830,20.52106660,96,0,103,0,0)
+        const rowRegex = /\(([^)]+)\)/g;
+        let rowMatch;
+        
+        while ((rowMatch = rowRegex.exec(valuesStr)) !== null) {
+          const rowContent = rowMatch[1];
+          
+          // Parsuj kolone korišćenjem regex-a da pravilno handle-uje string vrednosti sa quotes
+          // Pattern: bilo koji string u quotes ili broj
+          const valueRegex = /'([^']*)'|([^,]+)/g;
+          const cols: string[] = [];
+          let valueMatch;
+          
+          while ((valueMatch = valueRegex.exec(rowContent)) !== null) {
+            // Ako je match u quotes (group 1), koristi ga, inače koristi group 2 (broj)
+            cols.push(valueMatch[1] !== undefined ? valueMatch[1] : valueMatch[2].trim());
+          }
+          
+          // Debug log za prvih par redova
+          if (importedCount < 5) {
+            this.logger.log(`Parsed row ${importedCount}: ${cols.length} columns - ${cols.join('|')}`);
+          }
+          
+          // Preskoci ako nema dovoljno kolona
+          if (cols.length < 9) {
+            this.logger.warn(`Skipping row with only ${cols.length} columns`);
+            continue;
+          }
           
           batch.push({
-            time: cols[1], // captured
+            time: cols[1], // captured timestamp
             vehicle_id: vehicleId,
             garage_no: garageNo,
             lat: parseFloat(cols[2]),
