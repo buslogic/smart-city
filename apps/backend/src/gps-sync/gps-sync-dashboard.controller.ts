@@ -923,9 +923,9 @@ export class GpsSyncDashboardController {
         Info: string | null;
       }>>`SHOW PROCESSLIST`;
       
-      // Filtriraj samo naše konekcije
+      // Filtriraj samo naše konekcije (Host format je IP:port)
       const ourConnections = processList.filter(p => 
-        p.User === 'gsp-user' && p.Host?.includes('157.230.119.11')
+        p.User === 'gsp-user' && p.Host?.startsWith('157.230.119.11')
       );
       
       // Analiziraj stanje konekcija
