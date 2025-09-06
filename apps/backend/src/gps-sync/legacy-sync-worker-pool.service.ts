@@ -160,7 +160,7 @@ export class LegacySyncWorkerPoolService {
           this.workers.set(vehicle.id, {
             workerId: vehicle.id,
             vehicleId: vehicle.id,
-            garageNumber: vehicle.garageNumber,
+            garageNumber: vehicle.garage_number, // Ispravljeno: koristimo snake_case iz raw query
             status: 'idle',
             progress: 0,
             startTime: new Date()

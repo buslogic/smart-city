@@ -419,11 +419,19 @@ export class SmartSlowSyncService {
       await this.performHealthCheck();
       
       const batchVehicles = this.vehicleQueue.splice(0, this.currentConfig.vehiclesPerBatch);
+      
+      // Proveri da batch nije prazan
+      if (batchVehicles.length === 0) {
+        this.logger.warn(`Batch ${this.progress.currentBatch + 1} je prazan - završavam Smart Slow Sync`);
+        await this.completeSync();
+        return;
+      }
+      
       this.progress.currentBatch++;
       this.progress.vehiclesInCurrentBatch = batchVehicles.map(id => `ID:${id}`);
       this.progress.lastBatchAt = new Date();
       
-      this.logger.log(`Započinjem batch ${this.progress.currentBatch}/${this.progress.totalBatches} sa ${batchVehicles.length} vozila`);
+      this.logger.log(`Rozpoczinjem batch ${this.progress.currentBatch}/${this.progress.totalBatches} sa ${batchVehicles.length} vozila`);
       
       const startTime = Date.now();
       
@@ -922,7 +930,7 @@ export class SmartSlowSyncService {
     if (this.progress?.errors) {
       this.progress.errors.slice(-10).forEach(error => {
         activities.push({
-          timestamp: error.timestamp.toISOString(),
+          timestamp: typeof error.timestamp === 'string' ? error.timestamp : new Date(error.timestamp).toISOString(),
           message: `❌ Vozilo ID:${error.vehicleId} - ${error.error}`,
           type: 'error' as const
         });
