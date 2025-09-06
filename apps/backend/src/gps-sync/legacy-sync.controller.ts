@@ -8,6 +8,7 @@ import {
   Query,
   Patch,
   Delete,
+  Param,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody, ApiQuery, ApiPropertyOptional } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -82,11 +83,31 @@ class SlowSyncConfigDto {
 
   @IsNumber()
   @IsOptional()
+  nightHoursStart?: number;
+
+  @IsNumber()
+  @IsOptional()
+  nightHoursEnd?: number;
+
+  @IsNumber()
+  @IsOptional()
+  maxDailyBatches?: number;
+
+  @IsNumber()
+  @IsOptional()
   syncDaysBack?: number;
 
   @IsBoolean()
   @IsOptional()
   autoCleanup?: boolean;
+
+  @IsNumber()
+  @IsOptional()
+  compressAfterBatches?: number;
+
+  @IsNumber()
+  @IsOptional()
+  vacuumAfterBatches?: number;
 }
 
 @ApiTags('Legacy GPS Sync')
@@ -246,40 +267,6 @@ export class LegacySyncController {
     }
   }
 
-  @Get('worker-status')
-  @RequirePermissions('legacy_sync.view')
-  @ApiOperation({ summary: 'Dobavi status Worker Pool-a' })
-  @ApiResponse({
-    status: 200,
-    description: 'Status aktivnih worker-a',
-  })
-  async getWorkerStatus(): Promise<{ 
-    enabled: boolean;
-    activeWorkers: number;
-    maxWorkers: number;
-    workers: any[];
-  }> {
-    try {
-      const isEnabled = await this.legacySyncService['shouldUseWorkerPool']();
-      const workers = this.workerPoolService.getWorkerStatuses();
-      const activeCount = this.workerPoolService.getActiveWorkerCount();
-      
-      return {
-        enabled: isEnabled,
-        activeWorkers: activeCount,
-        maxWorkers: 3, // TODO: Učitati iz konfiguracije
-        workers: workers
-      };
-    } catch (error) {
-      this.logger.error('Error getting worker status', error);
-      return {
-        enabled: false,
-        activeWorkers: 0,
-        maxWorkers: 0,
-        workers: []
-      };
-    }
-  }
 
   @Post('worker-pool/toggle')
   @RequirePermissions('legacy_sync.manage')
@@ -413,7 +400,7 @@ export class LegacySyncController {
   })
   async getSlowSyncConfig(): Promise<SlowSyncConfig> {
     try {
-      return await this.slowSyncService['currentConfig'];
+      return await this.slowSyncService.getConfig();
     } catch (error) {
       this.logger.error('Error getting slow sync config', error);
       throw error;
@@ -465,11 +452,283 @@ export class LegacySyncController {
   })
   async processSlowSyncBatch(): Promise<{ message: string }> {
     try {
-      this.logger.log('Manually triggering batch processing');
-      await this.slowSyncService.processBatch();
+      this.logger.log('Manually triggering batch processing with forceProcess=true');
+      await this.slowSyncService.processBatch(true); // forceProcess=true za ručno pokretanje
       return { message: 'Batch je procesiran' };
     } catch (error) {
       this.logger.error('Error processing batch', error);
+      throw error;
+    }
+  }
+
+  @Get('worker-status')
+  @RequirePermissions('legacy_sync.view')
+  @ApiOperation({ summary: 'Dobij status svih worker-a' })
+  @ApiResponse({
+    status: 200,
+    description: 'Worker statusi',
+  })
+  async getWorkerStatus() {
+    const workers = this.workerPoolService.getWorkerStatuses();
+    return {
+      workers: workers.map(worker => ({
+        workerId: worker.workerId,
+        status: worker.status,
+        vehicleId: worker.vehicleId,
+        garageNumber: worker.garageNumber,
+        progress: worker.progress,
+        totalRecords: worker.totalRecords,
+        processedRecords: worker.processedRecords,
+        currentStep: worker.currentStep,
+        startedAt: worker.startTime, // Mapira startTime na startedAt
+        completedAt: worker.status === 'completed' ? new Date() : undefined,
+        error: worker.status === 'failed' ? 'Unknown error' : undefined
+      }))
+    };
+  }
+
+  @Get('slow-sync/activity-feed')
+  @RequirePermissions('legacy_sync.view')
+  @ApiOperation({ summary: 'Dobij live activity feed' })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Maksimalni broj poruka (default: 50, max: 100)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Activity feed',
+  })
+  async getActivityFeed(@Query('limit') limit?: string) {
+    const maxLimit = limit ? Math.min(parseInt(limit), 100) : 50;
+    return this.slowSyncService.getActivityFeed(maxLimit);
+  }
+
+  // ============= SMART SLOW SYNC VEHICLE MANAGEMENT =============
+
+  @Get('slow-sync/vehicles')
+  @RequirePermissions('legacy_sync.view')
+  @ApiOperation({ summary: 'Dobavi listu vozila za Smart Slow Sync' })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista vozila u Smart Slow Sync sistemu',
+  })
+  async getSlowSyncVehicles(): Promise<any[]> {
+    try {
+      const vehicles = await this.slowSyncService['prisma'].smartSlowSyncVehicle.findMany({
+        include: {
+          vehicle: {
+            select: {
+              id: true,
+              garageNumber: true,
+              vehicleModel: true,
+              registrationNumber: true,
+            },
+          },
+        },
+        orderBy: [
+          { enabled: 'desc' },
+          { priority: 'desc' },
+          { lastSyncAt: 'asc' },
+        ],
+      });
+      
+      // Konvertuj BigInt u string za JSON serijalizaciju
+      return vehicles.map(v => ({
+        ...v,
+        totalPointsProcessed: v.totalPointsProcessed.toString(),
+      }));
+    } catch (error) {
+      this.logger.error('Error fetching slow sync vehicles', error);
+      throw error;
+    }
+  }
+
+  @Post('slow-sync/vehicles')
+  @RequirePermissions('legacy_sync.manage')
+  @ApiOperation({ summary: 'Dodaj vozila u Smart Slow Sync' })
+  @ApiBody({ 
+    schema: { 
+      properties: { 
+        vehicleIds: { 
+          type: 'array', 
+          items: { type: 'number' },
+          description: 'Lista ID-jeva vozila'
+        },
+        priority: {
+          type: 'number',
+          default: 100,
+          description: 'Prioritet (viši broj = viši prioritet)'
+        }
+      } 
+    } 
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Vozila dodata u Smart Slow Sync',
+  })
+  async addSlowSyncVehicles(
+    @Body() dto: { vehicleIds: number[]; priority?: number }
+  ): Promise<{ message: string; added: number }> {
+    try {
+      const priority = dto.priority || 100;
+      let added = 0;
+      
+      for (const vehicleId of dto.vehicleIds) {
+        try {
+          await this.slowSyncService['prisma'].smartSlowSyncVehicle.create({
+            data: {
+              vehicleId,
+              priority,
+              enabled: true,
+            },
+          });
+          added++;
+        } catch (error) {
+          // Ignoriši ako već postoji
+          if (error.code !== 'P2002') {
+            throw error;
+          }
+        }
+      }
+      
+      return { 
+        message: `Dodato ${added} vozila u Smart Slow Sync`,
+        added 
+      };
+    } catch (error) {
+      this.logger.error('Error adding slow sync vehicles', error);
+      throw error;
+    }
+  }
+
+  @Patch('slow-sync/vehicles/:vehicleId')
+  @RequirePermissions('legacy_sync.manage')
+  @ApiOperation({ summary: 'Ažuriraj postavke vozila u Smart Slow Sync' })
+  @ApiBody({ 
+    schema: { 
+      properties: { 
+        enabled: { type: 'boolean' },
+        priority: { type: 'number' }
+      } 
+    } 
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Postavke vozila ažurirane',
+  })
+  async updateSlowSyncVehicle(
+    @Param('vehicleId') vehicleId: string,
+    @Body() dto: { enabled?: boolean; priority?: number }
+  ): Promise<{ message: string }> {
+    try {
+      await this.slowSyncService['prisma'].smartSlowSyncVehicle.update({
+        where: { vehicleId: parseInt(vehicleId) },
+        data: dto,
+      });
+      
+      return { message: 'Postavke vozila ažurirane' };
+    } catch (error) {
+      this.logger.error('Error updating slow sync vehicle', error);
+      throw error;
+    }
+  }
+
+  @Delete('slow-sync/vehicles/:vehicleId')
+  @RequirePermissions('legacy_sync.manage')
+  @ApiOperation({ summary: 'Ukloni vozilo iz Smart Slow Sync' })
+  @ApiResponse({
+    status: 200,
+    description: 'Vozilo uklonjeno iz Smart Slow Sync',
+  })
+  async removeSlowSyncVehicle(
+    @Param('vehicleId') vehicleId: string
+  ): Promise<{ message: string }> {
+    try {
+      await this.slowSyncService['prisma'].smartSlowSyncVehicle.delete({
+        where: { vehicleId: parseInt(vehicleId) },
+      });
+      
+      return { message: 'Vozilo uklonjeno iz Smart Slow Sync' };
+    } catch (error) {
+      this.logger.error('Error removing slow sync vehicle', error);
+      throw error;
+    }
+  }
+
+  @Get('slow-sync/history')
+  @RequirePermissions('legacy_sync.view')
+  @ApiOperation({ summary: 'Dobavi istoriju Smart Slow Sync-a' })
+  @ApiQuery({ name: 'vehicleId', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiResponse({
+    status: 200,
+    description: 'Istorija Smart Slow Sync-a',
+  })
+  async getSlowSyncHistory(
+    @Query('vehicleId') vehicleId?: string,
+    @Query('limit') limit?: string
+  ): Promise<any[]> {
+    try {
+      const history = await this.slowSyncService['prisma'].smartSlowSyncHistory.findMany({
+        where: vehicleId ? { vehicleId: parseInt(vehicleId) } : undefined,
+        orderBy: { startedAt: 'desc' },
+        take: limit ? parseInt(limit) : 50,
+        include: {
+          syncVehicle: {
+            include: {
+              vehicle: {
+                select: {
+                  garageNumber: true,
+                  vehicleModel: true,
+                },
+              },
+            },
+          },
+        },
+      });
+      
+      return history;
+    } catch (error) {
+      this.logger.error('Error fetching slow sync history', error);
+      throw error;
+    }
+  }
+
+  @Get('slow-sync/available-vehicles')
+  @RequirePermissions('legacy_sync.view')
+  @ApiOperation({ summary: 'Dobavi vozila koja nisu u Smart Slow Sync' })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista dostupnih vozila',
+  })
+  async getAvailableVehiclesForSlowSync(): Promise<any[]> {
+    try {
+      // Prvo dobavi ID-jeve vozila koja su već u slow sync
+      const existingVehicles = await this.slowSyncService['prisma'].smartSlowSyncVehicle.findMany({
+        select: { vehicleId: true },
+      });
+      const existingIds = existingVehicles.map(v => v.vehicleId);
+      
+      // Dobavi sva vozila koja nisu u slow sync
+      const availableVehicles = await this.slowSyncService['prisma'].busVehicle.findMany({
+        where: {
+          active: true,
+          legacyId: { not: null },
+          id: { notIn: existingIds },
+        },
+        select: {
+          id: true,
+          garageNumber: true,
+          vehicleModel: true,
+          registrationNumber: true,
+        },
+        orderBy: { garageNumber: 'asc' },
+      });
+      
+      return availableVehicles;
+    } catch (error) {
+      this.logger.error('Error fetching available vehicles', error);
       throw error;
     }
   }

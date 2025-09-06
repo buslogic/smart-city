@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { LegacySyncWorkerPoolService } from './legacy-sync-worker-pool.service';
+import { LegacySyncWorkerPoolService, WorkerResult } from './legacy-sync-worker-pool.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
 export enum SlowSyncPreset {
@@ -190,7 +190,8 @@ export class SmartSlowSyncService {
 
   async startSlowSync(config?: Partial<SlowSyncConfig>): Promise<SlowSyncProgress> {
     if (this.isRunning && !this.isPaused) {
-      throw new Error('Slow sync je već pokrenut');
+      this.logger.warn('Slow sync je već pokrenut');
+      return this.progress;
     }
 
     if (config) {
@@ -268,13 +269,16 @@ export class SmartSlowSyncService {
 
   async stopSlowSync(): Promise<SlowSyncProgress> {
     if (!this.isRunning) {
-      throw new Error('Slow sync nije pokrenut');
+      this.logger.warn('Pokušaj zaustavljanja slow sync koji nije pokrenut');
+      // Samo vrati trenutni progress bez greške
+      return this.progress;
     }
 
     this.logger.log('Zaustavljam slow sync...');
     this.isRunning = false;
     this.isPaused = false;
     this.progress.status = 'idle';
+    this.progress.vehiclesInCurrentBatch = [];
     await this.saveProgress();
     
     return this.progress;
@@ -300,8 +304,15 @@ export class SmartSlowSyncService {
     return this.progress;
   }
 
+  async getConfig(): Promise<SlowSyncConfig> {
+    return this.currentConfig;
+  }
+
   async updateConfig(config: Partial<SlowSyncConfig>): Promise<SlowSyncConfig> {
-    if (this.isRunning && !this.isPaused) {
+    // Dozvoliti ažuriranje konfiguracije ako je status completed, idle, ili pauziran
+    const canUpdate = !this.isRunning || this.isPaused || this.progress?.status === 'completed' || this.progress?.status === 'idle';
+    
+    if (!canUpdate) {
       throw new Error('Ne možete menjati konfiguraciju dok je sync aktivan. Prvo pauzirajte.');
     }
 
@@ -325,17 +336,61 @@ export class SmartSlowSyncService {
     return this.currentConfig;
   }
 
-  @Cron('0 * * * *') // Svaki sat
-  async processBatch() {
+  @Cron('*/2 * * * *') // Svake 2 minuta proveri da li treba pokrenuti sledeći batch
+  async checkBatchSchedule() {
     if (!this.isRunning || this.isPaused) {
       return;
     }
+    
+    // Ako ima vozila u queue
+    if (this.vehicleQueue && this.vehicleQueue.length > 0) {
+      // Ako nije pokrenut nijedan batch još uvek, pokreni prvi
+      if (!this.progress.lastBatchAt && this.progress.currentBatch === 0) {
+        this.logger.log(`⏰ CRON: Pokrećem prvi batch automatski...`);
+        await this.processBatch(true);
+      } 
+      // Inače proveri da li je vreme za sledeći batch
+      else if (this.progress.lastBatchAt) {
+        const lastBatch = new Date(this.progress.lastBatchAt);
+        const now = new Date();
+        const delayMs = this.currentConfig.batchDelayMinutes * 60 * 1000;
+        const nextRunTime = new Date(lastBatch.getTime() + delayMs);
+        
+        if (now >= nextRunTime) {
+          this.logger.log(`⏰ CRON: Vreme je za sledeći batch! Pokrećem automatski...`);
+          await this.processBatch(true);
+        } else {
+          const remainingMinutes = Math.ceil((nextRunTime.getTime() - now.getTime()) / 60000);
+          this.logger.log(`⏱️ CRON: Još ${remainingMinutes} minuta do sledećeg batch-a`);
+        }
+      }
+    }
+  }
 
-    const currentHour = new Date().getHours();
-    const isNightTime = this.isInNightHours(currentHour);
+  async processBatch(forceProcess: boolean = false) {
+    const now = new Date();
+    // Pouzdanije dobijanje Belgrade sata
+    const belgradeDateFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Europe/Belgrade',
+      hour: 'numeric',
+      hour12: false
+    });
+    const belgradeHour = parseInt(belgradeDateFormatter.format(now));
+    
+    this.logger.log(`ProcessBatch pokrenut - isRunning: ${this.isRunning}, isPaused: ${this.isPaused}, vehicleQueue.length: ${this.vehicleQueue?.length || 0}`);
+    this.logger.log(`Vreme - Server UTC: ${now.toISOString()}, Belgrade hour: ${belgradeHour}, forceProcess: ${forceProcess}`);
+    
+    if (!this.isRunning || this.isPaused) {
+      this.logger.log(`Batch processing preskočen - isRunning: ${this.isRunning}, isPaused: ${this.isPaused}`);
+      return;
+    }
 
-    if (!isNightTime) {
-      this.logger.log(`Trenutno je ${currentHour}h, čekam noćne sate (${this.currentConfig.nightHoursStart}h-${this.currentConfig.nightHoursEnd}h)`);
+    // Koristi Belgrade vreme za proveru noćnih sati
+    const isNightTime = this.isInNightHours(belgradeHour);
+    this.logger.log(`Vremenska provera - Belgrade hour: ${belgradeHour}, nightHoursStart: ${this.currentConfig.nightHoursStart}, nightHoursEnd: ${this.currentConfig.nightHoursEnd}, isNightTime: ${isNightTime}`);
+
+    if (!forceProcess && !isNightTime) {
+      this.logger.log(`Trenutno je ${belgradeHour}h po Belgrade vremenu, čekam noćne sate (${this.currentConfig.nightHoursStart}h-${this.currentConfig.nightHoursEnd}h). Koristi forceProcess=true za prinudno pokretanje.`);
       return;
     }
 
@@ -345,13 +400,19 @@ export class SmartSlowSyncService {
       return;
     }
 
-    if (this.vehicleQueue.length === 0) {
-      this.logger.log('Sva vozila su procesirana!');
-      this.progress.status = 'completed';
-      this.progress.completedAt = new Date();
-      this.isRunning = false;
-      await this.saveProgress();
-      return;
+    if (!this.vehicleQueue || this.vehicleQueue.length === 0) {
+      this.logger.log('Sva vozila su procesirana ili vehicleQueue nije inicijalizovan!');
+      
+      // Pokušaj da reinicijalizuješ queue ako je prazan
+      await this.initializeVehicleQueue();
+      
+      if (this.vehicleQueue.length === 0) {
+        this.progress.status = 'completed';
+        this.progress.completedAt = new Date();
+        this.isRunning = false;
+        await this.saveProgress();
+        return;
+      }
     }
 
     try {
@@ -404,6 +465,69 @@ export class SmartSlowSyncService {
       this.progress.processedVehicles += result.successCount;
       this.progress.stats.totalPointsProcessed += result.totalGpsPoints || 0;
       
+      // Ažuriraj statistike za svako vozilo
+      for (const vehicleId of batchVehicles) {
+        const wasSuccessful = !failedVehicles.includes(vehicleId);
+        const vehicleResult = workerResults.get(vehicleId);
+        
+        // Snimi istoriju sync-a
+        await this.prisma.smartSlowSyncHistory.create({
+          data: {
+            vehicleId,
+            batchNumber: this.progress.currentBatch,
+            syncStartDate: syncFrom,
+            syncEndDate: syncTo,
+            status: wasSuccessful ? 'completed' : 'failed',
+            pointsProcessed: vehicleResult?.processedRecords || 0,
+            processingTimeMs: Math.round(duration * 60 * 1000 / batchVehicles.length),
+            startedAt: new Date(startTime),
+            completedAt: new Date(),
+            error: wasSuccessful ? null : vehicleResult?.error || null,
+          },
+        });
+        
+        // Ažuriraj glavnu tabelu vozila
+        await this.prisma.smartSlowSyncVehicle.update({
+          where: { vehicleId },
+          data: {
+            lastSyncAt: new Date(),
+            lastSuccessfulSyncAt: wasSuccessful ? new Date() : undefined,
+            totalSyncCount: { increment: 1 },
+            successfulSyncCount: wasSuccessful ? { increment: 1 } : undefined,
+            failedSyncCount: !wasSuccessful ? { increment: 1 } : undefined,
+            totalPointsProcessed: { increment: vehicleResult?.processedRecords || 0 },
+            lastError: wasSuccessful ? null : vehicleResult?.error || null,
+          },
+        });
+      }
+      
+      // Snimi batch informacije - koristi upsert da izbegne duplicate key error
+      await this.prisma.smartSlowSyncBatch.upsert({
+        where: {
+          batchNumber: this.progress.currentBatch,
+        },
+        update: {
+          vehicleIds: batchVehicles,
+          totalVehicles: batchVehicles.length,
+          processedVehicles: result.successCount,
+          status: 'completed',
+          totalPointsProcessed: BigInt(result.totalGpsPoints || 0),
+          completedAt: new Date(),
+          processingTimeMs: Math.round(duration * 60 * 1000),
+        },
+        create: {
+          batchNumber: this.progress.currentBatch,
+          vehicleIds: batchVehicles,
+          totalVehicles: batchVehicles.length,
+          processedVehicles: result.successCount,
+          status: 'completed',
+          totalPointsProcessed: BigInt(result.totalGpsPoints || 0),
+          startedAt: new Date(startTime),
+          completedAt: new Date(),
+          processingTimeMs: Math.round(duration * 60 * 1000),
+        },
+      });
+      
       const totalTime = this.progress.stats.averageTimePerBatch * (this.progress.currentBatch - 1);
       this.progress.stats.averageTimePerBatch = (totalTime + duration) / this.progress.currentBatch;
       
@@ -433,7 +557,21 @@ export class SmartSlowSyncService {
 
       this.logger.log(`Batch ${this.progress.currentBatch} završen za ${duration.toFixed(1)} minuta`);
       
-      this.logger.log(`Pauziram ${this.currentConfig.batchDelayMinutes} minuta pre sledećeg batch-a...`);
+      // Ako ima još vozila, logovaj informaciju o pauzi
+      if (this.vehicleQueue && this.vehicleQueue.length > 0) {
+        this.logger.log(`⏸️ Pauziram ${this.currentConfig.batchDelayMinutes} minuta pre sledećeg batch-a...`);
+        this.logger.log(`📊 Preostalo vozila u queue: ${this.vehicleQueue.length}`);
+        this.logger.log(`🔄 CRON će automatski pokrenuti sledeći batch nakon pauze (proverava svake 2 minuta)`);
+        
+        // Samo sačuvaj vreme poslednjeg batch-a za CRON
+        this.progress.lastBatchAt = new Date();
+        await this.saveProgress();
+      } else {
+        this.logger.log(`✅ Svi batch-ovi završeni! Ukupno procesiranih vozila: ${this.progress.processedVehicles}`);
+        this.progress.status = 'completed';
+        this.progress.completedAt = new Date();
+        await this.saveProgress();
+      }
       
     } catch (error) {
       this.logger.error(`Greška u batch ${this.progress.currentBatch}: ${error.message}`);
@@ -448,19 +586,29 @@ export class SmartSlowSyncService {
   }
 
   private async initializeVehicleQueue() {
-    const vehicles = await this.prisma.busVehicle.findMany({
+    // Uzmi samo vozila koja su označena za Smart Slow Sync
+    const syncVehicles = await this.prisma.smartSlowSyncVehicle.findMany({
       where: {
-        active: true,
-        legacyId: { not: null },
+        enabled: true,
       },
-      select: { id: true },
-      orderBy: { id: 'asc' },
+      orderBy: [
+        { priority: 'desc' },  // Viši prioritet prvi
+        { lastSyncAt: 'asc' },  // Najstariji sync prvi
+      ],
+      select: { 
+        vehicleId: true,
+        priority: true,
+      },
     });
 
-    this.vehicleQueue = vehicles.map(v => v.id);
+    this.vehicleQueue = syncVehicles.map(v => v.vehicleId);
     this.progress.totalVehicles = this.vehicleQueue.length;
     
-    this.logger.log(`Inicijalizovan queue sa ${this.vehicleQueue.length} vozila`);
+    this.logger.log(`Inicijalizovan queue sa ${this.vehicleQueue.length} vozila označenih za Smart Slow Sync`);
+    
+    if (this.vehicleQueue.length === 0) {
+      this.logger.warn('Nema vozila označenih za Smart Slow Sync! Dodajte vozila u smart_slow_sync_vehicles tabelu.');
+    }
   }
 
   private isInNightHours(hour: number): boolean {
@@ -486,48 +634,60 @@ export class SmartSlowSyncService {
 
   private async performHealthCheck() {
     try {
-      // 1. Proveri database konekcije
-      const pgConnections = await this.prisma.$queryRaw<any[]>`
+      // 1. Proveri database konekcije (MySQL)
+      const connections = await this.prisma.$queryRaw<any[]>`
         SELECT COUNT(*) as count 
-        FROM pg_stat_activity 
-        WHERE datname = current_database()
+        FROM information_schema.PROCESSLIST 
+        WHERE DB = DATABASE()
       `;
       
-      const connectionCount = parseInt(pgConnections[0]?.count || '0');
+      const connectionCount = parseInt(connections[0]?.count || '0');
       if (connectionCount > 90) {
         throw new Error(`Previše database konekcija: ${connectionCount}`);
       }
 
-      // 2. Proveri disk prostor
-      const diskSpace = await this.prisma.$queryRaw<any[]>`
+      // 2. Proveri database veličinu (MySQL)
+      const dbInfo = await this.prisma.$queryRaw<any[]>`
         SELECT 
-          pg_size_pretty(pg_database_size(current_database())) as db_size,
-          pg_database_size(current_database()) as db_size_bytes
+          ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) as db_size_mb,
+          SUM(data_length + index_length) as db_size_bytes
+        FROM information_schema.TABLES 
+        WHERE table_schema = DATABASE()
       `;
       
-      if (diskSpace[0]) {
-        this.progress.stats.diskSpaceUsed = diskSpace[0].db_size;
+      if (dbInfo[0]) {
+        const sizeMB = parseFloat(dbInfo[0].db_size_mb || '0');
+        if (sizeMB >= 1024) {
+          this.progress.stats.diskSpaceUsed = `${(sizeMB / 1024).toFixed(2)} GB`;
+        } else {
+          this.progress.stats.diskSpaceUsed = `${sizeMB.toFixed(2)} MB`;
+        }
       }
 
-      // 3. Proveri table size
-      const tableSize = await this.prisma.$queryRaw<any[]>`
+      // 3. Proveri veličinu smart_slow_sync tabela
+      const tableInfo = await this.prisma.$queryRaw<any[]>`
         SELECT 
-          pg_size_pretty(pg_total_relation_size('gps_data')) as table_size,
-          pg_total_relation_size('gps_data') as table_size_bytes
+          table_name,
+          ROUND((data_length + index_length) / 1024 / 1024, 2) as table_size_mb,
+          table_rows as row_count
+        FROM information_schema.TABLES 
+        WHERE table_schema = DATABASE()
+          AND table_name IN ('smart_slow_sync_vehicles', 'smart_slow_sync_logs', 'smart_slow_sync_batches')
       `;
       
-      // Ako je tabela veća od 500GB, upozori
-      const tableSizeGB = parseInt(tableSize[0]?.table_size_bytes || '0') / (1024 * 1024 * 1024);
-      if (tableSizeGB > 500) {
-        this.logger.warn(`GPS tabela je velika: ${tableSize[0].table_size}. Razmotrite arhiviranje starih podataka.`);
+      // Log table sizes
+      for (const table of tableInfo) {
+        if (table.table_size_mb > 1000) {
+          this.logger.warn(`Tabela ${table.table_name} je velika: ${table.table_size_mb} MB, ${table.row_count} redova. Razmotrite arhiviranje starih podataka.`);
+        }
       }
 
-      // 4. Proveri aktivne query-je
+      // 4. Proveri aktivne query-je (MySQL)
       const activeQueries = await this.prisma.$queryRaw<any[]>`
         SELECT COUNT(*) as count 
-        FROM pg_stat_activity 
-        WHERE state = 'active' 
-          AND query NOT LIKE '%pg_stat_activity%'
+        FROM information_schema.PROCESSLIST 
+        WHERE COMMAND != 'Sleep' 
+          AND INFO NOT LIKE '%PROCESSLIST%'
       `;
       
       const activeCount = parseInt(activeQueries[0]?.count || '0');
@@ -545,121 +705,97 @@ export class SmartSlowSyncService {
   }
 
   private async performCompression() {
-    this.logger.log('Pokrećem kompresiju starih chunk-ova...');
+    // MySQL nema TimescaleDB kompresiju
+    // Možemo samo da arhiviramo stare podatke
+    this.logger.log('Provera starih podataka za arhiviranje...');
     
     try {
-      // Prvo proveri da li je kompresija omogućena na tabeli
-      const compressionSettings = await this.prisma.$queryRaw<any[]>`
-        SELECT * FROM timescaledb_information.compression_settings 
-        WHERE hypertable_name = 'gps_data'
+      // Proveri koliko ima starih sync history zapisa (starijih od 30 dana)
+      const oldHistory = await this.prisma.$queryRaw<any[]>`
+        SELECT COUNT(*) as count 
+        FROM smart_slow_sync_history 
+        WHERE started_at < DATE_SUB(NOW(), INTERVAL 30 DAY)
       `;
       
-      if (!compressionSettings || compressionSettings.length === 0) {
-        this.logger.warn('Kompresija nije omogućena na gps_data tabeli. Preskačem...');
-        return;
-      }
-
-      // Kompresuj chunk-ove starije od 7 dana
-      const chunksToCompress = await this.prisma.$queryRaw<any[]>`
-        SELECT 
-          chunk_schema,
-          chunk_name,
-          range_start,
-          range_end
-        FROM timescaledb_information.chunks 
-        WHERE hypertable_name = 'gps_data'
-          AND range_end < NOW() - INTERVAL '7 days'
-          AND is_compressed = false
-        ORDER BY range_start
-        LIMIT 5
-      `;
-      
-      let compressedCount = 0;
-      for (const chunk of chunksToCompress) {
-        try {
-          await this.prisma.$executeRaw`
-            SELECT compress_chunk('${chunk.chunk_schema}.${chunk.chunk_name}'::regclass)
-          `;
-          compressedCount++;
-          this.logger.debug(`Kompresovan chunk: ${chunk.chunk_name}`);
-        } catch (error) {
-          this.logger.warn(`Ne mogu kompresovati chunk ${chunk.chunk_name}: ${error.message}`);
+      const oldCount = parseInt(oldHistory[0]?.count || '0');
+      if (oldCount > 10000) {
+        this.logger.warn(`Ima ${oldCount} starih history zapisa. Razmotrite arhiviranje.`);
+        
+        // Možemo obrisati veoma stare history zapise (starije od 90 dana)
+        const deletedHistory = await this.prisma.smartSlowSyncHistory.deleteMany({
+          where: {
+            startedAt: {
+              lt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+            }
+          }
+        });
+        
+        if (deletedHistory.count > 0) {
+          this.logger.log(`Obrisano ${deletedHistory.count} starih history zapisa`);
         }
       }
       
-      if (compressedCount > 0) {
-        this.logger.log(`Kompresovano ${compressedCount} chunk-ova`);
-        
-        // Ažuriraj compression ratio
-        const stats = await this.prisma.$queryRaw<any[]>`
-          SELECT 
-            COALESCE(
-              SUM(before_compression_total_bytes)::float / 
-              NULLIF(SUM(after_compression_total_bytes)::float, 0), 
-              1
-            ) AS ratio
-          FROM timescaledb_information.compression_chunk_size
-          WHERE hypertable_name = 'gps_data'
-        `;
-        
-        if (stats && stats[0]) {
-          this.progress.stats.compressionRatio = parseFloat(stats[0].ratio) || 1;
-          this.logger.log(`Compression ratio: ${this.progress.stats.compressionRatio.toFixed(2)}x`);
-        }
-      } else {
-        this.logger.debug('Nema chunk-ova za kompresiju');
+      // Proveri batch tabelu
+      const oldBatches = await this.prisma.$queryRaw<any[]>`
+        SELECT COUNT(*) as count 
+        FROM smart_slow_sync_batches 
+        WHERE created_at < DATE_SUB(NOW(), INTERVAL 30 DAY)
+      `;
+      
+      const oldBatchCount = parseInt(oldBatches[0]?.count || '0');
+      if (oldBatchCount > 1000) {
+        this.logger.warn(`Ima ${oldBatchCount} starih batch zapisa. Razmotrite arhiviranje.`);
       }
+      
+      // Postavi stats za prikaz
+      this.progress.stats.compressionRatio = 1; // Nema kompresije u MySQL
+      
     } catch (error) {
-      this.logger.error(`Greška pri kompresiji: ${error.message}`);
-      // Ne prekidaj proces zbog greške u kompresiji
+      this.logger.error(`Greška pri čišćenju starih podataka: ${error.message}`);
+      // Ne prekidaj proces zbog greške
     }
   }
 
   private async performVacuum() {
-    this.logger.log('Pokrećem VACUUM ANALYZE...');
+    this.logger.log('Pokrećem optimizaciju tabela...');
     
     try {
-      // VACUUM ANALYZE na glavnoj tabeli
-      await this.prisma.$executeRaw`VACUUM ANALYZE gps_data`;
-      this.logger.log('VACUUM ANALYZE na gps_data završen');
-      
-      // VACUUM ANALYZE na continuous aggregates
-      const aggregates = [
-        'vehicle_hourly_stats',
-        'daily_vehicle_stats',
-        'monthly_vehicle_raw_stats'
+      // MySQL koristi OPTIMIZE TABLE umesto VACUUM
+      const tables = [
+        'smart_slow_sync_vehicles',
+        'smart_slow_sync_logs', 
+        'smart_slow_sync_batches'
       ];
       
-      for (const aggregate of aggregates) {
+      for (const table of tables) {
         try {
-          await this.prisma.$executeRaw`VACUUM ANALYZE ${aggregate}`;
-          this.logger.debug(`VACUUM ANALYZE na ${aggregate} završen`);
+          await this.prisma.$executeRawUnsafe(`OPTIMIZE TABLE ${table}`);
+          this.logger.debug(`Optimizovana tabela: ${table}`);
         } catch (error) {
-          this.logger.warn(`Ne mogu vacuum-ovati ${aggregate}: ${error.message}`);
+          this.logger.warn(`Ne mogu optimizovati ${table}: ${error.message}`);
         }
       }
       
-      // Proveri da li je potreban REINDEX
-      const bloat = await this.prisma.$queryRaw<any[]>`
+      // Proveri veličinu tabela nakon optimizacije
+      const tableStats = await this.prisma.$queryRaw<any[]>`
         SELECT 
-          schemaname,
-          tablename,
-          pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS size,
-          ROUND(100 * pg_total_relation_size(schemaname||'.'||tablename) / 
-                NULLIF(SUM(pg_total_relation_size(schemaname||'.'||tablename)) 
-                OVER (), 0), 2) AS percentage
-        FROM pg_tables
-        WHERE tablename = 'gps_data'
-        GROUP BY schemaname, tablename
+          table_name,
+          ROUND((data_length + index_length) / 1024 / 1024, 2) as size_mb,
+          table_rows
+        FROM information_schema.TABLES 
+        WHERE table_schema = DATABASE()
+          AND table_name IN ('smart_slow_sync_vehicles', 'smart_slow_sync_logs', 'smart_slow_sync_batches')
       `;
       
-      if (bloat && bloat[0]) {
-        this.logger.log(`Table size nakon VACUUM: ${bloat[0].size}`);
+      if (tableStats && tableStats.length > 0) {
+        for (const stat of tableStats) {
+          this.logger.log(`Tabela ${stat.table_name}: ${stat.size_mb} MB, ${stat.table_rows} redova`);
+        }
       }
       
     } catch (error) {
-      this.logger.error(`Greška pri VACUUM ANALYZE: ${error.message}`);
-      // Ne prekidaj proces zbog greške u vacuum-u
+      this.logger.error(`Greška pri optimizaciji tabela: ${error.message}`);
+      // Ne prekidaj proces zbog greške u optimizaciji
     }
   }
 
@@ -718,5 +854,109 @@ export class SmartSlowSyncService {
     await this.setSetting(this.SETTINGS_KEY + '_checkpoints', null);
     
     this.logger.log('Progress resetovan');
+  }
+
+  /**
+   * Dobij activity feed sa live porukama
+   */
+  async getActivityFeed(limit: number = 50): Promise<Array<{
+    timestamp: string;
+    message: string;
+    type: 'info' | 'success' | 'warning' | 'error';
+  }>> {
+    // Kombinuj različite izvore activity feed-a
+    const activities: Array<{
+      timestamp: string;
+      message: string;
+      type: 'info' | 'success' | 'warning' | 'error';
+    }> = [];
+
+    // 1. Worker Pool statuses kao activity
+    const workers = this.workerPoolService.getWorkerStatuses();
+    workers.forEach(worker => {
+      if (worker.status !== 'idle') {
+        let message = '';
+        let type: 'info' | 'success' | 'warning' | 'error' = 'info';
+
+        switch (worker.status) {
+          case 'exporting':
+            message = `🚗 ${worker.garageNumber} - Exportovanje sa legacy servera`;
+            type = 'info';
+            break;
+          case 'transferring':
+            message = `🚛 ${worker.garageNumber} - Transfer fajla u toku`;
+            type = 'info';
+            break;
+          case 'importing':
+            message = `📥 ${worker.garageNumber} - Import u TimescaleDB: ${worker.processedRecords?.toLocaleString() || 0}/${worker.totalRecords?.toLocaleString() || 0} tačaka`;
+            type = 'info';
+            break;
+          case 'detecting':
+            message = `🎯 ${worker.garageNumber} - Detekcija agresivne vožnje u toku`;
+            type = 'warning';
+            break;
+          case 'refreshing':
+            message = `📊 ${worker.garageNumber} - Osvežavanje continuous agregata`;
+            type = 'info';
+            break;
+          case 'completed':
+            message = `✅ ${worker.garageNumber} - Uspešno završeno: ${worker.totalRecords?.toLocaleString() || 0} GPS tačaka`;
+            type = 'success';
+            break;
+          case 'failed':
+            message = `❌ ${worker.garageNumber} - Greška: Unknown error`;
+            type = 'error';
+            break;
+        }
+
+        activities.push({
+          timestamp: worker.startTime?.toISOString() || new Date().toISOString(),
+          message,
+          type
+        });
+      }
+    });
+
+    // 2. Progress errors kao activity
+    if (this.progress?.errors) {
+      this.progress.errors.slice(-10).forEach(error => {
+        activities.push({
+          timestamp: error.timestamp.toISOString(),
+          message: `❌ Vozilo ID:${error.vehicleId} - ${error.error}`,
+          type: 'error' as const
+        });
+      });
+    }
+
+    // 3. Smart Slow Sync batch status
+    if (this.progress?.status === 'running') {
+      activities.push({
+        timestamp: new Date().toISOString(),
+        message: `🚀 Batch ${this.progress.currentBatch}/${this.progress.totalBatches} - ${this.progress.vehiclesInCurrentBatch.length} vozila u obradi`,
+        type: 'info'
+      });
+    }
+
+    // 4. Checkpoints kao activity
+    try {
+      const checkpoints = await this.getSetting<SlowSyncCheckpoint[]>(
+        this.SETTINGS_KEY + '_checkpoints'
+      ) || [];
+      
+      checkpoints.slice(-5).forEach(checkpoint => {
+        activities.push({
+          timestamp: checkpoint.createdAt.toISOString(),
+          message: `📋 Checkpoint ${checkpoint.batchNumber}: ${checkpoint.vehiclesProcessed.length} vozila, ${checkpoint.totalPoints.toLocaleString()} GPS tačaka`,
+          type: 'info'
+        });
+      });
+    } catch (error) {
+      // Ignoriši greške sa checkpoints
+    }
+
+    // Sortiraj po vremenu (najnoviji prvi) i ograniči
+    return activities
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, limit);
   }
 }
