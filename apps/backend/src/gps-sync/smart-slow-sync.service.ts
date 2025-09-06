@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { LegacySyncWorkerPoolService, WorkerResult } from './legacy-sync-worker-pool.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
@@ -53,7 +53,7 @@ export interface SlowSyncCheckpoint {
 }
 
 @Injectable()
-export class SmartSlowSyncService {
+export class SmartSlowSyncService implements OnModuleInit {
   private readonly logger = new Logger(SmartSlowSyncService.name);
   private isRunning = false;
   private isPaused = false;
@@ -93,7 +93,11 @@ export class SmartSlowSyncService {
     private readonly prisma: PrismaService,
     private readonly workerPoolService: LegacySyncWorkerPoolService,
   ) {
-    this.initializeProgress();
+    // Inicijalizacija će se obaviti u onModuleInit
+  }
+
+  async onModuleInit() {
+    await this.initializeProgress();
   }
 
   // Helper metode za rad sa system settings
