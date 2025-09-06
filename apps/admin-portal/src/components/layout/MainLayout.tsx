@@ -161,7 +161,7 @@ const MainLayout: React.FC = () => {
                     {item.hasSubmenu ? (
                       <>
                         <button
-                          onClick={() => item.setOpen(!item.isOpen)}
+                          onClick={() => item.setOpen?.(!item.isOpen)}
                           className="w-full group flex items-center px-2 py-2 text-base font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                         >
                           <item.icon className="mr-4 h-6 w-6" />
@@ -190,7 +190,7 @@ const MainLayout: React.FC = () => {
                       </>
                     ) : (
                       <Link
-                        to={item.href}
+                        to={item.href || '/'}
                         className="group flex items-center px-2 py-2 text-base font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                         onClick={() => setSidebarOpen(false)}
                       >
@@ -219,7 +219,7 @@ const MainLayout: React.FC = () => {
                   {item.hasSubmenu ? (
                     <>
                       <button
-                        onClick={() => item.setOpen(!item.isOpen)}
+                        onClick={() => item.setOpen?.(!item.isOpen)}
                         className="w-full group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                       >
                         <item.icon className="mr-3 h-5 w-5" />
@@ -251,7 +251,7 @@ const MainLayout: React.FC = () => {
                     </>
                   ) : (
                     <Link
-                      to={item.href}
+                      to={item.href || '/'}
                       className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
                         location.pathname === item.href
                           ? 'bg-gray-100 text-gray-900'
