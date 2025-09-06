@@ -174,11 +174,17 @@ export class SmartSlowSyncService implements OnModuleInit {
       this.SETTINGS_KEY + '_config'
     );
     
-    if (savedConfig) {
+    this.logger.debug(`Saved config from DB:`, JSON.stringify(savedConfig, null, 2));
+    
+    if (savedConfig && savedConfig.preset && savedConfig.vehiclesPerBatch && savedConfig.workersPerBatch) {
+      this.logger.log(`Koristim saved config sa preset: ${savedConfig.preset}`);
       this.currentConfig = savedConfig;
     } else {
+      this.logger.log('Saved config je prazan ili neispravan, koristim default config');
       this.currentConfig = this.getDefaultConfig();
     }
+    
+    this.logger.debug(`Final currentConfig:`, JSON.stringify(this.currentConfig, null, 2));
   }
 
   private getDefaultConfig(): SlowSyncConfig {
@@ -193,6 +199,12 @@ export class SmartSlowSyncService implements OnModuleInit {
   }
 
   async startSlowSync(config?: Partial<SlowSyncConfig>): Promise<SlowSyncProgress> {
+    // Osiguraj da je config inicijalizovan
+    if (!this.currentConfig) {
+      this.logger.log('Config nije inicijalizovan, inicijalizujem...');
+      await this.initializeProgress();
+    }
+
     if (this.isRunning && !this.isPaused) {
       this.logger.warn('Slow sync je već pokrenut');
       return this.progress;

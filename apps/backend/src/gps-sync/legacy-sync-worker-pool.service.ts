@@ -153,19 +153,16 @@ export class LegacySyncWorkerPoolService {
       const workerId = i + 1;
       const vehicleChunk = vehicleChunks[i];
       
-      // Za svako vozilo u chunk-u, kreiraj/ažuriraj worker status koristeći vehicleId kao ključ
-      for (const vehicle of vehicleChunk) {
-        if (!this.workers.has(vehicle.id) || 
-            (this.workers.has(vehicle.id) && this.workers.get(vehicle.id)?.status !== 'completed' && this.workers.get(vehicle.id)?.status !== 'failed')) {
-          this.workers.set(vehicle.id, {
-            workerId: vehicle.id,
-            vehicleId: vehicle.id,
-            garageNumber: vehicle.garage_number, // Ispravljeno: koristimo snake_case iz raw query
-            status: 'idle',
-            progress: 0,
-            startTime: new Date()
-          });
-        }
+        // Kreiraj worker status sa workerId kao ključ
+      if (!this.workers.has(workerId)) {
+        this.workers.set(workerId, {
+          workerId: workerId,
+          vehicleId: undefined, // Postaviće se u runWorker
+          garageNumber: undefined, // Postaviće se u runWorker
+          status: 'idle',
+          progress: 0,
+          startTime: new Date()
+        });
       }
       
       // Pokreni worker
