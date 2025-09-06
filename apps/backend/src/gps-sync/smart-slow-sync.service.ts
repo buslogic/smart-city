@@ -423,7 +423,10 @@ export class SmartSlowSyncService {
       // Proveri da batch nije prazan
       if (batchVehicles.length === 0) {
         this.logger.warn(`Batch ${this.progress.currentBatch + 1} je prazan - završavam Smart Slow Sync`);
-        await this.completeSync();
+        this.progress.status = 'completed';
+        this.progress.completedAt = new Date();
+        this.isRunning = false;
+        await this.saveProgress();
         return;
       }
       

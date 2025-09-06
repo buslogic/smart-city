@@ -25,7 +25,7 @@ export class DashboardController {
     private readonly widgetsService: DashboardWidgetsService,
   ) {}
 
-  // Debug endpoint - proverimo koje permisije korisnik ima
+  // Debug endpoint - proverimo koje permisije korisnik ima (za development)
   @Get('debug/permissions')
   @UseGuards(JwtAuthGuard)
   async debugPermissions(@Request() req) {
