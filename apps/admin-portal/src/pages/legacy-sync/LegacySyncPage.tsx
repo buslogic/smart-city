@@ -23,6 +23,7 @@ import {
   InputNumber,
   Timeline,
   Descriptions,
+  Checkbox,
 } from 'antd';
 import {
   SyncOutlined,
@@ -172,6 +173,7 @@ const LegacySyncPage: React.FC = () => {
   const [syncModal, setSyncModal] = useState(false);
   const [syncLogs, setSyncLogs] = useState<string[]>([]);
   const [overallProgress, setOverallProgress] = useState(0);
+  const [refreshAggregates, setRefreshAggregates] = useState(false); // Nova opcija za refresh
   const [workerPoolStatus, setWorkerPoolStatus] = useState<WorkerPoolStatus>({
     enabled: false,
     activeWorkers: 0,
@@ -195,7 +197,7 @@ const LegacySyncPage: React.FC = () => {
       intervalId = setInterval(() => {
         fetchSyncProgress();
         fetchWorkerPoolStatus(); // Ažuriraj i Worker Pool status
-      }, 2000); // Svake 2 sekunde
+      }, 1000); // Svake 1 sekund za brži response
     }
     
     return () => {
@@ -372,6 +374,7 @@ const LegacySyncPage: React.FC = () => {
         vehicle_ids: selectedVehicles,
         sync_from: dateRange[0].toISOString(),
         sync_to: dateRange[1].toISOString(),
+        refresh_aggregates: refreshAggregates, // Prosleđujemo opciju
       });
       
       setCurrentJobId(response.data.job_id);
@@ -495,7 +498,7 @@ const LegacySyncPage: React.FC = () => {
         if (progress) {
           if (progress.status === 'running') {
             return (
-              <Tooltip title={`Obrađeno: ${progress.processed_records} / ${progress.total_records}`}>
+              <Tooltip title={`Obrađeno: ${progress.processed_records.toLocaleString()} / ${progress.total_records.toLocaleString()}`}>
                 <Progress 
                   percent={progress.progress_percentage} 
                   size="small" 
@@ -678,6 +681,16 @@ const LegacySyncPage: React.FC = () => {
               Selektuj sve filtrirane ({filteredVehicles.length})
             </Button>
             
+            <Tooltip title="Osvežavanje continuous aggregates odmah nakon sync-a može opteretiti server. Ako nije čekirano, aggregates će se automatski osvežiti u roku od 1 sata.">
+              <Checkbox
+                checked={refreshAggregates}
+                onChange={(e) => setRefreshAggregates(e.target.checked)}
+                disabled={syncing}
+              >
+                Odmah osveži izveštaje nakon sync-a
+              </Checkbox>
+            </Tooltip>
+            
             <Button
               type="primary"
               icon={workerPoolStatus.enabled ? <ThunderboltOutlined /> : <SyncOutlined />}
@@ -830,26 +843,33 @@ const LegacySyncPage: React.FC = () => {
                 {Array.from(syncProgress.entries()).map(([vehicleId, progress]) => {
                   const vehicle = vehicles.find(v => v.id === vehicleId);
                   return (
-                    <div key={vehicleId} className="flex items-center justify-between text-sm">
-                      <span className="font-mono">{vehicle?.garage_number || `ID: ${vehicleId}`}</span>
-                      <div className="flex items-center gap-2">
-                        {progress.status === 'completed' && <CheckCircleOutlined className="text-green-500" />}
-                        {progress.status === 'error' && <CloseCircleOutlined className="text-red-500" />}
-                        {progress.status === 'running' && <LoadingOutlined className="text-blue-500" />}
-                        <Progress 
-                          percent={progress.progress_percentage} 
-                          size="small" 
-                          style={{ width: 100 }}
-                          status={
-                            progress.status === 'completed' ? 'success' :
-                            progress.status === 'error' ? 'exception' :
-                            'active'
-                          }
-                        />
-                        <span className="text-xs text-gray-500">
-                          {progress.processed_records}/{progress.total_records}
-                        </span>
+                    <div key={vehicleId} className="flex flex-col gap-1 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono">{vehicle?.garage_number || `ID: ${vehicleId}`}</span>
+                        <div className="flex items-center gap-2">
+                          {progress.status === 'completed' && <CheckCircleOutlined className="text-green-500" />}
+                          {progress.status === 'error' && <CloseCircleOutlined className="text-red-500" />}
+                          {progress.status === 'running' && <LoadingOutlined className="text-blue-500" />}
+                          <Progress 
+                            percent={progress.progress_percentage} 
+                            size="small" 
+                            style={{ width: 100 }}
+                            status={
+                              progress.status === 'completed' ? 'success' :
+                              progress.status === 'error' ? 'exception' :
+                              'active'
+                            }
+                          />
+                          <span className="text-xs text-gray-500 ml-2">
+                            {progress.processed_records.toLocaleString()}/{progress.total_records.toLocaleString()}
+                          </span>
+                        </div>
                       </div>
+                      {progress.currentStep && progress.status === 'running' && (
+                        <div className="text-xs text-blue-600 ml-2">
+                          📍 {progress.currentStep}
+                        </div>
+                      )}
                     </div>
                   );
                 })}

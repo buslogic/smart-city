@@ -366,11 +366,38 @@ export class SmartSlowSyncService {
       
       const startTime = Date.now();
       
-      const result = await this.workerPoolService.syncVehiclesBatch(
+      // Koristi Worker Pool servis za batch sinhronizaciju
+      const syncFrom = new Date();
+      syncFrom.setDate(syncFrom.getDate() - this.currentConfig.syncDaysBack);
+      const syncTo = new Date();
+      
+      const workerResults = await this.workerPoolService.startWorkerPoolSync(
         batchVehicles,
-        this.currentConfig.syncDaysBack,
-        this.currentConfig.workersPerBatch
+        syncFrom,
+        syncTo,
+        `slow-sync-batch-${this.progress.currentBatch}`,
+        false // Slow Sync NIKAD ne osvežava aggregates odmah (štedi resurse)
       );
+      
+      // Konvertuj rezultate u format koji o\u010dekujemo
+      let successCount = 0;
+      let totalGpsPoints = 0;
+      const failedVehicles: number[] = [];
+      
+      workerResults.forEach((result, vehicleId) => {
+        if (result.status === 'completed') {
+          successCount++;
+          totalGpsPoints += result.processedRecords;
+        } else {
+          failedVehicles.push(vehicleId);
+        }
+      });
+      
+      const result = {
+        successCount,
+        totalGpsPoints,
+        failedVehicles
+      };
 
       const duration = (Date.now() - startTime) / 1000 / 60; // minuti
       
@@ -458,22 +485,182 @@ export class SmartSlowSyncService {
   }
 
   private async performHealthCheck() {
-    // TODO: Implementirati provere
-    // - Database connections
-    // - Disk space
-    // - Memory usage
-    // - CPU usage
-    this.logger.debug('Health check passed');
+    try {
+      // 1. Proveri database konekcije
+      const pgConnections = await this.prisma.$queryRaw<any[]>`
+        SELECT COUNT(*) as count 
+        FROM pg_stat_activity 
+        WHERE datname = current_database()
+      `;
+      
+      const connectionCount = parseInt(pgConnections[0]?.count || '0');
+      if (connectionCount > 90) {
+        throw new Error(`Previše database konekcija: ${connectionCount}`);
+      }
+
+      // 2. Proveri disk prostor
+      const diskSpace = await this.prisma.$queryRaw<any[]>`
+        SELECT 
+          pg_size_pretty(pg_database_size(current_database())) as db_size,
+          pg_database_size(current_database()) as db_size_bytes
+      `;
+      
+      if (diskSpace[0]) {
+        this.progress.stats.diskSpaceUsed = diskSpace[0].db_size;
+      }
+
+      // 3. Proveri table size
+      const tableSize = await this.prisma.$queryRaw<any[]>`
+        SELECT 
+          pg_size_pretty(pg_total_relation_size('gps_data')) as table_size,
+          pg_total_relation_size('gps_data') as table_size_bytes
+      `;
+      
+      // Ako je tabela veća od 500GB, upozori
+      const tableSizeGB = parseInt(tableSize[0]?.table_size_bytes || '0') / (1024 * 1024 * 1024);
+      if (tableSizeGB > 500) {
+        this.logger.warn(`GPS tabela je velika: ${tableSize[0].table_size}. Razmotrite arhiviranje starih podataka.`);
+      }
+
+      // 4. Proveri aktivne query-je
+      const activeQueries = await this.prisma.$queryRaw<any[]>`
+        SELECT COUNT(*) as count 
+        FROM pg_stat_activity 
+        WHERE state = 'active' 
+          AND query NOT LIKE '%pg_stat_activity%'
+      `;
+      
+      const activeCount = parseInt(activeQueries[0]?.count || '0');
+      if (activeCount > 10) {
+        this.logger.warn(`Previše aktivnih query-ja: ${activeCount}. Čekam da se završe...`);
+        await new Promise(resolve => setTimeout(resolve, 30000)); // Čekaj 30 sekundi
+      }
+
+      this.logger.debug(`Health check passed - Connections: ${connectionCount}, DB Size: ${this.progress.stats.diskSpaceUsed}, Active queries: ${activeCount}`);
+      
+    } catch (error) {
+      this.logger.error(`Health check failed: ${error.message}`);
+      throw error;
+    }
   }
 
   private async performCompression() {
     this.logger.log('Pokrećem kompresiju starih chunk-ova...');
-    // TODO: Pozvati TimescaleDB compress_chunk
+    
+    try {
+      // Prvo proveri da li je kompresija omogućena na tabeli
+      const compressionSettings = await this.prisma.$queryRaw<any[]>`
+        SELECT * FROM timescaledb_information.compression_settings 
+        WHERE hypertable_name = 'gps_data'
+      `;
+      
+      if (!compressionSettings || compressionSettings.length === 0) {
+        this.logger.warn('Kompresija nije omogućena na gps_data tabeli. Preskačem...');
+        return;
+      }
+
+      // Kompresuj chunk-ove starije od 7 dana
+      const chunksToCompress = await this.prisma.$queryRaw<any[]>`
+        SELECT 
+          chunk_schema,
+          chunk_name,
+          range_start,
+          range_end
+        FROM timescaledb_information.chunks 
+        WHERE hypertable_name = 'gps_data'
+          AND range_end < NOW() - INTERVAL '7 days'
+          AND is_compressed = false
+        ORDER BY range_start
+        LIMIT 5
+      `;
+      
+      let compressedCount = 0;
+      for (const chunk of chunksToCompress) {
+        try {
+          await this.prisma.$executeRaw`
+            SELECT compress_chunk('${chunk.chunk_schema}.${chunk.chunk_name}'::regclass)
+          `;
+          compressedCount++;
+          this.logger.debug(`Kompresovan chunk: ${chunk.chunk_name}`);
+        } catch (error) {
+          this.logger.warn(`Ne mogu kompresovati chunk ${chunk.chunk_name}: ${error.message}`);
+        }
+      }
+      
+      if (compressedCount > 0) {
+        this.logger.log(`Kompresovano ${compressedCount} chunk-ova`);
+        
+        // Ažuriraj compression ratio
+        const stats = await this.prisma.$queryRaw<any[]>`
+          SELECT 
+            COALESCE(
+              SUM(before_compression_total_bytes)::float / 
+              NULLIF(SUM(after_compression_total_bytes)::float, 0), 
+              1
+            ) AS ratio
+          FROM timescaledb_information.compression_chunk_size
+          WHERE hypertable_name = 'gps_data'
+        `;
+        
+        if (stats && stats[0]) {
+          this.progress.stats.compressionRatio = parseFloat(stats[0].ratio) || 1;
+          this.logger.log(`Compression ratio: ${this.progress.stats.compressionRatio.toFixed(2)}x`);
+        }
+      } else {
+        this.logger.debug('Nema chunk-ova za kompresiju');
+      }
+    } catch (error) {
+      this.logger.error(`Greška pri kompresiji: ${error.message}`);
+      // Ne prekidaj proces zbog greške u kompresiji
+    }
   }
 
   private async performVacuum() {
     this.logger.log('Pokrećem VACUUM ANALYZE...');
-    // TODO: Pozvati VACUUM ANALYZE na TimescaleDB
+    
+    try {
+      // VACUUM ANALYZE na glavnoj tabeli
+      await this.prisma.$executeRaw`VACUUM ANALYZE gps_data`;
+      this.logger.log('VACUUM ANALYZE na gps_data završen');
+      
+      // VACUUM ANALYZE na continuous aggregates
+      const aggregates = [
+        'vehicle_hourly_stats',
+        'daily_vehicle_stats',
+        'monthly_vehicle_raw_stats'
+      ];
+      
+      for (const aggregate of aggregates) {
+        try {
+          await this.prisma.$executeRaw`VACUUM ANALYZE ${aggregate}`;
+          this.logger.debug(`VACUUM ANALYZE na ${aggregate} završen`);
+        } catch (error) {
+          this.logger.warn(`Ne mogu vacuum-ovati ${aggregate}: ${error.message}`);
+        }
+      }
+      
+      // Proveri da li je potreban REINDEX
+      const bloat = await this.prisma.$queryRaw<any[]>`
+        SELECT 
+          schemaname,
+          tablename,
+          pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS size,
+          ROUND(100 * pg_total_relation_size(schemaname||'.'||tablename) / 
+                NULLIF(SUM(pg_total_relation_size(schemaname||'.'||tablename)) 
+                OVER (), 0), 2) AS percentage
+        FROM pg_tables
+        WHERE tablename = 'gps_data'
+        GROUP BY schemaname, tablename
+      `;
+      
+      if (bloat && bloat[0]) {
+        this.logger.log(`Table size nakon VACUUM: ${bloat[0].size}`);
+      }
+      
+    } catch (error) {
+      this.logger.error(`Greška pri VACUUM ANALYZE: ${error.message}`);
+      // Ne prekidaj proces zbog greške u vacuum-u
+    }
   }
 
   private async createCheckpoint() {

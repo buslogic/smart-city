@@ -9,7 +9,7 @@ import {
   Patch,
   Delete,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody, ApiQuery, ApiPropertyOptional } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
@@ -41,6 +41,14 @@ class StartSyncDto {
   
   @IsDateString()
   sync_to: string;
+  
+  @IsOptional()
+  @IsBoolean()
+  @ApiPropertyOptional({ 
+    description: 'Odmah osveži continuous aggregates nakon sync-a (može opteretiti server)',
+    default: false 
+  })
+  refresh_aggregates?: boolean;
 }
 
 class SyncProgressDto {
@@ -128,7 +136,8 @@ export class LegacySyncController {
       const jobId = await this.legacySyncService.startLegacySync(
         dto.vehicle_ids,
         new Date(dto.sync_from),
-        new Date(dto.sync_to)
+        new Date(dto.sync_to),
+        dto.refresh_aggregates || false
       );
       
       return {
@@ -152,10 +161,43 @@ export class LegacySyncController {
   })
   async getSyncProgress(@Query('job_id') jobId?: string): Promise<SyncProgressDto[]> {
     try {
+      // Ako korisnik traži Worker Pool status, vrati Worker Pool podatke
+      const workerStatuses = this.workerPoolService.getWorkerStatuses();
+      if (workerStatuses.length > 0) {
+        // Konvertuj Worker Pool statuse u SyncProgress format
+        return workerStatuses.map(worker => ({
+          vehicle_id: worker.vehicleId || 0,
+          garage_number: worker.garageNumber || 'Unknown',
+          status: this.mapWorkerStatusToSyncStatus(worker.status),
+          progress_percentage: worker.progress || 0,
+          total_records: worker.totalRecords || 0,
+          processed_records: worker.processedRecords || 0,
+          currentStep: worker.currentStep,
+          logs: [], // Worker Pool čuva logove u rezultatima, ne u statusu
+          created_at: worker.startTime || new Date(),
+          updated_at: new Date(),
+        }));
+      }
+      
+      // Inače vrati legacy sync progress
       return await this.legacySyncService.getSyncProgress(jobId);
     } catch (error) {
       this.logger.error('Error fetching sync progress', error);
       throw error;
+    }
+  }
+  
+  private mapWorkerStatusToSyncStatus(workerStatus: string): 'pending' | 'running' | 'completed' | 'error' {
+    switch (workerStatus) {
+      case 'idle': return 'pending';
+      case 'exporting':
+      case 'transferring': 
+      case 'importing':
+      case 'detecting':
+      case 'refreshing': return 'running';
+      case 'completed': return 'completed';
+      case 'failed': return 'error';
+      default: return 'pending';
     }
   }
 

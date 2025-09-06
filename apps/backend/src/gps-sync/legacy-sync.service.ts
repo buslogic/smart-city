@@ -147,7 +147,8 @@ export class LegacySyncService {
   async startLegacySync(
     vehicleIds: number[], 
     syncFrom: Date, 
-    syncTo: Date
+    syncTo: Date,
+    refreshAggregates: boolean = false
   ): Promise<string> {
     const jobId = uuidv4();
     const jobs: SyncJob[] = [];
@@ -183,7 +184,7 @@ export class LegacySyncService {
       if (useWorkerPool) {
         // NOVO: Koristi Worker Pool za paralelno procesiranje
         this.logger.log(`🚀 Koristi se Worker Pool za ${vehicleIds.length} vozila`);
-        this.runSyncProcessWithWorkerPool(jobId, vehicleIds, syncFrom, syncTo)
+        this.runSyncProcessWithWorkerPool(jobId, vehicleIds, syncFrom, syncTo, refreshAggregates)
           .catch(error => {
             this.logger.error(`Worker Pool sync failed for job ${jobId}:`, error);
           });
@@ -221,7 +222,8 @@ export class LegacySyncService {
     jobId: string,
     vehicleIds: number[],
     syncFrom: Date,
-    syncTo: Date
+    syncTo: Date,
+    refreshAggregates: boolean = false
   ) {
     const jobs = this.syncJobs.get(jobId);
     if (!jobs) return;
@@ -232,7 +234,8 @@ export class LegacySyncService {
         vehicleIds,
         syncFrom,
         syncTo,
-        jobId
+        jobId,
+        refreshAggregates
       );
       
       // Ažuriraj job statuse prema rezultatima
