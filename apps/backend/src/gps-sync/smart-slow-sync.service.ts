@@ -437,7 +437,8 @@ export class SmartSlowSyncService {
         syncFrom,
         syncTo,
         `slow-sync-batch-${this.progress.currentBatch}`,
-        false // Slow Sync NIKAD ne osvežava aggregates odmah (štedi resurse)
+        false, // Slow Sync NIKAD ne osvežava aggregates odmah (štedi resurse)
+        this.progress.currentBatch > 1 // Zadrži completed statuse ako nije prvi batch
       );
       
       // Konvertuj rezultate u format koji o\u010dekujemo

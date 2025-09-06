@@ -23,6 +23,7 @@ import { SpacesModule } from './spaces/spaces.module';
 import { UploadsModule } from './users/uploads/uploads.module';
 import { GpsProcessorModule } from './gps-processor/gps-processor.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     DrivingBehaviorModule,
     SpacesModule,
     UploadsModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [

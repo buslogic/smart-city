@@ -8,25 +8,26 @@ datasource db {
 }
 
 model User {
-  id                Int                @id @default(autoincrement())
-  email             String             @unique
-  firstName         String             @map("first_name")
-  lastName          String             @map("last_name")
-  password          String
-  avatar            String?            @db.Text
-  isActive          Boolean            @default(true) @map("is_active")
-  refreshToken      String?            @map("refresh_token") @db.Text
-  lastLoginAt       DateTime?          @map("last_login_at")
-  createdAt         DateTime           @default(now()) @map("created_at")
-  updatedAt         DateTime           @updatedAt @map("updated_at")
-  
+  id           Int       @id @default(autoincrement())
+  email        String    @unique
+  firstName    String    @map("first_name")
+  lastName     String    @map("last_name")
+  password     String
+  avatar       String?   @db.Text
+  isActive     Boolean   @default(true) @map("is_active")
+  refreshToken String?   @map("refresh_token") @db.Text
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
   // Relations
-  roles             UserRole[]
-  sessions          Session[]
-  vehicleSyncLogs   VehicleSyncLog[]
-  gpsSyncLogs       GpsSyncLog[]
+  roles                    UserRole[]
+  sessions                 Session[]
+  vehicleSyncLogs          VehicleSyncLog[]
+  gpsSyncLogs              GpsSyncLog[]
   safetyScoreConfigHistory SafetyScoreConfigHistory[]
-  
+  dashboardConfig          UserDashboardConfig?
+
   @@index([email])
   @@map("users")
 }
@@ -39,45 +40,45 @@ model Session {
   userAgent String?  @map("user_agent") @db.Text
   expiresAt DateTime @map("expires_at")
   createdAt DateTime @default(now()) @map("created_at")
-  
+
   // Relations
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@index([token])
   @@map("sessions")
 }
 
 model Role {
-  id          Int              @id @default(autoincrement())
-  name        String           @unique
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
   description String?
-  createdAt   DateTime         @default(now()) @map("created_at")
-  updatedAt   DateTime         @updatedAt @map("updated_at")
-  
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
   // Relations
   permissions RolePermission[]
   users       UserRole[]
-  
+
   @@map("roles")
 }
 
 model Permission {
-  id           Int              @id @default(autoincrement())
-  name         String           @unique
-  resource     String
-  action       String
-  description  String?
-  descriptionSr String?         @map("description_sr") @db.Text
-  uiRoute      String?          @map("ui_route") @db.VarChar(255)
-  category     String?          @db.VarChar(50)
-  requiredFor  String?          @map("required_for") @db.Text // JSON array of features
-  createdAt    DateTime         @default(now()) @map("created_at")
-  updatedAt    DateTime         @updatedAt @map("updated_at")
-  
+  id            Int      @id @default(autoincrement())
+  name          String   @unique
+  resource      String
+  action        String
+  description   String?
+  descriptionSr String?  @map("description_sr") @db.Text
+  uiRoute       String?  @map("ui_route") @db.VarChar(255)
+  category      String?  @db.VarChar(50)
+  requiredFor   String?  @map("required_for") @db.Text // JSON array of features
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
   // Relations
-  roles        RolePermission[]
-  
+  roles RolePermission[]
+
   @@unique([resource, action])
   @@index([category])
   @@index([uiRoute])
@@ -89,11 +90,11 @@ model UserRole {
   roleId     Int
   assignedAt DateTime @default(now()) @map("assigned_at")
   assignedBy Int?     @map("assigned_by")
-  
+
   // Relations
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
   @@id([userId, roleId])
   @@map("user_roles")
 }
@@ -101,124 +102,125 @@ model UserRole {
 model RolePermission {
   roleId       Int
   permissionId Int
-  grantedAt    DateTime   @default(now()) @map("granted_at")
-  grantedBy    Int?       @map("granted_by")
-  
+  grantedAt    DateTime @default(now()) @map("granted_at")
+  grantedBy    Int?     @map("granted_by")
+
   // Relations
-  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
-  
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
   @@id([roleId, permissionId])
   @@map("role_permissions")
 }
 
 model LegacyDatabase {
-  id                    Int       @id @default(autoincrement())
-  name                  String
-  type                  String    // mysql, postgresql, mongodb, oracle, mssql
-  subtype               String?   // main_ticketing_database, gps_ticketing_database, global_ticketing_database, city_ticketing_database, city_gps_ticketing_database
-  host                  String
-  port                  Int
-  database              String
-  username              String
-  password              String    // Encrypted
-  isActive              Boolean   @default(true) @map("is_active")
-  testConnection        Boolean   @default(false) @map("test_connection")
-  lastConnectionTest    DateTime? @map("last_connection_test")
-  connectionError       String?   @map("connection_error") @db.Text
-  description           String?
-  createdAt             DateTime  @default(now()) @map("created_at")
-  updatedAt             DateTime  @updatedAt @map("updated_at")
-  
+  id                 Int       @id @default(autoincrement())
+  name               String
+  type               String // mysql, postgresql, mongodb, oracle, mssql
+  subtype            String? // main_ticketing_database, gps_ticketing_database, global_ticketing_database, city_ticketing_database, city_gps_ticketing_database
+  host               String
+  port               Int
+  database           String
+  username           String
+  password           String // Encrypted
+  isActive           Boolean   @default(true) @map("is_active")
+  testConnection     Boolean   @default(false) @map("test_connection")
+  lastConnectionTest DateTime? @map("last_connection_test")
+  connectionError    String?   @map("connection_error") @db.Text
+  description        String?
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
   // Relations
-  tableMappings         LegacyTableMapping[]
-  
+  tableMappings LegacyTableMapping[]
+
   @@map("legacy_databases")
 }
 
 model LegacyTableMapping {
-  id                    Int       @id @default(autoincrement())
-  legacyDatabaseId      Int       @map("legacy_database_id")
-  legacyTableName       String    @map("legacy_table_name")
-  localTableName        String    @map("local_table_name")
-  mappingType           String    @default("one_way") @map("mapping_type") // one_way, two_way, manual
-  syncEnabled           Boolean   @default(false) @map("sync_enabled")
-  syncFrequency         String?   @map("sync_frequency") // cron expression
-  lastSyncAt            DateTime? @map("last_sync_at")
-  lastSyncStatus        String?   @map("last_sync_status") // success, failed, in_progress
-  lastSyncMessage       String?   @map("last_sync_message") @db.Text
-  mappingConfig         String?   @map("mapping_config") @db.Text // JSON config for field mappings
-  description           String?
-  createdAt             DateTime  @default(now()) @map("created_at")
-  updatedAt             DateTime  @updatedAt @map("updated_at")
-  
+  id               Int       @id @default(autoincrement())
+  legacyDatabaseId Int       @map("legacy_database_id")
+  legacyTableName  String    @map("legacy_table_name")
+  localTableName   String    @map("local_table_name")
+  mappingType      String    @default("one_way") @map("mapping_type") // one_way, two_way, manual
+  syncEnabled      Boolean   @default(false) @map("sync_enabled")
+  syncFrequency    String?   @map("sync_frequency") // cron expression
+  lastSyncAt       DateTime? @map("last_sync_at")
+  lastSyncStatus   String?   @map("last_sync_status") // success, failed, in_progress
+  lastSyncMessage  String?   @map("last_sync_message") @db.Text
+  mappingConfig    String?   @map("mapping_config") @db.Text // JSON config for field mappings
+  description      String?
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
   // Relations
-  legacyDatabase        LegacyDatabase @relation(fields: [legacyDatabaseId], references: [id], onDelete: Cascade)
-  
+  legacyDatabase LegacyDatabase @relation(fields: [legacyDatabaseId], references: [id], onDelete: Cascade)
+
   @@unique([legacyDatabaseId, legacyTableName, localTableName])
   @@index([legacyDatabaseId])
   @@map("legacy_table_mappings")
 }
 
 model BusVehicle {
-  id                        Int       @id @default(autoincrement())
-  legacyId                  Int?      @unique @map("legacy_id") // ID iz legacy baze za sinhronizaciju
-  
+  id       Int  @id @default(autoincrement())
+  legacyId Int? @unique @map("legacy_id") // ID iz legacy baze za sinhronizaciju
+
   // Osnovni identifikatori
-  garageNumber              String    @unique @map("garage_number") // npr. P80123
-  registrationNumber        String?   @map("registration_number") 
-  vehicleNumber             String?   @map("vehicle_number")
-  
+  garageNumber       String  @unique @map("garage_number") // npr. P80123
+  registrationNumber String? @map("registration_number")
+  vehicleNumber      String? @map("vehicle_number")
+
   // Tehnički podaci
-  vehicleType               Int?      @map("vehicle_type") // 110, 109, 114, itd.
-  vehicleBrand              Int?      @map("vehicle_brand")
-  vehicleModel              Int?      @map("vehicle_model")
-  chassisNumber             String?   @map("chassis_number") @db.VarChar(50)
-  motorNumber               String?   @map("motor_number") @db.VarChar(50)
-  yearOfManufacture         DateTime? @map("year_of_manufacture")
-  seatCapacity              Int       @default(0) @map("seat_capacity")
-  standingCapacity          Int       @default(0) @map("standing_capacity")
-  totalCapacity             Int       @default(0) @map("total_capacity") // ukupan kapacitet
-  fuelType                  Int?      @map("fuel_type")
-  
+  vehicleType       Int?      @map("vehicle_type") // 110, 109, 114, itd.
+  vehicleBrand      Int?      @map("vehicle_brand")
+  vehicleModel      Int?      @map("vehicle_model")
+  chassisNumber     String?   @map("chassis_number") @db.VarChar(50)
+  motorNumber       String?   @map("motor_number") @db.VarChar(50)
+  yearOfManufacture DateTime? @map("year_of_manufacture")
+  seatCapacity      Int       @default(0) @map("seat_capacity")
+  standingCapacity  Int       @default(0) @map("standing_capacity")
+  totalCapacity     Int       @default(0) @map("total_capacity") // ukupan kapacitet
+  fuelType          Int?      @map("fuel_type")
+
   // Status
-  active                    Boolean   @default(true)
-  visible                   Boolean   @default(true)
-  
+  active  Boolean @default(true)
+  visible Boolean @default(true)
+
   // Oprema vozila
-  wifi                      Boolean   @default(false)
-  airCondition              Boolean   @default(false) @map("air_condition")
-  rampForDisabled           Boolean   @default(false) @map("ramp_for_disabled")
-  videoSystem               Boolean   @default(false) @map("video_system")
-  lowFloor                  Boolean   @default(false) @map("low_floor") // niskopodni autobus
-  
+  wifi            Boolean @default(false)
+  airCondition    Boolean @default(false) @map("air_condition")
+  rampForDisabled Boolean @default(false) @map("ramp_for_disabled")
+  videoSystem     Boolean @default(false) @map("video_system")
+  lowFloor        Boolean @default(false) @map("low_floor") // niskopodni autobus
+
   // GPS i telemetrija
-  imei                      String?   @db.VarChar(20)
-  imeiNet                   String?   @map("imei_net") @db.VarChar(20)
-  gpsModel                  String?   @map("gps_model") @db.VarChar(100)
-  
+  imei     String? @db.VarChar(20)
+  imeiNet  String? @map("imei_net") @db.VarChar(20)
+  gpsModel String? @map("gps_model") @db.VarChar(100)
+
   // Važni datumi
-  technicalControlFrom      DateTime? @map("technical_control_from")
-  technicalControlTo        DateTime? @map("technical_control_to")
-  registrationValidTo       DateTime? @map("registration_valid_to")
-  firstRegistrationDate     DateTime? @map("first_registration_date")
-  
+  technicalControlFrom  DateTime? @map("technical_control_from")
+  technicalControlTo    DateTime? @map("technical_control_to")
+  registrationValidTo   DateTime? @map("registration_valid_to")
+  firstRegistrationDate DateTime? @map("first_registration_date")
+
   // Veze sa drugim entitetima
-  centralPointId            Int?      @map("central_point_id")
-  centralPointName          String?   @map("central_point_name") @db.VarChar(200)
-  
+  centralPointId   Int?    @map("central_point_id")
+  centralPointName String? @map("central_point_name") @db.VarChar(200)
+
   // Dodatne informacije
-  note                      String?   @db.Text
-  imageUrl                  String?   @map("image_url") @db.VarChar(500)
-  
+  note     String? @db.Text
+  imageUrl String? @map("image_url") @db.VarChar(500)
+
   // Metadata
-  createdAt                 DateTime  @default(now()) @map("created_at")
-  updatedAt                 DateTime  @updatedAt @map("updated_at")
-  lastSyncAt                DateTime? @map("last_sync_at") // kada je poslednji put sinhronizovano sa legacy
-  
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  lastSyncAt DateTime? @map("last_sync_at") // kada je poslednji put sinhronizovano sa legacy
+
   // Relations
-  gpsCurrentData            LegacyCityGpsCurrent[]
-  
+  gpsCurrentData       LegacyCityGpsCurrent[]
+  smartSlowSyncVehicle SmartSlowSyncVehicle?
+
   @@index([vehicleType])
   @@index([active])
   @@index([centralPointId])
@@ -227,78 +229,78 @@ model BusVehicle {
 }
 
 model VehicleSyncLog {
-  id                Int       @id @default(autoincrement())
-  syncType          String    @map("sync_type") // 'full' | 'incremental' | 'manual'
-  status            String    // 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled'
-  startedAt         DateTime  @map("started_at")
-  completedAt       DateTime? @map("completed_at")
-  totalRecords      Int       @map("total_records")
-  processedRecords  Int       @default(0) @map("processed_records")
-  createdRecords    Int       @default(0) @map("created_records")
-  updatedRecords    Int       @default(0) @map("updated_records")
-  skippedRecords    Int       @default(0) @map("skipped_records")
-  errorRecords      Int       @default(0) @map("error_records")
-  errorDetails      Json?     @map("error_details")
-  userId            Int       @map("user_id")
-  user              User      @relation(fields: [userId], references: [id])
-  createdAt         DateTime  @default(now()) @map("created_at")
-  
-  syncDetails       VehicleSyncDetail[]
-  
+  id               Int       @id @default(autoincrement())
+  syncType         String    @map("sync_type") // 'full' | 'incremental' | 'manual'
+  status           String // 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled'
+  startedAt        DateTime  @map("started_at")
+  completedAt      DateTime? @map("completed_at")
+  totalRecords     Int       @map("total_records")
+  processedRecords Int       @default(0) @map("processed_records")
+  createdRecords   Int       @default(0) @map("created_records")
+  updatedRecords   Int       @default(0) @map("updated_records")
+  skippedRecords   Int       @default(0) @map("skipped_records")
+  errorRecords     Int       @default(0) @map("error_records")
+  errorDetails     Json?     @map("error_details")
+  userId           Int       @map("user_id")
+  user             User      @relation(fields: [userId], references: [id])
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  syncDetails VehicleSyncDetail[]
+
   @@map("vehicle_sync_logs")
 }
 
 model VehicleSyncDetail {
-  id              Int       @id @default(autoincrement())
-  syncLogId       Int       @map("sync_log_id")
-  syncLog         VehicleSyncLog @relation(fields: [syncLogId], references: [id], onDelete: Cascade)
-  legacyId        Int       @map("legacy_id")
-  action          String    // 'create' | 'update' | 'skip' | 'error'
-  changes         Json?
-  conflictFields  Json?     @map("conflict_fields")
-  resolution      String?   // 'auto' | 'manual' | 'pending'
-  errorMessage    String?   @map("error_message") @db.Text
-  createdAt       DateTime  @default(now()) @map("created_at")
-  
-  @@map("vehicle_sync_details")
+  id             Int            @id @default(autoincrement())
+  syncLogId      Int            @map("sync_log_id")
+  syncLog        VehicleSyncLog @relation(fields: [syncLogId], references: [id], onDelete: Cascade)
+  legacyId       Int            @map("legacy_id")
+  action         String // 'create' | 'update' | 'skip' | 'error'
+  changes        Json?
+  conflictFields Json?          @map("conflict_fields")
+  resolution     String? // 'auto' | 'manual' | 'pending'
+  errorMessage   String?        @map("error_message") @db.Text
+  createdAt      DateTime       @default(now()) @map("created_at")
+
   @@index([syncLogId])
   @@index([legacyId])
+  @@map("vehicle_sync_details")
 }
 
 model LegacyCityGpsCurrent {
-  garageNo            String    @id @map("garage_no") @db.VarChar(15)
-  lat                 Decimal   @db.Decimal(11, 8)
-  lng                 Decimal   @db.Decimal(11, 8)
-  course              Int       @db.SmallInt
-  speed               Int       @db.SmallInt
-  alt                 Int       @db.SmallInt
-  state               Int       @db.TinyInt
-  lineNumber          String?   @map("line_number") @db.VarChar(5)
-  tripType            Int       @map("trip_type") @db.TinyInt
-  direction           Int       @db.TinyInt // 0 ili 1 (A ili B smer)
-  inRoute             Int       @map("in_route") @db.TinyInt
-  
+  garageNo   String  @id @map("garage_no") @db.VarChar(15)
+  lat        Decimal @db.Decimal(11, 8)
+  lng        Decimal @db.Decimal(11, 8)
+  course     Int     @db.SmallInt
+  speed      Int     @db.SmallInt
+  alt        Int     @db.SmallInt
+  state      Int     @db.TinyInt
+  lineNumber String? @map("line_number") @db.VarChar(5)
+  tripType   Int     @map("trip_type") @db.TinyInt
+  direction  Int     @db.TinyInt // 0 ili 1 (A ili B smer)
+  inRoute    Int     @map("in_route") @db.TinyInt
+
   // GPS i vreme
-  captured            DateTime  @map("captured")
-  edited              DateTime  @map("edited")
-  
+  captured DateTime @map("captured")
+  edited   DateTime @map("edited")
+
   // Brojači putnika (sumarne vrednosti)
-  peopleCounterIn     Int       @default(0) @map("people_counter_in")
-  peopleCounterOut    Int       @default(0) @map("people_counter_out")
-  
+  peopleCounterIn  Int @default(0) @map("people_counter_in")
+  peopleCounterOut Int @default(0) @map("people_counter_out")
+
   // IOT podaci
-  iotVoltage          Int?      @map("iot_voltage")
-  iotIgnition         Int?      @map("iot_ignition")
-  batteryStatus       Int?      @map("battery_status") @db.TinyInt
-  
+  iotVoltage    Int? @map("iot_voltage")
+  iotIgnition   Int? @map("iot_ignition")
+  batteryStatus Int? @map("battery_status") @db.TinyInt
+
   // Dodatni podaci o vozilu iz naše baze
-  vehicleId           Int?      @map("vehicle_id") // veza sa BusVehicle
-  vehicle             BusVehicle? @relation(fields: [vehicleId], references: [id])
-  
+  vehicleId Int?        @map("vehicle_id") // veza sa BusVehicle
+  vehicle   BusVehicle? @relation(fields: [vehicleId], references: [id])
+
   // Metadata
-  lastUpdate          DateTime  @default(now()) @map("last_update")
-  dataSource          String    @default("cron") @map("data_source") // "cron" ili "realtime"
-  
+  lastUpdate DateTime @default(now()) @map("last_update")
+  dataSource String   @default("cron") @map("data_source") // "cron" ili "realtime"
+
   @@index([lineNumber])
   @@index([captured])
   @@index([vehicleId])
@@ -306,29 +308,29 @@ model LegacyCityGpsCurrent {
 }
 
 model GpsSyncLog {
-  id                Int       @id @default(autoincrement())
-  vehicleId         Int?      @map("vehicle_id")
-  vehicleGarageNo   String?   @map("vehicle_garage_no") @db.VarChar(50)
-  syncStartDate     DateTime  @map("sync_start_date")
-  syncEndDate       DateTime  @map("sync_end_date")
-  status            String    // 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled'
-  totalPoints       Int       @default(0) @map("total_points")
-  processedPoints   Int       @default(0) @map("processed_points")
-  insertedPoints    Int       @default(0) @map("inserted_points")
-  updatedPoints     Int       @default(0) @map("updated_points")
-  skippedPoints     Int       @default(0) @map("skipped_points")
-  errorPoints       Int       @default(0) @map("error_points")
-  totalDistance     Float?    @map("total_distance")
-  batchSize         Int       @default(1000) @map("batch_size")
-  delayMs           Int       @default(3000) @map("delay_ms")
-  startedAt         DateTime  @map("started_at")
-  completedAt       DateTime? @map("completed_at")
-  error             String?   @db.Text
-  
+  id              Int       @id @default(autoincrement())
+  vehicleId       Int?      @map("vehicle_id")
+  vehicleGarageNo String?   @map("vehicle_garage_no") @db.VarChar(50)
+  syncStartDate   DateTime  @map("sync_start_date")
+  syncEndDate     DateTime  @map("sync_end_date")
+  status          String // 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled'
+  totalPoints     Int       @default(0) @map("total_points")
+  processedPoints Int       @default(0) @map("processed_points")
+  insertedPoints  Int       @default(0) @map("inserted_points")
+  updatedPoints   Int       @default(0) @map("updated_points")
+  skippedPoints   Int       @default(0) @map("skipped_points")
+  errorPoints     Int       @default(0) @map("error_points")
+  totalDistance   Float?    @map("total_distance")
+  batchSize       Int       @default(1000) @map("batch_size")
+  delayMs         Int       @default(3000) @map("delay_ms")
+  startedAt       DateTime  @map("started_at")
+  completedAt     DateTime? @map("completed_at")
+  error           String?   @db.Text
+
   // Relations
-  userId            Int?      @map("user_id")
-  user              User?     @relation(fields: [userId], references: [id])
-  
+  userId Int?  @map("user_id")
+  user   User? @relation(fields: [userId], references: [id])
+
   @@index([status])
   @@index([vehicleGarageNo])
   @@index([startedAt])
@@ -336,31 +338,31 @@ model GpsSyncLog {
 }
 
 model GpsRawBuffer {
-  id                BigInt    @id @default(autoincrement())
-  
+  id BigInt @id @default(autoincrement())
+
   // GPS Data Fields
-  vehicleId         Int?      @map("vehicle_id")
-  garageNo          String    @map("garage_no") @db.VarChar(20)
-  imei              String?   @db.VarChar(50)
-  timestamp         DateTime
-  lat               Decimal   @db.Decimal(10, 8)
-  lng               Decimal   @db.Decimal(11, 8)
-  speed             Int       @default(0)
-  course            Int       @default(0)
-  altitude          Int       @default(0)
-  satellites        Int       @default(0)
-  state             Int       @default(0)
-  inRoute           Int       @default(0) @map("in_route")
-  
+  vehicleId  Int?     @map("vehicle_id")
+  garageNo   String   @map("garage_no") @db.VarChar(20)
+  imei       String?  @db.VarChar(50)
+  timestamp  DateTime
+  lat        Decimal  @db.Decimal(10, 8)
+  lng        Decimal  @db.Decimal(11, 8)
+  speed      Int      @default(0)
+  course     Int      @default(0)
+  altitude   Int      @default(0)
+  satellites Int      @default(0)
+  state      Int      @default(0)
+  inRoute    Int      @default(0) @map("in_route")
+
   // Metadata Fields
-  receivedAt        DateTime  @default(now()) @map("received_at")
-  processedAt       DateTime? @map("processed_at")
-  processStatus     String    @default("pending") @map("process_status") // pending | processing | sent | failed
-  retryCount        Int       @default(0) @map("retry_count")
-  errorMessage      String?   @map("error_message") @db.Text
-  rawData           Json?     @map("raw_data") // Čuvamo originalne podatke kao JSON
-  source            String    @default("legacy") @db.VarChar(50)
-  
+  receivedAt    DateTime  @default(now()) @map("received_at")
+  processedAt   DateTime? @map("processed_at")
+  processStatus String    @default("pending") @map("process_status") // pending | processing | sent | failed
+  retryCount    Int       @default(0) @map("retry_count")
+  errorMessage  String?   @map("error_message") @db.Text
+  rawData       Json?     @map("raw_data") // Čuvamo originalne podatke kao JSON
+  source        String    @default("legacy") @db.VarChar(50)
+
   @@index([processStatus, receivedAt], name: "idx_status_received")
   @@index([vehicleId, timestamp], name: "idx_vehicle_timestamp")
   @@index([processStatus, retryCount], name: "idx_processing")
@@ -370,48 +372,116 @@ model GpsRawBuffer {
 }
 
 model GpsProcessingStats {
-  id                    Int       @id @default(autoincrement())
-  hourSlot              DateTime  @unique @map("hour_slot")
-  receivedCount         Int       @default(0) @map("received_count")
-  processedCount        Int       @default(0) @map("processed_count")
-  avgProcessingTimeMs   Int       @default(0) @map("avg_processing_time_ms")
-  createdAt             DateTime  @default(now()) @map("created_at")
-  updatedAt             DateTime  @updatedAt @map("updated_at")
-  
+  id                  Int      @id @default(autoincrement())
+  hourSlot            DateTime @unique @map("hour_slot")
+  receivedCount       Int      @default(0) @map("received_count")
+  processedCount      Int      @default(0) @map("processed_count")
+  avgProcessingTimeMs Int      @default(0) @map("avg_processing_time_ms")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
   @@index([hourSlot], name: "idx_hour_slot")
   @@map("gps_processing_stats")
 }
 
 model SystemSettings {
-  id          Int       @id @default(autoincrement())
-  key         String    @unique @db.VarChar(100)
-  value       String    @db.Text
-  type        String    @default("string") @db.VarChar(20) // string | number | boolean | json
-  description String?   @db.Text
-  category    String    @default("general") @db.VarChar(50)
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  
+  id          Int      @id @default(autoincrement())
+  key         String   @unique @db.VarChar(100)
+  value       String   @db.Text
+  type        String   @default("string") @db.VarChar(20) // string | number | boolean | json
+  description String?  @db.Text
+  category    String   @default("general") @db.VarChar(50)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
   @@index([category], name: "idx_category")
   @@map("system_settings")
 }
 
+// Smart Slow Sync Models
+model SmartSlowSyncVehicle {
+  id                   Int       @id @default(autoincrement())
+  vehicleId            Int       @unique @map("vehicle_id")
+  enabled              Boolean   @default(true)
+  priority             Int       @default(100) // Viši broj = viši prioritet
+  lastSyncAt           DateTime? @map("last_sync_at")
+  lastSuccessfulSyncAt DateTime? @map("last_successful_sync_at")
+  totalSyncCount       Int       @default(0) @map("total_sync_count")
+  successfulSyncCount  Int       @default(0) @map("successful_sync_count")
+  failedSyncCount      Int       @default(0) @map("failed_sync_count")
+  totalPointsProcessed BigInt    @default(0) @map("total_points_processed")
+  lastError            String?   @map("last_error") @db.Text
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  vehicle     BusVehicle             @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  syncHistory SmartSlowSyncHistory[]
+
+  @@index([enabled, priority], name: "idx_enabled_priority")
+  @@index([lastSyncAt], name: "idx_last_sync")
+  @@map("smart_slow_sync_vehicles")
+}
+
+model SmartSlowSyncHistory {
+  id                 Int       @id @default(autoincrement())
+  vehicleId          Int       @map("vehicle_id")
+  batchNumber        Int       @map("batch_number")
+  syncStartDate      DateTime  @map("sync_start_date")
+  syncEndDate        DateTime  @map("sync_end_date")
+  status             String // 'pending' | 'running' | 'completed' | 'failed'
+  pointsProcessed    Int       @default(0) @map("points_processed")
+  processingTimeMs   Int       @default(0) @map("processing_time_ms")
+  diskSpaceUsedBytes BigInt?   @map("disk_space_used_bytes")
+  compressionRatio   Float?    @map("compression_ratio")
+  error              String?   @db.Text
+  startedAt          DateTime  @map("started_at")
+  completedAt        DateTime? @map("completed_at")
+
+  // Relations
+  syncVehicle SmartSlowSyncVehicle @relation(fields: [vehicleId], references: [vehicleId], onDelete: Cascade)
+
+  @@index([vehicleId, batchNumber], name: "idx_vehicle_batch")
+  @@index([status], name: "idx_status")
+  @@index([startedAt], name: "idx_started_at")
+  @@map("smart_slow_sync_history")
+}
+
+model SmartSlowSyncBatch {
+  id                   Int       @id @default(autoincrement())
+  batchNumber          Int       @unique @map("batch_number")
+  vehicleIds           Json      @map("vehicle_ids") // Array of vehicle IDs
+  totalVehicles        Int       @map("total_vehicles")
+  processedVehicles    Int       @default(0) @map("processed_vehicles")
+  status               String    @default("pending") // 'pending' | 'running' | 'completed' | 'failed'
+  totalPointsProcessed BigInt    @default(0) @map("total_points_processed")
+  startedAt            DateTime? @map("started_at")
+  completedAt          DateTime? @map("completed_at")
+  processingTimeMs     Int       @default(0) @map("processing_time_ms")
+  error                String?   @db.Text
+  createdAt            DateTime  @default(now()) @map("created_at")
+
+  @@index([status], name: "idx_batch_status")
+  @@index([batchNumber], name: "idx_batch_number")
+  @@map("smart_slow_sync_batches")
+}
+
 // Safety Score Configuration
 model SafetyScoreConfig {
-  id                 Int      @id @default(autoincrement())
-  eventType          String   @map("event_type") @db.VarChar(50)
-  severity           String   @db.VarChar(20)
-  thresholdEvents    Int      @map("threshold_events")
-  thresholdDistanceKm Int     @map("threshold_distance_km")
-  penaltyPoints      Decimal  @map("penalty_points") @db.Decimal(5, 2)
-  penaltyMultiplier  Decimal  @map("penalty_multiplier") @db.Decimal(5, 2)
-  maxPenalty         Decimal? @map("max_penalty") @db.Decimal(5, 2)
-  description        String?  @db.Text
-  isActive           Boolean  @default(true) @map("is_active")
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
-  
-  history            SafetyScoreConfigHistory[]
+  id                  Int      @id @default(autoincrement())
+  eventType           String   @map("event_type") @db.VarChar(50)
+  severity            String   @db.VarChar(20)
+  thresholdEvents     Int      @map("threshold_events")
+  thresholdDistanceKm Int      @map("threshold_distance_km")
+  penaltyPoints       Decimal  @map("penalty_points") @db.Decimal(5, 2)
+  penaltyMultiplier   Decimal  @map("penalty_multiplier") @db.Decimal(5, 2)
+  maxPenalty          Decimal? @map("max_penalty") @db.Decimal(5, 2)
+  description         String?  @db.Text
+  isActive            Boolean  @default(true) @map("is_active")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  history SafetyScoreConfigHistory[]
 
   @@unique([eventType, severity])
   @@map("safety_score_config")
@@ -426,18 +496,52 @@ model SafetyScoreConfigHistory {
   newValues  Json?    @map("new_values")
   changedAt  DateTime @default(now()) @map("changed_at")
 
-  config     SafetyScoreConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
-  user       User?             @relation(fields: [changedBy], references: [id], onDelete: SetNull)
+  config SafetyScoreConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  user   User?             @relation(fields: [changedBy], references: [id], onDelete: SetNull)
 
   @@map("safety_score_config_history")
 }
 
 model SafetyScoreGlobalConfig {
-  id              Int      @id @default(autoincrement())
-  parameterName   String   @unique @map("parameter_name") @db.VarChar(100)
-  parameterValue  Decimal  @map("parameter_value") @db.Decimal(10, 2)
-  description     String?  @db.Text
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id             Int      @id @default(autoincrement())
+  parameterName  String   @unique @map("parameter_name") @db.VarChar(100)
+  parameterValue Decimal  @map("parameter_value") @db.Decimal(10, 2)
+  description    String?  @db.Text
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   @@map("safety_score_global_config")
+}
+
+// Dashboard Configuration - First Table
+model UserDashboardConfig {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @unique @map("user_id")
+  config    Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user    User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  widgets UserDashboardWidget[]
+
+  @@map("user_dashboard_configs")
+}
+
+// Dashboard Widgets - Second Table
+model UserDashboardWidget {
+  id        Int      @id @default(autoincrement())
+  configId  Int      @map("config_id")
+  widgetId  String   @map("widget_id") @db.VarChar(50)
+  enabled   Boolean  @default(true)
+  order     Int      @default(0)
+  config    Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  dashboardConfig UserDashboardConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  @@unique([configId, widgetId])
+  @@index([configId])
+  @@map("user_dashboard_widgets")
 }

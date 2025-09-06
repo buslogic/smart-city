@@ -20,6 +20,7 @@ import {
   AlertTriangle,
   FileText,
   Activity,
+  LayoutDashboard,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth.store';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -28,9 +29,9 @@ import PermissionsDebugger from '../permissions/PermissionsDebugger';
 
 const MainLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [usersMenuOpen, setUsersMenuOpen] = useState(true);
-  const [transportMenuOpen, setTransportMenuOpen] = useState(true);
-  const [settingsMenuOpen, setSettingsMenuOpen] = useState(true);
+  const [usersMenuOpen, setUsersMenuOpen] = useState(false);
+  const [transportMenuOpen, setTransportMenuOpen] = useState(false);
+  const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
@@ -38,6 +39,12 @@ const MainLayout: React.FC = () => {
 
   // Filtriranje navigacije na osnovu permisija
   const navigation = [
+    {
+      name: 'Dashboard',
+      icon: LayoutDashboard,
+      href: '/dashboard',
+      hasSubmenu: false,
+    },
     {
       name: 'Korisnici',
       icon: Users,
@@ -125,7 +132,7 @@ const MainLayout: React.FC = () => {
         },
       ].filter(Boolean),
     },
-  ].filter(item => item.submenu.length > 0); // Uklanja sekcije bez pristupnih stavki
+  ].filter(item => !item.hasSubmenu || (item.submenu && item.submenu.length > 0)); // Uklanja sekcije bez pristupnih stavki
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -181,7 +188,16 @@ const MainLayout: React.FC = () => {
                           </div>
                         )}
                       </>
-                    ) : null}
+                    ) : (
+                      <Link
+                        to={item.href}
+                        className="group flex items-center px-2 py-2 text-base font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                        onClick={() => setSidebarOpen(false)}
+                      >
+                        <item.icon className="mr-4 h-6 w-6" />
+                        {item.name}
+                      </Link>
+                    )}
                   </div>
                 ))}
               </nav>
@@ -233,7 +249,19 @@ const MainLayout: React.FC = () => {
                         </div>
                       )}
                     </>
-                  ) : null}
+                  ) : (
+                    <Link
+                      to={item.href}
+                      className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
+                        location.pathname === item.href
+                          ? 'bg-gray-100 text-gray-900'
+                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                      }`}
+                    >
+                      <item.icon className="mr-3 h-5 w-5" />
+                      {item.name}
+                    </Link>
+                  )}
                 </div>
               ))}
             </nav>

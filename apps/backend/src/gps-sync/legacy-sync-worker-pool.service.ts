@@ -20,7 +20,7 @@ interface WorkerPoolConfig {
 }
 
 // Worker rezultat
-interface WorkerResult {
+export interface WorkerResult {
   workerId: number;
   vehicleId: number;
   garageNumber: string;
@@ -114,13 +114,29 @@ export class LegacySyncWorkerPoolService {
     syncFrom: Date,
     syncTo: Date,
     jobId: string,
-    refreshAggregates: boolean = false // Opciono osvežavanje continuous aggregates
+    refreshAggregates: boolean = false, // Opciono osvežavanje continuous aggregates
+    keepCompletedStatuses: boolean = false // Za Smart Slow Sync - zadrži completed vozila iz prethodnog batch-a
   ): Promise<Map<number, WorkerResult>> {
     const startTime = Date.now();
     this.logger.log(`🚀 Pokrećem Worker Pool sa max ${this.config.maxWorkers} worker-a za ${vehicleIds.length} vozila`);
     
     // Resetuj worker statuse
-    this.workers.clear();
+    if (keepCompletedStatuses) {
+      // Za Smart Slow Sync - zadrži completed statuse iz prethodnog batch-a
+      const completedWorkers = new Map();
+      for (const [workerId, worker] of this.workers) {
+        if (worker.status === 'completed' || worker.status === 'failed') {
+          completedWorkers.set(workerId, worker);
+        }
+      }
+      this.workers.clear();
+      // Vrati completed worker-e
+      for (const [workerId, worker] of completedWorkers) {
+        this.workers.set(workerId, worker);
+      }
+    } else {
+      this.workers.clear();
+    }
     this.activeWorkers = 0;
     
     // Dobavi informacije o vozilima
@@ -137,13 +153,20 @@ export class LegacySyncWorkerPoolService {
       const workerId = i + 1;
       const vehicleChunk = vehicleChunks[i];
       
-      // Inicijalizuj worker status
-      this.workers.set(workerId, {
-        workerId,
-        status: 'idle',
-        progress: 0,
-        startTime: new Date()
-      });
+      // Za svako vozilo u chunk-u, kreiraj/ažuriraj worker status koristeći vehicleId kao ključ
+      for (const vehicle of vehicleChunk) {
+        if (!this.workers.has(vehicle.id) || 
+            (this.workers.has(vehicle.id) && this.workers.get(vehicle.id)?.status !== 'completed' && this.workers.get(vehicle.id)?.status !== 'failed')) {
+          this.workers.set(vehicle.id, {
+            workerId: vehicle.id,
+            vehicleId: vehicle.id,
+            garageNumber: vehicle.garageNumber,
+            status: 'idle',
+            progress: 0,
+            startTime: new Date()
+          });
+        }
+      }
       
       // Pokreni worker
       workerPromises.push(
@@ -298,9 +321,14 @@ export class LegacySyncWorkerPoolService {
       
       results.push(result);
       
-      // Ažuriraj worker status
-      workerStatus.status = result.status === 'completed' ? 'idle' : 'failed';
-      workerStatus.progress = 100;
+      // Ažuriraj worker status - koristi vehicleId kao ključ
+      const finalWorkerStatus = this.workers.get(vehicle.id);
+      if (finalWorkerStatus) {
+        finalWorkerStatus.status = result.status === 'completed' ? 'completed' : 'failed';
+        finalWorkerStatus.progress = 100;
+        finalWorkerStatus.totalRecords = result.totalRecords;
+        finalWorkerStatus.processedRecords = result.processedRecords;
+      }
     }
     
     this.activeWorkers--;
@@ -323,12 +351,17 @@ export class LegacySyncWorkerPoolService {
     const garageNo = vehicle.garage_number;
     const tableName = `${garageNo}gps`;
     
-    // Ažuriraj worker status
+    // Ažuriraj worker status - koristi vehicleId kao ključ
     const updateWorkerStatus = (status: WorkerStatus['status'], step?: string, progress?: number) => {
-      const workerStatus = this.workers.get(workerId)!;
-      workerStatus.status = status;
-      workerStatus.currentStep = step;
-      if (progress !== undefined) workerStatus.progress = progress;
+      const workerStatus = this.workers.get(vehicle.id);
+      if (workerStatus) {
+        workerStatus.status = status;
+        workerStatus.currentStep = step;
+        if (progress !== undefined) workerStatus.progress = progress;
+        // Ažuriraj dodatne informacije
+        workerStatus.vehicleId = vehicle.id;
+        workerStatus.garageNumber = vehicle.garage_number;
+      }
     };
     
     try {

@@ -23,7 +23,8 @@ import {
   Navigation,
   RefreshCw,
   AlertTriangle,
-  Sliders
+  Sliders,
+  LayoutDashboard
 } from 'lucide-react';
 import type { Permission } from '../../../types/rbac.types';
 
@@ -67,6 +68,46 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
     };
 
     const tree: PermissionNode[] = [
+      {
+        id: 'dashboard',
+        name: 'Dashboard',
+        type: 'menu',
+        icon: <LayoutDashboard className="h-5 w-5" />,
+        color: 'text-purple-700',
+        bgColor: 'bg-purple-50',
+        children: [
+          {
+            id: 'dashboard-settings',
+            name: 'Dashboard podešavanja',
+            type: 'section',
+            icon: <Settings className="h-4 w-4" />,
+            children: allPermissions
+              .filter(p => p.resource === 'dashboard')
+              .map(p => ({
+                id: `perm-${p.id}`,
+                name: getPermissionLabel(p),
+                type: 'permission' as const,
+                permission: p,
+                color: getPermissionColor(p.action),
+              })),
+          },
+          {
+            id: 'dashboard-widgets',
+            name: 'Dashboard widget-i',
+            type: 'section',
+            icon: <LayoutDashboard className="h-4 w-4" />,
+            children: allPermissions
+              .filter(p => p.resource.startsWith('dashboard.widgets'))
+              .map(p => ({
+                id: `perm-${p.id}`,
+                name: getPermissionLabel(p),
+                type: 'permission' as const,
+                permission: p,
+                color: getPermissionColor(p.action),
+              })),
+          },
+        ],
+      },
       {
         id: 'korisnici',
         name: 'Korisnici',

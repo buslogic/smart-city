@@ -46,8 +46,10 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
 import { api } from '../../services/api';
+import SmartSlowSyncDashboard from './SmartSlowSyncDashboard';
 
 const { RangePicker } = DatePicker;
+// TabPane je deprecated, koristimo items API
 
 interface VehicleWithSyncStatus {
   id: number;
@@ -530,9 +532,18 @@ const LegacySyncPage: React.FC = () => {
     }),
   };
 
-  return (
-    <div className="p-6">
-      <Card 
+  const tabItems = [
+    {
+      key: 'manual',
+      label: (
+        <span>
+          <SyncOutlined />
+          Ručna sinhronizacija
+        </span>
+      ),
+      children: (
+        <>
+          <Card 
         title={
           <Space>
             <CloudServerOutlined />
@@ -746,8 +757,8 @@ const LegacySyncPage: React.FC = () => {
         </Space>
       </Card>
 
-      {/* Modal za prikaz progresa sinhronizacije */}
-      <Modal
+          {/* Modal za prikaz progresa sinhronizacije */}
+          <Modal
         title={
           <Space>
             <SyncOutlined spin />
@@ -877,7 +888,25 @@ const LegacySyncPage: React.FC = () => {
             </div>
           )}
         </div>
-      </Modal>
+          </Modal>
+        </>
+      ),
+    },
+    {
+      key: 'smart',
+      label: (
+        <span>
+          <RocketOutlined />
+          Smart Slow Sync
+        </span>
+      ),
+      children: <SmartSlowSyncDashboard />,
+    },
+  ];
+
+  return (
+    <div className="p-6">
+      <Tabs defaultActiveKey="manual" size="large" items={tabItems} />
     </div>
   );
 };

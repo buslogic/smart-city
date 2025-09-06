@@ -18,6 +18,7 @@ import AggressiveDriving from './pages/transport/safety/AggressiveDriving';
 import MonthlyReport from './pages/transport/safety/MonthlyReport';
 import { LegacySyncPage } from './pages/legacy-sync/LegacySyncPage';
 import Profile from './pages/users/Profile';
+import DashboardPage from './pages/dashboard/DashboardPage';
 
 function App() {
   return (
@@ -36,7 +37,16 @@ function App() {
               </AuthGuard>
             }
           >
-            <Route index element={<Navigate to="/users/administration" replace />} />
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            
+            <Route 
+              path="dashboard" 
+              element={
+                <PermissionGuard permissions={['dashboard.view']}>
+                  <DashboardPage />
+                </PermissionGuard>
+              } 
+            />
             
             <Route 
               path="users/administration" 

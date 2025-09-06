@@ -3,7 +3,9 @@
 # Curl Login Guard Hook - Ispravlja probleme sa special karakterima u passwordu
 # Koristi se kao pre-execution hook za Bash tool u Claude Code
 
-COMMAND="$1"
+# Čitaj JSON input sa stdin i ekstraktuj komandu
+JSON_INPUT=$(cat)
+COMMAND=$(echo "$JSON_INPUT" | "$(dirname "$0")/hook-json-parser.py")
 
 # Proveri da li komanda sadrži curl login sa problematičnim formatom
 if echo "$COMMAND" | grep -E "curl.*auth/login" > /dev/null 2>&1; then
@@ -16,36 +18,36 @@ if echo "$COMMAND" | grep -E "curl.*auth/login" > /dev/null 2>&1; then
     
     # Ako sadrži Test123! u bilo kom obliku, blokiraj
     if echo "$COMMAND" | grep -E 'Test123!' > /dev/null 2>&1; then
-        echo "❌ BLOKIRAN: Pogrešan format curl komande za login!"
-        echo ""
-        echo "⚠️  Password 'Test123!' sadrži '!' što bash interpretira kao history expansion."
-        echo ""
-        echo "✅ ISPRAVNO REŠENJE - koristi here-doc sa single quotes:"
-        echo ""
-        echo "curl -s -X POST http://localhost:3010/api/auth/login \\"
-        echo "  -H \"Content-Type: application/json\" \\"
-        echo "  -d @- <<'EOF'"
-        echo "{"
-        echo "  \"email\": \"admin@smart-city.rs\","
-        echo "  \"password\": \"Test123!\""
-        echo "}"
-        echo "EOF"
-        echo ""
-        echo "📝 Alternativa - sačuvaj token za dalju upotrebu:"
-        echo ""
-        echo "TOKEN=\$(curl -s -X POST http://localhost:3010/api/auth/login \\"
-        echo "  -H \"Content-Type: application/json\" \\"
-        echo "  -d @- <<'EOF' | jq -r '.access_token'"
-        echo "{"
-        echo "  \"email\": \"admin@smart-city.rs\","
-        echo "  \"password\": \"Test123!\""
-        echo "}"
-        echo "EOF"
-        echo ")"
-        echo ""
-        echo "# Zatim koristi token:"
-        echo "curl -H \"Authorization: Bearer \$TOKEN\" http://localhost:3010/api/users"
-        exit 1
+        >&2 echo "❌ BLOKIRAN: Pogrešan format curl komande za login!"
+        >&2 echo ""
+        >&2 echo "⚠️  Password 'Test123!' sadrži '!' što bash interpretira kao history expansion."
+        >&2 echo ""
+        >&2 echo "✅ ISPRAVNO REŠENJE - koristi here-doc sa single quotes:"
+        >&2 echo ""
+        >&2 echo "curl -s -X POST http://localhost:3010/api/auth/login \\"
+        >&2 echo "  -H \"Content-Type: application/json\" \\"
+        >&2 echo "  -d @- <<'EOF'"
+        >&2 echo "{"
+        >&2 echo "  \"email\": \"admin@smart-city.rs\","
+        >&2 echo "  \"password\": \"Test123!\""
+        >&2 echo "}"
+        >&2 echo "EOF"
+        >&2 echo ""
+        >&2 echo "📝 Alternativa - sačuvaj token za dalju upotrebu:"
+        >&2 echo ""
+        >&2 echo "TOKEN=\$(curl -s -X POST http://localhost:3010/api/auth/login \\"
+        >&2 echo "  -H \"Content-Type: application/json\" \\"
+        >&2 echo "  -d @- <<'EOF' | jq -r '.access_token'"
+        >&2 echo "{"
+        >&2 echo "  \"email\": \"admin@smart-city.rs\","
+        >&2 echo "  \"password\": \"Test123!\""
+        >&2 echo "}"
+        >&2 echo "EOF"
+        >&2 echo ")"
+        >&2 echo ""
+        >&2 echo "# Zatim koristi token:"
+        >&2 echo "curl -H \"Authorization: Bearer \$TOKEN\" http://localhost:3010/api/users"
+        exit 2
     fi
 fi
 

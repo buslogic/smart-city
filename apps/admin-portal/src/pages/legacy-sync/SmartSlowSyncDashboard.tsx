@@ -791,7 +791,7 @@ const SmartSlowSyncDashboard: React.FC = () => {
                         >
                           <div style={{ textAlign: 'center' }}>
                             <div style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: 8 }}>
-                              🚗 {vehicleId}
+                              🚗 {workerStatus?.garageNumber || vehicleId}
                             </div>
                             
                             {/* Process Pipeline Visualization */}

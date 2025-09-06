@@ -3,7 +3,9 @@
 # Claude Files Guard Hook - Preusmerava pretragu claude fajlova na root projekta
 # Koristi se kao pre-execution hook za Bash tool u Claude Code
 
-COMMAND="$1"
+# Čitaj JSON input sa stdin i ekstraktuj komandu
+JSON_INPUT=$(cat)
+COMMAND=$(echo "$JSON_INPUT" | "$(dirname "$0")/hook-json-parser.py")
 
 # Lista claude fajlova koji se uvek nalaze u root-u projekta
 CLAUDE_FILES=(
@@ -40,7 +42,7 @@ for file in "${CLAUDE_FILES[@]}"; do
         echo "  grep 'pattern' /home/kocev/smart-city/$file"
         echo ""
         echo "📝 Svi claude fajlovi su UVEK u: /home/kocev/smart-city/"
-        exit 1
+        exit 2
     fi
 done
 

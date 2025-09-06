@@ -235,7 +235,8 @@ export class LegacySyncService {
         syncFrom,
         syncTo,
         jobId,
-        refreshAggregates
+        refreshAggregates,
+        false // Regular sync uvek briše prethodne statuse
       );
       
       // Ažuriraj job statuse prema rezultatima

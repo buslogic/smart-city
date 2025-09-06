@@ -1,0 +1,1 @@
+SELECT migration_name, finished_at FROM _prisma_migrations WHERE migration_name LIKE '%dashboard%' ORDER BY finished_at DESC;

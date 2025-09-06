@@ -1,0 +1,1 @@
+DELETE FROM _prisma_migrations WHERE migration_name = '20250906152240_add_dashboard_permissions';
