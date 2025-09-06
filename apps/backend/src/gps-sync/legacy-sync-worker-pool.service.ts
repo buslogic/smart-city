@@ -467,7 +467,11 @@ export class LegacySyncWorkerPoolService {
     });
 
     let importedCount = 0;
-    const batchSize = 10000;
+    // Čitamo po 10,000 redova za efikasniju obradu fajla
+    const READ_BATCH_SIZE = 10000;
+    // Ali insertujemo po 2,500 da budemo ispod PostgreSQL limita (32,767 params)
+    // 2,500 redova × 11 parametara = 27,500 parametara (bezbedno ispod limita)
+    const INSERT_BATCH_SIZE = 2500;
     let batch: any[] = [];
     let lineCount = 0;
 
@@ -548,19 +552,26 @@ export class LegacySyncWorkerPoolService {
             in_route: parseInt(cols[7]) > 0
           });
           
-          // Kada batch dostigne veličinu, umetni u bazu
-          if (batch.length >= batchSize) {
-            await this.insertBatch(pool, batch);
-            importedCount += batch.length;
+          // Kada batch dostigne READ veličinu, podeli ga na manje INSERT batch-ove
+          if (batch.length >= READ_BATCH_SIZE) {
+            // Podeli veliki batch na manje delove za INSERT
+            for (let i = 0; i < batch.length; i += INSERT_BATCH_SIZE) {
+              const insertBatch = batch.slice(i, Math.min(i + INSERT_BATCH_SIZE, batch.length));
+              await this.insertBatch(pool, insertBatch);
+              importedCount += insertBatch.length;
+            }
             batch = [];
           }
         }
       }
       
-      // Umetni poslednji batch
+      // Umetni poslednji batch (takođe podeli ako je potrebno)
       if (batch.length > 0) {
-        await this.insertBatch(pool, batch);
-        importedCount += batch.length;
+        for (let i = 0; i < batch.length; i += INSERT_BATCH_SIZE) {
+          const insertBatch = batch.slice(i, Math.min(i + INSERT_BATCH_SIZE, batch.length));
+          await this.insertBatch(pool, insertBatch);
+          importedCount += insertBatch.length;
+        }
       }
       
       this.logger.log(`Import completed: ${importedCount} records imported from ${lineCount} lines`);
@@ -646,13 +657,27 @@ export class LegacySyncWorkerPoolService {
           alt = EXCLUDED.alt
       `;
       
-      this.logger.log(`Query has ${values.split('$').length - 1} placeholders, sending ${params.length} parameters`);
+      // Brojimo jedinstvene placeholder brojeve, ne sve $ znakove
+      const maxPlaceholder = batch.length * 11; // Svaki red ima 11 parametara
+      this.logger.log(`Batch size: ${batch.length}, Max placeholder: $${maxPlaceholder}, Params array length: ${params.length}`);
+      
+      if (params.length !== maxPlaceholder) {
+        this.logger.error(`MISMATCH: Expected ${maxPlaceholder} params but have ${params.length}`);
+      }
+      
+      // Debug: proveri prvih par parametara
+      if (batch.length > 0) {
+        this.logger.log(`First record params: ${JSON.stringify(params.slice(0, 11))}`);
+        this.logger.log(`First record in batch: ${JSON.stringify(batch[0])}`);
+      }
       
       await client.query(query, params);
       await client.query('COMMIT');
       
     } catch (error) {
       await client.query('ROLLBACK');
+      this.logger.error(`Insert batch failed: ${error.message}`);
+      this.logger.error(`Error code: ${error.code}, Detail: ${error.detail}`);
       throw error;
     } finally {
       client.release();
