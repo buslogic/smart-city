@@ -68,9 +68,10 @@ interface SlowSyncConfig {
 }
 
 interface SlowSyncProgress {
-  status: 'idle' | 'running' | 'paused' | 'completed' | 'error';
+  status: 'idle' | 'running' | 'paused' | 'waiting_for_next_batch' | 'completed' | 'error';
   startedAt?: string;
   lastBatchAt?: string;
+  nextBatchStartTime?: string;  // Novo: vreme kada će početi sledeći batch
   completedAt?: string;
   totalVehicles: number;
   processedVehicles: number;
@@ -408,6 +409,8 @@ const SmartSlowSyncDashboard: React.FC = () => {
     switch (progress.status) {
       case 'running':
         return <Badge status="processing" text="U toku" />;
+      case 'waiting_for_next_batch':
+        return <Badge status="warning" text="Čeka sledeći batch" />;
       case 'paused':
         return <Badge status="warning" text="Pauzirano" />;
       case 'completed':
@@ -727,21 +730,75 @@ const SmartSlowSyncDashboard: React.FC = () => {
                 </Row>
               </Card>
             </Col>
+          </>
+        )}
 
-            {/* Live Vehicle Processing Pipeline */}
-            <Col span={24}>
-              <Card title={
-                <Space>
-                  <TeamOutlined />
-                  <span>Live Vehicle Processing</span>
-                  <Badge 
-                    count={progress.vehiclesInCurrentBatch?.length || 0} 
-                    style={{ backgroundColor: '#108ee9' }} 
-                  />
-                </Space>
-              }>
-                <Row gutter={16}>
-                  {progress.vehiclesInCurrentBatch && progress.vehiclesInCurrentBatch.map((vehicleInfo, index) => {
+        {/* Live Vehicle Processing Pipeline - Prikaži za running ili waiting_for_next_batch */}
+        {progress && (progress.status === 'running' || progress.status === 'waiting_for_next_batch') && (
+          <Col span={24}>
+            <Card title={
+              <Space>
+                <TeamOutlined />
+                <span>Live Vehicle Processing</span>
+                <Badge 
+                  count={progress.vehiclesInCurrentBatch?.length || 0} 
+                  style={{ backgroundColor: '#108ee9' }} 
+                />
+              </Space>
+            }>
+              {/* Prikaži countdown ako je u waiting stanju */}
+              {progress.status === 'waiting_for_next_batch' && progress.nextBatchStartTime ? (
+                  <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+                    <ClockCircleOutlined style={{ fontSize: 48, color: '#faad14', marginBottom: 16 }} />
+                    <Title level={3}>Čeka se sledeći batch</Title>
+                    <Text type="secondary" style={{ fontSize: 16, display: 'block', marginBottom: 24 }}>
+                      Batch {progress.currentBatch} je završen. Sistem čeka pre pokretanja sledećeg batch-a.
+                    </Text>
+                    
+                    {/* Countdown timer */}
+                    <div style={{ marginBottom: 24 }}>
+                      <Statistic.Countdown 
+                        title="Sledeći batch počinje za:" 
+                        value={dayjs(progress.nextBatchStartTime).valueOf()} 
+                        format="mm:ss"
+                        valueStyle={{ fontSize: 32, color: '#1890ff' }}
+                        onFinish={() => {
+                          message.info('Vreme je za sledeći batch!');
+                          fetchProgress(); // Osveži status
+                        }}
+                      />
+                    </div>
+                    
+                    <Divider />
+                    
+                    <Row gutter={16} justify="center">
+                      <Col span={8}>
+                        <Statistic 
+                          title="Obrađeno vozila" 
+                          value={progress.processedVehicles} 
+                          suffix={`/ ${progress.totalVehicles}`}
+                          valueStyle={{ color: '#52c41a' }}
+                        />
+                      </Col>
+                      <Col span={8}>
+                        <Statistic 
+                          title="Završenih batch-ova" 
+                          value={progress.currentBatch} 
+                          suffix={`/ ${progress.totalBatches}`}
+                        />
+                      </Col>
+                      <Col span={8}>
+                        <Statistic 
+                          title="Preostalo vozila" 
+                          value={progress.totalVehicles - progress.processedVehicles}
+                          valueStyle={{ color: progress.totalVehicles - progress.processedVehicles > 0 ? '#faad14' : '#52c41a' }}
+                        />
+                      </Col>
+                    </Row>
+                  </div>
+                ) : progress.status === 'running' ? (
+                  <Row gutter={16}>
+                    {progress.vehiclesInCurrentBatch && progress.vehiclesInCurrentBatch.map((vehicleInfo, index) => {
                     // Parse vehicle info (format: "ID:123" ili "P93597")
                     const vehicleId = vehicleInfo.startsWith('ID:') 
                       ? vehicleInfo.replace('ID:', '') 
@@ -931,11 +988,14 @@ const SmartSlowSyncDashboard: React.FC = () => {
                       </Col>
                     );
                   })}
-                </Row>
+                  </Row>
+                ) : null}
               </Card>
             </Col>
+          )}
 
-            {/* Live Activity Feed */}
+          {/* Live Activity Feed - Samo za running stanje */}
+          {progress?.status === 'running' && (
             <Col span={24}>
               <Card 
                 title={
@@ -993,8 +1053,10 @@ const SmartSlowSyncDashboard: React.FC = () => {
                 </div>
               </Card>
             </Col>
+          )}
 
-            {/* Queue Preview */}
+          {/* Queue Preview - Samo za running stanje */}
+          {progress?.status === 'running' && (
             <Col span={24}>
               <Card title={
                 <Space>
@@ -1028,8 +1090,7 @@ const SmartSlowSyncDashboard: React.FC = () => {
                 </Row>
               </Card>
             </Col>
-          </>
-        )}
+          )}
 
         {/* Success Summary kada je completed */}
         {progress?.status === 'completed' && (

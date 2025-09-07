@@ -24,9 +24,10 @@ export interface SlowSyncConfig {
 }
 
 export interface SlowSyncProgress {
-  status: 'idle' | 'running' | 'paused' | 'completed' | 'error';
+  status: 'idle' | 'running' | 'paused' | 'waiting_for_next_batch' | 'completed' | 'error';
   startedAt?: Date;
   lastBatchAt?: Date;
+  nextBatchStartTime?: Date;  // Novo: vreme kada će početi sledeći batch
   completedAt?: Date;
   totalVehicles: number;
   processedVehicles: number;
@@ -358,7 +359,27 @@ export class SmartSlowSyncService implements OnModuleInit {
       return;
     }
     
-    // Ako ima vozila u queue
+    // Posebno rukuj waiting_for_next_batch stanjem
+    if (this.progress && this.progress.status === 'waiting_for_next_batch') {
+      const now = new Date();
+      
+      if (this.progress.nextBatchStartTime) {
+        const nextBatchTime = new Date(this.progress.nextBatchStartTime);
+        
+        if (now >= nextBatchTime) {
+          this.logger.log(`⏰ CRON: Vreme je za sledeći batch! Prebacujem iz waiting u running...`);
+          this.progress.status = 'running';
+          await this.saveProgress();
+          await this.processBatch(true);
+        } else {
+          const remainingMinutes = Math.ceil((nextBatchTime.getTime() - now.getTime()) / 60000);
+          this.logger.log(`⏱️ CRON: Još ${remainingMinutes} minuta do sledećeg batch-a (waiting stanje)`);
+        }
+      }
+      return;
+    }
+    
+    // Originalna logika za running stanje
     if (this.vehicleQueue && this.vehicleQueue.length > 0) {
       // Ako nije pokrenut nijedan batch još uvek, pokreni prvi
       if (!this.progress.lastBatchAt && this.progress.currentBatch === 0) {
@@ -598,19 +619,28 @@ export class SmartSlowSyncService implements OnModuleInit {
 
       this.logger.log(`Batch ${this.progress.currentBatch} završen za ${duration.toFixed(1)} minuta`);
       
-      // Ako ima još vozila, logovaj informaciju o pauzi
+      // Ako ima još vozila, prebaci u waiting stanje
       if (this.vehicleQueue && this.vehicleQueue.length > 0) {
         this.logger.log(`⏸️ Pauziram ${this.currentConfig.batchDelayMinutes} minuta pre sledećeg batch-a...`);
         this.logger.log(`📊 Preostalo vozila u queue: ${this.vehicleQueue.length}`);
         this.logger.log(`🔄 CRON će automatski pokrenuti sledeći batch nakon pauze (proverava svake 2 minuta)`);
         
-        // Samo sačuvaj vreme poslednjeg batch-a za CRON
+        // Prebaci u waiting stanje i očisti trenutne vozila
+        this.progress.status = 'waiting_for_next_batch';
+        this.progress.vehiclesInCurrentBatch = []; // Očisti kartice vozila
         this.progress.lastBatchAt = new Date();
+        
+        // Izračunaj kada će početi sledeći batch
+        const nextBatchTime = new Date();
+        nextBatchTime.setMinutes(nextBatchTime.getMinutes() + this.currentConfig.batchDelayMinutes);
+        this.progress.nextBatchStartTime = nextBatchTime;
+        
         await this.saveProgress();
       } else {
         this.logger.log(`✅ Svi batch-ovi završeni! Ukupno procesiranih vozila: ${this.progress.processedVehicles}`);
         this.progress.status = 'completed';
         this.progress.completedAt = new Date();
+        this.progress.vehiclesInCurrentBatch = []; // Očisti i za completed
         await this.saveProgress();
       }
       
