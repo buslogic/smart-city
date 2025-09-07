@@ -229,7 +229,7 @@ const ModernMenuV1: React.FC = () => {
 
     const isActive = location.pathname === item.href;
     const Icon = item.icon;
-    const paddingLeft = `${level * 20 + 12}px`;
+    const paddingLeft = `${level * 6 + 12}px`;
 
     if (item.hasSubmenu) {
       const hasAccessibleChildren = item.submenu?.some(child => 
@@ -247,8 +247,9 @@ const ModernMenuV1: React.FC = () => {
             onMouseEnter={() => setHoveredItem(item.name)}
             onMouseLeave={() => setHoveredItem(null)}
             style={{ paddingLeft }}
-            className={`w-full flex items-center justify-between pr-3 ${
-              level === 0 ? 'py-2.5 bg-white border-b border-gray-100' : 'py-1.5'
+            className={`w-full flex items-center justify-between pr-3 bg-white ${
+              level === 0 ? 'py-2.5 border-b border-gray-100' : 
+              level === 1 && item.hasSubmenu ? 'py-1 border-b border-gray-100' : 'py-1'
             } ${
               level === 0 ? 'text-base' : 'text-sm'
             } transition-all duration-200 ${
@@ -278,13 +279,13 @@ const ModernMenuV1: React.FC = () => {
           </button>
           
           {item.isOpen && (
-            <div className="relative">
+            <div className={`relative ${level === 0 ? 'mb-4' : ''}`}>
               {/* Vertikalna linija za povezivanje */}
               {level === 0 && (
                 <div 
                   className="absolute w-px bg-gray-100" 
                   style={{ 
-                    left: `${level * 20 + 28}px`,
+                    left: `${level * 6 + 28}px`,
                     top: 0,
                     bottom: 0
                   }}
@@ -309,8 +310,8 @@ const ModernMenuV1: React.FC = () => {
     const content = (
       <div 
         style={{ paddingLeft }}
-        className={`flex items-center justify-between pr-3 ${
-          level === 0 ? 'py-2.5 bg-white border-b border-gray-100' : 'py-1.5'
+        className={`flex items-center justify-between pr-3 bg-white ${
+          level === 0 ? 'py-2.5 border-b border-gray-100' : 'py-1'
         } transition-all duration-200 ${
         isActive 
           ? 'text-blue-600 font-medium' 
