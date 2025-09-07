@@ -203,11 +203,15 @@ const ModernMenuV1: React.FC = () => {
         },
       ].filter(item => !item.permissions || item.permissions.some(p => hasPermission(p))),
     },
-  ].filter(item => 
-    !item.permissions || 
-    item.permissions.some(p => hasPermission(p)) || 
-    (item.hasSubmenu === true && item.submenu !== undefined && item.submenu.length > 0)
-  );
+  ].filter(item => {
+    if (!item.permissions || item.permissions.some(p => hasPermission(p))) {
+      return true;
+    }
+    if (item.hasSubmenu === true && 'submenu' in item && Array.isArray(item.submenu) && item.submenu.length > 0) {
+      return true;
+    }
+    return false;
+  });
 
   // Hijerarhijski rendering sa pravilnim uvlačenjem
   const renderMenuItem = (item: MenuItem, level: number = 0) => {
@@ -238,7 +242,8 @@ const ModernMenuV1: React.FC = () => {
               level === 0 ? 'py-2.5 border-b border-gray-100' : 
               level === 1 && item.hasSubmenu ? 'py-1 border-b border-gray-100' : 'py-1'
             } ${
-              level === 0 ? 'text-lg' : 'text-sm'
+              level === 0 && item.isOpen ? 'text-lg' : 
+              level === 0 ? 'text-base' : 'text-sm'
             } transition-all duration-200 ${
               item.isOpen 
                 ? 'text-blue-600 font-medium' 
@@ -304,7 +309,7 @@ const ModernMenuV1: React.FC = () => {
           ? 'text-blue-600 font-medium' 
           : 'text-gray-600 hover:text-gray-900'
       } ${
-        level === 0 ? 'text-lg' : level === 1 ? 'text-sm' : 'text-xs'
+        level === 0 ? 'text-base' : level === 1 ? 'text-sm' : 'text-xs'
       }`}>
         <div className="flex items-center space-x-2">
           {level > 0 && (
@@ -448,17 +453,16 @@ const ModernMenuV1: React.FC = () => {
                 placement="bottomRight"
                 arrow
               >
-                <Button type="text" className="flex items-center space-x-2 p-2">
+                <Button type="text" className="flex items-center space-x-3 px-3 py-2">
+                  <span className="hidden sm:inline text-sm font-medium text-gray-700">
+                    {user?.firstName} {user?.lastName}
+                  </span>
                   <Avatar 
                     src={getAvatarUrl(user?.email || '')} 
                     icon={<UserOutlined />}
                     size="default"
+                    style={{ backgroundColor: '#1890ff' }}
                   />
-                  <Space className="hidden sm:flex">
-                    <span className="text-sm font-medium text-gray-700">
-                      {user?.firstName} {user?.lastName}
-                    </span>
-                  </Space>
                 </Button>
               </Dropdown>
             </div>
