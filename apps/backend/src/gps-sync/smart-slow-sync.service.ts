@@ -158,7 +158,7 @@ export class SmartSlowSyncService implements OnModuleInit {
     
     if (savedProgress) {
       this.progress = savedProgress;
-      this.logger.log(`Učitan postojeći progress: ${this.progress.processedVehicles}/${this.progress.totalVehicles} vozila`);
+      // this.logger.log(`Učitan postojeći progress: ${this.progress.processedVehicles}/${this.progress.totalVehicles} vozila`);
     } else {
       this.progress = {
         status: 'idle',
@@ -182,13 +182,13 @@ export class SmartSlowSyncService implements OnModuleInit {
       this.SETTINGS_KEY + '_config'
     );
     
-    this.logger.debug(`Saved config from DB:`, JSON.stringify(savedConfig, null, 2));
+    // this.logger.debug(`Saved config from DB:`, JSON.stringify(savedConfig, null, 2));
     
     if (savedConfig && savedConfig.preset && savedConfig.vehiclesPerBatch && savedConfig.workersPerBatch) {
-      this.logger.log(`Koristim saved config sa preset: ${savedConfig.preset}`);
+      // this.logger.log(`Koristim saved config sa preset: ${savedConfig.preset}`);
       this.currentConfig = savedConfig;
     } else {
-      this.logger.log('Saved config je prazan ili neispravan, koristim default config');
+      // this.logger.log('Saved config je prazan ili neispravan, koristim default config');
       this.currentConfig = this.getDefaultConfig();
     }
     
@@ -197,15 +197,15 @@ export class SmartSlowSyncService implements OnModuleInit {
     
     if (forceProcessSetting !== null && forceProcessSetting !== undefined) {
       this.currentConfig.forceProcess = forceProcessSetting;
-      this.logger.log(`Učitan forceProcess iz baze: ${forceProcessSetting}`);
+      // this.logger.log(`Učitan forceProcess iz baze: ${forceProcessSetting}`);
     } else {
       // Prvi put - postavi default false (UNCHECKED - poštuje noćne sate)
       this.currentConfig.forceProcess = false;
       await this.setSetting('smart_slow_sync.force_process', false);
-      this.logger.log(`Postavljen default forceProcess: false (UNCHECKED - poštuje noćne sate)`);
+      // this.logger.log(`Postavljen default forceProcess: false (UNCHECKED - poštuje noćne sate)`);
     }
     
-    this.logger.debug(`Final currentConfig:`, JSON.stringify(this.currentConfig, null, 2));
+    // this.logger.debug(`Final currentConfig:`, JSON.stringify(this.currentConfig, null, 2));
   }
 
   private getDefaultConfig(): SlowSyncConfig {
@@ -362,11 +362,12 @@ export class SmartSlowSyncService implements OnModuleInit {
   }
 
   async updateConfig(config: Partial<SlowSyncConfig>): Promise<SlowSyncConfig> {
-    // Dozvoliti ažuriranje konfiguracije ako je status completed, idle, ili pauziran
-    const canUpdate = !this.isRunning || this.isPaused || this.progress?.status === 'completed' || this.progress?.status === 'idle';
+    // Zabrani menjanje konfiguracije dok je sync aktivan (running ili waiting_for_next_batch)
+    const isActiveSync = this.isRunning && !this.isPaused && 
+      (this.progress?.status === 'running' || this.progress?.status === 'waiting_for_next_batch');
     
-    if (!canUpdate) {
-      throw new Error('Ne možete menjati konfiguraciju dok je sync aktivan. Prvo pauzirajte.');
+    if (isActiveSync) {
+      throw new Error('Konfiguraciju ne možete menjati dok je sinhronizacija u toku. Prvo zaustavite ili pauzirajte proces.');
     }
 
     if (config.preset) {

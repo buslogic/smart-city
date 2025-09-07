@@ -3,16 +3,16 @@
  * Podržava i lokalni development i produkciju sa DigitalOcean Spaces
  */
 export const getAvatarUrl = (avatarPath: string | null | undefined): string | undefined => {
-  console.log('getAvatarUrl called with:', avatarPath);
+  // console.log('getAvatarUrl called with:', avatarPath);
   
   if (!avatarPath) {
-    console.log('No avatar path provided');
+    // console.log('No avatar path provided');
     return undefined;
   }
 
   // Ako je već pun URL (počinje sa http:// ili https://), vrati ga direktno
   if (avatarPath.startsWith('http://') || avatarPath.startsWith('https://')) {
-    console.log('Already full URL:', avatarPath);
+    // console.log('Already full URL:', avatarPath);
     return avatarPath;
   }
 
@@ -24,7 +24,7 @@ export const getAvatarUrl = (avatarPath: string | null | undefined): string | un
     return avatarPath;
   }
   
-  console.log('API URL:', apiUrl);
+  // console.log('API URL:', apiUrl);
 
   // Proveri da li je produkcija (DigitalOcean Spaces URL)
   const isProduction = apiUrl.includes('smart-city.rs') || 
@@ -38,17 +38,17 @@ export const getAvatarUrl = (avatarPath: string | null | undefined): string | un
       // Ako je relativna putanja na produkciji, možda je greška
       console.warn('Relativna putanja avatara na produkciji:', avatarPath);
       const fullUrl = `${apiUrl}${avatarPath}`;
-      console.log('Production relative path, returning:', fullUrl);
+      // console.log('Production relative path, returning:', fullUrl);
       return fullUrl;
     }
-    console.log('Production full URL:', avatarPath);
+    // console.log('Production full URL:', avatarPath);
     return avatarPath;
   } else {
     // Development - koristi lokalni server
     // Ukloni dupli slash ako postoji
     const cleanPath = avatarPath.startsWith('/') ? avatarPath : `/${avatarPath}`;
     const fullUrl = `${apiUrl}${cleanPath}`;
-    console.log('Development URL:', fullUrl);
+    // console.log('Development URL:', fullUrl);
     return fullUrl;
   }
 };

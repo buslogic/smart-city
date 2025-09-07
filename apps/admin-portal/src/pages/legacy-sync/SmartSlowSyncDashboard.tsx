@@ -659,6 +659,12 @@ const SmartSlowSyncDashboard: React.FC = () => {
                       size="large"
                       icon={<SettingOutlined />}
                       onClick={() => setConfigModalVisible(true)}
+                      disabled={progress?.status === 'running' || progress?.status === 'waiting_for_next_batch'}
+                      title={
+                        progress?.status === 'running' || progress?.status === 'waiting_for_next_batch'
+                          ? 'Ne možete menjati konfiguraciju dok je sinhronizacija u toku'
+                          : 'Otvori konfiguraciju'
+                      }
                     >
                       Konfiguracija
                     </Button>

@@ -105,7 +105,7 @@ export class LegacySyncWorkerPoolService {
         }
       });
       
-      this.logger.log(`✅ Worker Pool konfiguracija učitana: ${this.config.maxWorkers} worker-a`);
+      // this.logger.log(`✅ Worker Pool konfiguracija učitana: ${this.config.maxWorkers} worker-a`);
     } catch (error) {
       this.logger.warn('Koriste se default Worker Pool podešavanja');
     }
