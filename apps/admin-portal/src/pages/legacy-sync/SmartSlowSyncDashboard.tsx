@@ -66,6 +66,7 @@ interface SlowSyncConfig {
   compressAfterBatches: number;
   vacuumAfterBatches: number;
   forceProcess: boolean;
+  syncAlreadySyncedVehicles: boolean;
 }
 
 interface SlowSyncProgress {
@@ -102,7 +103,8 @@ const PRESET_CONFIGS = {
     nightHoursEnd: 8,
     maxDailyBatches: 30,
     forceProcess: true,
-    description: 'Agresivni parametri za brzu sinhronizaciju. Ignoriše noćne sate.',
+    syncAlreadySyncedVehicles: true,
+    description: 'Agresivni parametri za brzu sinhronizaciju. Ignoriše noćne sate i resinhronizuje sva vozila.',
   },
   balanced: {
     name: 'Balansirana (7-10 dana)',
@@ -115,7 +117,8 @@ const PRESET_CONFIGS = {
     nightHoursEnd: 6,
     maxDailyBatches: 15,
     forceProcess: false,
-    description: 'Optimalan balans između brzine i resursa. Poštuje noćne sate.',
+    syncAlreadySyncedVehicles: false,
+    description: 'Optimalan balans između brzine i resursa. Poštuje noćne sate, sinhronizuje samo nova vozila.',
   },
   conservative: {
     name: 'Konzervativna (12-15 dana)',
@@ -128,7 +131,8 @@ const PRESET_CONFIGS = {
     nightHoursEnd: 5,
     maxDailyBatches: 10,
     forceProcess: false,
-    description: 'Sigurna opcija sa minimalnim opterećenjem servera. Poštuje noćne sate.',
+    syncAlreadySyncedVehicles: false,
+    description: 'Sigurna opcija sa minimalnim opterećenjem servera. Poštuje noćne sate, sinhronizuje samo nova vozila.',
   },
 };
 
@@ -418,6 +422,10 @@ const SmartSlowSyncDashboard: React.FC = () => {
       case 'paused':
         return <Badge status="warning" text="Pauzirano" />;
       case 'completed':
+        // Ako je završeno sa 0 vozila, prikaži specifičnu poruku
+        if (progress && progress.totalVehicles === 0) {
+          return <Badge status="success" text="Sva vozila već sinhronizovana" />;
+        }
         return <Badge status="success" text="Završeno" />;
       case 'error':
         return <Badge status="error" text="Greška" />;
@@ -1152,7 +1160,12 @@ const SmartSlowSyncDashboard: React.FC = () => {
                 
                 {progress.completedAt && (
                   <div style={{ marginTop: '24px', fontSize: '14px', color: '#666' }}>
-                    Završeno: {dayjs(progress.completedAt).format('DD.MM.YYYY HH:mm:ss')}
+                    <div>Završeno: {dayjs(progress.completedAt).format('DD.MM.YYYY HH:mm:ss')}</div>
+                    {progress.totalVehicles === 0 && (
+                      <div style={{ marginTop: '8px', color: '#52c41a', fontSize: '13px' }}>
+                        <InfoCircleOutlined style={{ marginRight: 4 }} /> Sva vozila su već bila uspešno sinhronizovana
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1579,6 +1592,24 @@ const SmartSlowSyncDashboard: React.FC = () => {
               />
               <Text>Zaobilazi noćne sate (ignoriše vremensko ograničenje)</Text>
             </Space>
+          </div>
+
+          <div>
+            <Text strong>Sinhronizacija vozila:</Text>
+            <Space>
+              <Switch
+                checked={tempConfig?.syncAlreadySyncedVehicles}
+                onChange={(checked) => setTempConfig({ ...tempConfig!, syncAlreadySyncedVehicles: checked })}
+              />
+              <Text>Sinhronizuj već sinhronizovana vozila</Text>
+            </Space>
+            <div style={{ marginTop: 4 }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {tempConfig?.syncAlreadySyncedVehicles 
+                  ? "Uključeno: Sinhronizuju se SVI enabledí vozila u tabeli" 
+                  : "Isključeno: Preskaču se vozila koja su već uspešno sinhronizovana"}
+              </Text>
+            </div>
           </div>
 
           <Alert

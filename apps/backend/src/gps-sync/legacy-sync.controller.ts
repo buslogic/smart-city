@@ -112,6 +112,10 @@ class SlowSyncConfigDto {
   @IsBoolean()
   @IsOptional()
   forceProcess?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  syncAlreadySyncedVehicles?: boolean;
 }
 
 @ApiTags('Legacy GPS Sync')

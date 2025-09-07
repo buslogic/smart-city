@@ -23,6 +23,7 @@ export interface SlowSyncConfig {
   compressAfterBatches: number;
   vacuumAfterBatches: number;
   forceProcess: boolean;
+  syncAlreadySyncedVehicles: boolean;
 }
 
 export interface SlowSyncProgress {
@@ -216,6 +217,7 @@ export class SmartSlowSyncService implements OnModuleInit {
       compressAfterBatches: 5,
       vacuumAfterBatches: 20,
       forceProcess: false,
+      syncAlreadySyncedVehicles: false,
     } as SlowSyncConfig;
   }
 
@@ -261,6 +263,20 @@ export class SmartSlowSyncService implements OnModuleInit {
     this.logger.log(`Konfiguracija: ${this.currentConfig.vehiclesPerBatch} vozila po batch-u, ${this.currentConfig.workersPerBatch} worker-a`);
 
     await this.initializeVehicleQueue();
+    
+    // Ako nema vozila za sinhronizaciju, završi odmah
+    if (this.vehicleQueue.length === 0) {
+      this.logger.warn('Nema vozila za sinhronizaciju - završavam Smart Slow Sync odmah');
+      this.isRunning = false;
+      this.progress.status = 'completed';
+      this.progress.startedAt = new Date();
+      this.progress.completedAt = new Date();
+      this.progress.currentBatch = 0;
+      this.progress.totalBatches = 0;
+      this.progress.totalVehicles = 0;
+      await this.saveProgress();
+      return this.progress;
+    }
     
     this.isRunning = true;
     this.progress.status = 'running';
@@ -706,11 +722,19 @@ export class SmartSlowSyncService implements OnModuleInit {
   }
 
   private async initializeVehicleQueue() {
+    // Definiši where uslov na osnovu konfiguracije
+    const whereCondition: any = {
+      enabled: true,
+    };
+
+    // Ako NIJE uključeno "Sinhronizuj već sinhronizovana vozila", preskoči ih
+    if (!this.currentConfig.syncAlreadySyncedVehicles) {
+      whereCondition.lastSuccessfulSyncAt = null; // Samo vozila koja NIKAD nisu uspešno sinhronizovana
+    }
+
     // Uzmi samo vozila koja su označena za Smart Slow Sync
     const syncVehicles = await this.prisma.smartSlowSyncVehicle.findMany({
-      where: {
-        enabled: true,
-      },
+      where: whereCondition,
       orderBy: [
         { priority: 'desc' },  // Viši prioritet prvi
         { lastSyncAt: 'asc' },  // Najstariji sync prvi
@@ -718,16 +742,35 @@ export class SmartSlowSyncService implements OnModuleInit {
       select: { 
         vehicleId: true,
         priority: true,
+        lastSuccessfulSyncAt: true,
       },
     });
 
     this.vehicleQueue = syncVehicles.map(v => v.vehicleId);
     this.progress.totalVehicles = this.vehicleQueue.length;
     
-    this.logger.log(`Inicijalizovan queue sa ${this.vehicleQueue.length} vozila označenih za Smart Slow Sync`);
+    // Dodaj detaljnije logovanje
+    const skippedVehiclesCount = !this.currentConfig.syncAlreadySyncedVehicles 
+      ? (await this.prisma.smartSlowSyncVehicle.count({
+          where: { enabled: true, lastSuccessfulSyncAt: { not: null } }
+        }))
+      : 0;
+
+    this.logger.log(`Inicijalizovan queue sa ${this.vehicleQueue.length} vozila za Smart Slow Sync`);
+    if (!this.currentConfig.syncAlreadySyncedVehicles && skippedVehiclesCount > 0) {
+      this.logger.log(`Preskočeno ${skippedVehiclesCount} već sinhronizovanih vozila (syncAlreadySyncedVehicles=false)`);
+    }
     
     if (this.vehicleQueue.length === 0) {
-      this.logger.warn('Nema vozila označenih za Smart Slow Sync! Dodajte vozila u smart_slow_sync_vehicles tabelu.');
+      const totalEnabledVehicles = await this.prisma.smartSlowSyncVehicle.count({
+        where: { enabled: true }
+      });
+      
+      if (totalEnabledVehicles === 0) {
+        this.logger.warn('Nema vozila označenih za Smart Slow Sync! Dodajte vozila u smart_slow_sync_vehicles tabelu.');
+      } else {
+        this.logger.warn(`Sva ${totalEnabledVehicles} aktivna vozila su već sinhronizovana. Uključi "Sinhronizuj već sinhronizovana vozila" za ponovnu sinhronizaciju.`);
+      }
     }
   }
 
