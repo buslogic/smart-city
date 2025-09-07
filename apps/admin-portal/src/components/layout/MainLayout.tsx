@@ -31,6 +31,7 @@ const MainLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [usersMenuOpen, setUsersMenuOpen] = useState(false);
   const [transportMenuOpen, setTransportMenuOpen] = useState(false);
+  const [transportVehiclesMenuOpen, setTransportVehiclesMenuOpen] = useState(false);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
@@ -71,15 +72,30 @@ const MainLayout: React.FC = () => {
       isOpen: transportMenuOpen,
       setOpen: setTransportMenuOpen,
       submenu: [
-        hasPermission('vehicles:read') && {
-          name: 'Administracija Vozila',
-          href: '/transport/vehicles',
+        // Novi podfolder Vozila
+        {
+          name: 'Vozila',
           icon: Car,
-        },
-        hasPermission('vehicles:sync') && {
-          name: 'Sinhronizacija Vozila',
-          href: '/transport/vehicle-sync',
-          icon: RefreshCw,
+          hasSubmenu: true,
+          isOpen: transportVehiclesMenuOpen,
+          setOpen: setTransportVehiclesMenuOpen,
+          submenu: [
+            hasPermission('vehicles:read') && {
+              name: 'Vozila',
+              href: '/transport/vehicles',
+              icon: Car,
+            },
+            hasPermission('vehicles:sync') && {
+              name: 'Sinhronizacija',
+              href: '/transport/vehicle-sync',
+              icon: RefreshCw,
+            },
+            hasPermission('legacy_sync.view') && {
+              name: 'Legacy Sync',
+              href: '/transport/legacy-sync',
+              icon: RefreshCw,
+            },
+          ].filter(Boolean),
         },
         hasPermission('dispatcher:view_map') && {
           name: 'Dispečerski Modul - Mapa i vozila',
@@ -100,11 +116,6 @@ const MainLayout: React.FC = () => {
           name: 'Dispečerski Modul - Sinhronizacija Dashboard',
           href: '/transport/dispatcher/gps-sync-dashboard',
           icon: Activity,
-        },
-        hasPermission('legacy_sync.view') && {
-          name: 'Legacy GPS Sinhronizacija',
-          href: '/transport/legacy-sync',
-          icon: RefreshCw,
         },
         hasPermission('safety:view_aggressive') && {
           name: 'Bezbednost - Agresivna vožnja',
@@ -175,15 +186,47 @@ const MainLayout: React.FC = () => {
                         {item.isOpen && (
                           <div className="ml-10 mt-1 space-y-1">
                             {item.submenu?.filter(Boolean).map((subitem: any) => (
-                              <Link
-                                key={subitem.name}
-                                to={subitem.href}
-                                className="group flex items-center px-2 py-2 text-base font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                                onClick={() => setSidebarOpen(false)}
-                              >
-                                <subitem.icon className="mr-3 h-5 w-5" />
-                                {subitem.name}
-                              </Link>
+                              subitem.hasSubmenu ? (
+                                <div key={subitem.name}>
+                                  <button
+                                    onClick={() => subitem.setOpen?.(!subitem.isOpen)}
+                                    className="w-full group flex items-center px-2 py-2 text-base font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                                  >
+                                    <subitem.icon className="mr-3 h-5 w-5" />
+                                    {subitem.name}
+                                    <ChevronDown 
+                                      className={`ml-auto h-4 w-4 transition-transform ${
+                                        subitem.isOpen ? 'rotate-180' : ''
+                                      }`}
+                                    />
+                                  </button>
+                                  {subitem.isOpen && (
+                                    <div className="ml-8 mt-1 space-y-1">
+                                      {subitem.submenu?.filter(Boolean).map((nestedItem: any) => (
+                                        <Link
+                                          key={nestedItem.name}
+                                          to={nestedItem.href}
+                                          className="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                                          onClick={() => setSidebarOpen(false)}
+                                        >
+                                          <nestedItem.icon className="mr-3 h-4 w-4" />
+                                          {nestedItem.name}
+                                        </Link>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <Link
+                                  key={subitem.name}
+                                  to={subitem.href}
+                                  className="group flex items-center px-2 py-2 text-base font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                                  onClick={() => setSidebarOpen(false)}
+                                >
+                                  <subitem.icon className="mr-3 h-5 w-5" />
+                                  {subitem.name}
+                                </Link>
+                              )
                             ))}
                           </div>
                         )}
@@ -233,18 +276,53 @@ const MainLayout: React.FC = () => {
                       {item.isOpen && (
                         <div className="ml-8 mt-1 space-y-1">
                           {item.submenu?.filter(Boolean).map((subitem: any) => (
-                            <Link
-                              key={subitem.name}
-                              to={subitem.href}
-                              className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
-                                location.pathname === subitem.href
-                                  ? 'bg-gray-100 text-gray-900'
-                                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                              }`}
-                            >
-                              <subitem.icon className="mr-3 h-4 w-4" />
-                              {subitem.name}
-                            </Link>
+                            subitem.hasSubmenu ? (
+                              <div key={subitem.name}>
+                                <button
+                                  onClick={() => subitem.setOpen?.(!subitem.isOpen)}
+                                  className="w-full group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                                >
+                                  <subitem.icon className="mr-3 h-4 w-4" />
+                                  {subitem.name}
+                                  <ChevronDown 
+                                    className={`ml-auto h-3 w-3 transition-transform ${
+                                      subitem.isOpen ? 'rotate-180' : ''
+                                    }`}
+                                  />
+                                </button>
+                                {subitem.isOpen && (
+                                  <div className="ml-6 mt-1 space-y-1">
+                                    {subitem.submenu?.filter(Boolean).map((nestedItem: any) => (
+                                      <Link
+                                        key={nestedItem.name}
+                                        to={nestedItem.href}
+                                        className={`group flex items-center px-2 py-1.5 text-sm font-medium rounded-md ${
+                                          location.pathname === nestedItem.href
+                                            ? 'bg-gray-100 text-gray-900'
+                                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                        }`}
+                                      >
+                                        <nestedItem.icon className="mr-3 h-4 w-4" />
+                                        {nestedItem.name}
+                                      </Link>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <Link
+                                key={subitem.name}
+                                to={subitem.href}
+                                className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
+                                  location.pathname === subitem.href
+                                    ? 'bg-gray-100 text-gray-900'
+                                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                }`}
+                              >
+                                <subitem.icon className="mr-3 h-4 w-4" />
+                                {subitem.name}
+                              </Link>
+                            )
                           ))}
                         </div>
                       )}
