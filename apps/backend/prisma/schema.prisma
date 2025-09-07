@@ -410,6 +410,8 @@ model SmartSlowSyncVehicle {
   successfulSyncCount  Int       @default(0) @map("successful_sync_count")
   failedSyncCount      Int       @default(0) @map("failed_sync_count")
   totalPointsProcessed BigInt    @default(0) @map("total_points_processed")
+  uniquePointsInDb     BigInt    @default(0) @map("unique_points_in_db") // Stvaran broj jedinstvenih tačaka u TimescaleDB
+  lastPointsCheck      DateTime? @map("last_points_check") // Kada je poslednji put provereno
   lastError            String?   @map("last_error") @db.Text
   createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt            DateTime  @updatedAt @map("updated_at")

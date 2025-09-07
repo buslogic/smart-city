@@ -48,9 +48,8 @@ COPY --from=builder --chown=nestjs:nodejs /app/package*.json ./
 COPY --from=builder --chown=nestjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nestjs:nodejs /app/tsconfig.json ./tsconfig.json
 
-# Copy scripts including entrypoint
+# Copy import scripts
 COPY --chown=nestjs:nodejs scripts/fast-import-gps-to-timescale-production.sh /app/scripts/
-COPY --chown=nestjs:nodejs scripts/docker-entrypoint.sh /app/scripts/
 RUN chmod +x /app/scripts/*.sh
 
 # Switch to non-root user
@@ -63,6 +62,6 @@ EXPOSE 3010
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3010/api/health', (r) => {r.statusCode === 200 ? process.exit(0) : process.exit(1)})"
 
-# Start the application with dumb-init and migration script
+# Start the application with dumb-init
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["/app/scripts/docker-entrypoint.sh"]
+CMD ["node", "dist/src/main"]

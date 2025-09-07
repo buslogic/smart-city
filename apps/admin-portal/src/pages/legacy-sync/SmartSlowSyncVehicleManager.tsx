@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Modal,
   Table,
@@ -17,6 +17,7 @@ import {
   Col,
   Statistic,
   Popconfirm,
+  Input,
 } from 'antd';
 import {
   PlusOutlined,
@@ -27,6 +28,9 @@ import {
   CloseCircleOutlined,
   ClockCircleOutlined,
   ThunderboltOutlined,
+  ReloadOutlined,
+  InfoCircleOutlined,
+  SearchOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
@@ -45,12 +49,14 @@ interface SlowSyncVehicle {
   successfulSyncCount: number;
   failedSyncCount: number;
   totalPointsProcessed: string;
+  uniquePointsInDb: string;
+  lastPointsCheck: string | null;
   lastError: string | null;
   vehicle: {
     id: number;
     garageNumber: string;
-    vehicleModel: string;
-    registrationNumber: string;
+    vehicleModel: number | null;
+    registrationNumber: string | null;
   };
 }
 
@@ -75,6 +81,8 @@ const SmartSlowSyncVehicleManager: React.FC<Props> = ({ visible, onClose }) => {
   const [targetKeys, setTargetKeys] = useState<string[]>([]);
   const [priority, setPriority] = useState(100);
   const [editingVehicle, setEditingVehicle] = useState<SlowSyncVehicle | null>(null);
+  const [countingVehicle, setCountingVehicle] = useState<number | null>(null);
+  const [searchText, setSearchText] = useState('');
 
   useEffect(() => {
     if (visible) {
@@ -148,6 +156,20 @@ const SmartSlowSyncVehicleManager: React.FC<Props> = ({ visible, onClose }) => {
     }
   };
 
+  const handleCountPoints = async (vehicleId: number) => {
+    setCountingVehicle(vehicleId);
+    try {
+      const response = await api.get(`/api/legacy-sync/slow-sync/vehicles/${vehicleId}/count-points`);
+      message.success(`Prebrojano: ${response.data.uniquePointsInDb.toLocaleString()} GPS tačaka u TimescaleDB`);
+      // Osveži listu vozila da prikaže ažurirane brojeve
+      await fetchVehicles();
+    } catch (error: any) {
+      message.error('Greška pri brojanju GPS tačaka');
+    } finally {
+      setCountingVehicle(null);
+    }
+  };
+
   const columns: ColumnsType<SlowSyncVehicle> = [
     {
       title: 'Garažni broj',
@@ -173,6 +195,7 @@ const SmartSlowSyncVehicleManager: React.FC<Props> = ({ visible, onClose }) => {
       dataIndex: ['vehicle', 'vehicleModel'],
       key: 'vehicleModel',
       width: 150,
+      render: (model) => model ? `Model ${model}` : <Tag color="default">N/A</Tag>,
     },
     {
       title: 'ID (MySQL)',
@@ -229,7 +252,7 @@ const SmartSlowSyncVehicleManager: React.FC<Props> = ({ visible, onClose }) => {
     {
       title: 'Statistike',
       key: 'stats',
-      width: 200,
+      width: 250,
       render: (_, record) => (
         <div style={{ lineHeight: '1.2' }}>
           <div>
@@ -245,10 +268,29 @@ const SmartSlowSyncVehicleManager: React.FC<Props> = ({ visible, onClose }) => {
             />
           </div>
           <div>
-            <Badge 
-              status="processing" 
-              text={`GPS tačaka: ${parseInt(record.totalPointsProcessed).toLocaleString()}`} 
-            />
+            <Tooltip title="Ukupan broj tačaka kroz sve sync-ove (mogu biti duplikati)">
+              <Badge 
+                status="processing" 
+                text={`Obrađeno: ${parseInt(record.totalPointsProcessed).toLocaleString()}`} 
+              />
+              <InfoCircleOutlined style={{ marginLeft: 4, color: '#1890ff', fontSize: 12 }} />
+            </Tooltip>
+          </div>
+          <div>
+            <Tooltip title={record.lastPointsCheck ? `Poslednja provera: ${dayjs(record.lastPointsCheck).format('DD.MM.YYYY HH:mm')}` : 'Nikad provereno'}>
+              <Badge 
+                status={record.uniquePointsInDb !== '0' ? "success" : "default"} 
+                text={`U bazi: ${parseInt(record.uniquePointsInDb || '0').toLocaleString()}`} 
+              />
+              <Button
+                size="small"
+                type="link"
+                icon={<ReloadOutlined spin={countingVehicle === record.vehicleId} />}
+                onClick={() => handleCountPoints(record.vehicleId)}
+                disabled={countingVehicle === record.vehicleId}
+                style={{ padding: '0 4px', height: 'auto' }}
+              />
+            </Tooltip>
           </div>
         </div>
       ),
@@ -300,6 +342,19 @@ const SmartSlowSyncVehicleManager: React.FC<Props> = ({ visible, onClose }) => {
   };
 
   const stats = getStatistics();
+
+  // Filtriranje vozila na osnovu pretrage
+  const filteredVehicles = useMemo(() => {
+    if (!searchText) return vehicles;
+    
+    const searchLower = searchText.toLowerCase();
+    return vehicles.filter(v => 
+      v.vehicle.garageNumber.toLowerCase().includes(searchLower) ||
+      (v.vehicle.registrationNumber && v.vehicle.registrationNumber.toLowerCase().includes(searchLower)) ||
+      (v.vehicle.vehicleModel && v.vehicle.vehicleModel.toString().includes(searchText)) ||
+      v.vehicle.id.toString().includes(searchText)
+    );
+  }, [vehicles, searchText]);
 
   return (
     <>
@@ -375,9 +430,25 @@ const SmartSlowSyncVehicleManager: React.FC<Props> = ({ visible, onClose }) => {
           </Col>
         </Row>
 
+        <div style={{ marginBottom: 16 }}>
+          <Input
+            placeholder="Pretraži vozila po garažnom broju, registraciji, modelu ili ID-u"
+            prefix={<SearchOutlined />}
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            allowClear
+            style={{ width: 400 }}
+          />
+          {searchText && (
+            <Text type="secondary" style={{ marginLeft: 16 }}>
+              Pronađeno: {filteredVehicles.length} od {vehicles.length} vozila
+            </Text>
+          )}
+        </div>
+
         <Table
           columns={columns}
-          dataSource={vehicles}
+          dataSource={filteredVehicles}
           rowKey="id"
           loading={loading}
           scroll={{ x: 1400 }}

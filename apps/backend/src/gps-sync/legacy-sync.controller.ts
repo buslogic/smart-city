@@ -10,7 +10,7 @@ import {
   Delete,
   Param,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody, ApiQuery, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody, ApiQuery, ApiPropertyOptional, ApiParam } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
@@ -506,6 +506,62 @@ export class LegacySyncController {
 
   // ============= SMART SLOW SYNC VEHICLE MANAGEMENT =============
 
+  @Get('slow-sync/vehicles/:vehicleId/count-points')
+  @RequirePermissions('legacy_sync.view')
+  @ApiOperation({ summary: 'Broji GPS tačke za vozilo u TimescaleDB' })
+  @ApiParam({ name: 'vehicleId', type: 'number' })
+  @ApiResponse({
+    status: 200,
+    description: 'Broj GPS tačaka u TimescaleDB',
+  })
+  async countVehiclePoints(@Param('vehicleId') vehicleId: string): Promise<any> {
+    try {
+      const id = parseInt(vehicleId);
+      this.logger.log(`Counting GPS points for vehicle ${id} in TimescaleDB`);
+      
+      // Konektuj se na TimescaleDB
+      const { Client } = require('pg');
+      const pgClient = new Client({
+        connectionString: process.env.TIMESCALE_DATABASE_URL,
+        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+      });
+      
+      await pgClient.connect();
+      
+      try {
+        // Broji stvaran broj tačaka u TimescaleDB
+        const countResult = await pgClient.query(
+          'SELECT COUNT(*) as count FROM gps_data WHERE vehicle_id = $1',
+          [id]
+        );
+        
+        const count = parseInt(countResult.rows[0]?.count || '0');
+        
+        // Ažuriraj u bazi
+        await this.slowSyncService['prisma'].smartSlowSyncVehicle.update({
+          where: { vehicleId: id },
+          data: {
+            uniquePointsInDb: BigInt(count),
+            lastPointsCheck: new Date(),
+          },
+        });
+        
+        this.logger.log(`Vehicle ${id} has ${count} unique GPS points in TimescaleDB`);
+        
+        return {
+          vehicleId: id,
+          uniquePointsInDb: count,
+          lastPointsCheck: new Date(),
+        };
+      } finally {
+        await pgClient.end();
+      }
+    } catch (error) {
+      this.logger.error(`Error counting points for vehicle ${vehicleId}`, error);
+      throw error;
+    }
+  }
+
   @Get('slow-sync/vehicles')
   @RequirePermissions('legacy_sync.view')
   @ApiOperation({ summary: 'Dobavi listu vozila za Smart Slow Sync' })
@@ -537,6 +593,7 @@ export class LegacySyncController {
       return vehicles.map(v => ({
         ...v,
         totalPointsProcessed: v.totalPointsProcessed.toString(),
+        uniquePointsInDb: v.uniquePointsInDb.toString(),
       }));
     } catch (error) {
       this.logger.error('Error fetching slow sync vehicles', error);
