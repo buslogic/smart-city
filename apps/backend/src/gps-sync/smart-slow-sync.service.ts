@@ -446,8 +446,21 @@ export class SmartSlowSyncService implements OnModuleInit {
         return;
       }
       
+      // Dobavi garažne brojeve za vozila u batch-u
+      const vehicles = await this.prisma.busVehicle.findMany({
+        where: { id: { in: batchVehicles } },
+        select: { id: true, garageNumber: true }
+      });
+      
+      // Kreiraj mapu ID -> garažni broj
+      const vehicleMap = new Map(vehicles.map(v => [v.id, v.garageNumber]));
+      
       this.progress.currentBatch++;
-      this.progress.vehiclesInCurrentBatch = batchVehicles.map(id => `ID:${id}`);
+      // Koristi garažne brojeve umesto ID-eva
+      this.progress.vehiclesInCurrentBatch = batchVehicles.map(id => {
+        const garageNumber = vehicleMap.get(id);
+        return garageNumber || `ID:${id}`; // Fallback na ID ako nema garažnog broja
+      });
       this.progress.lastBatchAt = new Date();
       
       this.logger.log(`Rozpoczinjem batch ${this.progress.currentBatch}/${this.progress.totalBatches} sa ${batchVehicles.length} vozila`);
@@ -603,7 +616,26 @@ export class SmartSlowSyncService implements OnModuleInit {
       
     } catch (error) {
       this.logger.error(`Greška u batch ${this.progress.currentBatch}: ${error.message}`);
-      this.vehicleQueue.unshift(...this.progress.vehiclesInCurrentBatch.map(v => parseInt(v.split(':')[1])));
+      // Vraćamo originalne vehicle ID-eve nazad u queue
+      // Već imamo batchVehicles koji sadrži ID-eve, ali moramo ga ponovo dobiti iz vehiclesInCurrentBatch
+      // ako je error nastao nakon što smo izgubili batchVehicles scope
+      const vehiclesToReturn: number[] = [];
+      for (const vehicleInfo of this.progress.vehiclesInCurrentBatch) {
+        if (vehicleInfo.startsWith('ID:')) {
+          // Ako je još uvek u ID formatu
+          vehiclesToReturn.push(parseInt(vehicleInfo.split(':')[1]));
+        } else {
+          // Ako je garažni broj, moramo pronaći ID
+          const vehicle = await this.prisma.busVehicle.findUnique({
+            where: { garageNumber: vehicleInfo },
+            select: { id: true }
+          });
+          if (vehicle) {
+            vehiclesToReturn.push(vehicle.id);
+          }
+        }
+      }
+      this.vehicleQueue.unshift(...vehiclesToReturn);
       this.progress.errors.push({
         vehicleId: 0,
         error: `Batch ${this.progress.currentBatch} failed: ${error.message}`,
@@ -832,9 +864,26 @@ export class SmartSlowSyncService implements OnModuleInit {
       this.SETTINGS_KEY + '_checkpoints'
     ) || [];
     
+    // Konvertuj garažne brojeve nazad u ID-eve za checkpoint
+    const vehicleIds: number[] = [];
+    for (const vehicleInfo of this.progress.vehiclesInCurrentBatch) {
+      if (vehicleInfo.startsWith('ID:')) {
+        vehicleIds.push(parseInt(vehicleInfo.split(':')[1]));
+      } else {
+        // Ako je garažni broj, pronađi ID
+        const vehicle = await this.prisma.busVehicle.findUnique({
+          where: { garageNumber: vehicleInfo },
+          select: { id: true }
+        });
+        if (vehicle) {
+          vehicleIds.push(vehicle.id);
+        }
+      }
+    }
+    
     const newCheckpoint: SlowSyncCheckpoint = {
       batchNumber: this.progress.currentBatch,
-      vehiclesProcessed: this.progress.vehiclesInCurrentBatch.map(v => parseInt(v.split(':')[1])),
+      vehiclesProcessed: vehicleIds,
       lastProcessedTime: new Date(),
       totalPoints: this.progress.stats.totalPointsProcessed,
       createdAt: new Date(),

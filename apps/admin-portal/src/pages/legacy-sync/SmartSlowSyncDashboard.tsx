@@ -748,10 +748,16 @@ const SmartSlowSyncDashboard: React.FC = () => {
                       : vehicleInfo;
                     
                     // Pronađi odgovarajući worker status
-                    const workerStatus = workerStatuses.find(w => 
-                      w.garageNumber === vehicleId || 
-                      w.vehicleId?.toString() === vehicleId
-                    );
+                    // vehicleId ovde je zapravo garažni broj (npr. "P93597") iz vehiclesInCurrentBatch
+                    const workerStatus = workerStatuses.find(w => {
+                      // Proveri da li se garažni broj poklapa
+                      if (w.garageNumber === vehicleId) return true;
+                      // Ili ako je vehicleId broj, proveri da li odgovara
+                      if (w.vehicleId && vehicleId.match(/^\d+$/)) {
+                        return w.vehicleId.toString() === vehicleId;
+                      }
+                      return false;
+                    });
                     
                     // Mapiranje worker status-a na faze
                     const getPhaseFromWorkerStatus = (status: string) => {

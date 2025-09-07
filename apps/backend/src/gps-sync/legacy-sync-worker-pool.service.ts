@@ -149,21 +149,21 @@ export class LegacySyncWorkerPoolService {
     // Kreiraj promise za svaki worker
     const workerPromises: Promise<WorkerResult[]>[] = [];
     
+    // Prvo kreiraj worker status za SVAKO vozilo
+    for (const vehicle of vehicles) {
+      this.workers.set(vehicle.id, {
+        workerId: 0, // Biće ažurirano kada worker počne procesiranje
+        vehicleId: vehicle.id,
+        garageNumber: vehicle.garage_number,
+        status: 'idle',
+        progress: 0,
+        startTime: new Date()
+      });
+    }
+    
     for (let i = 0; i < vehicleChunks.length; i++) {
       const workerId = i + 1;
       const vehicleChunk = vehicleChunks[i];
-      
-        // Kreiraj worker status sa workerId kao ključ
-      if (!this.workers.has(workerId)) {
-        this.workers.set(workerId, {
-          workerId: workerId,
-          vehicleId: undefined, // Postaviće se u runWorker
-          garageNumber: undefined, // Postaviće se u runWorker
-          status: 'idle',
-          progress: 0,
-          startTime: new Date()
-        });
-      }
       
       // Pokreni worker
       workerPromises.push(
@@ -304,10 +304,12 @@ export class LegacySyncWorkerPoolService {
     // this.logger.debug(`Worker ${workerId}: Počinje`);
     
     for (const vehicle of vehicles) {
-      const workerStatus = this.workers.get(workerId)!;
-      workerStatus.vehicleId = vehicle.id;
-      workerStatus.garageNumber = vehicle.garage_number;
-      workerStatus.status = 'exporting';
+      // Sada koristimo vehicle.id kao ključ
+      const workerStatus = this.workers.get(vehicle.id);
+      if (workerStatus) {
+        workerStatus.workerId = workerId; // Ažuriraj koji worker obrađuje ovo vozilo
+        workerStatus.status = 'exporting';
+      }
       
       const result = await this.syncVehicleWithWorker(
         workerId,
@@ -318,7 +320,7 @@ export class LegacySyncWorkerPoolService {
       
       results.push(result);
       
-      // Ažuriraj worker status - koristi vehicleId kao ključ
+      // Ažuriraj finalni status
       const finalWorkerStatus = this.workers.get(vehicle.id);
       if (finalWorkerStatus) {
         finalWorkerStatus.status = result.status === 'completed' ? 'completed' : 'failed';
@@ -377,10 +379,12 @@ export class LegacySyncWorkerPoolService {
       
       logs.push(`[Worker ${workerId}] 📊 Pronađeno ${totalRecords.toLocaleString()} GPS tačaka`);
       
-      // Ažuriraj worker status sa brojem tačaka
-      const workerStatus = this.workers.get(workerId)!;
-      workerStatus.totalRecords = totalRecords;
-      workerStatus.currentStep = `Pronađeno ${totalRecords.toLocaleString()} GPS tačaka`;
+      // Ažuriraj worker status sa brojem tačaka - koristi vehicle.id
+      const workerStatus = this.workers.get(vehicle.id);
+      if (workerStatus) {
+        workerStatus.totalRecords = totalRecords;
+        workerStatus.currentStep = `Pronađeno ${totalRecords.toLocaleString()} GPS tačaka`;
+      }
       
       if (totalRecords === 0) {
         logs.push(`[Worker ${workerId}] ⚠️ Nema podataka za period`);
@@ -443,10 +447,12 @@ export class LegacySyncWorkerPoolService {
         if (importSuccess) {
           logs.push(`[Worker ${workerId}] ✅ Import uspešan: ${importedCount} GPS tačaka`);
           
-          // Ažuriraj worker status sa obrađenim zapisima
-          const workerStatus = this.workers.get(workerId)!;
-          workerStatus.processedRecords = importedCount;
-          workerStatus.currentStep = `Import završen: ${importedCount.toLocaleString()} GPS tačaka`;
+          // Ažuriraj worker status sa obrađenim zapisima - koristi vehicle.id
+          const workerStatus = this.workers.get(vehicle.id);
+          if (workerStatus) {
+            workerStatus.processedRecords = importedCount;
+            workerStatus.currentStep = `Import završen: ${importedCount.toLocaleString()} GPS tačaka`;
+          }
         }
       } catch (error) {
         logs.push(`[Worker ${workerId}] ❌ Import greška: ${error.message}`);
