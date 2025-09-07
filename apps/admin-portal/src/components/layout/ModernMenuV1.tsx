@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useLocation, Link, useNavigate } from 'react-router-dom';
-import { Avatar, Dropdown, Button, Space, Tag } from 'antd';
+import { Avatar, Dropdown, Button } from 'antd';
 import { LogoutOutlined, UserOutlined } from '@ant-design/icons';
 import {
   Users,
@@ -203,12 +203,13 @@ const ModernMenuV1: React.FC = () => {
         },
       ].filter(item => !item.permissions || item.permissions.some(p => hasPermission(p))),
     },
-  ].filter(item => {
+  ].filter((item): item is MenuItem => {
     if (!item.permissions || item.permissions.some(p => hasPermission(p))) {
       return true;
     }
-    if (item.hasSubmenu === true && 'submenu' in item && Array.isArray(item.submenu) && item.submenu.length > 0) {
-      return true;
+    if (item.hasSubmenu === true) {
+      const submenuItems = (item as any).submenu;
+      return submenuItems && Array.isArray(submenuItems) && submenuItems.length > 0;
     }
     return false;
   });
@@ -442,21 +443,18 @@ const ModernMenuV1: React.FC = () => {
             </div>
             
             <div className="flex items-center space-x-4">
-              {/* Development mode indicator */}
-              {process.env.NODE_ENV === 'development' && (
-                <Tag color="orange">DEV</Tag>
-              )}
-              
               {/* User menu */}
               <Dropdown 
                 menu={{ items: userMenuItems }} 
                 placement="bottomRight"
                 arrow
               >
-                <Button type="text" className="flex items-center space-x-3 px-3 py-2">
-                  <span className="hidden sm:inline text-sm font-medium text-gray-700">
-                    {user?.firstName} {user?.lastName}
-                  </span>
+                <Button type="text" className="flex items-center space-x-2 px-2 py-1">
+                  {user && (
+                    <span className="text-sm font-medium text-gray-700">
+                      {user.firstName} {user.lastName}
+                    </span>
+                  )}
                   <Avatar 
                     src={getAvatarUrl(user?.email || '')} 
                     icon={<UserOutlined />}
