@@ -1,4 +1,5 @@
 // Dashboard kontroler - upravljanje korisničkim dashboard konfiguracijom
+// Ažurirano: 07.01.2025 - Dodata dashboard.update permisija kroz migraciju
 import {
   Controller,
   Get,
