@@ -108,6 +108,10 @@ class SlowSyncConfigDto {
   @IsNumber()
   @IsOptional()
   vacuumAfterBatches?: number;
+
+  @IsBoolean()
+  @IsOptional()
+  forceProcess?: boolean;
 }
 
 @ApiTags('Legacy GPS Sync')

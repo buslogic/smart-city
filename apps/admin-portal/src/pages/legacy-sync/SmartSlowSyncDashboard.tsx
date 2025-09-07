@@ -65,6 +65,7 @@ interface SlowSyncConfig {
   autoCleanup: boolean;
   compressAfterBatches: number;
   vacuumAfterBatches: number;
+  forceProcess: boolean;
 }
 
 interface SlowSyncProgress {
@@ -100,7 +101,8 @@ const PRESET_CONFIGS = {
     nightHoursStart: 20,
     nightHoursEnd: 8,
     maxDailyBatches: 30,
-    description: 'Agresivni parametri za brzu sinhronizaciju. Zahteva više resursa.',
+    forceProcess: true,
+    description: 'Agresivni parametri za brzu sinhronizaciju. Ignoriše noćne sate.',
   },
   balanced: {
     name: 'Balansirana (7-10 dana)',
@@ -112,7 +114,8 @@ const PRESET_CONFIGS = {
     nightHoursStart: 22,
     nightHoursEnd: 6,
     maxDailyBatches: 15,
-    description: 'Optimalan balans između brzine i resursa.',
+    forceProcess: false,
+    description: 'Optimalan balans između brzine i resursa. Poštuje noćne sate.',
   },
   conservative: {
     name: 'Konzervativna (12-15 dana)',
@@ -124,7 +127,8 @@ const PRESET_CONFIGS = {
     nightHoursStart: 23,
     nightHoursEnd: 5,
     maxDailyBatches: 10,
-    description: 'Sigurna opcija sa minimalnim opterećenjem servera.',
+    forceProcess: false,
+    description: 'Sigurna opcija sa minimalnim opterećenjem servera. Poštuje noćne sate.',
   },
 };
 
@@ -1565,6 +1569,15 @@ const SmartSlowSyncDashboard: React.FC = () => {
                 onChange={(checked) => setTempConfig({ ...tempConfig!, autoCleanup: checked })}
               />
               <Text>Auto cleanup nakon svakog batch-a</Text>
+            </Space>
+          </div>
+          <div>
+            <Space>
+              <Switch
+                checked={tempConfig?.forceProcess}
+                onChange={(checked) => setTempConfig({ ...tempConfig!, forceProcess: checked })}
+              />
+              <Text>Zaobilazi noćne sate (ignoriše vremensko ograničenje)</Text>
             </Space>
           </div>
 

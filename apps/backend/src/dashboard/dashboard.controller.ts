@@ -1,3 +1,4 @@
+// Dashboard kontroler - upravljanje korisničkim dashboard konfiguracijom
 import {
   Controller,
   Get,

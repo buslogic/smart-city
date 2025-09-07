@@ -6,6 +6,7 @@ import { Reflector } from '@nestjs/core';
 import * as express from 'express';
 import { join } from 'path';
 
+// Bootstrap aplikacije - inicijalizacija NestJS servera
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   

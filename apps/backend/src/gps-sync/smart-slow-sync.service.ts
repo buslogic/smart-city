@@ -22,6 +22,7 @@ export interface SlowSyncConfig {
   autoCleanup: boolean;
   compressAfterBatches: number;
   vacuumAfterBatches: number;
+  forceProcess: boolean;
 }
 
 export interface SlowSyncProgress {
@@ -190,6 +191,19 @@ export class SmartSlowSyncService implements OnModuleInit {
       this.currentConfig = this.getDefaultConfig();
     }
     
+    // Učitaj forceProcess kao separan setting
+    const forceProcessSetting = await this.getSetting<boolean>('smart_slow_sync.force_process');
+    
+    if (forceProcessSetting !== null && forceProcessSetting !== undefined) {
+      this.currentConfig.forceProcess = forceProcessSetting;
+      this.logger.log(`Učitan forceProcess iz baze: ${forceProcessSetting}`);
+    } else {
+      // Prvi put - postavi default false (UNCHECKED - poštuje noćne sate)
+      this.currentConfig.forceProcess = false;
+      await this.setSetting('smart_slow_sync.force_process', false);
+      this.logger.log(`Postavljen default forceProcess: false (UNCHECKED - poštuje noćne sate)`);
+    }
+    
     this.logger.debug(`Final currentConfig:`, JSON.stringify(this.currentConfig, null, 2));
   }
 
@@ -201,6 +215,7 @@ export class SmartSlowSyncService implements OnModuleInit {
       autoCleanup: true,
       compressAfterBatches: 5,
       vacuumAfterBatches: 20,
+      forceProcess: false,
     } as SlowSyncConfig;
   }
 
@@ -348,9 +363,19 @@ export class SmartSlowSyncService implements OnModuleInit {
       this.currentConfig = { ...this.currentConfig, ...config };
     }
 
+    // Sačuvaj forceProcess kao poseban setting
+    if (config.forceProcess !== undefined) {
+      await this.setSetting('smart_slow_sync.force_process', config.forceProcess);
+      this.logger.log(`forceProcess ažuriran u bazi: ${config.forceProcess}`);
+    }
+    
+    // Sačuvaj ostatak konfiguracije (bez forceProcess da ne bude duplo)
+    const configToSave = { ...this.currentConfig };
+    delete (configToSave as any).forceProcess; // Ukloni da ne bude duplo
+    
     await this.setSetting(
       this.SETTINGS_KEY + '_config',
-      this.currentConfig
+      configToSave
     );
 
     this.logger.log(`Konfiguracija ažurirana: ${JSON.stringify(this.currentConfig)}`);
@@ -388,8 +413,8 @@ export class SmartSlowSyncService implements OnModuleInit {
     if (this.vehicleQueue && this.vehicleQueue.length > 0) {
       // Ako nije pokrenut nijedan batch još uvek, pokreni prvi
       if (!this.progress.lastBatchAt && this.progress.currentBatch === 0) {
-        this.logger.log(`⏰ CRON: Pokrećem prvi batch automatski...`);
-        await this.processBatch(true);
+        this.logger.log(`⏰ CRON: Pokrećem prvi batch (forceProcess: ${this.currentConfig.forceProcess})...`);
+        await this.processBatch(this.currentConfig.forceProcess);
       } 
       // Inače proveri da li je vreme za sledeći batch
       else if (this.progress.lastBatchAt) {
@@ -399,8 +424,8 @@ export class SmartSlowSyncService implements OnModuleInit {
         const nextRunTime = new Date(lastBatch.getTime() + delayMs);
         
         if (now >= nextRunTime) {
-          this.logger.log(`⏰ CRON: Vreme je za sledeći batch! Pokrećem automatski...`);
-          await this.processBatch(true);
+          this.logger.log(`⏰ CRON: Vreme je za sledeći batch (forceProcess: ${this.currentConfig.forceProcess})!`);
+          await this.processBatch(this.currentConfig.forceProcess);
         } else {
           const remainingMinutes = Math.ceil((nextRunTime.getTime() - now.getTime()) / 60000);
           this.logger.log(`⏱️ CRON: Još ${remainingMinutes} minuta do sledećeg batch-a`);
