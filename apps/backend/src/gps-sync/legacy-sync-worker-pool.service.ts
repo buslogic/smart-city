@@ -5,6 +5,8 @@ import { promisify } from 'util';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { Client } from 'pg';
+import { TimeoutManager, TimeoutError } from '../common/utils/timeout-manager';
+import { RetryManager } from '../common/utils/retry-manager';
 
 const execAsync = promisify(exec);
 
@@ -50,6 +52,8 @@ interface WorkerStatus {
 @Injectable()
 export class LegacySyncWorkerPoolService {
   private readonly logger = new Logger(LegacySyncWorkerPoolService.name);
+  private readonly timeoutManager = new TimeoutManager();
+  private readonly retryManager = new RetryManager();
   
   // Worker Pool konfiguracija
   private config: WorkerPoolConfig = {
@@ -73,6 +77,7 @@ export class LegacySyncWorkerPoolService {
   
   constructor(private readonly prisma: PrismaService) {
     this.loadConfiguration();
+    this.logger.log('🚀 Worker Pool inicijalizovan sa timeout i retry podrškom');
   }
   
   /**
@@ -311,12 +316,35 @@ export class LegacySyncWorkerPoolService {
         workerStatus.status = 'exporting';
       }
       
-      const result = await this.syncVehicleWithWorker(
-        workerId,
-        vehicle,
-        syncFrom,
-        syncTo
-      );
+      // Pozovi syncVehicleWithWorker sa WORKER TIMEOUT wrapper-om
+      let result: WorkerResult;
+      try {
+        result = await this.timeoutManager.execWithWorkerTimeout(
+          this.syncVehicleWithWorker(workerId, vehicle, syncFrom, syncTo),
+          vehicle.id,
+          workerId
+        );
+      } catch (error) {
+        if (error instanceof TimeoutError) {
+          // Worker timeout - označi kao failed
+          this.logger.error(`⏱️ WORKER TIMEOUT za vozilo ${vehicle.garage_number} nakon 10 minuta!`);
+          result = {
+            workerId,
+            vehicleId: vehicle.id,
+            garageNumber: vehicle.garage_number,
+            status: 'failed',
+            processedRecords: 0,
+            totalRecords: 0,
+            startTime: new Date(),
+            endTime: new Date(),
+            duration: this.config.workerTimeout,
+            error: 'Worker timeout - operacija prekoračila 10 minuta',
+            logs: [`Worker timeout nakon ${this.config.workerTimeout}ms`]
+          };
+        } else {
+          throw error; // Re-throw druge greške
+        }
+      }
       
       results.push(result);
       
@@ -373,7 +401,7 @@ export class LegacySyncWorkerPoolService {
       
       const countCmd = `ssh -i ${this.SSH_KEY_PATH} root@${this.LEGACY_HOST} "mysql -uroot ${this.LEGACY_DB} -e 'SELECT COUNT(*) as total FROM ${tableName} WHERE captured >= \\"${fromDate} 00:00:00\\" AND captured <= \\"${toDate} 23:59:59\\"'"`;
       
-      const { stdout: countOutput } = await execAsync(countCmd);
+      const { stdout: countOutput } = await this.timeoutManager.execCommand(countCmd, this.timeoutManager.timeouts.SSH_COUNT, `COUNT za ${garageNo}`);
       const totalMatch = countOutput.match(/(\d+)/);
       const totalRecords = totalMatch ? parseInt(totalMatch[1]) : 0;
       
@@ -416,13 +444,31 @@ export class LegacySyncWorkerPoolService {
         ls -lh ${exportFileName}
       "`;
       
-      await execAsync(sshExportCmd);
+      // Export sa retry logikom (manje pokušaja jer traje dugo)
+      await this.retryManager.retryWithBackoff(async () => {
+        await this.timeoutManager.execCommand(
+          sshExportCmd,
+          this.timeoutManager.timeouts.SSH_EXPORT,
+          `EXPORT za ${garageNo}`
+        );
+      }, {
+        maxAttempts: 2, // Samo 2 pokušaja za export
+        operationName: `EXPORT za ${garageNo}`,
+        initialDelayMs: 5000 // 5 sekundi između pokušaja
+      });
       logs.push(`[Worker ${workerId}] 💾 Export završen: ${exportFileName}`);
       
       // Step 3: TRANSFER fajla
       updateWorkerStatus('transferring', 'Transfer fajla', 50);
       const scpCmd = `scp -i ${this.SSH_KEY_PATH} root@${this.LEGACY_HOST}:/tmp/${exportFileName} ${localPath}`;
-      await execAsync(scpCmd);
+      // Transfer sa retry logikom
+      await this.retryManager.retryNetworkOperation(async () => {
+        await this.timeoutManager.execCommand(
+          scpCmd,
+          this.timeoutManager.timeouts.SCP_TRANSFER,
+          `SCP TRANSFER za ${garageNo}`
+        );
+      }, `SCP transfer za ${garageNo}`);
       logs.push(`[Worker ${workerId}] 📥 Transfer završen`);
       
       // Step 4: IMPORT u TimescaleDB
@@ -479,11 +525,25 @@ export class LegacySyncWorkerPoolService {
         }
       }
       
-      // Step 6: CLEANUP
+      // Step 6: CLEANUP sa TIMEOUT (ali ne fail ako ne uspe)
       updateWorkerStatus('completed', 'Čišćenje', 90);
       try {
-        await execAsync(`rm -f ${localPath}`);
-        await execAsync(`ssh -i ${this.SSH_KEY_PATH} root@${this.LEGACY_HOST} "rm -f /tmp/${exportFileName}"`);
+        // Lokalni cleanup
+        await this.timeoutManager.execCommand(
+          `rm -f ${localPath}`,
+          this.timeoutManager.timeouts.CLEANUP,
+          'LOCAL CLEANUP'
+        );
+        
+        // Remote cleanup
+        const remoteCleanupCmd = `rm -f /tmp/${exportFileName}`;
+        await this.timeoutManager.execSSHCommand(
+          remoteCleanupCmd,
+          this.SSH_KEY_PATH,
+          this.LEGACY_HOST,
+          this.timeoutManager.timeouts.CLEANUP,
+          'REMOTE CLEANUP'
+        );
         logs.push(`[Worker ${workerId}] 🧹 Privremeni fajlovi obrisani`);
       } catch (cleanupError) {
         logs.push(`[Worker ${workerId}] ⚠️ Cleanup greška: ${cleanupError.message}`);
@@ -505,8 +565,28 @@ export class LegacySyncWorkerPoolService {
       };
       
     } catch (error) {
-      logs.push(`[Worker ${workerId}] ❌ Greška: ${error.message}`);
-      updateWorkerStatus('failed', 'Greška', 0);
+      // Detaljnije error handling
+      let errorMessage = error.message;
+      let errorType = 'UNKNOWN';
+      
+      if (error instanceof TimeoutError) {
+        errorType = 'TIMEOUT';
+        errorMessage = `Timeout: ${error.message}`;
+        this.logger.error(`⏱️ Timeout za ${garageNo}: ${error.message}`);
+      } else if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+        errorType = 'NETWORK';
+        errorMessage = `Network error: ${error.message}`;
+        this.logger.error(`🔌 Mrežna greška za ${garageNo}: ${error.message}`);
+      } else if (error.message?.includes('SSH')) {
+        errorType = 'SSH';
+        errorMessage = `SSH error: ${error.message}`;
+        this.logger.error(`🔐 SSH greška za ${garageNo}: ${error.message}`);
+      } else {
+        this.logger.error(`❌ Nepoznata greška za ${garageNo}: ${error.message}`);
+      }
+      
+      logs.push(`[Worker ${workerId}] ❌ ${errorType} greška: ${errorMessage}`);
+      updateWorkerStatus('failed', `${errorType} greška`, 0);
       
       return {
         workerId,
@@ -518,7 +598,7 @@ export class LegacySyncWorkerPoolService {
         startTime,
         endTime: new Date(),
         duration: Date.now() - startTime.getTime(),
-        error: error.message,
+        error: errorMessage,
         logs
       };
     }
