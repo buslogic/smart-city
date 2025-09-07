@@ -5,14 +5,13 @@ WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
-COPY prisma ./prisma/
 
 # Install dependencies (including ts-node for seed)
 RUN npm ci --only=production && \
     npm install -g @nestjs/cli prisma && \
     npm install --save-dev ts-node typescript @types/node
 
-# Copy source code
+# Copy source code (including prisma folder)
 COPY . .
 
 # Generate Prisma client

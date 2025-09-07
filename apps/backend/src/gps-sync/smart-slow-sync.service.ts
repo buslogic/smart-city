@@ -6,7 +6,8 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 export enum SlowSyncPreset {
   FAST = 'fast',
   BALANCED = 'balanced', 
-  CONSERVATIVE = 'conservative'
+  CONSERVATIVE = 'conservative',
+  CUSTOM = 'custom'
 }
 
 export interface SlowSyncConfig {
@@ -87,6 +88,10 @@ export class SmartSlowSyncService implements OnModuleInit {
       nightHoursStart: 23,
       nightHoursEnd: 5,
       maxDailyBatches: 10,
+    },
+    [SlowSyncPreset.CUSTOM]: {
+      // Custom nema predefinisane vrednosti - korisnik sam podešava
+      // Koristi default vrednosti iz getDefaultConfig()
     },
   };
 
