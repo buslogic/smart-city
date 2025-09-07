@@ -203,7 +203,7 @@ const ModernMenuV1: React.FC = () => {
         },
       ].filter(item => !item.permissions || item.permissions.some(p => hasPermission(p))),
     },
-  ].filter((item): item is MenuItem => {
+  ].filter(item => {
     if (!item.permissions || item.permissions.some(p => hasPermission(p))) {
       return true;
     }
@@ -212,7 +212,7 @@ const ModernMenuV1: React.FC = () => {
       return submenuItems && Array.isArray(submenuItems) && submenuItems.length > 0;
     }
     return false;
-  });
+  }) as MenuItem[];
 
   // Hijerarhijski rendering sa pravilnim uvlačenjem
   const renderMenuItem = (item: MenuItem, level: number = 0) => {
@@ -456,10 +456,9 @@ const ModernMenuV1: React.FC = () => {
                     </span>
                   )}
                   <Avatar 
-                    src={getAvatarUrl(user?.email || '')} 
-                    icon={<UserOutlined />}
+                    src={getAvatarUrl(user?.avatar)} 
+                    icon={!user?.avatar && <UserOutlined />}
                     size="default"
-                    style={{ backgroundColor: '#1890ff' }}
                   />
                 </Button>
               </Dropdown>
