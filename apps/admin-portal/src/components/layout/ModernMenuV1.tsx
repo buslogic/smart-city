@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useLocation, Link, useNavigate } from 'react-router-dom';
+import { Avatar, Dropdown, Button, Space, Tag } from 'antd';
+import { LogoutOutlined, UserOutlined } from '@ant-design/icons';
 import {
   Users,
   Menu as MenuIcon,
@@ -19,30 +21,15 @@ import {
   Activity,
   LayoutDashboard,
   ChevronRight,
-  Wrench,
-  Calendar,
-  FileClock,
-  AlertCircle,
   Database,
   Radio,
-  Route,
-  MapPin,
-  TrendingUp,
-  UserCheck,
-  Fuel,
   Gauge,
-  Wifi,
-  WifiOff,
-  Battery,
-  Download,
-  Upload,
-  Zap,
-  LogOut,
-  User,
   Hash,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth.store';
 import { usePermissions } from '../../hooks/usePermissions';
+import { getAvatarUrl } from '../../utils/avatar';
+import PermissionsDebugger from '../permissions/PermissionsDebugger';
 
 interface MenuItem {
   name: string;
@@ -154,7 +141,7 @@ const ModernMenuV1: React.FC = () => {
               href: '/transport/dispatcher/gps-sync',
               icon: Radio,
               permissions: ['dispatcher:sync_gps'],
-              badge: { text: 'LIVE', type: 'danger' },
+              badge: { text: 'LIVE', type: 'danger' as const },
             },
           ].filter(item => !item.permissions || item.permissions.some(p => hasPermission(p))),
         },
@@ -170,7 +157,7 @@ const ModernMenuV1: React.FC = () => {
               href: '/transport/safety/aggressive-driving',
               icon: Gauge,
               permissions: ['safety:view_aggressive'],
-              badge: { text: '7', type: 'warning' },
+              badge: { text: '7', type: 'warning' as const },
             },
             {
               name: 'Mesečni Izveštaj',
@@ -372,8 +359,26 @@ const ModernMenuV1: React.FC = () => {
     );
   };
 
+  const userMenuItems = [
+    {
+      key: 'profile',
+      label: 'Profil',
+      icon: <UserOutlined />,
+      onClick: () => navigate('/users/profile'),
+    },
+    {
+      type: 'divider',
+    },
+    {
+      key: 'logout',
+      label: 'Odjava',
+      icon: <LogoutOutlined />,
+      onClick: logout,
+    },
+  ];
+
   return (
-    <div className="h-screen flex overflow-hidden bg-white">
+    <div className="h-screen flex overflow-hidden bg-gray-50">
       {/* Sidebar */}
       <div className={`${sidebarOpen ? 'block' : 'hidden'} lg:flex lg:flex-shrink-0`}>
         <div className="flex flex-col w-64">
@@ -392,29 +397,6 @@ const ModernMenuV1: React.FC = () => {
             <nav className="flex-1 px-2 py-4 space-y-0">
               {navigation.map((item) => renderMenuItem(item))}
             </nav>
-
-            {/* User section */}
-            <div className="border-t border-gray-200 p-4">
-              <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-                  <User className="h-4 w-4 text-gray-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
-                    {user?.firstName} {user?.lastName}
-                  </p>
-                  <p className="text-xs text-gray-500 truncate">
-                    {user?.email}
-                  </p>
-                </div>
-                <button
-                  onClick={logout}
-                  className="p-1 text-gray-400 hover:text-gray-600"
-                >
-                  <LogOut className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -431,11 +413,65 @@ const ModernMenuV1: React.FC = () => {
 
       {/* Main content */}
       <div className="flex flex-col flex-1 overflow-hidden">
-        <main className="flex-1 relative overflow-y-auto focus:outline-none">
+        {/* Header */}
+        <header className="bg-white shadow-sm">
+          <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-4">
+            <div className="flex items-center">
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="lg:hidden p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:bg-gray-100"
+              >
+                {sidebarOpen ? <X className="h-6 w-6" /> : <MenuIcon className="h-6 w-6" />}
+              </button>
+              <h1 className="ml-2 text-xl font-semibold text-gray-900">
+                {/* Dinamički naslov na osnovu trenutne rute */}
+                {navigation.find(item => 
+                  item.href === location.pathname || 
+                  item.submenu?.some(sub => sub.href === location.pathname)
+                )?.name || 
+                navigation.flatMap(item => item.submenu || [])
+                  .find(sub => sub.href === location.pathname)?.name || 
+                'Smart City Admin'}
+              </h1>
+            </div>
+            
+            <div className="flex items-center space-x-4">
+              {/* Development mode indicator */}
+              {process.env.NODE_ENV === 'development' && (
+                <Tag color="orange">DEV</Tag>
+              )}
+              
+              {/* User menu */}
+              <Dropdown 
+                menu={{ items: userMenuItems }} 
+                placement="bottomRight"
+                arrow
+              >
+                <Button type="text" className="flex items-center space-x-2 p-2">
+                  <Avatar 
+                    src={getAvatarUrl(user?.email || '')} 
+                    icon={<UserOutlined />}
+                    size="default"
+                  />
+                  <Space className="hidden sm:flex">
+                    <span className="text-sm font-medium text-gray-700">
+                      {user?.firstName} {user?.lastName}
+                    </span>
+                  </Space>
+                </Button>
+              </Dropdown>
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 relative overflow-y-auto focus:outline-none bg-gray-50">
           <div className="py-6 px-4 sm:px-6 lg:px-8">
             <Outlet />
           </div>
         </main>
+
+        {/* Permissions Debugger */}
+        {process.env.NODE_ENV === 'development' && <PermissionsDebugger />}
       </div>
     </div>
   );

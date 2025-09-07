@@ -4,8 +4,6 @@ import srRS from 'antd/locale/sr_RS';
 import { AuthGuard } from './components/guards/AuthGuard';
 import { PermissionGuard } from './components/guards/PermissionGuard';
 import MainLayout from './components/layout/MainLayout';
-import MainLayoutEnhanced from './components/layout/MainLayoutEnhanced';
-import MainLayoutV3 from './components/layout/MainLayoutV3';
 import ModernMenuV1 from './components/layout/ModernMenuV1';
 import { LoginPage } from './pages/LoginPage';
 import UserAdministration from './pages/users/UserAdministration';
