@@ -615,6 +615,66 @@ const SmartSlowSyncDashboard: React.FC = () => {
                         </Button>
                       </>
                     )}
+                    {progress?.status === 'waiting_for_next_batch' && (
+                      <>
+                        <Popconfirm
+                          title="Zaustavi Smart Slow Sync?"
+                          description="Da li ste sigurni da želite zaustaviti proces tokom pauze? Progress će biti sačuvan."
+                          onConfirm={async () => {
+                            try {
+                              setLoading(true);
+                              await api.post('/api/legacy-sync/slow-sync/stop');
+                              message.success('Smart Slow Sync zaustavljen');
+                              await fetchProgress();
+                            } catch (error: any) {
+                              console.error('Stop error:', error);
+                              message.error(error.response?.data?.message || 'Greška pri zaustavljanju');
+                            } finally {
+                              setLoading(false);
+                            }
+                          }}
+                          okText="Da, zaustavi"
+                          cancelText="Otkaži"
+                        >
+                          <Button
+                            danger
+                            size="large"
+                            icon={<StopOutlined />}
+                            loading={loading}
+                          >
+                            Zaustavi
+                          </Button>
+                        </Popconfirm>
+                        <Popconfirm
+                          title="Resetuj Smart Slow Sync?"
+                          description="UPOZORENJE: Ovo će obrisati sav progress i početi potpuno ispočetka!"
+                          onConfirm={async () => {
+                            try {
+                              setLoading(true);
+                              await api.delete('/api/legacy-sync/slow-sync/reset');
+                              message.success('Smart Slow Sync resetovan');
+                              await fetchProgress();
+                            } catch (error: any) {
+                              message.error(error.response?.data?.message || 'Greška pri resetovanju');
+                            } finally {
+                              setLoading(false);
+                            }
+                          }}
+                          okText="Da, resetuj sve"
+                          cancelText="Otkaži"
+                          okButtonProps={{ danger: true }}
+                        >
+                          <Button
+                            type="default"
+                            size="large"
+                            icon={<DeleteOutlined />}
+                            loading={loading}
+                          >
+                            Reset
+                          </Button>
+                        </Popconfirm>
+                      </>
+                    )}
                     {progress?.status === 'completed' && (
                       <>
                         <Button
@@ -813,6 +873,22 @@ const SmartSlowSyncDashboard: React.FC = () => {
                         />
                       </Col>
                     </Row>
+                    
+                    <Divider />
+                    
+                    <Alert
+                      message="Opcije tokom pauze"
+                      description={
+                        <Space direction="vertical" size="small">
+                          <Text>Možete da zaustavite ili resetujete proces korišćenjem dugmića u header-u.</Text>
+                          <Text type="secondary">• Zaustavi - zaustavlja proces ali čuva progress</Text>
+                          <Text type="secondary">• Reset - briše sav progress i počinje ispočetka</Text>
+                        </Space>
+                      }
+                      type="info"
+                      showIcon
+                      style={{ marginTop: 16 }}
+                    />
                   </div>
                 ) : progress.status === 'running' ? (
                   <Row gutter={16}>
