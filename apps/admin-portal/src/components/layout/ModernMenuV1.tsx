@@ -206,7 +206,7 @@ const ModernMenuV1: React.FC = () => {
   ].filter(item => 
     !item.permissions || 
     item.permissions.some(p => hasPermission(p)) || 
-    (item.hasSubmenu && item.submenu && item.submenu.length > 0)
+    (item.hasSubmenu === true && item.submenu !== undefined && item.submenu.length > 0)
   );
 
   // Hijerarhijski rendering sa pravilnim uvlačenjem
@@ -238,7 +238,7 @@ const ModernMenuV1: React.FC = () => {
               level === 0 ? 'py-2.5 border-b border-gray-100' : 
               level === 1 && item.hasSubmenu ? 'py-1 border-b border-gray-100' : 'py-1'
             } ${
-              level === 0 ? 'text-base' : 'text-sm'
+              level === 0 ? 'text-lg' : 'text-sm'
             } transition-all duration-200 ${
               item.isOpen 
                 ? 'text-blue-600 font-medium' 
@@ -304,7 +304,7 @@ const ModernMenuV1: React.FC = () => {
           ? 'text-blue-600 font-medium' 
           : 'text-gray-600 hover:text-gray-900'
       } ${
-        level === 0 ? 'text-base' : level === 1 ? 'text-sm' : 'text-xs'
+        level === 0 ? 'text-lg' : level === 1 ? 'text-sm' : 'text-xs'
       }`}>
         <div className="flex items-center space-x-2">
           {level > 0 && (
@@ -367,7 +367,8 @@ const ModernMenuV1: React.FC = () => {
       onClick: () => navigate('/users/profile'),
     },
     {
-      type: 'divider',
+      type: 'divider' as const,
+      key: 'divider',
     },
     {
       key: 'logout',
