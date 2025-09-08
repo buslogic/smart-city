@@ -155,6 +155,9 @@ export class GpsProcessorService {
     });
     const batchNumber = (lastBatch?.batchNumber || 0) + 1;
     
+    // 🔴 DEBUG: Log početak batch-a sa timestamp
+    this.logger.log(`🔴 DEBUG: Batch #${batchNumber} START at ${new Date().toISOString()}, timestamp: ${startTime}`);
+    
     // Kreiraj batch history zapis
     const batchHistory = await this.prisma.gpsBatchHistory.create({
       data: {
@@ -175,19 +178,31 @@ export class GpsProcessorService {
     const chunkSize = Math.ceil(this.settings.batchSize / workerCount);
     const workerPromises: Promise<any>[] = [];
     
+    // 🔴 DEBUG: Log pre pokretanja worker-a
+    this.logger.log(`🔴 DEBUG: Kreiranje ${workerCount} worker-a, chunkSize: ${chunkSize}`);
+    
     for (let i = 0; i < workerCount; i++) {
       const offset = i * chunkSize;
       const limit = Math.min(chunkSize, this.settings.batchSize - offset);
       
       if (limit <= 0) break; // Nema više podataka za ovaj worker
       
+      // 🔴 DEBUG: Log kad se kreira svaki worker promise
+      this.logger.log(`🔴 DEBUG: Kreiram Worker ${i + 1} sa limit=${limit} at ${new Date().toISOString()}`);
+      
       workerPromises.push(
         this.processWorkerChunk(i + 1, offset, limit, batchHistory.id)
       );
     }
     
+    // 🔴 DEBUG: Log pre čekanja
+    this.logger.log(`🔴 DEBUG: Svi worker promises kreirani, čekam Promise.allSettled at ${new Date().toISOString()}`);
+    
     // Čekaj da svi worker-i završe
     const workerResults = await Promise.allSettled(workerPromises);
+    
+    // 🔴 DEBUG: Log posle čekanja
+    this.logger.log(`🔴 DEBUG: Promise.allSettled završen at ${new Date().toISOString()}`);
     
     // Agregiraj rezultate i pripremaj worker detalje
     let totalProcessed = 0;
@@ -245,6 +260,11 @@ export class GpsProcessorService {
     const totalTime = Date.now() - startTime;
     const avgRecordsPerSecond = totalProcessed / (totalTime / 1000);
     
+    // 🔴 DEBUG: Log finalne kalkulacije
+    this.logger.log(`🔴 DEBUG: FINAL - startTime: ${startTime}, now: ${Date.now()}, totalTime: ${totalTime}ms`);
+    this.logger.log(`🔴 DEBUG: Worker durations: ${workerDetails.map(w => w.duration).join(', ')}ms`);
+    this.logger.log(`🔴 DEBUG: Sum of worker durations: ${workerDetails.reduce((sum, w) => sum + w.duration, 0)}ms`);
+    
     // Ažuriraj batch history
     await this.prisma.gpsBatchHistory.update({
       where: { id: batchHistory.id },
@@ -286,6 +306,9 @@ export class GpsProcessorService {
     const workerStart = Date.now();
     const startedAt = new Date();
     const processingSteps: any[] = [];
+    
+    // 🔴 DEBUG: Log početak worker-a
+    this.logger.log(`🔴 DEBUG: Worker ${workerId} STARTED at ${startedAt.toISOString()}, timestamp: ${workerStart}`);
     
     // Kreiraj worker log na početku
     const workerLog = await this.prisma.gpsWorkerLog.create({
@@ -419,6 +442,11 @@ export class GpsProcessorService {
           processingSteps
         }
       });
+      
+      // 🔴 DEBUG: Log završetak worker-a
+      this.logger.log(
+        `🔴 DEBUG: Worker ${workerId} FINISHED at ${completedAt.toISOString()}, duration: ${workerTime}ms, processed: ${result.processedCount}`
+      );
       
       this.logger.debug(
         `Worker ${workerId}: Završen - ${result.processedCount} procesirano za ${workerTime}ms`
