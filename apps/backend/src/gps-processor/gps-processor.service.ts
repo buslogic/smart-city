@@ -187,12 +187,16 @@ export class GpsProcessorService {
     });
     
     // Centralizovan refresh continuous aggregates
+    // 🔴 TEMP: Isključeno za optimizaciju brzine real-time sync-a
+    /*
     if (timeRanges.length > 0) {
       const overallMin = timeRanges.reduce((min, r) => r.min < min ? r.min : min, timeRanges[0].min);
       const overallMax = timeRanges.reduce((max, r) => r.max > max ? r.max : max, timeRanges[0].max);
       
       await this.refreshContinuousAggregates(overallMin, overallMax);
     }
+    */
+    this.logger.debug('⚡ Refresh aggregates preskočen za brzinu');
     
     const totalTime = Date.now() - startTime;
     this.logger.log(
@@ -315,12 +319,17 @@ export class GpsProcessorService {
         `;
 
         // 5. Detekcija agresivne vožnje
-        await this.detectAggressiveDriving(batch);
+        // 🔴 TEMP: Isključeno za optimizaciju brzine real-time sync-a
+        // await this.detectAggressiveDriving(batch);
+        this.logger.debug('⚡ Aggressive driving detekcija preskočena za brzinu');
         
         // 6. Refresh continuous aggregates
+        // 🔴 TEMP: Isključeno za optimizaciju brzine real-time sync-a
+        /*
         if (result.timeRange) {
           await this.refreshContinuousAggregates(result.timeRange.min, result.timeRange.max);
         }
+        */
       }
       
       const processingTime = Date.now() - startTime;
