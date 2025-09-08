@@ -137,6 +137,13 @@ const ModernMenuV1: React.FC = () => {
               permissions: ['vehicles:sync'],
             },
             {
+              name: 'GPS Real-Time Sync',
+              href: '/transport/gps-buffer-status',
+              icon: Database,
+              permissions: ['dispatcher:sync_gps'],
+              description: 'Status GPS buffer tabele',
+            },
+            {
               name: 'Legacy Sync',
               href: '/transport/legacy-sync',
               icon: RefreshCw,

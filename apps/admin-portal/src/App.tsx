@@ -100,6 +100,15 @@ function App() {
             />
             
             <Route 
+              path="transport/gps-buffer-status" 
+              element={
+                <PermissionGuard permissions={['dispatcher:sync_gps']}>
+                  <GpsSyncDashboard />
+                </PermissionGuard>
+              } 
+            />
+            
+            <Route 
               path="transport/dispatcher/map-vehicles" 
               element={
                 <PermissionGuard permissions={['dispatcher:view_map']}>
