@@ -76,6 +76,10 @@ const ModernMenuV1: React.FC = () => {
     if (path.includes('/settings/')) expandedSections.add('Podešavanje');
     if (path.includes('/dispatcher/')) expandedSections.add('Dispečerski Modul');
     if (path.includes('/safety/')) expandedSections.add('Bezbednost');
+    if (path.includes('/maintenance/')) {
+      expandedSections.add('Autobuski Prevoznici');
+      expandedSections.add('Alati za održavanje');
+    }
     setExpandedSections(new Set(expandedSections));
   }, [location.pathname]);
 
@@ -198,6 +202,21 @@ const ModernMenuV1: React.FC = () => {
               href: '/transport/safety/monthly-report',
               icon: FileText,
               permissions: ['safety:view_report'],
+            },
+          ].filter(item => !item.permissions || item.permissions.some(p => hasPermission(p))),
+        },
+        {
+          name: 'Alati za održavanje',
+          icon: Settings,
+          hasSubmenu: true,
+          isOpen: expandedSections.has('Alati za održavanje'),
+          setOpen: () => toggleSection('Alati za održavanje'),
+          submenu: [
+            {
+              name: 'TimescaleDB',
+              href: '/transport/maintenance/timescaledb',
+              icon: Database,
+              permissions: ['maintenance.timescaledb.view'],
             },
           ].filter(item => !item.permissions || item.permissions.some(p => hasPermission(p))),
         },

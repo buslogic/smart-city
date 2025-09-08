@@ -315,6 +315,21 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
                 color: getPermissionColor(p.action),
               })),
           },
+          {
+            id: 'maintenance-tools',
+            name: 'Alati za održavanje',
+            type: 'section',
+            icon: <Settings className="h-4 w-4" />,
+            children: allPermissions
+              .filter(p => p.resource.startsWith('maintenance.') || p.resource === 'maintenance')
+              .map(p => ({
+                id: `perm-${p.id}`,
+                name: getPermissionLabel(p),
+                type: 'permission' as const,
+                permission: p,
+                color: getPermissionColor(p.action),
+              })),
+          },
         ],
       },
       {
@@ -357,6 +372,17 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
   };
 
   const getPermissionLabel = (permission: Permission): string => {
+    // Specifični labeli za maintenance permisije
+    if (permission.resource === 'maintenance.timescaledb') {
+      const maintenanceLabels: Record<string, string> = {
+        'view': 'Pregled TimescaleDB alata',
+        'manage': 'Upravljanje TimescaleDB alatima',
+      };
+      if (maintenanceLabels[permission.action]) {
+        return maintenanceLabels[permission.action];
+      }
+    }
+    
     // Specifični labeli za dispatcher permisije
     if (permission.resource === 'dispatcher') {
       const dispatcherLabels: Record<string, string> = {

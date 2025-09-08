@@ -20,6 +20,7 @@ import MonthlyReport from './pages/transport/safety/MonthlyReport';
 import { LegacySyncPage } from './pages/legacy-sync/LegacySyncPage';
 import Profile from './pages/users/Profile';
 import DashboardPage from './pages/dashboard/DashboardPage';
+import TimescaleDB from './pages/transport/maintenance/TimescaleDB';
 
 function App() {
   return (
@@ -167,6 +168,15 @@ function App() {
               element={
                 <PermissionGuard permissions={['safety:view_report']}>
                   <MonthlyReport />
+                </PermissionGuard>
+              } 
+            />
+            
+            <Route 
+              path="transport/maintenance/timescaledb" 
+              element={
+                <PermissionGuard permissions={['maintenance.timescaledb.view']}>
+                  <TimescaleDB />
                 </PermissionGuard>
               } 
             />

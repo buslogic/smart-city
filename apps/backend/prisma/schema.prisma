@@ -313,20 +313,14 @@ model GpsRawBuffer {
   errorMessage  String?   @map("error_message") @db.Text
   source        String    @default("legacy") @db.VarChar(50)
   rawData       Json?     @map("raw_data")
-  workerGroup   Int?      @map("worker_group") @db.TinyInt // Za optimizovanu raspodelu po worker-ima (MOD(vehicle_id, 8))
+  workerGroup   Int?      @map("worker_group") @db.TinyInt
 
-  // Stari indeksi za brisanje:
-  // - idx_status_received (zamenjen sa idx_status_only i idx_worker_select)
-  // - idx_processing (duplikat, pokriveno sa idx_worker_select)
-  // - idx_garage_timestamp (retko se koristi)
-
-  // Optimizovani indeksi za 5M+ zapisa
-  @@index([processStatus], map: "idx_status_only") // Za COUNT(*) GROUP BY process_status - KRITIČNO za dashboard
-  @@index([processStatus, retryCount, receivedAt], map: "idx_worker_select") // Za worker SELECT sa FOR UPDATE SKIP LOCKED
-  @@index([workerGroup, processStatus, retryCount], map: "idx_worker_group") // NOVO: Za brzu raspodelu po worker-ima
-  @@index([processedAt, processStatus], map: "idx_cleanup") // Za cleanup CRON
-  @@index([receivedAt], map: "idx_received_at") // Za sortiranje po vremenu
-  @@index([vehicleId, timestamp], map: "idx_vehicle_timestamp") // Za unique check u TimescaleDB
+  @@index([processStatus], map: "idx_status_only")
+  @@index([processStatus, retryCount, receivedAt], map: "idx_worker_select")
+  @@index([workerGroup, processStatus, retryCount], map: "idx_worker_group")
+  @@index([processedAt, processStatus], map: "idx_cleanup")
+  @@index([receivedAt], map: "idx_received_at")
+  @@index([vehicleId, timestamp], map: "idx_vehicle_timestamp")
   @@map("gps_raw_buffer")
 }
 
@@ -496,40 +490,26 @@ model UserDashboardWidget {
 }
 
 model GpsBatchHistory {
-  id          String    @id @default(uuid())
-  batchNumber Int       @map("batch_number")
-  startedAt   DateTime  @map("started_at")
-  completedAt DateTime? @map("completed_at")
-  status      String    @db.VarChar(20) // pending, processing, completed, failed
-
-  // Batch configuration
-  batchSize       Int @map("batch_size")
-  actualProcessed Int @default(0) @map("actual_processed")
-  failedRecords   Int @default(0) @map("failed_records")
-
-  // Worker information
-  workerCount   Int   @map("worker_count")
-  workerDetails Json? @map("worker_details") // Array of worker stats
-
-  // Performance metrics
-  totalDurationMs     Int?   @map("total_duration_ms")
-  avgRecordsPerSecond Float? @map("avg_records_per_second")
-
-  // Source information
-  sourceTable  String? @map("source_table") @db.VarChar(50)
-  cronInterval Int?    @map("cron_interval") // seconds
-
-  // Error tracking
-  errorMessage String? @map("error_message") @db.Text
-  errorDetails Json?   @map("error_details")
-
-  // Metadata
-  processedBy String?  @map("processed_by") @db.VarChar(100) // server/instance info
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  workerLogs GpsWorkerLog[]
+  id                  String         @id @default(uuid())
+  batchNumber         Int            @map("batch_number")
+  startedAt           DateTime       @map("started_at")
+  completedAt         DateTime?      @map("completed_at")
+  status              String         @db.VarChar(20)
+  batchSize           Int            @map("batch_size")
+  actualProcessed     Int            @default(0) @map("actual_processed")
+  failedRecords       Int            @default(0) @map("failed_records")
+  workerCount         Int            @map("worker_count")
+  workerDetails       Json?          @map("worker_details")
+  totalDurationMs     Int?           @map("total_duration_ms")
+  avgRecordsPerSecond Float?         @map("avg_records_per_second")
+  sourceTable         String?        @map("source_table") @db.VarChar(50)
+  cronInterval        Int?           @map("cron_interval")
+  errorMessage        String?        @map("error_message") @db.Text
+  errorDetails        Json?          @map("error_details")
+  processedBy         String?        @map("processed_by") @db.VarChar(100)
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
+  workerLogs          GpsWorkerLog[]
 
   @@index([startedAt])
   @@index([status])
@@ -538,50 +518,27 @@ model GpsBatchHistory {
 }
 
 model GpsWorkerLog {
-  id       String @id @default(uuid())
-  batchId  String @map("batch_id")
-  workerId Int    @map("worker_id")
-
-  // Timing information
-  startedAt   DateTime  @map("started_at")
-  completedAt DateTime? @map("completed_at")
-  durationMs  Int?      @map("duration_ms")
-
-  // Processing information
-  status           String @db.VarChar(20) // started, processing, completed, failed
-  recordsAssigned  Int    @map("records_assigned") // koliko je dobio na početku
-  recordsProcessed Int    @default(0) @map("records_processed") // koliko je uspešno obradio
-  recordsFailed    Int    @default(0) @map("records_failed")
-  recordsPerSecond Float? @map("records_per_second")
-
-  // Worker details
-  chunkSize Int? @map("chunk_size") // veličina chunk-a koji je dobio
-  offset    Int? @map("offset") // offset u batch-u
-
-  // Processing steps log (JSON array)
-  processingSteps Json? @map("processing_steps") // Array of steps
-  /**
-   * Example structure:
-   * [
-   * { step: "fetch_data", startedAt: "2024-01-01T12:00:00", completedAt: "2024-01-01T12:00:01", recordsCount: 2500, status: "success" },
-   * { step: "mark_processing", startedAt: "2024-01-01T12:00:01", completedAt: "2024-01-01T12:00:01.100", status: "success" },
-   * { step: "insert_timescale", startedAt: "2024-01-01T12:00:01.100", completedAt: "2024-01-01T12:00:01.500", recordsInserted: 2500, status: "success" },
-   * { step: "mark_processed", startedAt: "2024-01-01T12:00:01.500", completedAt: "2024-01-01T12:00:01.600", status: "success" }
-   * ]
-   */
-
-  // Error tracking
-  errorMessage String? @map("error_message") @db.Text
-  errorStack   String? @map("error_stack") @db.Text
-  failedIds    Json?   @map("failed_ids") // Array of record IDs that failed
-
-  // Metadata
-  processedBy String?  @map("processed_by") @db.VarChar(100) // server/thread info
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  batch GpsBatchHistory @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  id               String          @id @default(uuid())
+  batchId          String          @map("batch_id")
+  workerId         Int             @map("worker_id")
+  startedAt        DateTime        @map("started_at")
+  completedAt      DateTime?       @map("completed_at")
+  durationMs       Int?            @map("duration_ms")
+  status           String          @db.VarChar(20)
+  recordsAssigned  Int             @map("records_assigned")
+  recordsProcessed Int             @default(0) @map("records_processed")
+  recordsFailed    Int             @default(0) @map("records_failed")
+  recordsPerSecond Float?          @map("records_per_second")
+  chunkSize        Int?            @map("chunk_size")
+  offset           Int?            @map("offset")
+  processingSteps  Json?           @map("processing_steps")
+  errorMessage     String?         @map("error_message") @db.Text
+  errorStack       String?         @map("error_stack") @db.Text
+  failedIds        Json?           @map("failed_ids")
+  processedBy      String?         @map("processed_by") @db.VarChar(100)
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+  batch            GpsBatchHistory @relation(fields: [batchId], references: [id], onDelete: Cascade)
 
   @@index([batchId])
   @@index([workerId])
