@@ -194,7 +194,7 @@ const ModernMenuV1: React.FC = () => {
             },
           ].filter(item => !item.permissions || item.permissions.some(p => hasPermission(p))),
         },
-      ].filter(item => !item.permissions || item.permissions.some(p => hasPermission(p)) || item.hasSubmenu),
+      ].filter(item => item.hasSubmenu || (item.permissions && item.permissions.some((p: string) => hasPermission(p)))),
     },
     
     {
