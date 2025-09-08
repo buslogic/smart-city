@@ -2,28 +2,34 @@
 
 ## ⚠️ VAŽNO: Konvencija imenovanja permisija
 
-### OBAVEZNO koristiti TAČKU (.) za separaciju, NE DVOTAČKU (:)
+### OBAVEZNO koristiti DVOTAČKU (:) na KRAJU između resursa i akcije
 
-**✅ ISPRAVNO:**
-- `maintenance.timescaledb.view`
-- `dashboard.widgets.gps.view` 
-- `settings.general.read`
-- `legacy_sync.manage`
+**✅ ISPRAVNO FORMAT:**
+```
+[modul].[resurs]:[akcija]
+```
+
+**✅ ISPRAVNI PRIMERI:**
+- `maintenance.timescaledb:view`
+- `dashboard.widgets.gps:view` 
+- `settings.general:read`
+- `legacy_sync:manage`
+- `vehicles:read`
+- `dispatcher:sync_gps`
 
 **❌ POGREŠNO:**
-- `maintenance:timescaledb:view`
-- `dispatcher:sync_gps`
-- `vehicles:read`
+- `maintenance.timescaledb.view` (koristi tačku umesto dvotačke pre akcije)
+- `maintenance:timescaledb:view` (previše dvotačaka)
 
-### Format permisije:
-```
-[modul].[resurs].[akcija]
-```
+### Detaljno objašnjenje formata:
+- Koristi **TAČKU (.)** za separaciju modula i pod-modula
+- Koristi **DVOTAČKU (:)** SAMO pre finalne akcije
 
 Primeri:
-- `maintenance.timescaledb.view` - modul: maintenance, resurs: timescaledb, akcija: view
-- `transport.vehicles.create` - modul: transport, resurs: vehicles, akcija: create
-- `settings.api.update` - modul: settings, resurs: api, akcija: update
+- `maintenance.timescaledb:view` - modul: maintenance, resurs: timescaledb, akcija: view
+- `dashboard.widgets.vehicles:view` - modul: dashboard, pod-modul: widgets, resurs: vehicles, akcija: view
+- `settings:read` - resurs: settings, akcija: read
+- `vehicles:create` - resurs: vehicles, akcija: create
 
 ### Standardne akcije:
 - `view` ili `read` - pregled
@@ -40,8 +46,8 @@ Primeri:
 
 **Vreme potrebno:** 5-10 minuta
 
-### ⚠️ PRE POČETKA: Permisije MORAJU koristiti TAČKU (.)
-Primer: `maintenance.timescaledb.view` ✅ NE `maintenance:timescaledb:view` ❌
+### ⚠️ PRE POČETKA: Permisije MORAJU koristiti DVOTAČKU (:) pre akcije
+Primer: `maintenance.timescaledb:view` ✅ NE `maintenance.timescaledb.view` ❌
 
 ### 1.1 **Dodavanje opcije u meni komponentu**
 Fajl: `/apps/admin-portal/src/components/layout/ModernMenuV1.tsx`
@@ -59,7 +65,7 @@ Fajl: `/apps/admin-portal/src/components/layout/ModernMenuV1.tsx`
       name: 'TimescaleDB',
       href: '/transport/maintenance/timescaledb',  // Putanja
       icon: Database,
-      permissions: ['maintenance.timescaledb.view'],  // Permisija sa TAČKOM
+      permissions: ['maintenance.timescaledb:view'],  // Permisija sa DVOTAČKOM pre akcije
     },
   ].filter(item => !item.permissions || item.permissions.some(p => hasPermission(p))),
 },

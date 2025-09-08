@@ -175,7 +175,7 @@ function App() {
             <Route 
               path="transport/maintenance/timescaledb" 
               element={
-                <PermissionGuard permissions={['maintenance.timescaledb.view']}>
+                <PermissionGuard permissions={['maintenance.timescaledb:view']}>
                   <TimescaleDB />
                 </PermissionGuard>
               } 

@@ -601,6 +601,7 @@ export class GpsProcessorService {
           receivedAt: new Date(),
           satellites: 0,
           state: 0,
+          workerGroup: point.vehicleId % 8, // Dodeljuje worker grupu na osnovu vehicle ID (0-7)
           // gpsTime se čuva u rawData
         };
 
