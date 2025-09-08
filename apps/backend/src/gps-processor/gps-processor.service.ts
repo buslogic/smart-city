@@ -318,13 +318,19 @@ export class GpsProcessorService {
     });
     
     try {
-      // Step 1: Fetch data
+      // Step 1: Fetch data - VAŽNO: Grupiši po vehicle_id da izbegneš deadlock!
+      // Svaki worker uzima podatke za različita vozila koristeći modulo operaciju
       const fetchStart = new Date();
+      
+      // Koristi worker ID da odrediš koja vozila ovaj worker obrađuje
+      // Ovo osigurava da različiti worker-i rade sa različitim vozilima
+      const totalWorkers = this.settings.workerCount || 8;
       const batch = await this.prisma.$queryRaw<any[]>`
         SELECT * FROM gps_raw_buffer 
         WHERE process_status = 'pending' 
         AND retry_count < 3
-        ORDER BY received_at ASC
+        AND MOD(vehicle_id, ${totalWorkers}) = ${workerId - 1}
+        ORDER BY vehicle_id, received_at ASC
         LIMIT ${limit}
         FOR UPDATE SKIP LOCKED
       `;
