@@ -56,17 +56,6 @@ const ModernMenuV1: React.FC = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
   const { hasPermission } = usePermissions();
-  
-  // Debug log za permisije
-  useEffect(() => {
-    console.log('===== MENU DEBUG =====');
-    console.log('User:', user?.email);
-    console.log('Roles:', user?.roles);
-    console.log('All permissions:', user?.permissions);
-    console.log('Has maintenance.timescaledb:view?', user?.permissions?.includes('maintenance.timescaledb:view'));
-    console.log('hasPermission check:', hasPermission('maintenance.timescaledb:view'));
-    console.log('======================');
-  }, [user, hasPermission]);
 
   const toggleSection = (sectionName: string) => {
     const newExpanded = new Set(expandedSections);

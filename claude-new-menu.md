@@ -133,7 +133,7 @@ import TimescaleDB from './pages/transport/maintenance/TimescaleDB';
 <Route 
   path="transport/maintenance/timescaledb" 
   element={
-    <PermissionGuard permissions={['maintenance.timescaledb.view']}>
+    <PermissionGuard permissions={['maintenance.timescaledb:view']}>
       <TimescaleDB />
     </PermissionGuard>
   } 
@@ -144,14 +144,14 @@ import TimescaleDB from './pages/transport/maintenance/TimescaleDB';
 
 #### Frontend permisija:
 - Koristi se u `PermissionGuard` komponenti
-- Format: `['maintenance.timescaledb.view']` (sa TAČKOM!)
+- Format: `['maintenance.timescaledb:view']` (sa DVOTAČKOM pre akcije!)
 
 #### Backend permisija (ako treba):
 Dodaj u `/apps/backend/src/permissions/config/route-permissions.config.ts`:
 ```typescript
 {
   route: '/transport/maintenance/timescaledb',
-  requiredPermissions: ['maintenance.timescaledb.view'],
+  requiredPermissions: ['maintenance.timescaledb:view'],
   optionalPermissions: [],
 }
 ```
@@ -169,7 +169,7 @@ Dodaj u `/apps/backend/src/permissions/config/route-permissions.config.ts`:
 Tabela: `permissions`
 
 Polja:
-- `name` - jedinstveno ime (npr. `maintenance.timescaledb.view`)
+- `name` - jedinstveno ime (npr. `maintenance.timescaledb:view`)
 - `resource` - resurs (npr. `maintenance.timescaledb`)
 - `action` - akcija (npr. `view`)
 - `description` - opis na engleskom
@@ -181,7 +181,7 @@ Polja:
 ```sql
 INSERT INTO permissions (name, resource, action, description, description_sr, category)
 VALUES (
-  'maintenance.timescaledb.view',
+  'maintenance.timescaledb:view',
   'maintenance.timescaledb',
   'view',
   'View TimescaleDB maintenance page',
@@ -195,28 +195,28 @@ VALUES (
 ```sql
 -- Dodeli permisiju SUPER_ADMIN roli (obično ima role_id = 1)
 INSERT INTO role_permissions (role_id, permission_id)
-SELECT 1, id FROM permissions WHERE name = 'maintenance.timescaledb.view';
+SELECT 1, id FROM permissions WHERE name = 'maintenance.timescaledb:view';
 
 -- Ili za specifičnu rolu po nazivu
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id 
 FROM roles r, permissions p 
 WHERE r.name = 'SUPER_ADMIN' 
-AND p.name = 'maintenance.timescaledb.view';
+AND p.name = 'maintenance.timescaledb:view';
 ```
 
 ### 2.4 **Provera**
 
 ```sql
 -- Proveri da li je permisija kreirana
-SELECT * FROM permissions WHERE name = 'maintenance.timescaledb.view';
+SELECT * FROM permissions WHERE name = 'maintenance.timescaledb:view';
 
 -- Proveri koje role imaju ovu permisiju
 SELECT r.name as role_name, p.name as permission_name
 FROM role_permissions rp
 JOIN roles r ON rp.role_id = r.id
 JOIN permissions p ON rp.permission_id = p.id
-WHERE p.name = 'maintenance.timescaledb.view';
+WHERE p.name = 'maintenance.timescaledb:view';
 ```
 
 ---
@@ -262,6 +262,6 @@ Ako treba dodati samo jednu opciju bez grupe:
   name: 'Ime Opcije',
   href: '/transport/ime-opcije',
   icon: IconName,
-  permissions: ['modul.resurs.akcija'],  // SA TAČKOM!
+  permissions: ['modul.resurs:akcija'],  // SA DVOTAČKOM pre akcije!
 }
 ```
