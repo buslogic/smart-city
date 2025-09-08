@@ -132,21 +132,11 @@ export class GpsProcessorService {
    * Novi Worker Pool pristup - paralelno procesiranje
    */
   private async processWithWorkerPool(workerCount: number) {
-    const startTime = Date.now();
+    // 🔴 DEBUG: Log početak metode
+    this.logger.log(`🔴 DEBUG: processWithWorkerPool CALLED at ${new Date().toISOString()}`);
     
-    // Proveri koliko ima pending zapisa
-    const pendingCount = await this.prisma.$queryRaw<[{ count: bigint }]>`
-      SELECT COUNT(*) as count 
-      FROM gps_raw_buffer 
-      WHERE process_status = 'pending' 
-      AND retry_count < 3
-    `;
-    
-    const totalPending = Number(pendingCount[0]?.count || 0);
-    
-    if (totalPending === 0) {
-      return; // Nema podataka
-    }
+    // SKIP COUNT QUERY - nepotreban i spor na 5M+ zapisa!
+    // Worker-i će ionako uzeti samo ono što mogu sa LIMIT
     
     // Generiši batch number (možda treba čuvati u servisu kao counter)
     const lastBatch = await this.prisma.gpsBatchHistory.findFirst({
@@ -155,8 +145,11 @@ export class GpsProcessorService {
     });
     const batchNumber = (lastBatch?.batchNumber || 0) + 1;
     
+    // POMERAJ startTime OVDE - posle COUNT query-ja!
+    const startTime = Date.now();
+    
     // 🔴 DEBUG: Log početak batch-a sa timestamp
-    this.logger.log(`🔴 DEBUG: Batch #${batchNumber} START at ${new Date().toISOString()}, timestamp: ${startTime}`);
+    this.logger.log(`🔴 DEBUG: Batch #${batchNumber} REAL START at ${new Date().toISOString()}, timestamp: ${startTime}`);
     
     // Kreiraj batch history zapis
     const batchHistory = await this.prisma.gpsBatchHistory.create({
@@ -172,7 +165,7 @@ export class GpsProcessorService {
       }
     });
     
-    this.logger.log(`🚀 Batch #${batchNumber}: Pokrećem Worker Pool sa ${workerCount} worker-a za ${totalPending} zapisa`);
+    this.logger.log(`🚀 Batch #${batchNumber}: Pokrećem Worker Pool sa ${workerCount} worker-a`);
     
     // Podeli posao na worker-e
     const chunkSize = Math.ceil(this.settings.batchSize / workerCount);

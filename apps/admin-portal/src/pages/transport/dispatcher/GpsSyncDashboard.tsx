@@ -175,13 +175,31 @@ const GpsSyncDashboard: React.FC = () => {
     refetchIntervalInBackground: false,
   });
 
+  // Batch History state (premešten gore)
+  const [batchHistory, setBatchHistory] = useState<any[]>([]);
+  const [batchHistoryLoading, setBatchHistoryLoading] = useState(false);
+
+  // Fetch batch history (premešten gore)
+  const fetchBatchHistory = useCallback(async () => {
+    setBatchHistoryLoading(true);
+    try {
+      const response = await api.get('/api/gps-sync-dashboard/batch-history');
+      setBatchHistory(response.data.batches || []);
+    } catch (error) {
+      console.error('Error fetching batch history:', error);
+    } finally {
+      setBatchHistoryLoading(false);
+    }
+  }, []);
+
   const handleManualRefresh = useCallback(() => {
     refetchBuffer();
     refetchStats();
     refetchTimescale();
     refetchCron();
     refetchConnection();
-  }, [refetchBuffer, refetchStats, refetchTimescale, refetchCron, refetchConnection]);
+    fetchBatchHistory(); // Dodaj refresh za batch history
+  }, [refetchBuffer, refetchStats, refetchTimescale, refetchCron, refetchConnection, fetchBatchHistory]);
 
   const handleCronControl = useCallback(async (action: 'start' | 'stop', cronName: string, instance?: number) => {
     setControllingCron(`${cronName}-${action}`);
@@ -366,37 +384,25 @@ const GpsSyncDashboard: React.FC = () => {
     },
   ];
 
-  // Batch History state
-  const [batchHistory, setBatchHistory] = useState<any[]>([]);
-  const [batchHistoryLoading, setBatchHistoryLoading] = useState(false);
-  
   // Worker Details Modal state
   const [selectedWorker, setSelectedWorker] = useState<any>(null);
   const [workerModalVisible, setWorkerModalVisible] = useState(false);
 
-  // Fetch batch history
-  const fetchBatchHistory = useCallback(async () => {
-    setBatchHistoryLoading(true);
-    try {
-      const response = await api.get('/api/gps-sync-dashboard/batch-history');
-      setBatchHistory(response.data.batches || []);
-    } catch (error) {
-      console.error('Error fetching batch history:', error);
-    } finally {
-      setBatchHistoryLoading(false);
-    }
-  }, []);
-
   // Fetch batch history on mount and when refreshing
   useEffect(() => {
     fetchBatchHistory();
-  }, []);
+  }, [fetchBatchHistory]);
 
-  // Add to manual refresh
-  const handleManualRefreshWithHistory = useCallback(() => {
-    handleManualRefresh();
-    fetchBatchHistory();
-  }, [handleManualRefresh, fetchBatchHistory]);
+  // Auto-refresh batch history
+  useEffect(() => {
+    if (!autoRefresh) return;
+    
+    const interval = setInterval(() => {
+      fetchBatchHistory();
+    }, 30000); // Svaki 30 sekundi kao i ostali
+
+    return () => clearInterval(interval);
+  }, [autoRefresh, fetchBatchHistory]);
   
   // Handle worker details modal
   const showWorkerDetails = (worker: any, batchNumber: number) => {
@@ -422,7 +428,7 @@ const GpsSyncDashboard: React.FC = () => {
             </Text>
             <Button
               icon={<ReloadOutlined />}
-              onClick={handleManualRefreshWithHistory}
+              onClick={handleManualRefresh}
               loading={isLoadingBuffer}
             >
               Osveži
@@ -1419,12 +1425,12 @@ const GpsSyncDashboard: React.FC = () => {
             name="batchSize"
             rules={[
               { required: true, message: 'Obavezno polje' },
-              { type: 'number', min: 100, max: 20000, message: 'Vrednost mora biti između 100 i 20000' }
+              { type: 'number', min: 100, max: 100000, message: 'Vrednost mora biti između 100 i 100000' }
             ]}
           >
             <InputNumber 
               min={100} 
-              max={20000} 
+              max={100000} 
               step={1000}
               style={{ width: '100%' }}
               addonAfter="tačaka"
