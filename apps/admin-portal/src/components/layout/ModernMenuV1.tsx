@@ -118,6 +118,33 @@ const ModernMenuV1: React.FC = () => {
       setOpen: () => toggleSection('Autobuski Prevoznici'),
       submenu: [
         {
+          name: 'Vozila',
+          icon: Car,
+          hasSubmenu: true,
+          isOpen: expandedSections.has('Vozila'),
+          setOpen: () => toggleSection('Vozila'),
+          submenu: [
+            {
+              name: 'Vozila',
+              href: '/transport/vehicles',
+              icon: Car,
+              permissions: ['vehicles:read'],
+            },
+            {
+              name: 'Sinhronizacija',
+              href: '/transport/vehicle-sync',
+              icon: RefreshCw,
+              permissions: ['vehicles:sync'],
+            },
+            {
+              name: 'Legacy Sync',
+              href: '/transport/legacy-sync',
+              icon: RefreshCw,
+              permissions: ['legacy_sync.view'],
+            },
+          ].filter(item => !item.permissions || item.permissions.some(p => hasPermission(p))),
+        },
+        {
           name: 'Dispečerski Modul',
           icon: Navigation,
           hasSubmenu: true,
@@ -167,24 +194,6 @@ const ModernMenuV1: React.FC = () => {
             },
           ].filter(item => !item.permissions || item.permissions.some(p => hasPermission(p))),
         },
-        {
-          name: 'Vozila',
-          href: '/transport/vehicles',
-          icon: Car,
-          permissions: ['vehicles:read'],
-        },
-        {
-          name: 'Sinhronizacija',
-          href: '/transport/vehicle-sync',
-          icon: RefreshCw,
-          permissions: ['vehicles:sync'],
-        },
-        {
-          name: 'Legacy Sync',
-          href: '/transport/legacy-sync',
-          icon: Database,
-          permissions: ['legacy_sync.view'],
-        },
       ].filter(item => !item.permissions || item.permissions.some(p => hasPermission(p)) || item.hasSubmenu),
     },
     
@@ -232,15 +241,15 @@ const ModernMenuV1: React.FC = () => {
 
       return (
         <div key={item.name} className={`${
-          level === 0 && item.name === 'Dashboard' ? 'mb-4' : ''
+          level === 0 && item.name === 'Dashboard' ? 'mb-1' : ''
         }`}>
           <button
             onClick={() => item.setOpen?.(!item.isOpen)}
             onMouseEnter={() => setHoveredItem(item.name)}
             onMouseLeave={() => setHoveredItem(null)}
-            style={{ paddingLeft }}
+            style={{ paddingLeft, paddingTop: level === 0 ? '0.6875rem' : undefined, paddingBottom: level === 0 ? '0.6875rem' : undefined }}
             className={`w-full flex items-center justify-between pr-3 bg-white ${
-              level === 0 ? 'py-2.5 border-b border-gray-100' : 
+              level === 0 ? 'border-b border-gray-100' : 
               level === 1 && item.hasSubmenu ? 'py-1 border-b border-gray-100' : 'py-1'
             } ${
               level === 0 && item.isOpen ? 'text-lg' : 
@@ -302,9 +311,9 @@ const ModernMenuV1: React.FC = () => {
 
     const content = (
       <div 
-        style={{ paddingLeft }}
+        style={{ paddingLeft, paddingTop: level === 0 ? '0.6875rem' : undefined, paddingBottom: level === 0 ? '0.6875rem' : undefined }}
         className={`flex items-center justify-between pr-3 bg-white ${
-          level === 0 ? 'py-2.5 border-b border-gray-100' : 'py-1'
+          level === 0 ? 'border-b border-gray-100' : 'py-1'
         } transition-all duration-200 ${
         isActive 
           ? 'text-blue-600 font-medium' 
@@ -342,7 +351,7 @@ const ModernMenuV1: React.FC = () => {
 
     return (
       <div key={item.name} className={`${
-        level === 0 && item.name === 'Dashboard' ? 'mb-4' : ''
+        level === 0 && item.name === 'Dashboard' ? 'mb-1' : ''
       }`}>
         {item.href ? (
           <Link
@@ -421,8 +430,8 @@ const ModernMenuV1: React.FC = () => {
       {/* Main content */}
       <div className="flex flex-col flex-1 overflow-hidden">
         {/* Header */}
-        <header className="bg-white shadow-sm">
-          <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-4">
+        <header className="bg-white shadow-sm h-16">
+          <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 h-full">
             <div className="flex items-center">
               <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}

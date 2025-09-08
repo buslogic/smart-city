@@ -406,6 +406,15 @@ export class SmartSlowSyncService implements OnModuleInit {
       return;
     }
     
+    // NOVA PROVERA - ako je status 'running' ali još procesira trenutni batch, ne diraj
+    if (this.progress && 
+        this.progress.status === 'running' && 
+        this.progress.vehiclesInCurrentBatch && 
+        this.progress.vehiclesInCurrentBatch.length > 0) {
+      this.logger.debug(`⏳ CRON: Batch ${this.progress.currentBatch} još uvek u toku, čekam da završi...`);
+      return;
+    }
+    
     // Posebno rukuj waiting_for_next_batch stanjem
     if (this.progress && this.progress.status === 'waiting_for_next_batch') {
       const now = new Date();
@@ -549,6 +558,40 @@ export class SmartSlowSyncService implements OnModuleInit {
         this.progress.currentBatch > 1 // Zadrži completed statuse ako nije prvi batch
       );
       
+      // NOVA VERIFIKACIJA - proveri da li su svi rezultati vraćeni
+      if (workerResults.size !== batchVehicles.length) {
+        this.logger.warn(
+          `⚠️ UPOZORENJE: Očekivano ${batchVehicles.length} rezultata, ` +
+          `dobijeno ${workerResults.size}! Proveravam koja vozila nedostaju...`
+        );
+        
+        // Pronađi koja vozila nedostaju
+        const missingVehicles = batchVehicles.filter(
+          vehicleId => !workerResults.has(vehicleId)
+        );
+        
+        if (missingVehicles.length > 0) {
+          this.logger.error(`❌ Nedostaju rezultati za vozila sa ID: ${missingVehicles.join(', ')}`);
+          
+          // Označi nedostajuća vozila kao failed
+          missingVehicles.forEach(vehicleId => {
+            workerResults.set(vehicleId, {
+              workerId: 0,
+              vehicleId,
+              garageNumber: `ID:${vehicleId}`,
+              status: 'failed',
+              processedRecords: 0,
+              totalRecords: 0,
+              startTime: new Date(),
+              endTime: new Date(),
+              duration: 0,
+              error: 'Rezultat nije vraćen iz Worker Pool-a - mogući timeout ili greška',
+              logs: ['Worker nije vratio rezultat za ovo vozilo']
+            } as any);
+          });
+        }
+      }
+      
       // Konvertuj rezultate u format koji o\u010dekujemo
       let successCount = 0;
       let totalGpsPoints = 0;
@@ -664,7 +707,19 @@ export class SmartSlowSyncService implements OnModuleInit {
         await this.performVacuum();
       }
 
-      this.logger.log(`Batch ${this.progress.currentBatch} završen za ${duration.toFixed(1)} minuta`);
+      // DETALJNI LOGGING za debug
+      this.logger.log(`
+📊 BATCH ${this.progress.currentBatch} ZAVRŠEN - DETALJAN IZVEŠTAJ:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• Vozila u batch-u: ${batchVehicles.length}
+• Rezultata dobijeno: ${workerResults.size}
+• Uspešnih: ${successCount}
+• Neuspešnih: ${failedVehicles.length}
+• GPS tačaka procesiranih: ${totalGpsPoints.toLocaleString()}
+• Vreme procesiranja: ${duration.toFixed(1)} minuta
+• Preostalo u queue: ${this.vehicleQueue.length}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      `);
       
       // Ako ima još vozila, prebaci u waiting stanje
       if (this.vehicleQueue && this.vehicleQueue.length > 0) {
@@ -672,22 +727,32 @@ export class SmartSlowSyncService implements OnModuleInit {
         this.logger.log(`📊 Preostalo vozila u queue: ${this.vehicleQueue.length}`);
         this.logger.log(`🔄 CRON će automatski pokrenuti sledeći batch nakon pauze (proverava svake 2 minuta)`);
         
-        // Prebaci u waiting stanje i očisti trenutne vozila
-        this.progress.status = 'waiting_for_next_batch';
-        this.progress.vehiclesInCurrentBatch = []; // Očisti kartice vozila
-        this.progress.lastBatchAt = new Date();
-        
         // Izračunaj kada će početi sledeći batch
+        // ISPRAVKA: Koristi setTime() umesto setMinutes() da bi pravilno rukovalo preliv minuta
         const nextBatchTime = new Date();
-        nextBatchTime.setMinutes(nextBatchTime.getMinutes() + this.currentConfig.batchDelayMinutes);
-        this.progress.nextBatchStartTime = nextBatchTime;
+        nextBatchTime.setTime(nextBatchTime.getTime() + (this.currentConfig.batchDelayMinutes * 60 * 1000));
+        
+        // ATOMSKI UPDATE - sve promene odjednom da se izbegne race condition
+        this.progress = {
+          ...this.progress,
+          status: 'waiting_for_next_batch',
+          vehiclesInCurrentBatch: [], // Očisti kartice vozila
+          lastBatchAt: new Date(),
+          nextBatchStartTime: nextBatchTime
+        };
         
         await this.saveProgress();
       } else {
         this.logger.log(`✅ Svi batch-ovi završeni! Ukupno procesiranih vozila: ${this.progress.processedVehicles}`);
-        this.progress.status = 'completed';
-        this.progress.completedAt = new Date();
-        this.progress.vehiclesInCurrentBatch = []; // Očisti i za completed
+        
+        // ATOMSKI UPDATE - sve promene odjednom
+        this.progress = {
+          ...this.progress,
+          status: 'completed',
+          completedAt: new Date(),
+          vehiclesInCurrentBatch: [] // Očisti i za completed
+        };
+        
         await this.saveProgress();
       }
       

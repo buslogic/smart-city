@@ -38,6 +38,13 @@ const MainLayout: React.FC = () => {
   const { user, logout } = useAuthStore();
   const { canReadUsers, canReadRoles, hasPermission } = usePermissions();
 
+  // Debug - proveri permisije
+  console.log('User permissions check:', {
+    vehicles_read: hasPermission('vehicles:read'),
+    vehicles_sync: hasPermission('vehicles:sync'),
+    legacy_sync_view: hasPermission('legacy_sync.view'),
+  });
+
   // Filtriranje navigacije na osnovu permisija
   const navigation = [
     {
@@ -72,8 +79,12 @@ const MainLayout: React.FC = () => {
       isOpen: transportMenuOpen,
       setOpen: setTransportMenuOpen,
       submenu: [
-        // Novi podfolder Vozila
-        {
+        // Novi podfolder Vozila - prikaži samo ako ima bar jednu vidljivu opciju
+        (() => {
+          const hasVehiclePerms = hasPermission('vehicles:read') || hasPermission('vehicles:sync') || hasPermission('legacy_sync.view');
+          console.log('Vozila submenu should show:', hasVehiclePerms);
+          return hasVehiclePerms;
+        })() && {
           name: 'Vozila',
           icon: Car,
           hasSubmenu: true,
