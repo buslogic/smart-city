@@ -106,6 +106,20 @@ export class SmartSlowSyncService implements OnModuleInit {
 
   async onModuleInit() {
     await this.initializeProgress();
+    
+    // 🔴 FIX: Učitaj isRunning iz baze pri pokretanju
+    const savedIsRunning = await this.getSetting<boolean>('smart_slow_sync.is_running');
+    if (savedIsRunning !== null) {
+      this.isRunning = savedIsRunning;
+      
+      // Proveri konzistentnost pri pokretanju
+      if (this.isRunning && this.progress?.status === 'completed') {
+        this.logger.warn('⚠️ Nekonzistentno stanje pri pokretanju - resetujem isRunning');
+        await this.setRunningState(false, 'Konzistentnost check pri pokretanju');
+      } else {
+        this.logger.log(`📌 isRunning učitan iz baze: ${this.isRunning}`);
+      }
+    }
   }
 
   // Helper metode za rad sa system settings
@@ -402,6 +416,13 @@ export class SmartSlowSyncService implements OnModuleInit {
 
   @Cron('*/2 * * * *') // Svake 2 minuta proveri da li treba pokrenuti sledeći batch
   async checkBatchSchedule() {
+    // 🔴 FIX: Proveri konzistentnost stanja pre svega
+    if (this.isRunning && this.progress?.status === 'completed') {
+      this.logger.warn('⚠️ Detektovano nekonzistentno stanje: isRunning=true ali status=completed. Resetujem...');
+      this.isRunning = false;
+      await this.saveProgress(); // Sačuvaj izmenu
+    }
+    
     if (!this.isRunning || this.isPaused) {
       return;
     }
@@ -730,7 +751,11 @@ export class SmartSlowSyncService implements OnModuleInit {
         // Izračunaj kada će početi sledeći batch
         // ISPRAVKA: Koristi setTime() umesto setMinutes() da bi pravilno rukovalo preliv minuta
         const nextBatchTime = new Date();
-        nextBatchTime.setTime(nextBatchTime.getTime() + (this.currentConfig.batchDelayMinutes * 60 * 1000));
+        const delayMs = this.currentConfig.batchDelayMinutes * 60 * 1000;
+        this.logger.log(`⏱️ DEBUG: batchDelayMinutes=${this.currentConfig.batchDelayMinutes}, delayMs=${delayMs}ms`);
+        nextBatchTime.setTime(nextBatchTime.getTime() + delayMs);
+        this.logger.log(`⏱️ DEBUG: Sledeći batch u ${nextBatchTime.toISOString()}`);
+        
         
         // ATOMSKI UPDATE - sve promene odjednom da se izbegne race condition
         this.progress = {
@@ -754,6 +779,10 @@ export class SmartSlowSyncService implements OnModuleInit {
         };
         
         await this.saveProgress();
+        
+        // 🔴 FIX: Resetuj isRunning flag kada su svi batch-ovi završeni
+        this.isRunning = false;
+        this.logger.log('🔄 isRunning resetovan na false - svi batch-ovi završeni');
       }
       
     } catch (error) {
@@ -784,6 +813,12 @@ export class SmartSlowSyncService implements OnModuleInit {
         timestamp: new Date(),
       });
       await this.saveProgress();
+    } finally {
+      // 🔴 FIX: Dodatna provera da se isRunning resetuje ako je sync završen
+      if (this.progress?.status === 'completed' && this.isRunning) {
+        this.logger.log('🔄 Finally blok: Resetujem isRunning flag jer je status completed');
+        this.isRunning = false;
+      }
     }
   }
 
@@ -1076,6 +1111,22 @@ export class SmartSlowSyncService implements OnModuleInit {
       this.SETTINGS_KEY + '_progress',
       this.progress
     );
+  }
+
+  /**
+   * 🔴 FIX: Centralizovana metoda za menjanje isRunning stanja sa logging-om
+   */
+  private async setRunningState(value: boolean, reason: string): Promise<void> {
+    const oldValue = this.isRunning;
+    this.isRunning = value;
+    
+    // Log svaku promenu
+    if (oldValue !== value) {
+      this.logger.log(`🔄 isRunning: ${oldValue} → ${value} (Razlog: ${reason})`);
+    }
+    
+    // Sačuvaj u bazu za perzistentnost
+    await this.setSetting('smart_slow_sync.is_running', value);
   }
 
   async resetProgress(): Promise<void> {

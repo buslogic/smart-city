@@ -797,4 +797,81 @@ export class LegacySyncController {
       throw error;
     }
   }
+
+  /**
+   * 🔴 FIX: Health check endpoint za monitoring Smart Slow Sync stanja
+   */
+  @Get('smart-slow-sync/health')
+  @RequirePermissions('legacy_sync.view')
+  @ApiOperation({ summary: 'Health check za Smart Slow Sync' })
+  @ApiResponse({
+    status: 200,
+    description: 'Health status Smart Slow Sync sistema',
+  })
+  async getSmartSlowSyncHealth(): Promise<any> {
+    try {
+      const progress = await this.slowSyncService.getProgress();
+      const config = await this.slowSyncService.getConfig();
+      
+      // Pristup privatnim properti-ima preko bracket notacije
+      const isRunning = this.slowSyncService['isRunning'];
+      const isPaused = this.slowSyncService['isPaused'];
+      
+      // Proveri konzistentnost
+      const isConsistent = !(isRunning && progress?.status === 'completed');
+      
+      return {
+        isRunning,
+        isPaused,
+        progress,
+        config,
+        timestamp: new Date(),
+        isConsistent,
+        warning: !isConsistent 
+          ? 'Nekonzistentno stanje - isRunning=true ali status=completed' 
+          : null,
+        healthStatus: isConsistent ? 'healthy' : 'unhealthy',
+      };
+    } catch (error) {
+      this.logger.error('Error getting Smart Slow Sync health', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 🔴 FIX: Force reset endpoint za emergency situacije
+   */
+  @Post('smart-slow-sync/force-reset')
+  @RequirePermissions('legacy_sync.manage')
+  @ApiOperation({ summary: 'Force reset Smart Slow Sync sistema' })
+  @ApiResponse({
+    status: 200,
+    description: 'Sistem je uspešno resetovan',
+  })
+  async forceResetSmartSlowSync(): Promise<any> {
+    this.logger.warn('Force reset Smart Slow Sync requested');
+    
+    try {
+      // Force reset sve - pristup privatnim properti-ima
+      this.slowSyncService['isRunning'] = false;
+      this.slowSyncService['isPaused'] = false;
+      
+      // Resetuj progress
+      await this.slowSyncService.resetProgress();
+      
+      // Obriši isRunning iz baze
+      await this.slowSyncService['setSetting']('smart_slow_sync.is_running', false);
+      
+      this.logger.log('Smart Slow Sync je force resetovan');
+      
+      return {
+        success: true,
+        message: 'Smart Slow Sync je uspešno force resetovan',
+        timestamp: new Date(),
+      };
+    } catch (error) {
+      this.logger.error('Error during force reset', error);
+      throw error;
+    }
+  }
 }

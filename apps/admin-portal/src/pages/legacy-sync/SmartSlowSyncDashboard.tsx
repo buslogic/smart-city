@@ -838,7 +838,7 @@ const SmartSlowSyncDashboard: React.FC = () => {
                       <Statistic.Countdown 
                         title="Sledeći batch počinje za:" 
                         value={dayjs(progress.nextBatchStartTime).valueOf()} 
-                        format="mm:ss"
+                        format="HH:mm:ss"
                         valueStyle={{ fontSize: 32, color: '#1890ff' }}
                         onFinish={() => {
                           message.info('Vreme je za sledeći batch!');
