@@ -609,6 +609,71 @@ export class GpsSyncDashboardController {
     };
   }
 
+  @Get('batch-history')
+  @RequirePermissions('dispatcher:view_sync_dashboard')
+  @ApiOperation({ summary: 'Istorija batch procesiranja' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Batch history'
+  })
+  async getBatchHistory() {
+    try {
+      // Čitaj iz nove gps_batch_history tabele
+      const batches = await this.prisma.gpsBatchHistory.findMany({
+        where: {
+          status: { in: ['completed', 'failed'] }
+        },
+        orderBy: { startedAt: 'desc' },
+        take: 3
+      });
+
+      // Mapiraj podatke za frontend
+      const batchHistory = batches.map((batch, index) => {
+        // Parsuj worker detalje iz JSON-a
+        const workerDetails = batch.workerDetails as any[] || [];
+        
+        // Kreiraj worker podatke za prikaz
+        const workers = workerDetails.map(w => ({
+          workerId: w.workerId,
+          processed: w.processed || 0,
+          duration: w.duration || 0,
+          status: w.status || 'unknown',
+          recordsPerSecond: w.duration > 0 ? Math.round(w.processed / (w.duration / 1000)) : 0,
+          startedAt: w.startedAt || null,
+          completedAt: w.completedAt || null
+        }));
+        
+        return {
+          id: batch.id,
+          batchNumber: batch.batchNumber,
+          startedAt: batch.startedAt,
+          completedAt: batch.completedAt,
+          totalRecords: batch.actualProcessed + batch.failedRecords, // Ukupno pokušano
+          processedRecords: batch.actualProcessed,
+          failedRecords: batch.failedRecords,
+          batchSize: batch.batchSize,
+          workerCount: batch.workerCount,
+          totalDuration: batch.totalDurationMs,
+          avgRecordsPerSecond: batch.avgRecordsPerSecond,
+          workers: workers,
+          status: batch.status,
+          errorMessage: batch.errorMessage
+        };
+      });
+      
+      return {
+        success: true,
+        batches: batchHistory
+      };
+    } catch (error) {
+      this.logger.error('Error fetching batch history:', error);
+      return {
+        success: false,
+        batches: []
+      };
+    }
+  }
+
   @Post('cron-control')
   @RequirePermissions('dispatcher.manage_cron')
   @ApiOperation({ summary: 'Kontrola cron procesa (start/stop)' })

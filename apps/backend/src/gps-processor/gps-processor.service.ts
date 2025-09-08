@@ -148,7 +148,28 @@ export class GpsProcessorService {
       return; // Nema podataka
     }
     
-    this.logger.log(`🚀 Pokrećem Worker Pool sa ${workerCount} worker-a za ${totalPending} zapisa`);
+    // Generiši batch number (možda treba čuvati u servisu kao counter)
+    const lastBatch = await this.prisma.gpsBatchHistory.findFirst({
+      orderBy: { batchNumber: 'desc' },
+      select: { batchNumber: true }
+    });
+    const batchNumber = (lastBatch?.batchNumber || 0) + 1;
+    
+    // Kreiraj batch history zapis
+    const batchHistory = await this.prisma.gpsBatchHistory.create({
+      data: {
+        batchNumber,
+        startedAt: new Date(),
+        status: 'processing',
+        batchSize: this.settings.batchSize,
+        workerCount,
+        sourceTable: 'gps_raw_buffer',
+        cronInterval: 30, // 30 sekundi default
+        processedBy: `backend-${process.env.NODE_ENV || 'dev'}`
+      }
+    });
+    
+    this.logger.log(`🚀 Batch #${batchNumber}: Pokrećem Worker Pool sa ${workerCount} worker-a za ${totalPending} zapisa`);
     
     // Podeli posao na worker-e
     const chunkSize = Math.ceil(this.settings.batchSize / workerCount);
@@ -168,22 +189,45 @@ export class GpsProcessorService {
     // Čekaj da svi worker-i završe
     const workerResults = await Promise.allSettled(workerPromises);
     
-    // Agregiraj rezultate
+    // Agregiraj rezultate i pripremaj worker detalje
     let totalProcessed = 0;
     let totalFailed = 0;
     const timeRanges: { min: Date; max: Date }[] = [];
+    const workerDetails: any[] = [];
     
     workerResults.forEach((result, index) => {
+      const workerId = index + 1;
+      const workerDetail: any = {
+        workerId,
+        status: 'unknown',
+        processed: 0,
+        failed: 0,
+        duration: 0,
+        startedAt: null,
+        completedAt: null
+      };
+      
       if (result.status === 'fulfilled' && result.value) {
         totalProcessed += result.value.processed;
         totalFailed += result.value.failed;
+        workerDetail.status = 'completed';
+        workerDetail.processed = result.value.processed;
+        workerDetail.failed = result.value.failed;
+        workerDetail.duration = result.value.duration || 0;
+        workerDetail.startedAt = result.value.startedAt || null;
+        workerDetail.completedAt = result.value.completedAt || null;
+        
         if (result.value.timeRange) {
           timeRanges.push(result.value.timeRange);
         }
       } else if (result.status === 'rejected') {
-        this.logger.error(`Worker ${index + 1} je pao:`, result.reason);
+        this.logger.error(`Worker ${workerId} je pao:`, result.reason);
         totalFailed += chunkSize; // Pretpostavi da je ceo chunk failed
+        workerDetail.status = 'failed';
+        workerDetail.error = result.reason?.message || 'Unknown error';
       }
+      
+      workerDetails.push(workerDetail);
     });
     
     // Centralizovan refresh continuous aggregates
@@ -199,8 +243,24 @@ export class GpsProcessorService {
     this.logger.debug('⚡ Refresh aggregates preskočen za brzinu');
     
     const totalTime = Date.now() - startTime;
+    const avgRecordsPerSecond = totalProcessed / (totalTime / 1000);
+    
+    // Ažuriraj batch history
+    await this.prisma.gpsBatchHistory.update({
+      where: { id: batchHistory.id },
+      data: {
+        completedAt: new Date(),
+        status: totalFailed > 0 && totalProcessed === 0 ? 'failed' : 'completed',
+        actualProcessed: totalProcessed,
+        failedRecords: totalFailed,
+        totalDurationMs: Math.round(totalTime),
+        avgRecordsPerSecond: Math.round(avgRecordsPerSecond),
+        workerDetails: workerDetails
+      }
+    });
+    
     this.logger.log(
-      `✅ Worker Pool završen: ${totalProcessed} procesirano, ${totalFailed} failed za ${totalTime}ms`
+      `✅ Batch #${batchNumber} završen: ${totalProcessed} procesirano, ${totalFailed} failed za ${totalTime}ms`
     );
     
     // Ažuriraj statistike
@@ -214,8 +274,16 @@ export class GpsProcessorService {
     workerId: number, 
     offset: number, 
     limit: number
-  ): Promise<{ processed: number; failed: number; timeRange?: { min: Date; max: Date } }> {
+  ): Promise<{ 
+    processed: number; 
+    failed: number; 
+    duration: number; 
+    startedAt?: Date;
+    completedAt?: Date;
+    timeRange?: { min: Date; max: Date } 
+  }> {
     const workerStart = Date.now();
+    const startedAt = new Date();
     
     try {
       // Dohvati svoj deo podataka sa FOR UPDATE SKIP LOCKED
@@ -230,7 +298,13 @@ export class GpsProcessorService {
       
       if (!batch || batch.length === 0) {
         this.logger.debug(`Worker ${workerId}: Nema podataka`);
-        return { processed: 0, failed: 0 };
+        return { 
+          processed: 0, 
+          failed: 0, 
+          duration: Date.now() - workerStart,
+          startedAt,
+          completedAt: new Date()
+        };
       }
       
       this.logger.debug(`Worker ${workerId}: Procesira ${batch.length} zapisa`);
@@ -258,6 +332,8 @@ export class GpsProcessorService {
       }
       
       const workerTime = Date.now() - workerStart;
+      const completedAt = new Date();
+      
       this.logger.debug(
         `Worker ${workerId}: Završen - ${result.processedCount} procesirano za ${workerTime}ms`
       );
@@ -265,6 +341,9 @@ export class GpsProcessorService {
       return {
         processed: result.processedCount,
         failed: batch.length - result.processedCount,
+        duration: workerTime,
+        startedAt,
+        completedAt,
         timeRange: result.timeRange
       };
       

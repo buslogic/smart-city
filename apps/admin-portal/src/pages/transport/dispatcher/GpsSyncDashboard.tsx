@@ -15,7 +15,10 @@ import {
   RedoOutlined,
   StopOutlined,
   ClearOutlined,
-  SettingOutlined
+  SettingOutlined,
+  TeamOutlined,
+  ThunderboltOutlined,
+  QuestionCircleOutlined
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../../services/api';
@@ -363,6 +366,34 @@ const GpsSyncDashboard: React.FC = () => {
     },
   ];
 
+  // Batch History state
+  const [batchHistory, setBatchHistory] = useState<any[]>([]);
+  const [batchHistoryLoading, setBatchHistoryLoading] = useState(false);
+
+  // Fetch batch history
+  const fetchBatchHistory = useCallback(async () => {
+    setBatchHistoryLoading(true);
+    try {
+      const response = await api.get('/api/gps-sync-dashboard/batch-history');
+      setBatchHistory(response.data.batches || []);
+    } catch (error) {
+      console.error('Error fetching batch history:', error);
+    } finally {
+      setBatchHistoryLoading(false);
+    }
+  }, []);
+
+  // Fetch batch history on mount and when refreshing
+  useEffect(() => {
+    fetchBatchHistory();
+  }, []);
+
+  // Add to manual refresh
+  const handleManualRefreshWithHistory = useCallback(() => {
+    handleManualRefresh();
+    fetchBatchHistory();
+  }, [handleManualRefresh, fetchBatchHistory]);
+
   return (
     <div style={{ padding: '24px' }}>
       <Row justify="space-between" align="middle" style={{ marginBottom: 24 }}>
@@ -381,7 +412,7 @@ const GpsSyncDashboard: React.FC = () => {
             </Text>
             <Button
               icon={<ReloadOutlined />}
-              onClick={handleManualRefresh}
+              onClick={handleManualRefreshWithHistory}
               loading={isLoadingBuffer}
             >
               Osveži
@@ -731,6 +762,274 @@ const GpsSyncDashboard: React.FC = () => {
           </Row>
         </Card>
       )}
+
+      {/* Batch History - Nova sekcija */}
+      <Card 
+        title={
+          <Space>
+            <ClockCircleOutlined />
+            <span>Batch History (Poslednja 3)</span>
+          </Space>
+        }
+        extra={
+          <Button 
+            size="small" 
+            icon={<ReloadOutlined />} 
+            onClick={fetchBatchHistory}
+            loading={batchHistoryLoading}
+          >
+            Osveži
+          </Button>
+        }
+        style={{ marginBottom: 24 }}
+      >
+        {batchHistory.length > 0 ? (
+          <div>
+            {batchHistory.slice(0, 3).map((batch, index) => (
+              <div 
+                key={batch.id || index} 
+                style={{ 
+                  marginBottom: index < 2 ? 20 : 0,
+                  padding: 16,
+                  backgroundColor: index === 0 ? '#f0f5ff' : '#fafafa',
+                  borderRadius: 8,
+                  border: index === 0 ? '1px solid #1890ff' : '1px solid #e8e8e8'
+                }}
+              >
+                <Row gutter={[16, 8]}>
+                  <Col span={24}>
+                    <Space direction="vertical" size={4}>
+                      <Space>
+                        <Text strong style={{ fontSize: 14 }}>
+                          Batch #{batch.batchNumber || index + 1}
+                        </Text>
+                        <Tag color={index === 0 ? 'blue' : 'default'}>
+                          {index === 0 ? 'Najnoviji' : `Pre ${index} batch-a`}
+                        </Tag>
+                        {batch.status && (
+                          <Tag color={
+                            batch.status === 'completed' ? 'success' : 
+                            batch.status === 'processing' ? 'processing' : 
+                            batch.status === 'failed' ? 'error' : 'default'
+                          }>
+                            {batch.status === 'completed' ? 'Završen' :
+                             batch.status === 'processing' ? 'U toku' :
+                             batch.status === 'failed' ? 'Neuspešan' : batch.status}
+                          </Tag>
+                        )}
+                      </Space>
+                      <Space direction="vertical" size={0} style={{ width: '100%' }}>
+                        <Space>
+                          <ClockCircleOutlined style={{ color: '#52c41a' }} />
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            Početak: <Text strong>
+                              {batch.totalDuration && batch.totalDuration < 5000 
+                                ? dayjs(batch.startedAt).format('HH:mm:ss.SSS')
+                                : dayjs(batch.startedAt).format(
+                                    dayjs(batch.startedAt).isSame(dayjs(), 'day') ? 'HH:mm:ss' : 'DD.MM HH:mm:ss'
+                                  )}
+                            </Text>
+                            <Text type="secondary" style={{ fontSize: 11, marginLeft: 8 }}>
+                              ({dayjs(batch.startedAt).fromNow()})
+                            </Text>
+                          </Text>
+                        </Space>
+                        <Space>
+                          <CheckCircleOutlined style={{ color: batch.completedAt ? '#52c41a' : '#faad14' }} />
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            Kraj: <Text strong>
+                              {batch.completedAt 
+                                ? (batch.totalDuration && batch.totalDuration < 5000 
+                                    ? dayjs(batch.completedAt).format('HH:mm:ss.SSS')
+                                    : dayjs(batch.completedAt).format('HH:mm:ss'))
+                                : 'U toku...'}
+                            </Text>
+                          </Text>
+                        </Space>
+                        <Space>
+                          <ThunderboltOutlined style={{ color: '#1890ff' }} />
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            Trajanje: <Text strong style={{ color: batch.totalDuration > 30000 ? '#faad14' : '#52c41a' }}>
+                              {batch.totalDuration ? 
+                                batch.totalDuration < 1000 ?
+                                  `${batch.totalDuration}ms` :
+                                batch.totalDuration < 60000 ? 
+                                  `${(batch.totalDuration / 1000).toFixed(1)} sekundi` :
+                                  `${Math.floor(batch.totalDuration / 60000)} min ${Math.round((batch.totalDuration % 60000) / 1000)} sek`
+                                : 'Računam...'}
+                            </Text>
+                            {batch.totalDuration && batch.totalDuration < 1000 && (
+                              <Tooltip title="Izuzetno brzo procesiranje! Worker Pool radi odlično.">
+                                <Tag color="green" style={{ marginLeft: 8 }}>BRZO</Tag>
+                              </Tooltip>
+                            )}
+                          </Text>
+                        </Space>
+                      </Space>
+                    </Space>
+                  </Col>
+                </Row>
+                
+                {/* Error poruka ako postoji */}
+                {batch.errorMessage && (
+                  <Alert
+                    message="Greška u procesiranju"
+                    description={batch.errorMessage}
+                    type="error"
+                    showIcon
+                    style={{ marginTop: 8, marginBottom: 8 }}
+                  />
+                )}
+                
+                <Row gutter={[16, 8]} style={{ marginTop: 12 }}>
+                  <Col xs={12} sm={6}>
+                    <Statistic
+                      title="Procesirano"
+                      value={batch.processedRecords || 0}
+                      valueStyle={{ fontSize: 16 }}
+                      suffix={
+                        <Tooltip title="Ukupan broj GPS tačaka procesiranih u ovom satu (može biti više batch-ova)">
+                          <QuestionCircleOutlined style={{ fontSize: 12, marginLeft: 4 }} />
+                        </Tooltip>
+                      }
+                    />
+                  </Col>
+                  <Col xs={12} sm={6}>
+                    <Statistic
+                      title="Batch size"
+                      value={batch.batchSize || 0}
+                      valueStyle={{ fontSize: 16 }}
+                      suffix={
+                        <Tooltip title="Maksimalan broj zapisa po batch-u (podešeno u sistemu)">
+                          <QuestionCircleOutlined style={{ fontSize: 12, marginLeft: 4 }} />
+                        </Tooltip>
+                      }
+                    />
+                  </Col>
+                  <Col xs={12} sm={6}>
+                    <Statistic
+                      title="Worker-a"
+                      value={batch.workerCount || 0}
+                      prefix={<TeamOutlined />}
+                      valueStyle={{ fontSize: 16 }}
+                    />
+                  </Col>
+                  <Col xs={12} sm={6}>
+                    <Statistic
+                      title="Trajanje"
+                      value={batch.totalDuration ? 
+                        batch.totalDuration < 1000 ? 
+                          `${batch.totalDuration}ms` : 
+                          `${(batch.totalDuration / 1000).toFixed(1)}s` 
+                        : 'N/A'}
+                      prefix={<ClockCircleOutlined />}
+                      valueStyle={{ 
+                        fontSize: 16, 
+                        color: batch.totalDuration < 1000 ? '#52c41a' : 
+                               batch.totalDuration > 30000 ? '#faad14' : '#52c41a' 
+                      }}
+                    />
+                  </Col>
+                </Row>
+
+                {/* Worker detalji */}
+                {batch.workers && batch.workers.length > 0 && (
+                  <div style={{ marginTop: 12 }}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>Worker detalji:</Text>
+                    <Row gutter={8} style={{ marginTop: 8 }}>
+                      {batch.workers.map((worker: any, wIndex: number) => (
+                        <Col key={wIndex} span={Math.floor(24 / Math.min(batch.workers.length, 6))}>
+                          <div style={{
+                            padding: '6px 8px',
+                            backgroundColor: worker.status === 'completed' ? '#f6ffed' : '#fff7e6',
+                            border: `1px solid ${worker.status === 'completed' ? '#b7eb8f' : '#ffd591'}`,
+                            borderRadius: 4,
+                            fontSize: 11
+                          }}>
+                            <div style={{ fontWeight: 'bold' }}>Worker {worker.workerId}</div>
+                            <div>{worker.processed || 0} zapisa</div>
+                            <div>
+                              {worker.duration ? 
+                                worker.duration < 1000 ? 
+                                  `${worker.duration}ms` : 
+                                  `${(worker.duration / 1000).toFixed(1)}s` 
+                                : 'N/A'}
+                            </div>
+                            {worker.startedAt && worker.completedAt && (
+                              <Tooltip title={`Start: ${dayjs(worker.startedAt).format('HH:mm:ss.SSS')} - Kraj: ${dayjs(worker.completedAt).format('HH:mm:ss.SSS')}`}>
+                                <div style={{ color: '#1890ff', fontSize: 10, cursor: 'help' }}>
+                                  {dayjs(worker.startedAt).format('HH:mm:ss.SSS')}
+                                </div>
+                              </Tooltip>
+                            )}
+                            <div style={{ color: '#52c41a' }}>
+                              {worker.recordsPerSecond ? `${Math.round(worker.recordsPerSecond)} rec/s` : ''}
+                            </div>
+                          </div>
+                        </Col>
+                      ))}
+                    </Row>
+                  </div>
+                )}
+
+                {/* Performanse */}
+                <Row gutter={[16, 8]} style={{ marginTop: 12 }}>
+                  <Col span={6}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>Uspešno:</Text>
+                    <div>
+                      <Text strong style={{ color: '#52c41a' }}>
+                        {batch.processedRecords || 0}
+                      </Text>
+                      {batch.processedRecords > 0 && (
+                        <Text type="secondary" style={{ marginLeft: 8, fontSize: 11 }}>
+                          ({Math.round((batch.processedRecords / (batch.processedRecords + batch.failedRecords)) * 100)}%)
+                        </Text>
+                      )}
+                    </div>
+                  </Col>
+                  <Col span={6}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>Neuspešno:</Text>
+                    <div>
+                      <Text strong style={{ color: batch.failedRecords > 0 ? '#ff4d4f' : '#999' }}>
+                        {batch.failedRecords || 0}
+                      </Text>
+                      {batch.failedRecords > 0 && (
+                        <Text type="secondary" style={{ marginLeft: 8, fontSize: 11 }}>
+                          ({Math.round((batch.failedRecords / (batch.processedRecords + batch.failedRecords)) * 100)}%)
+                        </Text>
+                      )}
+                    </div>
+                  </Col>
+                  <Col span={6}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>Brzina batch-a:</Text>
+                    <div>
+                      <Text strong style={{ color: batch.avgRecordsPerSecond > 1000 ? '#52c41a' : '#faad14' }}>
+                        {Math.round(batch.avgRecordsPerSecond || 0)} rec/s
+                      </Text>
+                    </div>
+                  </Col>
+                  <Col span={6}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>Po worker-u:</Text>
+                    <div>
+                      <Text strong>
+                        ~{Math.round((batch.avgRecordsPerSecond || 0) / (batch.workerCount || 1))} rec/s
+                      </Text>
+                    </div>
+                  </Col>
+                </Row>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            {batchHistoryLoading ? (
+              <Spin />
+            ) : (
+              <Text type="secondary">Nema dostupne istorije batch-ova</Text>
+            )}
+          </div>
+        )}
+      </Card>
 
       {/* Cron Process Status */}
       <Card 
