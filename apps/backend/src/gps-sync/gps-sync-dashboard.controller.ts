@@ -618,30 +618,51 @@ export class GpsSyncDashboardController {
   })
   async getBatchHistory() {
     try {
-      // Čitaj iz nove gps_batch_history tabele
+      // Čitaj iz nove gps_batch_history tabele sa worker logovima
       const batches = await this.prisma.gpsBatchHistory.findMany({
         where: {
           status: { in: ['completed', 'failed'] }
         },
         orderBy: { startedAt: 'desc' },
-        take: 3
+        take: 3,
+        include: {
+          workerLogs: {
+            orderBy: { workerId: 'asc' }
+          }
+        }
       });
 
       // Mapiraj podatke za frontend
       const batchHistory = batches.map((batch, index) => {
-        // Parsuj worker detalje iz JSON-a
-        const workerDetails = batch.workerDetails as any[] || [];
-        
-        // Kreiraj worker podatke za prikaz
-        const workers = workerDetails.map(w => ({
-          workerId: w.workerId,
-          processed: w.processed || 0,
-          duration: w.duration || 0,
-          status: w.status || 'unknown',
-          recordsPerSecond: w.duration > 0 ? Math.round(w.processed / (w.duration / 1000)) : 0,
-          startedAt: w.startedAt || null,
-          completedAt: w.completedAt || null
-        }));
+        // Koristi stvarne worker logove ako postoje
+        const workers = batch.workerLogs && batch.workerLogs.length > 0 
+          ? batch.workerLogs.map(log => ({
+              workerId: log.workerId,
+              processed: log.recordsProcessed,
+              failed: log.recordsFailed,
+              duration: log.durationMs || 0,
+              status: log.status,
+              recordsPerSecond: log.recordsPerSecond || 0,
+              startedAt: log.startedAt,
+              completedAt: log.completedAt,
+              recordsAssigned: log.recordsAssigned,
+              processingSteps: log.processingSteps,
+              errorMessage: log.errorMessage
+            }))
+          : // Fallback na stari način ako nema logova
+            (batch.workerDetails as any[] || []).map(w => ({
+              workerId: w.workerId,
+              processed: w.processed || 0,
+              failed: w.failed || 0,
+              duration: w.duration || 0,
+              status: w.status || 'unknown',
+              recordsPerSecond: w.duration > 0 ? Math.round(w.processed / (w.duration / 1000)) : 0,
+              startedAt: w.startedAt || null,
+              completedAt: w.completedAt || null,
+              recordsAssigned: w.processed || 0,
+              processingSteps: null,
+              errorMessage: null
+            }));
         
         return {
           id: batch.id,

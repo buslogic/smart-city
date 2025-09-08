@@ -369,6 +369,10 @@ const GpsSyncDashboard: React.FC = () => {
   // Batch History state
   const [batchHistory, setBatchHistory] = useState<any[]>([]);
   const [batchHistoryLoading, setBatchHistoryLoading] = useState(false);
+  
+  // Worker Details Modal state
+  const [selectedWorker, setSelectedWorker] = useState<any>(null);
+  const [workerModalVisible, setWorkerModalVisible] = useState(false);
 
   // Fetch batch history
   const fetchBatchHistory = useCallback(async () => {
@@ -393,6 +397,12 @@ const GpsSyncDashboard: React.FC = () => {
     handleManualRefresh();
     fetchBatchHistory();
   }, [handleManualRefresh, fetchBatchHistory]);
+  
+  // Handle worker details modal
+  const showWorkerDetails = (worker: any, batchNumber: number) => {
+    setSelectedWorker({ ...worker, batchNumber });
+    setWorkerModalVisible(true);
+  };
 
   return (
     <div style={{ padding: '24px' }}>
@@ -939,15 +949,38 @@ const GpsSyncDashboard: React.FC = () => {
                     <Row gutter={8} style={{ marginTop: 8 }}>
                       {batch.workers.map((worker: any, wIndex: number) => (
                         <Col key={wIndex} span={Math.floor(24 / Math.min(batch.workers.length, 6))}>
-                          <div style={{
-                            padding: '6px 8px',
-                            backgroundColor: worker.status === 'completed' ? '#f6ffed' : '#fff7e6',
-                            border: `1px solid ${worker.status === 'completed' ? '#b7eb8f' : '#ffd591'}`,
-                            borderRadius: 4,
-                            fontSize: 11
-                          }}>
-                            <div style={{ fontWeight: 'bold' }}>Worker {worker.workerId}</div>
-                            <div>{worker.processed || 0} zapisa</div>
+                          <div 
+                            onClick={() => worker.processingSteps && showWorkerDetails(worker, batch.batchNumber)}
+                            style={{
+                              padding: '6px 8px',
+                              backgroundColor: worker.status === 'completed' ? '#f6ffed' : '#fff7e6',
+                              border: `1px solid ${worker.status === 'completed' ? '#b7eb8f' : '#ffd591'}`,
+                              borderRadius: 4,
+                              fontSize: 11,
+                              cursor: worker.processingSteps ? 'pointer' : 'default',
+                              transition: 'all 0.2s',
+                              ...(worker.processingSteps && {
+                                ':hover': {
+                                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                }
+                              })
+                            }}>
+                            <div style={{ fontWeight: 'bold' }}>
+                              Worker {worker.workerId}
+                              {worker.status === 'failed' && (
+                                <ExclamationCircleOutlined style={{ color: '#ff4d4f', marginLeft: 4, fontSize: 10 }} />
+                              )}
+                            </div>
+                            <div>
+                              <Text type="secondary" style={{ fontSize: 10 }}>Dodeljeno:</Text> {worker.recordsAssigned || 0}
+                            </div>
+                            <div>
+                              <Text type="secondary" style={{ fontSize: 10 }}>Obrađeno:</Text> 
+                              <Text style={{ color: '#52c41a', marginLeft: 4 }}>{worker.processed || 0}</Text>
+                              {worker.failed > 0 && (
+                                <Text type="danger" style={{ marginLeft: 4 }}>({worker.failed} failed)</Text>
+                              )}
+                            </div>
                             <div>
                               {worker.duration ? 
                                 worker.duration < 1000 ? 
@@ -956,15 +989,38 @@ const GpsSyncDashboard: React.FC = () => {
                                 : 'N/A'}
                             </div>
                             {worker.startedAt && worker.completedAt && (
-                              <Tooltip title={`Start: ${dayjs(worker.startedAt).format('HH:mm:ss.SSS')} - Kraj: ${dayjs(worker.completedAt).format('HH:mm:ss.SSS')}`}>
+                              <Tooltip title={
+                                <div>
+                                  <div>Start: {dayjs(worker.startedAt).format('HH:mm:ss.SSS')}</div>
+                                  <div>Kraj: {dayjs(worker.completedAt).format('HH:mm:ss.SSS')}</div>
+                                  {worker.processingSteps && (
+                                    <div style={{ marginTop: 8 }}>
+                                      <div style={{ fontWeight: 'bold', marginBottom: 4 }}>Koraci:</div>
+                                      {(worker.processingSteps as any[]).map((step, idx) => (
+                                        <div key={idx} style={{ fontSize: 11 }}>
+                                          • {step.step}: {step.durationMs}ms
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              }>
                                 <div style={{ color: '#1890ff', fontSize: 10, cursor: 'help' }}>
                                   {dayjs(worker.startedAt).format('HH:mm:ss.SSS')}
+                                  {worker.processingSteps && (
+                                    <Badge count="i" style={{ marginLeft: 4, transform: 'scale(0.7)' }} />
+                                  )}
                                 </div>
                               </Tooltip>
                             )}
-                            <div style={{ color: '#52c41a' }}>
+                            <div style={{ color: worker.recordsPerSecond > 1000 ? '#52c41a' : '#faad14' }}>
                               {worker.recordsPerSecond ? `${Math.round(worker.recordsPerSecond)} rec/s` : ''}
                             </div>
+                            {worker.errorMessage && (
+                              <Tooltip title={worker.errorMessage}>
+                                <div style={{ color: '#ff4d4f', fontSize: 9, marginTop: 2 }}>Error!</div>
+                              </Tooltip>
+                            )}
                           </div>
                         </Col>
                       ))}
@@ -1488,6 +1544,137 @@ const GpsSyncDashboard: React.FC = () => {
             />
           )}
         </Form>
+      </Modal>
+      
+      {/* Worker Details Modal */}
+      <Modal
+        title={
+          <Space>
+            <TeamOutlined />
+            <span>Worker {selectedWorker?.workerId} - Batch #{selectedWorker?.batchNumber}</span>
+          </Space>
+        }
+        open={workerModalVisible}
+        onCancel={() => setWorkerModalVisible(false)}
+        footer={[
+          <Button key="close" onClick={() => setWorkerModalVisible(false)}>
+            Zatvori
+          </Button>
+        ]}
+        width={700}
+      >
+        {selectedWorker && (
+          <div>
+            {/* Worker osnovne informacije */}
+            <Descriptions bordered size="small" style={{ marginBottom: 16 }}>
+              <Descriptions.Item label="Status" span={1}>
+                <Tag color={selectedWorker.status === 'completed' ? 'success' : 'error'}>
+                  {selectedWorker.status}
+                </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="Trajanje" span={1}>
+                {selectedWorker.duration < 1000 
+                  ? `${selectedWorker.duration}ms`
+                  : `${(selectedWorker.duration / 1000).toFixed(2)}s`}
+              </Descriptions.Item>
+              <Descriptions.Item label="Brzina" span={1}>
+                {Math.round(selectedWorker.recordsPerSecond)} rec/s
+              </Descriptions.Item>
+              <Descriptions.Item label="Početak" span={1}>
+                {dayjs(selectedWorker.startedAt).format('HH:mm:ss.SSS')}
+              </Descriptions.Item>
+              <Descriptions.Item label="Kraj" span={1}>
+                {dayjs(selectedWorker.completedAt).format('HH:mm:ss.SSS')}
+              </Descriptions.Item>
+              <Descriptions.Item label="Dodeljeno zapisa" span={1}>
+                {selectedWorker.recordsAssigned}
+              </Descriptions.Item>
+              <Descriptions.Item label="Obrađeno" span={1}>
+                <Text type="success">{selectedWorker.processed}</Text>
+              </Descriptions.Item>
+              <Descriptions.Item label="Neuspešno" span={1}>
+                <Text type={selectedWorker.failed > 0 ? 'danger' : 'secondary'}>
+                  {selectedWorker.failed || 0}
+                </Text>
+              </Descriptions.Item>
+            </Descriptions>
+            
+            {/* Processing Steps Timeline */}
+            {selectedWorker.processingSteps && selectedWorker.processingSteps.length > 0 && (
+              <>
+                <Divider orientation="left">Koraci procesiranja</Divider>
+                <div style={{ padding: '0 16px' }}>
+                  {(selectedWorker.processingSteps as any[]).map((step, index) => (
+                    <div key={index} style={{ marginBottom: 16 }}>
+                      <Row gutter={16} align="middle">
+                        <Col span={6}>
+                          <Text strong>{step.step.replace(/_/g, ' ').toUpperCase()}</Text>
+                        </Col>
+                        <Col span={6}>
+                          <Text type="secondary">
+                            {dayjs(step.startedAt).format('HH:mm:ss.SSS')}
+                          </Text>
+                        </Col>
+                        <Col span={6}>
+                          <Tag color={step.status === 'success' ? 'green' : 'red'}>
+                            {step.durationMs}ms
+                          </Tag>
+                        </Col>
+                        <Col span={6}>
+                          {step.recordsCount && (
+                            <Text>{step.recordsCount} zapisa</Text>
+                          )}
+                          {step.recordsInserted && (
+                            <Text>{step.recordsInserted} upisano</Text>
+                          )}
+                        </Col>
+                      </Row>
+                      {index < selectedWorker.processingSteps.length - 1 && (
+                        <div style={{ 
+                          borderLeft: '2px solid #f0f0f0', 
+                          height: 20, 
+                          marginLeft: 80,
+                          marginTop: 4
+                        }} />
+                      )}
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Total processing time breakdown */}
+                <div style={{ marginTop: 16, padding: 16, backgroundColor: '#fafafa', borderRadius: 4 }}>
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Text type="secondary">Ukupno trajanje:</Text>
+                      <Text strong style={{ marginLeft: 8 }}>
+                        {selectedWorker.duration}ms
+                      </Text>
+                    </Col>
+                    <Col span={12}>
+                      <Text type="secondary">Efikasnost:</Text>
+                      <Progress 
+                        percent={Math.round((selectedWorker.processed / selectedWorker.recordsAssigned) * 100)} 
+                        size="small"
+                        style={{ marginTop: 4 }}
+                      />
+                    </Col>
+                  </Row>
+                </div>
+              </>
+            )}
+            
+            {/* Error message if exists */}
+            {selectedWorker.errorMessage && (
+              <Alert
+                message="Greška u procesiranju"
+                description={selectedWorker.errorMessage}
+                type="error"
+                showIcon
+                style={{ marginTop: 16 }}
+              />
+            )}
+          </div>
+        )}
       </Modal>
     </div>
   );

@@ -182,7 +182,7 @@ export class GpsProcessorService {
       if (limit <= 0) break; // Nema više podataka za ovaj worker
       
       workerPromises.push(
-        this.processWorkerChunk(i + 1, offset, limit)
+        this.processWorkerChunk(i + 1, offset, limit, batchHistory.id)
       );
     }
     
@@ -273,7 +273,8 @@ export class GpsProcessorService {
   private async processWorkerChunk(
     workerId: number, 
     offset: number, 
-    limit: number
+    limit: number,
+    batchId: string
   ): Promise<{ 
     processed: number; 
     failed: number; 
@@ -284,9 +285,25 @@ export class GpsProcessorService {
   }> {
     const workerStart = Date.now();
     const startedAt = new Date();
+    const processingSteps: any[] = [];
+    
+    // Kreiraj worker log na početku
+    const workerLog = await this.prisma.gpsWorkerLog.create({
+      data: {
+        batchId,
+        workerId,
+        startedAt,
+        status: 'started',
+        recordsAssigned: limit,
+        chunkSize: limit,
+        offset,
+        processedBy: `worker-${workerId}-${process.pid}`
+      }
+    });
     
     try {
-      // Dohvati svoj deo podataka sa FOR UPDATE SKIP LOCKED
+      // Step 1: Fetch data
+      const fetchStart = new Date();
       const batch = await this.prisma.$queryRaw<any[]>`
         SELECT * FROM gps_raw_buffer 
         WHERE process_status = 'pending' 
@@ -295,9 +312,32 @@ export class GpsProcessorService {
         LIMIT ${limit}
         FOR UPDATE SKIP LOCKED
       `;
+      const fetchEnd = new Date();
+      
+      processingSteps.push({
+        step: 'fetch_data',
+        startedAt: fetchStart,
+        completedAt: fetchEnd,
+        durationMs: fetchEnd.getTime() - fetchStart.getTime(),
+        recordsCount: batch?.length || 0,
+        status: 'success'
+      });
       
       if (!batch || batch.length === 0) {
         this.logger.debug(`Worker ${workerId}: Nema podataka`);
+        
+        // Ažuriraj worker log
+        await this.prisma.gpsWorkerLog.update({
+          where: { id: workerLog.id },
+          data: {
+            completedAt: new Date(),
+            durationMs: Date.now() - workerStart,
+            status: 'completed',
+            recordsProcessed: 0,
+            processingSteps
+          }
+        });
+        
         return { 
           processed: 0, 
           failed: 0, 
@@ -309,7 +349,8 @@ export class GpsProcessorService {
       
       this.logger.debug(`Worker ${workerId}: Procesira ${batch.length} zapisa`);
       
-      // Označi kao processing
+      // Step 2: Mark as processing
+      const markStart = new Date();
       const ids = batch.map(r => r.id);
       await this.prisma.$executeRaw`
         UPDATE gps_raw_buffer 
@@ -317,22 +358,67 @@ export class GpsProcessorService {
             processed_at = NOW()
         WHERE id IN (${Prisma.join(ids)})
       `;
+      const markEnd = new Date();
       
-      // Procesira i ubaci u TimescaleDB
+      processingSteps.push({
+        step: 'mark_processing',
+        startedAt: markStart,
+        completedAt: markEnd,
+        durationMs: markEnd.getTime() - markStart.getTime(),
+        status: 'success'
+      });
+      
+      // Step 3: Insert to TimescaleDB
+      const insertStart = new Date();
       const result = await this.insertBatchToTimescaleDB(batch);
+      const insertEnd = new Date();
       
-      // Označi kao processed
+      processingSteps.push({
+        step: 'insert_timescale',
+        startedAt: insertStart,
+        completedAt: insertEnd,
+        durationMs: insertEnd.getTime() - insertStart.getTime(),
+        recordsInserted: result.processedCount,
+        status: 'success'
+      });
+      
+      // Step 4: Mark as processed
       if (result.processedCount > 0) {
+        const markProcessedStart = new Date();
         await this.prisma.$executeRaw`
           UPDATE gps_raw_buffer 
           SET process_status = 'processed',
               processed_at = NOW()
           WHERE id IN (${Prisma.join(ids)})
         `;
+        const markProcessedEnd = new Date();
+        
+        processingSteps.push({
+          step: 'mark_processed',
+          startedAt: markProcessedStart,
+          completedAt: markProcessedEnd,
+          durationMs: markProcessedEnd.getTime() - markProcessedStart.getTime(),
+          status: 'success'
+        });
       }
       
       const workerTime = Date.now() - workerStart;
       const completedAt = new Date();
+      const recordsPerSecond = workerTime > 0 ? (result.processedCount / (workerTime / 1000)) : 0;
+      
+      // Ažuriraj worker log sa finalnim podacima
+      await this.prisma.gpsWorkerLog.update({
+        where: { id: workerLog.id },
+        data: {
+          completedAt,
+          durationMs: workerTime,
+          status: 'completed',
+          recordsProcessed: result.processedCount,
+          recordsFailed: batch.length - result.processedCount,
+          recordsPerSecond,
+          processingSteps
+        }
+      });
       
       this.logger.debug(
         `Worker ${workerId}: Završen - ${result.processedCount} procesirano za ${workerTime}ms`
@@ -349,6 +435,20 @@ export class GpsProcessorService {
       
     } catch (error) {
       this.logger.error(`Worker ${workerId} greška:`, error);
+      
+      // Ažuriraj worker log sa error informacijama
+      await this.prisma.gpsWorkerLog.update({
+        where: { id: workerLog.id },
+        data: {
+          completedAt: new Date(),
+          durationMs: Date.now() - workerStart,
+          status: 'failed',
+          errorMessage: error.message || 'Unknown error',
+          errorStack: error.stack,
+          processingSteps
+        }
+      });
+      
       throw error;
     }
   }
