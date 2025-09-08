@@ -101,6 +101,7 @@ export class GpsIngestService {
             source: source,
             processStatus: 'pending',
             retryCount: 0,
+            workerGroup: vehicleId ? vehicleId % 8 : 0, // Dodeli worker grupu na osnovu vehicle_id
           });
 
         } catch (error) {

@@ -313,6 +313,7 @@ model GpsRawBuffer {
   errorMessage  String?   @map("error_message") @db.Text
   source        String    @default("legacy") @db.VarChar(50)
   rawData       Json?     @map("raw_data")
+  workerGroup   Int?      @map("worker_group") @db.TinyInt // Za optimizovanu raspodelu po worker-ima (MOD(vehicle_id, 8))
 
   // Stari indeksi za brisanje:
   // - idx_status_received (zamenjen sa idx_status_only i idx_worker_select)
@@ -322,6 +323,7 @@ model GpsRawBuffer {
   // Optimizovani indeksi za 5M+ zapisa
   @@index([processStatus], map: "idx_status_only") // Za COUNT(*) GROUP BY process_status - KRITIČNO za dashboard
   @@index([processStatus, retryCount, receivedAt], map: "idx_worker_select") // Za worker SELECT sa FOR UPDATE SKIP LOCKED
+  @@index([workerGroup, processStatus, retryCount], map: "idx_worker_group") // NOVO: Za brzu raspodelu po worker-ima
   @@index([processedAt, processStatus], map: "idx_cleanup") // Za cleanup CRON
   @@index([receivedAt], map: "idx_received_at") // Za sortiranje po vremenu
   @@index([vehicleId, timestamp], map: "idx_vehicle_timestamp") // Za unique check u TimescaleDB

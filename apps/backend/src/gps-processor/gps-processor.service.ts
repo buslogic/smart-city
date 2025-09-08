@@ -322,14 +322,13 @@ export class GpsProcessorService {
       // Svaki worker uzima podatke za različita vozila koristeći modulo operaciju
       const fetchStart = new Date();
       
-      // Koristi worker ID da odrediš koja vozila ovaj worker obrađuje
-      // Ovo osigurava da različiti worker-i rade sa različitim vozilima
-      const totalWorkers = this.settings.workerCount || 8;
+      // Koristi worker_group kolonu za brzu raspodelu (bez MOD kalkulacije)
+      // Svaki worker uzima svoje redove prema worker_group indeksu
       const batch = await this.prisma.$queryRaw<any[]>`
         SELECT * FROM gps_raw_buffer 
-        WHERE process_status = 'pending' 
+        WHERE worker_group = ${workerId - 1}
+        AND process_status = 'pending' 
         AND retry_count < 3
-        AND MOD(vehicle_id, ${totalWorkers}) = ${workerId - 1}
         ORDER BY vehicle_id, received_at ASC
         LIMIT ${limit}
         FOR UPDATE SKIP LOCKED
