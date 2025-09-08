@@ -1130,6 +1130,11 @@ export class SmartSlowSyncService implements OnModuleInit {
   }
 
   async resetProgress(): Promise<void> {
+    // 🔴 FIX: Resetuj i isRunning flag kada se resetuje progress
+    this.isRunning = false;
+    this.isPaused = false;
+    await this.setSetting('smart_slow_sync.is_running', false);
+    
     this.progress = {
       status: 'idle',
       totalVehicles: 0,
@@ -1150,7 +1155,7 @@ export class SmartSlowSyncService implements OnModuleInit {
     await this.setSetting(this.SETTINGS_KEY + '_progress', null);
     await this.setSetting(this.SETTINGS_KEY + '_checkpoints', null);
     
-    this.logger.log('Progress resetovan');
+    this.logger.log('Progress resetovan - isRunning i isPaused postavljeni na false');
   }
 
   /**
