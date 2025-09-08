@@ -314,11 +314,17 @@ model GpsRawBuffer {
   source        String    @default("legacy") @db.VarChar(50)
   rawData       Json?     @map("raw_data")
 
-  @@index([processStatus, receivedAt], map: "idx_status_received")
-  @@index([vehicleId, timestamp], map: "idx_vehicle_timestamp")
-  @@index([processStatus, retryCount], map: "idx_processing")
-  @@index([garageNo, timestamp], map: "idx_garage_timestamp")
-  @@index([receivedAt], map: "idx_received_at")
+  // Stari indeksi za brisanje:
+  // - idx_status_received (zamenjen sa idx_status_only i idx_worker_select)
+  // - idx_processing (duplikat, pokriveno sa idx_worker_select)
+  // - idx_garage_timestamp (retko se koristi)
+
+  // Optimizovani indeksi za 5M+ zapisa
+  @@index([processStatus], map: "idx_status_only") // Za COUNT(*) GROUP BY process_status - KRITIČNO za dashboard
+  @@index([processStatus, retryCount, receivedAt], map: "idx_worker_select") // Za worker SELECT sa FOR UPDATE SKIP LOCKED
+  @@index([processedAt, processStatus], map: "idx_cleanup") // Za cleanup CRON
+  @@index([receivedAt], map: "idx_received_at") // Za sortiranje po vremenu
+  @@index([vehicleId, timestamp], map: "idx_vehicle_timestamp") // Za unique check u TimescaleDB
   @@map("gps_raw_buffer")
 }
 

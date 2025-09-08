@@ -78,21 +78,13 @@ export class GpsSyncDashboardController {
   async getBufferStatus() {
     // Dobijanje statistika iz gps_raw_buffer tabele
     const [
-      totalCount,
       statusCounts,
       oldestRecord,
       newestRecord,
       vehicleCount,
       lastProcessed
     ] = await Promise.all([
-      // Ukupan broj slogova - koristimo GROUP BY koji već radimo
-      this.prisma.$queryRaw<Array<{ process_status: string; count: bigint }>>`
-        SELECT process_status, COUNT(*) as count 
-        FROM gps_raw_buffer 
-        GROUP BY process_status
-      `,
-      
-      // Isti query kao gore - koristićemo ga dvaput
+      // OPTIMIZOVANO: Samo jedan query za status count (koristi idx_status_only)
       this.prisma.$queryRaw<Array<{ process_status: string; count: bigint }>>`
         SELECT process_status, COUNT(*) as count 
         FROM gps_raw_buffer 
@@ -116,11 +108,15 @@ export class GpsSyncDashboardController {
         LIMIT 1
       `,
       
-      // Broj jedinstvenih vozila
+      // OPTIMIZOVANO: Broj jedinstvenih vozila - samo prvih 1000 za brzinu
       this.prisma.$queryRaw<{ count: bigint }[]>`
         SELECT COUNT(DISTINCT vehicle_id) as count 
-        FROM gps_raw_buffer 
-        WHERE process_status = 'pending'
+        FROM (
+          SELECT vehicle_id 
+          FROM gps_raw_buffer 
+          WHERE process_status = 'pending'
+          LIMIT 10000
+        ) as subquery
       `,
       
       // Poslednje procesiranje
@@ -139,22 +135,24 @@ export class GpsSyncDashboardController {
       error: 0
     };
 
-    // Računaj ukupan broj iz statusCounts (prvi query)
+    // Računaj ukupan broj iz statusCounts
     let totalRecords = 0;
-    totalCount.forEach((status) => {
+    statusCounts.forEach((status) => {
       recordsByStatus[status.process_status] = Number(status.count);
       totalRecords += Number(status.count);
     });
 
-    // Računanje prosečnog vremena procesiranja - pojednostaviti
-    // Umesto subquery, samo uzimamo prosek poslednjeg sata
+    // OPTIMIZOVANO: Prosečno vreme - samo poslednji 100 zapisa za brzinu
     const avgProcessingTime = await this.prisma.$queryRaw<{ avg_time: number | null }[]>`
       SELECT AVG(TIMESTAMPDIFF(MICROSECOND, received_at, processed_at)) / 1000 as avg_time
-      FROM gps_raw_buffer 
-      WHERE process_status = 'processed' 
-        AND processed_at IS NOT NULL
-        AND processed_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)
-      LIMIT 1000
+      FROM (
+        SELECT received_at, processed_at
+        FROM gps_raw_buffer 
+        WHERE process_status = 'processed' 
+          AND processed_at IS NOT NULL
+        ORDER BY processed_at DESC
+        LIMIT 100
+      ) as recent_processed
     `;
 
     // Konvertuj avg_time u broj
