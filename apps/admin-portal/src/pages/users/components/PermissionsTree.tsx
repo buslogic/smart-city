@@ -382,6 +382,22 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
       }
     }
     
+    // Specifični labeli za dashboard.widgets permisije
+    if (permission.resource && permission.resource.startsWith('dashboard.widgets')) {
+      if (permission.resource === 'dashboard.widgets.gps') {
+        return 'GPS Sync Widget';
+      }
+      if (permission.resource === 'dashboard.widgets.vehicles') {
+        return 'Statistike Vozila Widget';
+      }
+      if (permission.resource === 'dashboard.widgets.users') {
+        return 'Statistike Korisnika Widget';
+      }
+      if (permission.resource === 'dashboard.widgets.system') {
+        return 'Zdravlje Sistema Widget';
+      }
+    }
+    
     const labels: Record<string, string> = {
       'create': 'Kreiranje',
       'read': 'Pregled',

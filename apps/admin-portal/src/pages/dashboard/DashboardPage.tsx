@@ -25,6 +25,7 @@ import {
 } from '@ant-design/icons';
 import { api } from '../../services/api';
 import VehicleStatisticsWidget from './widgets/VehicleStatisticsWidget';
+import GpsSyncWidget from './widgets/GpsSyncWidget';
 import { usePermissions } from '../../hooks/usePermissions';
 
 const { Title, Text } = Typography;
@@ -125,6 +126,8 @@ const DashboardPage: React.FC = () => {
     switch (widget.widgetId) {
       case 'vehicle-statistics':
         return <VehicleStatisticsWidget key={widget.id} config={widget.config} />;
+      case 'gps-sync-status':
+        return <GpsSyncWidget key={widget.id} config={widget.config} />;
       default:
         return (
           <Card key={widget.id}>

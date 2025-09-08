@@ -38,7 +38,7 @@ export class GpsProcessorService {
   ) {
     // Kreiraj konekciju na TimescaleDB
     this.timescalePool = createTimescalePool();
-    this.logger.log('🚀 GPS Processor Service inicijalizovan');
+    // this.logger.log('🚀 GPS Processor Service inicijalizovan');
     
     // Učitaj podešavanja pri pokretanju
     this.loadSettings();
@@ -94,13 +94,13 @@ export class GpsProcessorService {
   async processGpsBuffer() {
     // Skip ako je cron isključen
     if (!GpsProcessorService.cronEnabled.processor) {
-      this.logger.debug('⏸️ GPS Processor cron je pauziran');
+      // this.logger.debug('⏸️ GPS Processor cron je pauziran');
       return;
     }
     
     // Skip ako već procesira
     if (this.isProcessing) {
-      this.logger.debug('⏭️ Preskačem - procesiranje već u toku');
+      // this.logger.debug('⏭️ Preskačem - procesiranje već u toku');
       return;
     }
 
@@ -133,7 +133,7 @@ export class GpsProcessorService {
    */
   private async processWithWorkerPool(workerCount: number) {
     // 🔴 DEBUG: Log početak metode
-    this.logger.log(`🔴 DEBUG: processWithWorkerPool CALLED at ${new Date().toISOString()}`);
+    // this.logger.log(`🔴 DEBUG: processWithWorkerPool CALLED at ${new Date().toISOString()}`);
     
     // SKIP COUNT QUERY - nepotreban i spor na 5M+ zapisa!
     // Worker-i će ionako uzeti samo ono što mogu sa LIMIT
@@ -149,7 +149,7 @@ export class GpsProcessorService {
     const startTime = Date.now();
     
     // 🔴 DEBUG: Log početak batch-a sa timestamp
-    this.logger.log(`🔴 DEBUG: Batch #${batchNumber} REAL START at ${new Date().toISOString()}, timestamp: ${startTime}`);
+    // this.logger.log(`🔴 DEBUG: Batch #${batchNumber} REAL START at ${new Date().toISOString()}, timestamp: ${startTime}`);
     
     // Kreiraj batch history zapis
     const batchHistory = await this.prisma.gpsBatchHistory.create({
@@ -165,14 +165,14 @@ export class GpsProcessorService {
       }
     });
     
-    this.logger.log(`🚀 Batch #${batchNumber}: Pokrećem Worker Pool sa ${workerCount} worker-a`);
+    // this.logger.log(`🚀 Batch #${batchNumber}: Pokrećem Worker Pool sa ${workerCount} worker-a`);
     
     // Podeli posao na worker-e
     const chunkSize = Math.ceil(this.settings.batchSize / workerCount);
     const workerPromises: Promise<any>[] = [];
     
     // 🔴 DEBUG: Log pre pokretanja worker-a
-    this.logger.log(`🔴 DEBUG: Kreiranje ${workerCount} worker-a, chunkSize: ${chunkSize}`);
+    // this.logger.log(`🔴 DEBUG: Kreiranje ${workerCount} worker-a, chunkSize: ${chunkSize}`);
     
     for (let i = 0; i < workerCount; i++) {
       const offset = i * chunkSize;
@@ -181,7 +181,7 @@ export class GpsProcessorService {
       if (limit <= 0) break; // Nema više podataka za ovaj worker
       
       // 🔴 DEBUG: Log kad se kreira svaki worker promise
-      this.logger.log(`🔴 DEBUG: Kreiram Worker ${i + 1} sa limit=${limit} at ${new Date().toISOString()}`);
+      // this.logger.log(`🔴 DEBUG: Kreiram Worker ${i + 1} sa limit=${limit} at ${new Date().toISOString()}`);
       
       workerPromises.push(
         this.processWorkerChunk(i + 1, offset, limit, batchHistory.id)
@@ -189,13 +189,13 @@ export class GpsProcessorService {
     }
     
     // 🔴 DEBUG: Log pre čekanja
-    this.logger.log(`🔴 DEBUG: Svi worker promises kreirani, čekam Promise.allSettled at ${new Date().toISOString()}`);
+    // this.logger.log(`🔴 DEBUG: Svi worker promises kreirani, čekam Promise.allSettled at ${new Date().toISOString()}`);
     
     // Čekaj da svi worker-i završe
     const workerResults = await Promise.allSettled(workerPromises);
     
     // 🔴 DEBUG: Log posle čekanja
-    this.logger.log(`🔴 DEBUG: Promise.allSettled završen at ${new Date().toISOString()}`);
+    // this.logger.log(`🔴 DEBUG: Promise.allSettled završen at ${new Date().toISOString()}`);
     
     // Agregiraj rezultate i pripremaj worker detalje
     let totalProcessed = 0;
@@ -248,15 +248,15 @@ export class GpsProcessorService {
       await this.refreshContinuousAggregates(overallMin, overallMax);
     }
     */
-    this.logger.debug('⚡ Refresh aggregates preskočen za brzinu');
+    // this.logger.debug('⚡ Refresh aggregates preskočen za brzinu');
     
     const totalTime = Date.now() - startTime;
     const avgRecordsPerSecond = totalProcessed / (totalTime / 1000);
     
     // 🔴 DEBUG: Log finalne kalkulacije
-    this.logger.log(`🔴 DEBUG: FINAL - startTime: ${startTime}, now: ${Date.now()}, totalTime: ${totalTime}ms`);
-    this.logger.log(`🔴 DEBUG: Worker durations: ${workerDetails.map(w => w.duration).join(', ')}ms`);
-    this.logger.log(`🔴 DEBUG: Sum of worker durations: ${workerDetails.reduce((sum, w) => sum + w.duration, 0)}ms`);
+    // this.logger.log(`🔴 DEBUG: FINAL - startTime: ${startTime}, now: ${Date.now()}, totalTime: ${totalTime}ms`);
+    // this.logger.log(`🔴 DEBUG: Worker durations: ${workerDetails.map(w => w.duration).join(', ')}ms`);
+    // this.logger.log(`🔴 DEBUG: Sum of worker durations: ${workerDetails.reduce((sum, w) => sum + w.duration, 0)}ms`);
     
     // Ažuriraj batch history
     await this.prisma.gpsBatchHistory.update({
@@ -272,9 +272,9 @@ export class GpsProcessorService {
       }
     });
     
-    this.logger.log(
-      `✅ Batch #${batchNumber} završen: ${totalProcessed} procesirano, ${totalFailed} failed za ${totalTime}ms`
-    );
+    // this.logger.log(
+    //   `✅ Batch #${batchNumber} završen: ${totalProcessed} procesirano, ${totalFailed} failed za ${totalTime}ms`
+    // );
     
     // Ažuriraj statistike
     await this.updateProcessingStats(totalProcessed, totalTime);
@@ -301,7 +301,7 @@ export class GpsProcessorService {
     const processingSteps: any[] = [];
     
     // 🔴 DEBUG: Log početak worker-a
-    this.logger.log(`🔴 DEBUG: Worker ${workerId} STARTED at ${startedAt.toISOString()}, timestamp: ${workerStart}`);
+    // this.logger.log(`🔴 DEBUG: Worker ${workerId} STARTED at ${startedAt.toISOString()}, timestamp: ${workerStart}`);
     
     // Kreiraj worker log na početku
     const workerLog = await this.prisma.gpsWorkerLog.create({
@@ -340,7 +340,7 @@ export class GpsProcessorService {
       });
       
       if (!batch || batch.length === 0) {
-        this.logger.debug(`Worker ${workerId}: Nema podataka`);
+        // this.logger.debug(`Worker ${workerId}: Nema podataka`);
         
         // Ažuriraj worker log
         await this.prisma.gpsWorkerLog.update({
@@ -363,7 +363,7 @@ export class GpsProcessorService {
         };
       }
       
-      this.logger.debug(`Worker ${workerId}: Procesira ${batch.length} zapisa`);
+      // this.logger.debug(`Worker ${workerId}: Procesira ${batch.length} zapisa`);
       
       // Step 2: Mark as processing
       const markStart = new Date();
@@ -437,13 +437,13 @@ export class GpsProcessorService {
       });
       
       // 🔴 DEBUG: Log završetak worker-a
-      this.logger.log(
-        `🔴 DEBUG: Worker ${workerId} FINISHED at ${completedAt.toISOString()}, duration: ${workerTime}ms, processed: ${result.processedCount}`
-      );
+      // this.logger.log(
+      //   `🔴 DEBUG: Worker ${workerId} FINISHED at ${completedAt.toISOString()}, duration: ${workerTime}ms, processed: ${result.processedCount}`
+      // );
       
-      this.logger.debug(
-        `Worker ${workerId}: Završen - ${result.processedCount} procesirano za ${workerTime}ms`
-      );
+      // this.logger.debug(
+      //   `Worker ${workerId}: Završen - ${result.processedCount} procesirano za ${workerTime}ms`
+      // );
       
       return {
         processed: result.processedCount,
@@ -495,7 +495,7 @@ export class GpsProcessorService {
         return; // Nema podataka za procesiranje
       }
 
-      this.logger.log(`📦 Pronađeno ${batch.length} GPS tačaka za procesiranje`);
+      // this.logger.log(`📦 Pronađeno ${batch.length} GPS tačaka za procesiranje`);
 
       const ids = batch.map(r => r.id);
 
@@ -521,7 +521,7 @@ export class GpsProcessorService {
         // 5. Detekcija agresivne vožnje
         // 🔴 TEMP: Isključeno za optimizaciju brzine real-time sync-a
         // await this.detectAggressiveDriving(batch);
-        this.logger.debug('⚡ Aggressive driving detekcija preskočena za brzinu');
+        // this.logger.debug('⚡ Aggressive driving detekcija preskočena za brzinu');
         
         // 6. Refresh continuous aggregates
         // 🔴 TEMP: Isključeno za optimizaciju brzine real-time sync-a
@@ -536,9 +536,9 @@ export class GpsProcessorService {
       this.processedCount += result.processedCount;
       this.lastProcessTime = new Date();
 
-      this.logger.log(
-        `✅ Procesirano ${result.processedCount} GPS tačaka za ${processingTime}ms (od ${batch.length} iz buffer-a)`
-      );
+      // this.logger.log(
+      //   `✅ Procesirano ${result.processedCount} GPS tačaka za ${processingTime}ms (od ${batch.length} iz buffer-a)`
+      // );
       
       // Ažuriraj statistike
       await this.updateProcessingStats(result.processedCount, processingTime);
@@ -615,7 +615,7 @@ export class GpsProcessorService {
           skipDuplicates: true,
         });
 
-        this.logger.log(`Inserted ${validPoints.length} points to buffer`);
+        // this.logger.log(`Inserted ${validPoints.length} points to buffer`);
       } catch (error) {
         this.logger.error('Error inserting to buffer', error);
         throw error;
@@ -661,7 +661,7 @@ export class GpsProcessorService {
    * Ručno pokreni procesiranje (za testiranje)
    */
   async processManually() {
-    this.logger.log('🔧 Ručno pokretanje procesiranja...');
+    // this.logger.log('🔧 Ručno pokretanje procesiranja...');
     await this.processGpsBuffer();
     return {
       success: true,
@@ -681,7 +681,7 @@ export class GpsProcessorService {
         AND received_at < DATE_SUB(NOW(), INTERVAL ${olderThanHours} HOUR)
       `;
 
-      this.logger.log(`🧹 Obrisano ${result} failed GPS zapisa starijih od ${olderThanHours}h`);
+      // this.logger.log(`🧹 Obrisano ${result} failed GPS zapisa starijih od ${olderThanHours}h`);
       return result;
     } catch (error) {
       this.logger.error('Greška pri čišćenju failed zapisa:', error);
@@ -697,7 +697,7 @@ export class GpsProcessorService {
   async cleanupProcessedRecords() {
     // Skip ako je cron isključen
     if (!GpsProcessorService.cronEnabled.cleanup) {
-      this.logger.debug('⏸️ Buffer Cleanup cron je pauziran');
+      // this.logger.debug('⏸️ Buffer Cleanup cron je pauziran');
       return;
     }
     
@@ -719,7 +719,7 @@ export class GpsProcessorService {
       }
       
       if (deletedProcessed > 0) {
-        this.logger.log(`🧹 Obrisano ${deletedProcessed} processed GPS zapisa`);
+        // this.logger.log(`🧹 Obrisano ${deletedProcessed} processed GPS zapisa`);
       }
       
       // 2. Briši failed zapise starije od X sati (batch delete sa LIMIT)
@@ -737,7 +737,7 @@ export class GpsProcessorService {
       }
       
       if (deletedFailed > 0) {
-        this.logger.log(`🧹 Obrisano ${deletedFailed} failed GPS zapisa starijih od ${this.settings.cleanupFailedHours}h`);
+        // this.logger.log(`🧹 Obrisano ${deletedFailed} failed GPS zapisa starijih od ${this.settings.cleanupFailedHours}h`);
       }
       
       totalDeleted = deletedProcessed + deletedFailed;
@@ -761,7 +761,7 @@ export class GpsProcessorService {
   async cleanupOldStats() {
     // Skip ako je cron isključen
     if (!GpsProcessorService.cronEnabled.statsCleanup) {
-      this.logger.debug('⏸️ Stats Cleanup cron je pauziran');
+      // this.logger.debug('⏸️ Stats Cleanup cron je pauziran');
       return;
     }
     
@@ -775,7 +775,7 @@ export class GpsProcessorService {
       `;
 
       if (result > 0) {
-        this.logger.log(`📊 Obrisano ${result} starih statistika (starije od ${this.settings.cleanupStatsDays} dana)`);
+        // this.logger.log(`📊 Obrisano ${result} starih statistika (starije od ${this.settings.cleanupStatsDays} dana`);
       }
       
       // Ažuriraj vreme poslednjeg izvršavanja
@@ -794,8 +794,8 @@ export class GpsProcessorService {
    */
   static setCronEnabled(cronName: 'processor' | 'cleanup' | 'statsCleanup', enabled: boolean) {
     this.cronEnabled[cronName] = enabled;
-    const logger = new Logger('GpsProcessorService');
-    logger.log(`${enabled ? '▶️' : '⏸️'} Cron ${cronName} je ${enabled ? 'pokrenut' : 'pauziran'}`);
+    // const logger = new Logger('GpsProcessorService');
+    // logger.log(`${enabled ? '▶️' : '⏸️'} Cron ${cronName} je ${enabled ? 'pokrenut' : 'pauziran'}`);
   }
 
   static getCronStatus() {
@@ -913,7 +913,7 @@ export class GpsProcessorService {
    */
   private async refreshContinuousAggregates(minTime: Date, maxTime: Date) {
     try {
-      this.logger.debug(`🔄 Refresh aggregates za period ${minTime.toISOString()} - ${maxTime.toISOString()}`);
+      // this.logger.debug(`🔄 Refresh aggregates za period ${minTime.toISOString()} - ${maxTime.toISOString()}`);
       
       // Refresh hourly aggregates
       await this.timescalePool.query(`
@@ -933,7 +933,7 @@ export class GpsProcessorService {
         )
       `, [minTime, maxTime]);
       
-      this.logger.debug(`✅ Aggregates osveženi`);
+      // this.logger.debug(`✅ Aggregates osveženi`);
     } catch (error) {
       this.logger.warn(`⚠️ Refresh agregata nije uspeo: ${error.message}`);
     }
@@ -1005,14 +1005,14 @@ export class GpsProcessorService {
             timeRange.startTime,
             timeRange.endTime
           );
-          this.logger.debug(`🔍 Agresivna vožnja detektovana za vozilo ${timeRange.garageNo} (${vehicleId})`);
+          // this.logger.debug(`🔍 Agresivna vožnja detektovana za vozilo ${timeRange.garageNo} (${vehicleId})`);
         } catch (error) {
           this.logger.warn(`⚠️ Greška u detekciji za vozilo ${vehicleId}: ${error.message}`);
         }
       });
 
       await Promise.all(detectionPromises);
-      this.logger.log(`🚗 Agresivna vožnja obrađena za ${vehicleGroups.size} vozila`);
+      // this.logger.log(`🚗 Agresivna vožnja obrađena za ${vehicleGroups.size} vozila`);
       
     } catch (error) {
       this.logger.error(`❌ Greška u batch detekciji agresivne vožnje: ${error.message}`);
@@ -1024,6 +1024,6 @@ export class GpsProcessorService {
    */
   async onModuleDestroy() {
     await this.timescalePool.end();
-    this.logger.log('GPS Processor Service zaustavljen');
+    // this.logger.log('GPS Processor Service zaustavljen');
   }
 }

@@ -79,6 +79,14 @@ export class DashboardController {
     return this.widgetsService.getVehicleStatistics();
   }
 
+  @Get('widgets/gps-sync-status')
+  @RequirePermissions('dashboard.widgets.gps.view')
+  @ApiOperation({ summary: 'Dobavi GPS sync status za dashboard widget' })
+  @ApiResponse({ status: 200, description: 'GPS sync status' })
+  async getGpsSyncStatus() {
+    return this.widgetsService.getGpsSyncStatus();
+  }
+
   @Post('widgets/toggle')
   @RequirePermissions('dashboard.update')
   @ApiOperation({ summary: 'Uključi/isključi widget za korisnika' })
