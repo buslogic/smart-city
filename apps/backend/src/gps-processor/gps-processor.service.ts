@@ -324,7 +324,7 @@ export class GpsProcessorService {
       
       // Koristi worker_group kolonu za brzu raspodelu (bez MOD kalkulacije)
       // Svaki worker uzima svoje redove prema worker_group indeksu
-      // Uklonjen ORDER BY vehicle_id jer meša podatke između worker grupa
+      // SKIP LOCKED uklonjen jer svaki worker ima ekskluzivnu grupu
       const batch = await this.prisma.$queryRaw<any[]>`
         SELECT * FROM gps_raw_buffer 
         WHERE worker_group = ${workerId - 1}
@@ -332,7 +332,7 @@ export class GpsProcessorService {
         AND retry_count < 3
         ORDER BY received_at ASC
         LIMIT ${limit}
-        FOR UPDATE SKIP LOCKED
+        FOR UPDATE
       `;
       const fetchEnd = new Date();
       
