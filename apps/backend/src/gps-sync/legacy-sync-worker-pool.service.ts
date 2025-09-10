@@ -107,27 +107,27 @@ export class LegacySyncWorkerPoolService {
         
         switch(setting.key) {
           case 'legacy_sync.worker_pool.max_workers':
-            this.config.maxWorkers = value as number;
+            this.config.maxWorkers = parseInt(value as string, 10) || 3;
             break;
           case 'legacy_sync.worker_pool.worker_timeout_ms':
-            this.config.workerTimeout = value as number;
+            this.config.workerTimeout = parseInt(value as string, 10) || 600000;
             break;
           case 'legacy_sync.aggressive_detection_enabled':
             this.aggressiveDetectionEnabled = value as boolean;
             this.logger.log(`🎯 Agresivna detekcija: ${this.aggressiveDetectionEnabled ? 'UKLJUČENA' : 'ISKLJUČENA'}`)
             break;
           case 'legacy_sync.worker_pool.retry_attempts':
-            this.config.retryAttempts = value as number;
+            this.config.retryAttempts = parseInt(value as string, 10) || 2;
             break;
           // NOVO za COPY support:
           case 'legacy_sync.insert_method':
             this.config.insertMethod = value as 'batch' | 'copy' | 'auto';
             break;
           case 'legacy_sync.copy_batch_size':
-            this.config.copyBatchSize = value as number;
+            this.config.copyBatchSize = parseInt(value as string, 10) || 10000;
             break;
           case 'legacy_sync.fallback_to_batch':
-            this.config.fallbackToBatch = value as boolean;
+            this.config.fallbackToBatch = value === 'true' || value === true;
             break;
         }
       });
@@ -730,11 +730,22 @@ export class LegacySyncWorkerPoolService {
     });
 
     let importedCount = 0;
-    // Čitamo po 10,000 redova za efikasniju obradu fajla
-    const READ_BATCH_SIZE = 10000;
-    // Ali insertujemo po 2,500 da budemo ispod PostgreSQL limita (32,767 params)
-    // 2,500 redova × 11 parametara = 27,500 parametara (bezbedno ispod limita)
-    const INSERT_BATCH_SIZE = 2500;
+    
+    // Dinamički batch size na osnovu insert metoda
+    // COPY metod može da hendluje mnogo više redova bez PostgreSQL parameter limita
+    const INSERT_BATCH_SIZE = this.config.insertMethod === 'copy' 
+      ? (this.config.copyBatchSize || 10000)  // Za COPY: koristi konfigurisan batch size (default 10,000)
+      : 2500;  // Za batch INSERT: 2,500 redova × 11 parametara = 27,500 (ispod limita od 32,767)
+    
+    // READ_BATCH_SIZE treba da bude jednak INSERT_BATCH_SIZE za COPY metodu
+    // Za batch metodu, čitamo više redova odjednom za efikasniju obradu fajla
+    const READ_BATCH_SIZE = this.config.insertMethod === 'copy'
+      ? INSERT_BATCH_SIZE  // Za COPY: čitaj koliko možeš da insertaš
+      : 10000;  // Za batch: čitaj po 10,000 pa deli na manje batch-ove od 2,500
+    
+    this.logger.debug(`[BATCH SIZE] Config copyBatchSize: ${this.config.copyBatchSize}, insertMethod: ${this.config.insertMethod}`);
+    this.logger.debug(`[BATCH SIZE] Koristi se batch size: ${INSERT_BATCH_SIZE} za metod: ${this.config.insertMethod || 'batch'}`);
+    
     let batch: any[] = [];
     let lineCount = 0;
 
