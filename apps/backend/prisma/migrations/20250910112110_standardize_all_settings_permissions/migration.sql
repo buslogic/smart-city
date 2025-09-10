@@ -34,7 +34,11 @@ WHERE name = 'settings.general.update';
 
 -- 3. Replace settings.general.manage with granular permissions
 -- First save roles that have settings.general.manage
-CREATE TEMPORARY TABLE temp_settings_manage_roles AS
+CREATE TEMPORARY TABLE temp_settings_manage_roles (
+  roleId INT PRIMARY KEY
+);
+
+INSERT INTO temp_settings_manage_roles
 SELECT DISTINCT rp.roleId
 FROM role_permissions rp
 JOIN permissions p ON rp.permissionId = p.id
@@ -109,7 +113,11 @@ WHERE name = 'settings.legacy_databases.delete';
 
 -- Replace settings.legacy_databases.manage with configure permission
 -- Save roles that have manage permission
-CREATE TEMPORARY TABLE temp_legacy_db_manage_roles AS
+CREATE TEMPORARY TABLE temp_legacy_db_manage_roles (
+  roleId INT PRIMARY KEY
+);
+
+INSERT INTO temp_legacy_db_manage_roles
 SELECT DISTINCT rp.roleId
 FROM role_permissions rp
 JOIN permissions p ON rp.permissionId = p.id

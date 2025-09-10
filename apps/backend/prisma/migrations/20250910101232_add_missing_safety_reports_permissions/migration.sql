@@ -1,7 +1,11 @@
 -- Add missing safety.reports permissions for complete functionality
 
 -- Save roles that currently have safety.reports:view permission
-CREATE TEMPORARY TABLE temp_safety_reports_roles AS
+CREATE TEMPORARY TABLE temp_safety_reports_roles (
+  roleId INT PRIMARY KEY
+);
+
+INSERT INTO temp_safety_reports_roles
 SELECT DISTINCT rp.roleId
 FROM role_permissions rp
 JOIN permissions p ON rp.permissionId = p.id

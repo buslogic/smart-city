@@ -20,7 +20,11 @@ WHERE name = 'safety:view_monthly_report';
 
 -- 3. Delete generic safety:manage and replace with specific permissions
 -- First save roles that had safety:manage
-CREATE TEMPORARY TABLE temp_safety_manage_roles AS
+CREATE TEMPORARY TABLE temp_safety_manage_roles (
+  roleId INT PRIMARY KEY
+);
+
+INSERT INTO temp_safety_manage_roles
 SELECT DISTINCT rp.roleId
 FROM role_permissions rp
 JOIN permissions p ON rp.permissionId = p.id

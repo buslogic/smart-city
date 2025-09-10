@@ -19,13 +19,13 @@ model User {
   createdAt                DateTime                   @default(now()) @map("created_at")
   updatedAt                DateTime                   @updatedAt @map("updated_at")
   avatar                   String?                    @db.Text
+  drivingAnalysisLogs      DrivingAnalysisLog[]
   gpsSyncLogs              GpsSyncLog[]
   safetyScoreConfigHistory SafetyScoreConfigHistory[]
   sessions                 Session[]
   dashboardConfig          UserDashboardConfig?
   roles                    UserRole[]
   vehicleSyncLogs          VehicleSyncLog[]
-  drivingAnalysisLogs      DrivingAnalysisLog[]
 
   @@index([email])
   @@map("users")
@@ -567,8 +567,7 @@ model DrivingAnalysisLog {
   vehicleProgress     Json?     @map("vehicle_progress")
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([status])
   @@index([userId])

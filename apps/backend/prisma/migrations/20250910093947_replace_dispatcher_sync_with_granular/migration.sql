@@ -1,5 +1,9 @@
 -- Prvo sačuvaj postojeće role_permissions za dispatcher:sync_gps
-CREATE TEMPORARY TABLE temp_dispatcher_sync_roles AS
+CREATE TEMPORARY TABLE temp_dispatcher_sync_roles (
+  roleId INT PRIMARY KEY
+);
+
+INSERT INTO temp_dispatcher_sync_roles
 SELECT DISTINCT rp.roleId
 FROM role_permissions rp
 JOIN permissions p ON rp.permissionId = p.id

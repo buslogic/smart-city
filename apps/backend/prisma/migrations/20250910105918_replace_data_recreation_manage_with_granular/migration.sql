@@ -1,7 +1,11 @@
 -- Replace safety.data.recreation:manage with granular permissions following our standard
 
 -- Save roles that currently have safety.data.recreation:manage permission
-CREATE TEMPORARY TABLE temp_data_recreation_roles AS
+CREATE TEMPORARY TABLE temp_data_recreation_roles (
+  roleId INT PRIMARY KEY
+);
+
+INSERT INTO temp_data_recreation_roles
 SELECT DISTINCT rp.roleId
 FROM role_permissions rp
 JOIN permissions p ON rp.permissionId = p.id
