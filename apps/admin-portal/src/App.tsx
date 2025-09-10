@@ -77,7 +77,7 @@ function App() {
             <Route 
               path="settings/general" 
               element={
-                <PermissionGuard permissions={['settings:general:read']}>
+                <PermissionGuard permissions={['settings.general:view']}>
                   <GeneralSettings />
                 </PermissionGuard>
               } 
@@ -149,7 +149,7 @@ function App() {
             <Route 
               path="transport/legacy-sync" 
               element={
-                <PermissionGuard permissions={['legacy_sync.view']}>
+                <PermissionGuard permissions={['legacy.sync:view']}>
                   <LegacySyncPage />
                 </PermissionGuard>
               } 
@@ -158,7 +158,7 @@ function App() {
             <Route 
               path="transport/safety/aggressive-driving" 
               element={
-                <PermissionGuard permissions={['safety:view_aggressive']}>
+                <PermissionGuard permissions={['safety.aggressive.driving:view']}>
                   <AggressiveDriving />
                 </PermissionGuard>
               } 
@@ -167,7 +167,7 @@ function App() {
             <Route 
               path="transport/safety/monthly-report" 
               element={
-                <PermissionGuard permissions={['safety:view_report']}>
+                <PermissionGuard permissions={['safety.reports:view']}>
                   <MonthlyReport />
                 </PermissionGuard>
               } 
@@ -176,7 +176,7 @@ function App() {
             <Route 
               path="transport/safety/data-recreation" 
               element={
-                <PermissionGuard permissions={['safety.data-recreation:manage']}>
+                <PermissionGuard permissions={['safety.data.recreation:view']}>
                   <DataRecreation />
                 </PermissionGuard>
               } 

@@ -33,7 +33,7 @@ export class DrivingRecreationController {
   constructor(private readonly drivingRecreationService: DrivingRecreationService) {}
 
   @Get('vehicles')
-  @RequirePermissions('safety.data-recreation:manage')
+  @RequirePermissions('safety.data.recreation:view')
   @ApiOperation({ summary: 'Get vehicles with GPS and events statistics' })
   @ApiResponse({ status: 200, type: [VehicleWithStatsDto] })
   async getVehiclesWithStats(
@@ -44,7 +44,7 @@ export class DrivingRecreationController {
   }
 
   @Post('start')
-  @RequirePermissions('safety.data-recreation:manage')
+  @RequirePermissions('safety.data.recreation:start')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Start driving events recreation process' })
   @ApiResponse({ status: 201, description: 'Recreation started successfully' })
@@ -56,7 +56,7 @@ export class DrivingRecreationController {
   }
 
   @Get('status/:id')
-  @RequirePermissions('safety.data-recreation:manage')
+  @RequirePermissions('safety.data.recreation:view')
   @ApiOperation({ summary: 'Get recreation process status' })
   @ApiResponse({ status: 200, type: RecreationStatusDto })
   async getRecreationStatus(
@@ -66,7 +66,7 @@ export class DrivingRecreationController {
   }
 
   @Delete('stop/:id')
-  @RequirePermissions('safety.data-recreation:manage')
+  @RequirePermissions('safety.data.recreation:stop')
   @ApiOperation({ summary: 'Stop recreation process' })
   @ApiResponse({ status: 200, description: 'Recreation stopped successfully' })
   async stopRecreation(
@@ -76,7 +76,7 @@ export class DrivingRecreationController {
   }
 
   @Get('history')
-  @RequirePermissions('safety.data-recreation:manage')
+  @RequirePermissions('safety.data.recreation:view')
   @ApiOperation({ summary: 'Get recreation history' })
   @ApiResponse({ status: 200, type: [RecreationHistoryDto] })
   async getRecreationHistory(
@@ -88,7 +88,7 @@ export class DrivingRecreationController {
   }
 
   @Post('preview')
-  @RequirePermissions('safety.data-recreation:manage')
+  @RequirePermissions('safety.data.recreation:configure')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Preview events count for selected vehicles' })
   @ApiResponse({ status: 200 })

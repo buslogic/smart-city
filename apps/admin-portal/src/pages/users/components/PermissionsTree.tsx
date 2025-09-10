@@ -77,6 +77,7 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
         case 'configure': return 'text-purple-600';
         case 'cleanup': return 'text-amber-600';
         case 'dashboard': return 'text-indigo-600';
+        case 'export': return 'text-emerald-600';
         case 'sync_gps': return 'text-cyan-600';
         case 'view_map': return 'text-blue-600';
         case 'view_analytics': return 'text-indigo-600';
@@ -304,7 +305,7 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
                 name: 'Agresivna Vožnja',
                 type: 'section',
                 children: allPermissions
-                  .filter(p => p.name === 'safety:view_aggressive' || p.name === 'safety:view_aggressive_driving')
+                  .filter(p => p.resource === 'safety.aggressive.driving')
                   .map(p => ({
                     id: `perm-${p.id}`,
                     name: getPermissionLabel(p),
@@ -314,11 +315,11 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
                   })),
               },
               {
-                id: 'mesecni-izvestaj',
-                name: 'Mesečni Izveštaj',
+                id: 'safety-reports',
+                name: 'Bezbednosni Izveštaji',
                 type: 'section',
                 children: allPermissions
-                  .filter(p => p.name === 'safety:view_report' || p.name === 'safety:view_monthly_report')
+                  .filter(p => p.resource === 'safety.reports')
                   .map(p => ({
                     id: `perm-${p.id}`,
                     name: getPermissionLabel(p),
@@ -332,7 +333,7 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
                 name: 'Rekreacija podataka',
                 type: 'section',
                 children: allPermissions
-                  .filter(p => p.resource === 'safety.data-recreation')
+                  .filter(p => p.resource === 'safety.data.recreation')
                   .map(p => ({
                     id: `perm-${p.id}`,
                     name: getPermissionLabel(p),
@@ -386,11 +387,10 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
             icon: <Sliders className="h-4 w-4" />,
             children: allPermissions
               .filter(p => 
-                p.resource === 'settings' || 
                 p.resource === 'settings.general' ||
-                p.resource === 'api_settings' ||
-                p.resource === 'system_settings' ||
-                p.resource === 'legacy_databases' ||
+                p.resource === 'settings.api' ||
+                p.resource === 'settings.system' ||
+                p.resource === 'settings.legacy.databases' ||
                 p.resource === 'legacy_tables'
               )
               .map(p => ({
@@ -473,23 +473,84 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
     }
     
     // Specifični labeli za safety permisije
-    if (permission.resource === 'safety' || permission.name?.startsWith('safety:')) {
-      if (permission.name === 'safety:view_aggressive' || permission.name === 'safety:view_aggressive_driving') {
-        return 'Pregled agresivne vožnje';
-      }
-      if (permission.name === 'safety:view_report' || permission.name === 'safety:view_monthly_report') {
-        return 'Pregled mesečnog izveštaja';
+    if (permission.resource === 'safety.aggressive.driving') {
+      const aggressiveDrivingLabels: Record<string, string> = {
+        'view': 'Pregled agresivne vožnje',
+        'configure': 'Konfiguracija parametara',
+        'export': 'Eksport podataka',
+      };
+      if (aggressiveDrivingLabels[permission.action]) {
+        return aggressiveDrivingLabels[permission.action];
       }
     }
     
-    // Specifični labeli za safety.data-recreation
-    if (permission.resource === 'safety.data-recreation') {
+    if (permission.resource === 'safety.reports') {
+      const reportsLabels: Record<string, string> = {
+        'view': 'Pregled izveštaja',
+        'create': 'Kreiranje izveštaja',
+        'export': 'Eksport PDF izveštaja',
+        'configure': 'Konfiguracija parametara',
+      };
+      if (reportsLabels[permission.action]) {
+        return reportsLabels[permission.action];
+      }
+    }
+    
+    // Specifični labeli za safety.data.recreation
+    if (permission.resource === 'safety.data.recreation') {
       const recreationLabels: Record<string, string> = {
-        'manage': 'Upravljanje rekreacijom podataka',
-        'view': 'Pregled rekreacije podataka',
+        'view': 'Pregled statistika i istorije',
+        'start': 'Pokretanje rekreacije',
+        'stop': 'Zaustavljanje rekreacije',
+        'configure': 'Konfiguracija parametara',
       };
       if (recreationLabels[permission.action]) {
         return recreationLabels[permission.action];
+      }
+    }
+    
+    // Specifični labeli za settings permisije
+    if (permission.resource === 'settings.general') {
+      const generalLabels: Record<string, string> = {
+        'view': 'Pregled opštih podešavanja',
+        'update': 'Ažuriranje opštih podešavanja',
+        'configure': 'Konfiguracija opštih podešavanja',
+      };
+      if (generalLabels[permission.action]) {
+        return generalLabels[permission.action];
+      }
+    }
+    
+    if (permission.resource === 'settings.api') {
+      const apiLabels: Record<string, string> = {
+        'view': 'Pregled API podešavanja',
+        'update': 'Ažuriranje API podešavanja',
+      };
+      if (apiLabels[permission.action]) {
+        return apiLabels[permission.action];
+      }
+    }
+    
+    if (permission.resource === 'settings.system') {
+      const systemLabels: Record<string, string> = {
+        'view': 'Pregled sistemskih podešavanja',
+        'update': 'Ažuriranje sistemskih podešavanja',
+      };
+      if (systemLabels[permission.action]) {
+        return systemLabels[permission.action];
+      }
+    }
+    
+    if (permission.resource === 'settings.legacy.databases') {
+      const legacyDbLabels: Record<string, string> = {
+        'view': 'Pregled legacy baza',
+        'create': 'Kreiranje legacy baza',
+        'update': 'Ažuriranje legacy baza',
+        'delete': 'Brisanje legacy baza',
+        'configure': 'Konfiguracija legacy baza',
+      };
+      if (legacyDbLabels[permission.action]) {
+        return legacyDbLabels[permission.action];
       }
     }
     

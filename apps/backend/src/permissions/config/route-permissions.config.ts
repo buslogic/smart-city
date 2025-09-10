@@ -52,13 +52,13 @@ export const routePermissionsConfig: RoutePermissionDto[] = [
   // Safety & Reports
   {
     route: '/transport/safety/aggressive-driving',
-    requiredPermissions: ['safety:view_aggressive_driving'],
-    optionalPermissions: ['reports.export'],
+    requiredPermissions: ['safety.aggressive.driving:view'],
+    optionalPermissions: ['safety.aggressive.driving:export'],
   },
   {
     route: '/transport/safety/monthly-report',
-    requiredPermissions: ['vehicles:read', 'safety:view_monthly_report'],
-    optionalPermissions: ['reports.export', 'reports.create'],
+    requiredPermissions: ['vehicles:read', 'safety.reports:view'],
+    optionalPermissions: ['safety.reports:create', 'safety.reports:export', 'safety.reports:configure'],
   },
   
   // Reports
