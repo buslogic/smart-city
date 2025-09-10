@@ -4,20 +4,20 @@ export const routePermissionsConfig: RoutePermissionDto[] = [
   // Dashboard
   {
     route: '/dashboard',
-    requiredPermissions: ['dashboard.view'],
-    optionalPermissions: ['dashboard.edit'],
+    requiredPermissions: ['dashboard:view'],
+    optionalPermissions: ['dashboard:update'],
   },
   
   // Users Management
   {
     route: '/users',
-    requiredPermissions: ['users.read'],
-    optionalPermissions: ['users.create', 'users.update', 'users.delete'],
+    requiredPermissions: ['users:view'],
+    optionalPermissions: ['users:create', 'users:update', 'users:delete'],
   },
   {
     route: '/users/roles-permissions',
-    requiredPermissions: ['roles.manage', 'permissions.manage'],
-    optionalPermissions: [],
+    requiredPermissions: ['roles:view', 'permissions:view'],
+    optionalPermissions: ['roles:create', 'roles:update', 'roles:delete', 'permissions:create', 'permissions:update', 'permissions:delete'],
   },
   
   // Vehicles

@@ -29,18 +29,22 @@ async function main() {
   // Create permissions
   const permissions = [
     // User permissions
-    { name: 'users.create', resource: 'users', action: 'create', description: 'Kreiranje korisnika' },
-    { name: 'users.read', resource: 'users', action: 'read', description: 'Pregled korisnika' },
-    { name: 'users.update', resource: 'users', action: 'update', description: 'Ažuriranje korisnika' },
-    { name: 'users.delete', resource: 'users', action: 'delete', description: 'Brisanje korisnika' },
-    { name: 'users.manage', resource: 'users', action: 'manage', description: 'Upravljanje korisnicima' },
+    { name: 'users:create', resource: 'users', action: 'create', description: 'Kreiranje korisnika' },
+    { name: 'users:view', resource: 'users', action: 'view', description: 'Pregled korisnika' },
+    { name: 'users:update', resource: 'users', action: 'update', description: 'Ažuriranje korisnika' },
+    { name: 'users:delete', resource: 'users', action: 'delete', description: 'Brisanje korisnika' },
     
     // Role permissions
-    { name: 'roles.create', resource: 'roles', action: 'create', description: 'Kreiranje uloga' },
-    { name: 'roles.read', resource: 'roles', action: 'read', description: 'Pregled uloga' },
-    { name: 'roles.update', resource: 'roles', action: 'update', description: 'Ažuriranje uloga' },
-    { name: 'roles.delete', resource: 'roles', action: 'delete', description: 'Brisanje uloga' },
-    { name: 'roles.manage', resource: 'roles', action: 'manage', description: 'Upravljanje ulogama' },
+    { name: 'roles:create', resource: 'roles', action: 'create', description: 'Kreiranje uloga' },
+    { name: 'roles:view', resource: 'roles', action: 'view', description: 'Pregled uloga' },
+    { name: 'roles:update', resource: 'roles', action: 'update', description: 'Ažuriranje uloga' },
+    { name: 'roles:delete', resource: 'roles', action: 'delete', description: 'Brisanje uloga' },
+    
+    // Permission permissions
+    { name: 'permissions:create', resource: 'permissions', action: 'create', description: 'Kreiranje permisija' },
+    { name: 'permissions:view', resource: 'permissions', action: 'view', description: 'Pregled permisija' },
+    { name: 'permissions:update', resource: 'permissions', action: 'update', description: 'Ažuriranje permisija' },
+    { name: 'permissions:delete', resource: 'permissions', action: 'delete', description: 'Brisanje permisija' },
     
     // Settings permissions
     { name: 'settings.general.read', resource: 'settings', action: 'read', description: 'Pregled opštih podešavanja' },

@@ -66,6 +66,9 @@ export class LegacySyncWorkerPoolService {
     }
   };
   
+  // Flag za agresivnu detekciju (učitava se iz baze)
+  private aggressiveDetectionEnabled: boolean = false;
+  
   // Worker statusi
   private workers: Map<number, WorkerStatus> = new Map();
   private activeWorkers = 0;
@@ -90,7 +93,8 @@ export class LegacySyncWorkerPoolService {
       });
       
       settings.forEach(setting => {
-        const value = setting.type === 'number' ? parseInt(setting.value) : setting.value;
+        const value = setting.type === 'number' ? parseInt(setting.value) : 
+                       setting.type === 'boolean' ? setting.value === 'true' : setting.value;
         
         switch(setting.key) {
           case 'legacy_sync.worker_pool.max_workers':
@@ -98,6 +102,10 @@ export class LegacySyncWorkerPoolService {
             break;
           case 'legacy_sync.worker_pool.worker_timeout_ms':
             this.config.workerTimeout = value as number;
+            break;
+          case 'legacy_sync.aggressive_detection_enabled':
+            this.aggressiveDetectionEnabled = value as boolean;
+            this.logger.log(`🎯 Agresivna detekcija: ${this.aggressiveDetectionEnabled ? 'UKLJUČENA' : 'ISKLJUČENA'}`)
             break;
           case 'legacy_sync.worker_pool.retry_attempts':
             this.config.retryAttempts = value as number;
@@ -510,8 +518,8 @@ export class LegacySyncWorkerPoolService {
       
       const processedRecords = importedCount;
       
-      // Step 5: DETECT AGGRESSIVE DRIVING
-      if (importSuccess && importedCount > 0) {
+      // Step 5: DETECT AGGRESSIVE DRIVING (AKO JE UKLJUČENO)
+      if (importSuccess && importedCount > 0 && this.aggressiveDetectionEnabled) {
         updateWorkerStatus('detecting', 'Detekcija agresivne vožnje', 85);
         logs.push(`[Worker ${workerId}] 🔍 Pokrećem detekciju agresivne vožnje...`);
         
@@ -523,6 +531,9 @@ export class LegacySyncWorkerPoolService {
           logs.push(`[Worker ${workerId}] ⚠️ Detekcija greška: ${detectionError.message}`);
           // Ne prekidaj proces zbog greške u detekciji
         }
+      } else if (importSuccess && importedCount > 0 && !this.aggressiveDetectionEnabled) {
+        logs.push(`[Worker ${workerId}] ⏭️ Preskačem detekciju agresivne vožnje (isključena u konfiguraciji)`);
+        updateWorkerStatus('detecting', 'Detekcija preskočena', 85);
       }
       
       // Step 6: CLEANUP sa TIMEOUT (ali ne fail ako ne uspe)
@@ -827,6 +838,9 @@ export class LegacySyncWorkerPoolService {
   private async insertBatch(pool: any, batch: any[]): Promise<void> {
     // this.logger.debug(`Inserting batch of ${batch.length} records`);
     
+    // 📊 PERFORMANCE LOG - Start TimescaleDB Insert
+    const insertStartTime = Date.now();
+    
     const client = await pool.connect();
     
     try {
@@ -898,6 +912,10 @@ export class LegacySyncWorkerPoolService {
       await client.query(query, params);
       await client.query('COMMIT');
       
+      // 📊 PERFORMANCE LOG - End TimescaleDB Insert
+      const insertDuration = Date.now() - insertStartTime;
+      this.logger.log(`⏱️ [TIMESCALE INSERT] Batch od ${batch.length} redova - Trajanje: ${insertDuration}ms (${(insertDuration/1000).toFixed(2)}s)`);
+      
     } catch (error) {
       await client.query('ROLLBACK');
       this.logger.error(`Insert batch failed: ${error.message}`);
@@ -909,6 +927,49 @@ export class LegacySyncWorkerPoolService {
   }
 
   /**
+   * Dobavi trenutnu konfiguraciju Worker Pool-a
+   */
+  async getWorkerPoolConfig(): Promise<{
+    maxWorkers: number;
+    workerTimeout: number;
+    aggressiveDetectionEnabled: boolean;
+  }> {
+    // Reload configuration da imamo najnovije podatke
+    await this.loadConfiguration();
+    
+    return {
+      maxWorkers: this.config.maxWorkers,
+      workerTimeout: this.config.workerTimeout,
+      aggressiveDetectionEnabled: this.aggressiveDetectionEnabled
+    };
+  }
+
+  /**
+   * Uključi/isključi agresivnu detekciju
+   */
+  async toggleAggressiveDetection(enabled: boolean): Promise<void> {
+    this.aggressiveDetectionEnabled = enabled;
+    
+    // Sačuvaj u bazu
+    await this.prisma.systemSettings.upsert({
+      where: { key: 'legacy_sync.aggressive_detection_enabled' },
+      update: { 
+        value: enabled.toString(),
+        updatedAt: new Date()
+      },
+      create: {
+        key: 'legacy_sync.aggressive_detection_enabled',
+        value: enabled.toString(),
+        type: 'boolean',
+        category: 'legacy_sync',
+        description: 'Omogućava detekciju agresivne vožnje tokom sinhronizacije',
+      }
+    });
+    
+    this.logger.log(`🎯 Agresivna detekcija ${enabled ? 'UKLJUČENA' : 'ISKLJUČENA'} i sačuvana u bazu`);
+  }
+
+  /**
    * Poziva detekciju agresivne vožnje za vozilo u zadatom period
    */
   private async detectAggressiveDriving(
@@ -917,6 +978,10 @@ export class LegacySyncWorkerPoolService {
     syncFrom: Date,
     syncTo: Date
   ): Promise<number> {
+    // 📊 PERFORMANCE LOG - Start Event Detection
+    const detectionStartTime = Date.now();
+    this.logger.log(`🎯 [EVENT DETECTION START] Vozilo ${garageNo} - Period: ${syncFrom.toISOString().split('T')[0]} do ${syncTo.toISOString().split('T')[0]}`);
+    
     const { Pool } = require('pg');
     const pgPool = new Pool({
       connectionString: process.env.TIMESCALE_DATABASE_URL,
@@ -935,6 +1000,9 @@ export class LegacySyncWorkerPoolService {
         const dayStart = currentDate.toISOString().split('T')[0] + ' 00:00:00';
         const dayEnd = currentDate.toISOString().split('T')[0] + ' 23:59:59';
         
+        // 📊 PERFORMANCE LOG - Daily Detection
+        const dayStartTime = Date.now();
+        
         try {
           const result = await pgPool.query(`
             SELECT detect_aggressive_driving_batch(
@@ -949,6 +1017,10 @@ export class LegacySyncWorkerPoolService {
           if (result.rows && result.rows[0]) {
             const dayEvents = parseInt(result.rows[0].detect_aggressive_driving_batch) || 0;
             totalDetectedEvents += dayEvents;
+            
+            // 📊 PERFORMANCE LOG - Daily Detection Complete
+            const dayDuration = Date.now() - dayStartTime;
+            this.logger.log(`  📅 [DAILY DETECTION] ${currentDate.toISOString().split('T')[0]} - Događaja: ${dayEvents}, Trajanje: ${dayDuration}ms`);
           }
         } catch (dayError) {
           // Loguj grešku ali nastavi sa sledećim danom
@@ -958,6 +1030,10 @@ export class LegacySyncWorkerPoolService {
         // Pređi na sledeći dan
         currentDate.setDate(currentDate.getDate() + 1);
       }
+      
+      // 📊 PERFORMANCE LOG - Total Event Detection Complete
+      const totalDetectionDuration = Date.now() - detectionStartTime;
+      this.logger.log(`✅ [EVENT DETECTION COMPLETE] Vozilo ${garageNo} - Ukupno događaja: ${totalDetectedEvents}, Ukupno trajanje: ${totalDetectionDuration}ms (${(totalDetectionDuration/1000).toFixed(2)}s)`);
       
       this.logger.log(`🎯 Detektovano ${totalDetectedEvents} agresivnih događaja za vozilo ${garageNo}`);
       

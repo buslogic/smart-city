@@ -3,8 +3,10 @@ import { Shield, Save, RotateCcw, ChevronDown, AlertTriangle } from 'lucide-reac
 import type { Role, Permission } from '../../../types/rbac.types';
 import { rbacService } from '../../../services/rbacService';
 import PermissionsTree from './PermissionsTree';
+import { usePermissions } from '../../../hooks/usePermissions';
 
 const PermissionsManagement: React.FC = () => {
+  const { canAccess } = usePermissions();
   const [roles, setRoles] = useState<Role[]>([]);
   const [selectedRole, setSelectedRole] = useState<number | null>(null);
   const [allPermissions, setAllPermissions] = useState<Permission[]>([]);
@@ -15,11 +17,17 @@ const PermissionsManagement: React.FC = () => {
   const [hasChanges, setHasChanges] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
+  // Check permissions
+  const canView = canAccess(['permissions:view']);
+  const canUpdate = canAccess(['permissions:update']);
+
   const fetchRoles = async () => {
     try {
       const response = await rbacService.getRoles(1, 100);
       if (response.data && response.data.length > 0) {
-        setRoles(response.data);
+        // Sortiraj role po ID u ascending redosledu
+        const sortedRoles = response.data.sort((a: Role, b: Role) => a.id - b.id);
+        setRoles(sortedRoles);
       } else {
         console.error('Nema rola u bazi');
         const errorDiv = document.createElement('div');
@@ -113,6 +121,15 @@ const PermissionsManagement: React.FC = () => {
   };
 
   const handlePermissionToggle = (permissionId: number) => {
+    if (!canUpdate) {
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'fixed top-4 right-4 bg-yellow-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
+      errorDiv.textContent = 'Nemate dozvolu za izmenu permisija';
+      document.body.appendChild(errorDiv);
+      setTimeout(() => errorDiv.remove(), 2000);
+      return;
+    }
+    
     if (rolePermissions.includes(permissionId)) {
       setRolePermissions(rolePermissions.filter(id => id !== permissionId));
     } else {
@@ -122,6 +139,15 @@ const PermissionsManagement: React.FC = () => {
 
   const handleSave = async () => {
     if (!selectedRole) return;
+    
+    if (!canUpdate) {
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
+      errorDiv.textContent = 'Nemate dozvolu za ažuriranje permisija';
+      document.body.appendChild(errorDiv);
+      setTimeout(() => errorDiv.remove(), 3000);
+      return;
+    }
     
     try {
       setSaving(true);
@@ -152,6 +178,17 @@ const PermissionsManagement: React.FC = () => {
 
   const selectedRoleData = roles.find(r => r.id === selectedRole);
 
+  // Ako korisnik nema permissions:view, prikaži poruku
+  if (!canView) {
+    return (
+      <div className="bg-white p-12 rounded-lg shadow text-center">
+        <Shield className="h-12 w-12 text-red-400 mx-auto mb-4" />
+        <p className="text-gray-700 font-semibold mb-2">Pristup odbijen</p>
+        <p className="text-gray-500">Nemate dozvolu za pregled permisija</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {/* Role Selector */}
@@ -162,11 +199,19 @@ const PermissionsManagement: React.FC = () => {
             <div className="relative">
               <button
                 onClick={() => setDropdownOpen(!dropdownOpen)}
-                className="w-96 px-4 py-2 text-left bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-[36rem] px-4 py-2 text-left bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 <div className="flex items-center justify-between">
                   <span className={selectedRoleData ? 'text-gray-900' : 'text-gray-500'}>
-                    {selectedRoleData ? `${selectedRoleData.name} - ${selectedRoleData.description}` : 'Izaberite rolu...'}
+                    {selectedRoleData ? (
+                      <>
+                        <span className="font-medium">ID: {selectedRoleData.id}</span>
+                        <span className="mx-3">•</span>
+                        <span className="font-semibold">{selectedRoleData.name}</span>
+                        <span className="mx-3">-</span>
+                        <span className="text-gray-600">{selectedRoleData.description}</span>
+                      </>
+                    ) : 'Izaberite rolu...'}
                   </span>
                   <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
                 </div>
@@ -180,9 +225,10 @@ const PermissionsManagement: React.FC = () => {
                       onClick={() => handleRoleChange(role.id)}
                       className="w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-gray-900">{role.name}</span>
-                        <span className="text-sm text-gray-500">{role.description}</span>
+                      <div className="flex items-center gap-4">
+                        <span className="font-medium text-blue-600 min-w-[3rem]">ID: {role.id}</span>
+                        <span className="font-semibold text-gray-900 min-w-[10rem]">{role.name}</span>
+                        <span className="text-sm text-gray-500 flex-1">{role.description}</span>
                       </div>
                     </button>
                   ))}
@@ -193,22 +239,29 @@ const PermissionsManagement: React.FC = () => {
           
           {selectedRole && (
             <div className="flex items-center space-x-2">
-              <button
-                onClick={handleReset}
-                disabled={!hasChanges}
-                className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <RotateCcw className="h-4 w-4 mr-2" />
-                Resetuj
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={!hasChanges || saving}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Save className="h-4 w-4 mr-2" />
-                {saving ? 'Čuvanje...' : 'Sačuvaj promene'}
-              </button>
+              {canUpdate && (
+                <>
+                  <button
+                    onClick={handleReset}
+                    disabled={!hasChanges}
+                    className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    Resetuj
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    disabled={!hasChanges || saving}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    {saving ? 'Čuvanje...' : 'Sačuvaj promene'}
+                  </button>
+                </>
+              )}
+              {!canUpdate && hasChanges && (
+                <span className="text-sm text-gray-500 italic">Nemate dozvolu za ažuriranje permisija</span>
+              )}
             </div>
           )}
         </div>
@@ -238,6 +291,15 @@ const PermissionsManagement: React.FC = () => {
             selectedPermissions={rolePermissions}
             onPermissionToggle={handlePermissionToggle}
             onBulkToggle={(permissionIds, selected) => {
+              if (!canUpdate) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'fixed top-4 right-4 bg-yellow-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
+                errorDiv.textContent = 'Nemate dozvolu za izmenu permisija';
+                document.body.appendChild(errorDiv);
+                setTimeout(() => errorDiv.remove(), 2000);
+                return;
+              }
+              
               if (selected) {
                 const newPermissions = [...new Set([...rolePermissions, ...permissionIds])];
                 setRolePermissions(newPermissions);
@@ -246,6 +308,7 @@ const PermissionsManagement: React.FC = () => {
                 setRolePermissions(newPermissions);
               }
             }}
+            readOnly={!canUpdate}
           />
         )
       ) : (

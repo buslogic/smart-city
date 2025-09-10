@@ -19,7 +19,7 @@ export class UserInfo {
   @ApiProperty({ isArray: true, example: ['SUPER_ADMIN'] })
   roles: string[];
 
-  @ApiProperty({ isArray: true, example: ['users:create', 'users:read'] })
+  @ApiProperty({ isArray: true, example: ['users:create', 'users:view'] })
   permissions: string[];
 }
 

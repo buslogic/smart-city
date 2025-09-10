@@ -89,7 +89,7 @@ const ModernMenuV1: React.FC = () => {
       name: 'Dashboard',
       icon: LayoutDashboard,
       href: '/dashboard',
-      permissions: ['dashboard.view'],
+      permissions: ['dashboard:view'],
     },
     
     {
@@ -103,13 +103,13 @@ const ModernMenuV1: React.FC = () => {
           name: 'Administracija',
           href: '/users/administration',
           icon: UserCog,
-          permissions: ['users:read'],
+          permissions: ['users:view'],
         },
         {
           name: 'Role i Permisije',
           href: '/users/roles-permissions',
           icon: Shield,
-          permissions: ['roles:read'],
+          permissions: ['roles:view'],
         },
       ].filter(item => !item.permissions || item.permissions.some(p => hasPermission(p))),
     },
@@ -202,6 +202,12 @@ const ModernMenuV1: React.FC = () => {
               href: '/transport/safety/monthly-report',
               icon: FileText,
               permissions: ['safety:view_report'],
+            },
+            {
+              name: 'Rekreacija podataka',
+              href: '/transport/safety/data-recreation',
+              icon: RefreshCw,
+              permissions: ['safety.data-recreation:manage'],
             },
           ].filter(item => !item.permissions || item.permissions.some(p => hasPermission(p))),
         },

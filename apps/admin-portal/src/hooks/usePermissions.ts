@@ -27,16 +27,14 @@ export const usePermissions = () => {
   };
 
   const canCreateUsers = () => canAccess(['users:create']);
-  const canReadUsers = () => canAccess(['users:read']);
+  const canViewUsers = () => canAccess(['users:view']);
   const canUpdateUsers = () => canAccess(['users:update']);
   const canDeleteUsers = () => canAccess(['users:delete']);
-  const canManageUsers = () => canAccess(['users:manage']);
 
   const canCreateRoles = () => canAccess(['roles:create']);
-  const canReadRoles = () => canAccess(['roles:read']);
+  const canViewRoles = () => canAccess(['roles:view']);
   const canUpdateRoles = () => canAccess(['roles:update']);
   const canDeleteRoles = () => canAccess(['roles:delete']);
-  const canManageRoles = () => canAccess(['roles:manage']);
 
   const hasPermission = (permission: string) => {
     // Super admin ima pristup svemu
@@ -49,15 +47,13 @@ export const usePermissions = () => {
   return {
     canAccess,
     canCreateUsers,
-    canReadUsers,
+    canViewUsers,
     canUpdateUsers,
     canDeleteUsers,
-    canManageUsers,
     canCreateRoles,
-    canReadRoles,
+    canViewRoles,
     canUpdateRoles,
     canDeleteRoles,
-    canManageRoles,
     user,
     checkPermission,
     hasRole,

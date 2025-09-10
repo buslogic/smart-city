@@ -44,6 +44,7 @@ interface PermissionsTreeProps {
   selectedPermissions: number[];
   onPermissionToggle: (permissionId: number) => void;
   onBulkToggle: (permissionIds: number[], selected: boolean) => void;
+  readOnly?: boolean;
 }
 
 const PermissionsTree: React.FC<PermissionsTreeProps> = ({
@@ -51,8 +52,9 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
   selectedPermissions,
   onPermissionToggle,
   onBulkToggle,
+  readOnly = false,
 }) => {
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['korisnici', 'autobuski-prevoznici', 'podesavanja']));
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
 
   // Organizuj permisije prema hijerarhiji menija
   const buildPermissionTree = (): PermissionNode[] => {
@@ -316,6 +318,21 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
               })),
           },
           {
+            id: 'safety-data-recreation',
+            name: 'Bezbednost - Rekreacija podataka',
+            type: 'section',
+            icon: <RefreshCw className="h-4 w-4" />,
+            children: allPermissions
+              .filter(p => p.resource === 'safety.data-recreation')
+              .map(p => ({
+                id: `perm-${p.id}`,
+                name: getPermissionLabel(p),
+                type: 'permission' as const,
+                permission: p,
+                color: getPermissionColor(p.action),
+              })),
+          },
+          {
             id: 'maintenance-tools',
             name: 'Alati za održavanje',
             type: 'section',
@@ -376,7 +393,7 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
     if (permission.resource === 'maintenance.timescaledb') {
       const maintenanceLabels: Record<string, string> = {
         'view': 'Pregled TimescaleDB alata',
-        'manage': 'Upravljanje TimescaleDB alatima',
+        'manage': 'Upravljanje TimescaleDB operacijama (refresh aggregates)',
       };
       if (maintenanceLabels[permission.action]) {
         return maintenanceLabels[permission.action];
@@ -495,7 +512,7 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
         case 'section':
           return 'font-medium text-sm py-2 bg-white';
         case 'permission':
-          return 'text-sm py-1.5 bg-white hover:bg-blue-25';
+          return 'text-sm py-2 bg-white hover:bg-blue-25';
         default:
           return '';
       }
@@ -528,8 +545,11 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
           
           {/* Checkbox */}
           <button
-            onClick={() => handleNodeToggle(node)}
-            className="mr-3 flex-shrink-0 p-1 hover:bg-white hover:shadow-sm rounded transition-all duration-150"
+            onClick={() => !readOnly && handleNodeToggle(node)}
+            className={`mr-3 flex-shrink-0 p-1 rounded transition-all duration-150 ${
+              readOnly ? 'cursor-not-allowed opacity-60' : 'hover:bg-white hover:shadow-sm'
+            }`}
+            disabled={readOnly}
           >
             {selectionState === 'all' ? (
               <CheckSquare className="h-5 w-5 text-green-600" />
@@ -570,24 +590,33 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
           )}
           
           {/* Naziv */}
-          <span className={`
-            flex-grow
-            ${node.type === 'permission' ? 'text-sm' : ''}
-            ${node.color || (selectionState === 'all' ? 'text-green-700' : 'text-gray-700')}
-            ${selectionState === 'all' && node.type !== 'permission' ? 'font-semibold' : ''}
-          `}>
-            {node.name}
-          </span>
-          
-          {/* Badge za permisije akciju */}
-          {node.type === 'permission' && node.permission && (
+          <div className="flex-grow flex items-center gap-6">
             <span className={`
-              ml-2 px-2 py-0.5 text-xs font-medium rounded-full
-              ${getActionBadgeColor(node.permission.action)}
+              ${node.type === 'permission' ? 'text-sm' : ''}
+              ${node.color || (selectionState === 'all' ? 'text-green-700' : 'text-gray-700')}
+              ${selectionState === 'all' && node.type !== 'permission' ? 'font-semibold' : ''}
             `}>
-              {node.permission.action.toUpperCase()}
+              {node.name}
             </span>
-          )}
+            
+            {/* Prikaz naziva permisije iz baze */}
+            {node.type === 'permission' && node.permission && (
+              <>
+                {/* Naziv permisije iz baze */}
+                <span className="ml-auto mr-4 px-3 py-1.5 text-sm font-mono bg-gray-100 text-gray-700 rounded border border-gray-300">
+                  {node.permission.name}
+                </span>
+                
+                {/* Badge za permisije akciju */}
+                <span className={`
+                  px-2.5 py-1 text-xs font-medium rounded-full
+                  ${getActionBadgeColor(node.permission.action)}
+                `}>
+                  {node.permission.action.toUpperCase()}
+                </span>
+              </>
+            )}
+          </div>
           
           {/* Broj permisija */}
           {node.type !== 'permission' && hasChildren && (
@@ -629,7 +658,7 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
         </div>
         <p className="text-xs text-blue-700 mt-1">Odaberite permisije koje želite dodeliti ovoj ulozi</p>
       </div>
-      <div className="max-h-96 overflow-y-auto bg-gray-50">
+      <div className="max-h-[600px] overflow-y-auto bg-gray-50">
         {tree.map(node => renderNode(node))}
       </div>
     </div>

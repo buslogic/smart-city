@@ -16,10 +16,12 @@ const RolesManagement: React.FC = () => {
     try {
       setLoading(true);
       const response = await rbacService.getRoles(1, 100);
-      setRoles(response.data);
+      // Sortiraj role po ID u ascending redosledu
+      const sortedRoles = response.data.sort((a: Role, b: Role) => a.id - b.id);
+      setRoles(sortedRoles);
     } catch (error) {
       console.error('Greška pri učitavanju rola:', error);
-      // Mock podaci za testiranje
+      // Mock podaci za testiranje - već su sortirani po ID
       const mockRoles: Role[] = [
         {
           id: 1,
@@ -185,6 +187,9 @@ const RolesManagement: React.FC = () => {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                ID
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Naziv
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -204,19 +209,22 @@ const RolesManagement: React.FC = () => {
           <tbody className="bg-white divide-y divide-gray-200">
             {loading ? (
               <tr>
-                <td colSpan={5} className="px-6 py-4 text-center text-gray-500">
+                <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
                   Učitavanje...
                 </td>
               </tr>
             ) : roles.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-4 text-center text-gray-500">
+                <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
                   Nema pronađenih rola
                 </td>
               </tr>
             ) : (
               roles.map((role) => (
                 <tr key={role.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    {role.id}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleColor(role.name)}`}>
                       {role.name}

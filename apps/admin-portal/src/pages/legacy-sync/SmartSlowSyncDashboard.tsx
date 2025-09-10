@@ -67,6 +67,7 @@ interface SlowSyncConfig {
   vacuumAfterBatches: number;
   forceProcess: boolean;
   syncAlreadySyncedVehicles: boolean;
+  aggressiveDetectionEnabled?: boolean; // NOVO - za agresivnu detekciju
 }
 
 interface SlowSyncProgress {
@@ -235,6 +236,19 @@ const SmartSlowSyncDashboard: React.FC = () => {
       const response = await api.get('/api/legacy-sync/slow-sync/config');
       setConfig(response.data);
       setTempConfig(response.data);
+      
+      // NOVO: Učitaj i status agresivne detekcije iz Worker Pool konfiguracije
+      const workerConfigResponse = await api.get('/api/legacy-sync/config');
+      if (workerConfigResponse.data) {
+        setConfig(prev => ({
+          ...prev!,
+          aggressiveDetectionEnabled: workerConfigResponse.data.aggressiveDetectionEnabled
+        }));
+        setTempConfig(prev => ({
+          ...prev!,
+          aggressiveDetectionEnabled: workerConfigResponse.data.aggressiveDetectionEnabled
+        }));
+      }
     } catch (error) {
       console.error('Error fetching config:', error);
     }
@@ -383,7 +397,17 @@ const SmartSlowSyncDashboard: React.FC = () => {
   const handleSaveConfig = async () => {
     try {
       setLoading(true);
+      
+      // Sačuvaj Smart Slow Sync konfiguraciju
       await api.patch('/api/legacy-sync/slow-sync/config', tempConfig);
+      
+      // NOVO: Sačuvaj i agresivnu detekciju u Worker Pool konfiguraciju
+      if (tempConfig?.aggressiveDetectionEnabled !== undefined) {
+        await api.post('/api/legacy-sync/config/aggressive-detection', {
+          enabled: tempConfig.aggressiveDetectionEnabled
+        });
+      }
+      
       message.success('Konfiguracija sačuvana');
       setConfig(tempConfig);
       setConfigModalVisible(false);
@@ -1690,6 +1714,37 @@ const SmartSlowSyncDashboard: React.FC = () => {
                 {tempConfig?.syncAlreadySyncedVehicles 
                   ? "Uključeno: Sinhronizuju se SVI enabledí vozila u tabeli" 
                   : "Isključeno: Preskaču se vozila koja su već uspešno sinhronizovana"}
+              </Text>
+            </div>
+          </div>
+
+          <Divider />
+
+          <div style={{ background: '#fff7e6', padding: '12px', borderRadius: '8px', border: '1px solid #ffd591' }}>
+            <Text strong style={{ color: '#fa8c16' }}>🎯 Detekcija agresivne vožnje:</Text>
+            <div style={{ marginTop: 8 }}>
+              <Space>
+                <Switch
+                  checked={tempConfig?.aggressiveDetectionEnabled}
+                  onChange={(checked) => setTempConfig({ ...tempConfig!, aggressiveDetectionEnabled: checked })}
+                  checkedChildren="ON"
+                  unCheckedChildren="OFF"
+                />
+                <Text strong={tempConfig?.aggressiveDetectionEnabled}>
+                  {tempConfig?.aggressiveDetectionEnabled ? 'UKLJUČENA' : 'ISKLJUČENA'}
+                </Text>
+              </Space>
+            </div>
+            <div style={{ marginTop: 8 }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {tempConfig?.aggressiveDetectionEnabled 
+                  ? "⚠️ Uključeno: Tokom sinhronizacije će se detektovati agresivna vožnja i puniti events tabela (USPORAVA PROCES)" 
+                  : "✅ Isključeno: Preskače se detekcija agresivne vožnje (BRŽI PROCES)"}
+              </Text>
+            </div>
+            <div style={{ marginTop: 4 }}>
+              <Text type="warning" style={{ fontSize: 11 }}>
+                ⚡ Preporuka: Isključite detekciju za bržu sinhronizaciju, pa je pokrenite naknadno
               </Text>
             </div>
           </div>

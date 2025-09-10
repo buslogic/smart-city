@@ -248,6 +248,44 @@ export class LegacySyncController {
     }
   }
 
+  @Get('config')
+  @RequirePermissions('legacy_sync.manage')
+  @ApiOperation({ summary: 'Dobavi konfiguraciju Worker Pool-a' })
+  @ApiResponse({
+    status: 200,
+    description: 'Konfiguracija Worker Pool-a',
+  })
+  async getWorkerConfig(): Promise<any> {
+    try {
+      const config = await this.workerPoolService.getWorkerPoolConfig();
+      return config;
+    } catch (error) {
+      this.logger.error('Error fetching worker config', error);
+      throw error;
+    }
+  }
+
+  @Post('config/aggressive-detection')
+  @RequirePermissions('legacy_sync.manage')
+  @ApiOperation({ summary: 'Uključi/isključi agresivnu detekciju' })
+  @ApiBody({ schema: { properties: { enabled: { type: 'boolean' } } } })
+  @ApiResponse({
+    status: 200,
+    description: 'Konfiguracija ažurirana',
+  })
+  async toggleAggressiveDetection(@Body() dto: { enabled: boolean }): Promise<{ message: string; enabled: boolean }> {
+    try {
+      await this.workerPoolService.toggleAggressiveDetection(dto.enabled);
+      return { 
+        message: `Agresivna detekcija ${dto.enabled ? 'uključena' : 'isključena'}`,
+        enabled: dto.enabled
+      };
+    } catch (error) {
+      this.logger.error('Error toggling aggressive detection', error);
+      throw error;
+    }
+  }
+
   @Get('test-connection')
   @RequirePermissions('legacy_sync.view')
   @ApiOperation({ summary: 'Test konekcije na legacy server' })

@@ -25,6 +25,7 @@ model User {
   dashboardConfig          UserDashboardConfig?
   roles                    UserRole[]
   vehicleSyncLogs          VehicleSyncLog[]
+  drivingAnalysisLogs      DrivingAnalysisLog[]
 
   @@index([email])
   @@map("users")
@@ -545,4 +546,32 @@ model GpsWorkerLog {
   @@index([startedAt])
   @@index([status])
   @@map("gps_worker_logs")
+}
+
+model DrivingAnalysisLog {
+  id                  Int       @id @default(autoincrement())
+  userId              Int       @map("user_id")
+  vehicleIds          Json      @map("vehicle_ids")
+  startDate           DateTime  @map("start_date")
+  endDate             DateTime  @map("end_date")
+  totalVehicles       Int       @map("total_vehicles")
+  processedVehicles   Int       @default(0) @map("processed_vehicles")
+  totalEventsDetected Int       @default(0) @map("total_events_detected")
+  totalEventsBefore   Int       @default(0) @map("total_events_before")
+  status              String    @default("pending") @map("status") @db.VarChar(50)
+  strategy            String    @default("daily") @map("strategy") @db.VarChar(20)
+  clearExisting       Boolean   @default(false) @map("clear_existing")
+  startedAt           DateTime? @map("started_at")
+  completedAt         DateTime? @map("completed_at")
+  errorMessage        String?   @map("error_message") @db.Text
+  vehicleProgress     Json?     @map("vehicle_progress")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("driving_analysis_logs")
 }

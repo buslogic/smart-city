@@ -68,18 +68,16 @@ const PermissionsManagement: React.FC = () => {
       // Mock podaci
       setAllPermissions([
         // Users permissions
-        { id: 1, name: 'users.create', resource: 'users', action: 'create', description: 'Kreiranje korisnika', createdAt: '', updatedAt: '' },
-        { id: 2, name: 'users.read', resource: 'users', action: 'read', description: 'Pregled korisnika', createdAt: '', updatedAt: '' },
-        { id: 3, name: 'users.update', resource: 'users', action: 'update', description: 'Ažuriranje korisnika', createdAt: '', updatedAt: '' },
-        { id: 4, name: 'users.delete', resource: 'users', action: 'delete', description: 'Brisanje korisnika', createdAt: '', updatedAt: '' },
-        { id: 5, name: 'users.manage', resource: 'users', action: 'manage', description: 'Upravljanje korisnicima', createdAt: '', updatedAt: '' },
+        { id: 1, name: 'users:create', resource: 'users', action: 'create', description: 'Kreiranje korisnika', createdAt: '', updatedAt: '' },
+        { id: 2, name: 'users:view', resource: 'users', action: 'view', description: 'Pregled korisnika', createdAt: '', updatedAt: '' },
+        { id: 3, name: 'users:update', resource: 'users', action: 'update', description: 'Ažuriranje korisnika', createdAt: '', updatedAt: '' },
+        { id: 4, name: 'users:delete', resource: 'users', action: 'delete', description: 'Brisanje korisnika', createdAt: '', updatedAt: '' },
         
         // Roles permissions
-        { id: 6, name: 'roles.create', resource: 'roles', action: 'create', description: 'Kreiranje uloga', createdAt: '', updatedAt: '' },
-        { id: 7, name: 'roles.read', resource: 'roles', action: 'read', description: 'Pregled uloga', createdAt: '', updatedAt: '' },
-        { id: 8, name: 'roles.update', resource: 'roles', action: 'update', description: 'Ažuriranje uloga', createdAt: '', updatedAt: '' },
-        { id: 9, name: 'roles.delete', resource: 'roles', action: 'delete', description: 'Brisanje uloga', createdAt: '', updatedAt: '' },
-        { id: 10, name: 'roles.manage', resource: 'roles', action: 'manage', description: 'Upravljanje ulogama', createdAt: '', updatedAt: '' },
+        { id: 6, name: 'roles:create', resource: 'roles', action: 'create', description: 'Kreiranje uloga', createdAt: '', updatedAt: '' },
+        { id: 7, name: 'roles:view', resource: 'roles', action: 'view', description: 'Pregled uloga', createdAt: '', updatedAt: '' },
+        { id: 8, name: 'roles:update', resource: 'roles', action: 'update', description: 'Ažuriranje uloga', createdAt: '', updatedAt: '' },
+        { id: 9, name: 'roles:delete', resource: 'roles', action: 'delete', description: 'Brisanje uloga', createdAt: '', updatedAt: '' },
       ]);
     }
   };
