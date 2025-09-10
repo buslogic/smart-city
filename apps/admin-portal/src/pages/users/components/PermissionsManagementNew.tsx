@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Shield, Save, RotateCcw, ChevronDown, AlertTriangle } from 'lucide-react';
 import type { Role, Permission } from '../../../types/rbac.types';
 import { rbacService } from '../../../services/rbacService';
-import PermissionsTree from './PermissionsTree';
+import PermissionsTree from './PermissionsTreeNew';
 import { usePermissions } from '../../../hooks/usePermissions';
 
 const PermissionsManagement: React.FC = () => {

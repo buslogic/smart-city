@@ -77,7 +77,12 @@ async function main() {
     { name: 'vehicles:read', resource: 'vehicles', action: 'read', description: 'Pregled vozila' },
     { name: 'vehicles:update', resource: 'vehicles', action: 'update', description: 'Ažuriranje vozila' },
     { name: 'vehicles:delete', resource: 'vehicles', action: 'delete', description: 'Brisanje vozila' },
-    { name: 'vehicles:sync', resource: 'vehicles', action: 'sync', description: 'Sinhronizacija vozila' },
+    
+    // Vehicle Sync permissions
+    { name: 'vehicles.sync:view', resource: 'vehicles.sync', action: 'view', description: 'Pregled statusa sinhronizacije vozila' },
+    { name: 'vehicles.sync:start', resource: 'vehicles.sync', action: 'start', description: 'Pokretanje sinhronizacije vozila' },
+    { name: 'vehicles.sync:stop', resource: 'vehicles.sync', action: 'stop', description: 'Zaustavljanje sinhronizacije vozila' },
+    { name: 'vehicles.sync:configure', resource: 'vehicles.sync', action: 'configure', description: 'Konfiguracija parametara sinhronizacije' },
     
     // Dispatcher Module permissions
     { name: 'dispatcher:read', resource: 'dispatcher', action: 'read', description: 'Pregled dispečerskog modula' },
@@ -188,7 +193,8 @@ async function main() {
           { resource: 'users', action: { in: ['read', 'update'] } },
           { resource: 'roles', action: 'read' },
           { resource: 'legacy_tables', action: 'read' },
-          { resource: 'vehicles', action: { in: ['read', 'create', 'update', 'sync'] } },
+          { resource: 'vehicles', action: { in: ['read', 'create', 'update'] } },
+          { resource: 'vehicles.sync', action: { in: ['view', 'start', 'stop', 'configure'] } },
           { resource: 'dispatcher', action: { in: ['read', 'manage', 'track_vehicles', 'send_commands'] } },
           { resource: 'dispatcher_map', action: 'read' },
           { resource: 'dispatcher_analytics', action: 'read' },

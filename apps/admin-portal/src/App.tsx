@@ -17,6 +17,7 @@ import GpsSync from './pages/transport/dispatcher/GpsSync';
 import GpsSyncDashboard from './pages/transport/dispatcher/GpsSyncDashboard';
 import AggressiveDriving from './pages/transport/safety/AggressiveDriving';
 import MonthlyReport from './pages/transport/safety/MonthlyReport';
+import DataRecreation from './pages/transport/safety/DataRecreation';
 import { LegacySyncPage } from './pages/legacy-sync/LegacySyncPage';
 import Profile from './pages/users/Profile';
 import DashboardPage from './pages/dashboard/DashboardPage';
@@ -44,7 +45,7 @@ function App() {
             <Route 
               path="dashboard" 
               element={
-                <PermissionGuard permissions={['dashboard.view']}>
+                <PermissionGuard permissions={['dashboard:view']}>
                   <DashboardPage />
                 </PermissionGuard>
               } 
@@ -53,7 +54,7 @@ function App() {
             <Route 
               path="users/administration" 
               element={
-                <PermissionGuard permissions={['users:read']}>
+                <PermissionGuard permissions={['users:view']}>
                   <UserAdministration />
                 </PermissionGuard>
               } 
@@ -62,7 +63,7 @@ function App() {
             <Route 
               path="users/roles-permissions" 
               element={
-                <PermissionGuard permissions={['roles:read']}>
+                <PermissionGuard permissions={['roles:view']}>
                   <RolesPermissions />
                 </PermissionGuard>
               } 
@@ -94,7 +95,7 @@ function App() {
             <Route 
               path="transport/vehicle-sync" 
               element={
-                <PermissionGuard permissions={['vehicles:sync']}>
+                <PermissionGuard permissions={['vehicles.sync:view']}>
                   <VehicleSync />
                 </PermissionGuard>
               } 
@@ -168,6 +169,15 @@ function App() {
               element={
                 <PermissionGuard permissions={['safety:view_report']}>
                   <MonthlyReport />
+                </PermissionGuard>
+              } 
+            />
+
+            <Route 
+              path="transport/safety/data-recreation" 
+              element={
+                <PermissionGuard permissions={['safety.data-recreation:manage']}>
+                  <DataRecreation />
                 </PermissionGuard>
               } 
             />

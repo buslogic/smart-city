@@ -1,5 +1,24 @@
 # Vodič za dodavanje nove opcije menija u Smart City Admin Portal
 
+## 📋 BRZI PREGLED - 4 KORAKA
+
+1. **KORAK 1:** Dodaj opciju u meni i kreiraj stranicu
+   - ModernMenuV1.tsx - dodaj meni opciju
+   - Kreiraj React komponentu stranice
+   - App.tsx - dodaj rutu sa PermissionGuard
+   
+2. **KORAK 2:** Kreiraj permisiju u bazi
+   - Napravi SQL INSERT za permisiju
+   - Format: `modul.resurs:akcija` (DVOTAČKA pre akcije!)
+   
+3. **KORAK 3:** Ažuriraj RBAC Tree
+   - PermissionsTree.tsx - dodaj sekciju za nove permisije
+   - Opciono: dodaj custom labele
+   
+4. **KORAK 4:** Kreiraj Prisma migraciju
+   - Napravi migration.sql fajl
+   - Pokreni `npx prisma migrate deploy`
+
 ## ⚠️ VAŽNO: Konvencija imenovanja permisija
 
 ### OBAVEZNO koristiti DVOTAČKU (:) na KRAJU između resursa i akcije
@@ -217,6 +236,107 @@ FROM role_permissions rp
 JOIN roles r ON rp.role_id = r.id
 JOIN permissions p ON rp.permission_id = p.id
 WHERE p.name = 'maintenance.timescaledb:view';
+```
+
+---
+
+## KORAK 3: Ažuriranje RBAC Tree komponente
+
+**Cilj:** Dodati novu permisiju u RBAC tree kako bi se mogla dodeljivati kroz UI
+
+**Fajl:** `/apps/admin-portal/src/pages/users/components/PermissionsTree.tsx`
+
+### 3.1 **Pronađi odgovarajuću sekciju**
+
+Pronađi gde se nalazi grupa kojoj dodaješ opciju. U našem primeru, tražimo `Autobuski Prevoznici` grupu.
+
+### 3.2 **Dodaj novu sekciju za permisije**
+
+```typescript
+{
+  id: 'maintenance-tools',
+  name: 'Alati za održavanje',
+  type: 'section',
+  icon: <Settings className="h-4 w-4" />,
+  children: allPermissions
+    .filter(p => p.resource.startsWith('maintenance.') || p.resource === 'maintenance')
+    .map(p => ({
+      id: `perm-${p.id}`,
+      name: getPermissionLabel(p),
+      type: 'permission' as const,
+      permission: p,
+      color: getPermissionColor(p.action),
+    })),
+},
+```
+
+### 3.3 **Dodaj labele za nove permisije (opciono)**
+
+U funkciji `getPermissionLabel`, dodaj specifične labele:
+
+```typescript
+// Specifični labeli za maintenance permisije
+if (permission.resource === 'maintenance.timescaledb') {
+  const maintenanceLabels: Record<string, string> = {
+    'view': 'Pregled TimescaleDB alata',
+    'manage': 'Upravljanje TimescaleDB alatima',
+  };
+  if (maintenanceLabels[permission.action]) {
+    return maintenanceLabels[permission.action];
+  }
+}
+```
+
+---
+
+## KORAK 4: Kreiranje Prisma migracije
+
+**Cilj:** Kreirati migraciju koja će dodati permisiju u bazu podataka
+
+**Vreme potrebno:** 5 minuta
+
+### 4.1 **Kreiraj migraciju fajl**
+
+Putanja: `/apps/backend/prisma/migrations/[timestamp]_add_[feature]_permission/migration.sql`
+
+Primer: `/apps/backend/prisma/migrations/20250908193730_add_maintenance_timescaledb_permission/migration.sql`
+
+### 4.2 **Sadržaj migracije**
+
+```sql
+-- Add maintenance.timescaledb:view permission
+INSERT INTO permissions (name, resource, action, description, description_sr, category, created_at, updated_at)
+VALUES (
+  'maintenance.timescaledb:view',
+  'maintenance.timescaledb',
+  'view',
+  'View TimescaleDB maintenance page',
+  'Pregled TimescaleDB stranice za održavanje',
+  'maintenance',
+  NOW(),
+  NOW()
+);
+```
+
+**VAŽNO:** 
+- NE dodaji permisije rolama u migraciji
+- Samo dodaj permisiju u `permissions` tabelu
+- Role će dodeliti permisiju kroz UI
+
+### 4.3 **Pokreni migraciju**
+
+```bash
+cd /home/kocev/smart-city/apps/backend
+npx prisma migrate deploy
+```
+
+### 4.4 **Proveri migraciju**
+
+```bash
+# Proveri da li je permisija dodana
+npx prisma studio
+# Ili kroz SQL
+SELECT * FROM permissions WHERE name = 'maintenance.timescaledb:view';
 ```
 
 ---

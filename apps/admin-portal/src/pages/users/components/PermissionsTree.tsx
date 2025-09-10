@@ -62,9 +62,13 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
       switch(action) {
         case 'create': return 'text-green-600';
         case 'read': return 'text-blue-600';
+        case 'view': return 'text-blue-600';
         case 'update': return 'text-orange-600';
         case 'delete': return 'text-red-600';
         case 'manage': return 'text-purple-600';
+        case 'start': return 'text-green-600';
+        case 'stop': return 'text-red-600';
+        case 'configure': return 'text-purple-600';
         default: return 'text-gray-600';
       }
     };
@@ -197,7 +201,7 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
             type: 'section',
             icon: <Car className="h-4 w-4" />,
             children: allPermissions
-              .filter(p => p.resource === 'vehicles' && p.action !== 'sync')
+              .filter(p => p.resource === 'vehicles')
               .map(p => ({
                 id: `perm-${p.id}`,
                 name: getPermissionLabel(p),
@@ -212,7 +216,7 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
             type: 'section',
             icon: <RefreshCw className="h-4 w-4" />,
             children: allPermissions
-              .filter(p => p.resource === 'vehicles' && p.action === 'sync')
+              .filter(p => p.resource === 'vehicles.sync')
               .map(p => ({
                 id: `perm-${p.id}`,
                 name: getPermissionLabel(p),
@@ -409,6 +413,19 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
       };
       if (dispatcherLabels[permission.action]) {
         return dispatcherLabels[permission.action];
+      }
+    }
+    
+    // Specifični labeli za vehicles.sync permisije
+    if (permission.resource === 'vehicles.sync') {
+      const vehiclesSyncLabels: Record<string, string> = {
+        'view': 'Pregled statusa sinhronizacije',
+        'start': 'Pokretanje sinhronizacije',
+        'stop': 'Zaustavljanje sinhronizacije',
+        'configure': 'Konfiguracija parametara',
+      };
+      if (vehiclesSyncLabels[permission.action]) {
+        return vehiclesSyncLabels[permission.action];
       }
     }
     

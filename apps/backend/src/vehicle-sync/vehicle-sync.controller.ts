@@ -25,10 +25,10 @@ export class VehicleSyncController {
 
   /**
    * Pokreće sinhronizaciju vozila sa legacy sistemom
-   * Zahteva vehicles:sync permisiju
+   * Zahteva vehicles.sync:start permisiju
    */
   @Post('start')
-  @RequirePermissions('vehicles:sync')
+  @RequirePermissions('vehicles.sync:start')
   @ApiOperation({ summary: 'Pokreni sinhronizaciju vozila' })
   @ApiQuery({ name: 'type', required: false, enum: ['full', 'incremental'], description: 'Tip sinhronizacije' })
   @ApiQuery({ name: 'batchSize', required: false, type: Number, description: 'Veličina batch-a (default: 50)' })
@@ -49,10 +49,10 @@ export class VehicleSyncController {
 
   /**
    * Zaustavlja trenutnu sinhronizaciju vozila
-   * Zahteva vehicles:sync permisiju
+   * Zahteva vehicles.sync:stop permisiju
    */
   @Delete('stop')
-  @RequirePermissions('vehicles:sync')
+  @RequirePermissions('vehicles.sync:stop')
   @ApiOperation({ summary: 'Zaustavi sinhronizaciju vozila' })
   @ApiResponse({ status: 200, description: 'Sinhronizacija zaustavljena' })
   @ApiResponse({ status: 400, description: 'Nema aktivne sinhronizacije' })
@@ -62,10 +62,10 @@ export class VehicleSyncController {
 
   /**
    * Vraća trenutni status sinhronizacije vozila
-   * Zahteva vehicles:read permisiju
+   * Zahteva vehicles.sync:view permisiju
    */
   @Get('status')
-  @RequirePermissions('vehicles:read')
+  @RequirePermissions('vehicles.sync:view')
   @ApiOperation({ summary: 'Trenutni status sinhronizacije' })
   @ApiResponse({ status: 200, description: 'Status sinhronizacije' })
   async getStatus() {
@@ -73,7 +73,7 @@ export class VehicleSyncController {
   }
 
   @Get('history')
-  @RequirePermissions('vehicles:read')
+  @RequirePermissions('vehicles.sync:view')
   @ApiOperation({ summary: 'Istorija sinhronizacija' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Broj rezultata' })
   @ApiResponse({ status: 200, description: 'Lista sinhronizacija' })

@@ -24,6 +24,8 @@ import { UploadsModule } from './users/uploads/uploads.module';
 import { GpsProcessorModule } from './gps-processor/gps-processor.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { TimescaledbModule } from './timescaledb/timescaledb.module';
+import { DrivingRecreationModule } from './safety/driving-recreation/driving-recreation.module';
 
 @Module({
   imports: [
@@ -49,6 +51,8 @@ import { DashboardModule } from './dashboard/dashboard.module';
     SpacesModule,
     UploadsModule,
     DashboardModule,
+    TimescaledbModule,
+    DrivingRecreationModule,
   ],
   controllers: [AppController],
   providers: [

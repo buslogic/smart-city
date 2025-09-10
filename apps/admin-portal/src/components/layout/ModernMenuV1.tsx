@@ -138,7 +138,7 @@ const ModernMenuV1: React.FC = () => {
               name: 'Sinhronizacija',
               href: '/transport/vehicle-sync',
               icon: RefreshCw,
-              permissions: ['vehicles:sync'],
+              permissions: ['vehicles.sync:view'],
             },
             {
               name: 'GPS Real-Time Sync',

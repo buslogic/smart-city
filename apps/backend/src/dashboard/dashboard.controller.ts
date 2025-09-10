@@ -1,5 +1,5 @@
 // Dashboard kontroler - upravljanje korisničkim dashboard konfiguracijom
-// Ažurirano: 07.01.2025 - Dodata dashboard.update permisija kroz migraciju
+// Ažurirano: 09.09.2025 - Promenjena permisija dashboard:read u dashboard:view
 import {
   Controller,
   Get,
@@ -45,7 +45,7 @@ export class DashboardController {
   }
 
   @Get('config')
-  @RequirePermissions('dashboard.view')
+  @RequirePermissions('dashboard:view')
   @ApiOperation({ summary: 'Dobavi konfiguraciju dashboard-a za trenutnog korisnika' })
   @ApiResponse({ status: 200, description: 'Konfiguracija uspešno dobijena' })
   async getUserDashboardConfig(@Request() req) {
@@ -53,7 +53,7 @@ export class DashboardController {
   }
 
   @Put('config')
-  @RequirePermissions('dashboard.update')
+  @RequirePermissions('dashboard:update')
   @ApiOperation({ summary: 'Ažuriraj konfiguraciju dashboard-a za trenutnog korisnika' })
   @ApiResponse({ status: 200, description: 'Konfiguracija uspešno ažurirana' })
   async updateUserDashboardConfig(
@@ -64,7 +64,7 @@ export class DashboardController {
   }
 
   @Get('widgets/available')
-  @RequirePermissions('dashboard.view')
+  @RequirePermissions('dashboard:view')
   @ApiOperation({ summary: 'Dobavi listu dostupnih widget-a za korisnika' })
   @ApiResponse({ status: 200, description: 'Lista dostupnih widget-a' })
   async getAvailableWidgets(@Request() req) {
@@ -72,7 +72,7 @@ export class DashboardController {
   }
 
   @Get('widgets/vehicle-statistics')
-  @RequirePermissions('dashboard.widgets.vehicles.view')
+  @RequirePermissions('dashboard.widgets.vehicles:view')
   @ApiOperation({ summary: 'Dobavi statistike vozila za dashboard widget' })
   @ApiResponse({ status: 200, description: 'Statistike vozila' })
   async getVehicleStatistics() {
@@ -80,7 +80,7 @@ export class DashboardController {
   }
 
   @Get('widgets/gps-sync-status')
-  @RequirePermissions('dashboard.widgets.gps.view')
+  @RequirePermissions('dashboard.widgets.gps:view')
   @ApiOperation({ summary: 'Dobavi GPS sync status za dashboard widget' })
   @ApiResponse({ status: 200, description: 'GPS sync status' })
   async getGpsSyncStatus() {
@@ -88,7 +88,7 @@ export class DashboardController {
   }
 
   @Post('widgets/toggle')
-  @RequirePermissions('dashboard.update')
+  @RequirePermissions('dashboard:update')
   @ApiOperation({ summary: 'Uključi/isključi widget za korisnika' })
   @ApiResponse({ status: 200, description: 'Widget status ažuriran' })
   async toggleWidget(

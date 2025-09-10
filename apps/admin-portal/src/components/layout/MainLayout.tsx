@@ -41,7 +41,7 @@ const MainLayout: React.FC = () => {
   // Debug - proveri permisije
   console.log('User permissions check:', {
     vehicles_read: hasPermission('vehicles:read'),
-    vehicles_sync: hasPermission('vehicles:sync'),
+    vehicles_sync_view: hasPermission('vehicles.sync:view'),
     legacy_sync_view: hasPermission('legacy_sync.view'),
   });
 
@@ -96,7 +96,7 @@ const MainLayout: React.FC = () => {
               href: '/transport/vehicles',
               icon: Car,
             },
-            hasPermission('vehicles:sync') && {
+            hasPermission('vehicles.sync:view') && {
               name: 'Sinhronizacija',
               href: '/transport/vehicle-sync',
               icon: RefreshCw,

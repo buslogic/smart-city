@@ -28,8 +28,8 @@ export const routePermissionsConfig: RoutePermissionDto[] = [
   },
   {
     route: '/transport/vehicles/sync',
-    requiredPermissions: ['vehicles:sync'],
-    optionalPermissions: [],
+    requiredPermissions: ['vehicles.sync:view'],
+    optionalPermissions: ['vehicles.sync:start', 'vehicles.sync:stop', 'vehicles.sync:configure'],
   },
   
   // GPS & Tracking

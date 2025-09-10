@@ -11,7 +11,7 @@ export function createTimescalePool(): Pool {
       connectionString: process.env.TIMESCALE_DATABASE_URL,
       max: 20,
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
+      connectionTimeoutMillis: 10000,
     });
   }
 
@@ -24,7 +24,7 @@ export function createTimescalePool(): Pool {
     password: process.env.TIMESCALE_PASSWORD || 'TimescalePass123!',
     max: 20,
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000,
+    connectionTimeoutMillis: 10000,
   });
 }
 

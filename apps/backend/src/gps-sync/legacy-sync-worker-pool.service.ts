@@ -113,7 +113,7 @@ export class LegacySyncWorkerPoolService {
         }
       });
       
-      // this.logger.log(`✅ Worker Pool konfiguracija učitana: ${this.config.maxWorkers} worker-a`);
+      this.logger.log(`✅ Worker Pool konfiguracija učitana: ${this.config.maxWorkers} worker-a`);
     } catch (error) {
       this.logger.warn('Koriste se default Worker Pool podešavanja');
     }
@@ -130,6 +130,9 @@ export class LegacySyncWorkerPoolService {
     refreshAggregates: boolean = false, // Opciono osvežavanje continuous aggregates
     keepCompletedStatuses: boolean = false // Za Smart Slow Sync - zadrži completed vozila iz prethodnog batch-a
   ): Promise<Map<number, WorkerResult>> {
+    // Učitaj najnoviju konfiguraciju iz baze pre svake sinhronizacije
+    await this.loadConfiguration();
+    
     const startTime = Date.now();
     this.logger.log(`🚀 Pokrećem Worker Pool sa max ${this.config.maxWorkers} worker-a za ${vehicleIds.length} vozila`);
     

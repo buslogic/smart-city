@@ -50,7 +50,10 @@ const VehicleSync: React.FC = () => {
   const [showConfig, setShowConfig] = useState(false);
   
   const { hasPermission } = usePermissions();
-  const canSync = hasPermission('vehicles:sync');
+  const canView = hasPermission('vehicles.sync:view');
+  const canStart = hasPermission('vehicles.sync:start');
+  const canStop = hasPermission('vehicles.sync:stop');
+  const canConfigure = hasPermission('vehicles.sync:configure');
 
   // Učitaj status pri mount
   useEffect(() => {
@@ -352,6 +355,7 @@ const VehicleSync: React.FC = () => {
             type="link" 
             size="small"
             onClick={() => setShowConfig(!showConfig)}
+            disabled={!canConfigure}
           >
             {showConfig ? 'Sakrij' : 'Prikaži'} napredna podešavanja
           </Button>
@@ -423,7 +427,7 @@ const VehicleSync: React.FC = () => {
             icon={<SyncOutlined />}
             onClick={handleStartSync}
             loading={loading}
-            disabled={isRunning || !canSync}
+            disabled={isRunning || !canStart}
           >
             Pokreni sinhronizaciju
           </Button>
@@ -433,7 +437,7 @@ const VehicleSync: React.FC = () => {
             icon={<StopOutlined />}
             onClick={handleStopSync}
             loading={loading}
-            disabled={!isRunning}
+            disabled={!isRunning || !canStop}
           >
             Zaustavi
           </Button>
