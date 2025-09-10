@@ -128,13 +128,17 @@ export class LegacySyncWorkerPoolService {
     syncTo: Date,
     jobId: string,
     refreshAggregates: boolean = false, // Opciono osvežavanje continuous aggregates
-    keepCompletedStatuses: boolean = false // Za Smart Slow Sync - zadrži completed vozila iz prethodnog batch-a
+    keepCompletedStatuses: boolean = false, // Za Smart Slow Sync - zadrži completed vozila iz prethodnog batch-a
+    maxWorkers?: number // Opciono - override broj workera (za Smart Slow Sync)
   ): Promise<Map<number, WorkerResult>> {
     // Učitaj najnoviju konfiguraciju iz baze pre svake sinhronizacije
     await this.loadConfiguration();
     
+    // Koristi prosleđeni maxWorkers ili iz konfiguracije
+    const effectiveMaxWorkers = maxWorkers ?? this.config.maxWorkers;
+    
     const startTime = Date.now();
-    this.logger.log(`🚀 Pokrećem Worker Pool sa max ${this.config.maxWorkers} worker-a za ${vehicleIds.length} vozila`);
+    this.logger.log(`🚀 Pokrećem Worker Pool sa max ${effectiveMaxWorkers} worker-a za ${vehicleIds.length} vozila`);
     
     // Resetuj worker statuse
     if (keepCompletedStatuses) {
@@ -159,7 +163,7 @@ export class LegacySyncWorkerPoolService {
     const vehicles = await this.getVehicleInfo(vehicleIds);
     
     // Podeli vozila na chunk-ove prema broju worker-a
-    const workerCount = Math.min(this.config.maxWorkers, vehicles.length);
+    const workerCount = Math.min(effectiveMaxWorkers, vehicles.length);
     const vehicleChunks = this.splitIntoChunks(vehicles, workerCount);
     
     // Kreiraj promise za svaki worker

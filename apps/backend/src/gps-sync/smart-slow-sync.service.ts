@@ -576,7 +576,8 @@ export class SmartSlowSyncService implements OnModuleInit {
         syncTo,
         `slow-sync-batch-${this.progress.currentBatch}`,
         false, // Slow Sync NIKAD ne osvežava aggregates odmah (štedi resurse)
-        this.progress.currentBatch > 1 // Zadrži completed statuse ako nije prvi batch
+        this.progress.currentBatch > 1, // Zadrži completed statuse ako nije prvi batch
+        this.currentConfig.workersPerBatch // Prosleđuje broj workera iz Smart Slow Sync konfiguracije
       );
       
       // NOVA VERIFIKACIJA - proveri da li su svi rezultati vraćeni
