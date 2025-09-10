@@ -22,6 +22,8 @@ import {
   message,
   Spin,
   Popconfirm,
+  Radio,
+  Checkbox,
 } from 'antd';
 import {
   PlayCircleOutlined,
@@ -46,6 +48,7 @@ import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { api } from '../../services/api';
+import legacySyncService, { CopyConfig } from '../../services/legacySyncService';
 import SmartSlowSyncVehicleManager from './SmartSlowSyncVehicleManager';
 
 dayjs.extend(duration);
@@ -143,6 +146,11 @@ const SmartSlowSyncDashboard: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [configModalVisible, setConfigModalVisible] = useState(false);
   const [tempConfig, setTempConfig] = useState<SlowSyncConfig | null>(null);
+  const [copyConfig, setCopyConfig] = useState<CopyConfig>({
+    insertMethod: 'batch',
+    copyBatchSize: 10000,
+    fallbackToBatch: true,
+  });
   const [refreshing, setRefreshing] = useState(false);
   const [vehicleManagerVisible, setVehicleManagerVisible] = useState(false);
   const [currentActivity, setCurrentActivity] = useState<string>('');
@@ -396,6 +404,23 @@ const SmartSlowSyncDashboard: React.FC = () => {
     });
   };
 
+  const handleOpenConfig = async () => {
+    try {
+      setLoading(true);
+      
+      // Učitaj COPY konfiguraciju
+      const copyResponse = await legacySyncService.getCopyConfig();
+      setCopyConfig(copyResponse);
+      
+      setConfigModalVisible(true);
+    } catch (error: any) {
+      console.error('Greška pri učitavanju COPY konfiguracije:', error);
+      message.error('Greška pri učitavanju konfiguracije');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSaveConfig = async () => {
     try {
       setLoading(true);
@@ -412,6 +437,10 @@ const SmartSlowSyncDashboard: React.FC = () => {
           enabled: aggressiveDetectionEnabled
         });
       }
+      
+      // Sačuvaj COPY konfiguraciju (filtriraj samo potrebne fieldove)
+      const { estimatedSpeed, recommendedMethod, ...copyConfigToSave } = copyConfig;
+      await legacySyncService.updateCopyConfig(copyConfigToSave);
       
       message.success('Konfiguracija sačuvana');
       setConfig(tempConfig);
@@ -747,7 +776,7 @@ const SmartSlowSyncDashboard: React.FC = () => {
                     <Button
                       size="large"
                       icon={<SettingOutlined />}
-                      onClick={() => setConfigModalVisible(true)}
+                      onClick={handleOpenConfig}
                       disabled={progress?.status === 'running' || progress?.status === 'waiting_for_next_batch'}
                       title={
                         progress?.status === 'running' || progress?.status === 'waiting_for_next_batch'
@@ -1751,6 +1780,99 @@ const SmartSlowSyncDashboard: React.FC = () => {
               <Text type="warning" style={{ fontSize: 11 }}>
                 ⚡ Preporuka: Isključite detekciju za bržu sinhronizaciju, pa je pokrenite naknadno
               </Text>
+            </div>
+          </div>
+
+          <Divider />
+
+          <div style={{ background: '#f6ffed', padding: '12px', borderRadius: '8px', border: '1px solid #b7eb8f' }}>
+            <Text strong style={{ color: '#52c41a' }}>🚀 COPY Konfiguracija (Optimizacija):</Text>
+            <div style={{ marginTop: 8 }}>
+              <Text strong>Insert metod:</Text>
+              <Radio.Group
+                value={copyConfig?.insertMethod}
+                onChange={(e) => setCopyConfig({ ...copyConfig!, insertMethod: e.target.value })}
+                style={{ width: '100%', marginTop: 8 }}
+              >
+                <Space direction="vertical">
+                  <Radio value="batch">
+                    <Space>
+                      <Text>Batch INSERT</Text>
+                      <Text type="secondary" style={{ fontSize: 12 }}>(Standardni, siguran, sporiji)</Text>
+                    </Space>
+                  </Radio>
+                  <Radio value="copy">
+                    <Space>
+                      <Text>COPY</Text>
+                      <Text type="secondary" style={{ fontSize: 12 }}>(4-10x brži, noviji, preporučeno)</Text>
+                    </Space>
+                  </Radio>
+                  <Radio value="auto">
+                    <Space>
+                      <Text>AUTO</Text>
+                      <Text type="secondary" style={{ fontSize: 12 }}>(Pokušava COPY, vraća se na batch ako ne radi)</Text>
+                    </Space>
+                  </Radio>
+                </Space>
+              </Radio.Group>
+            </div>
+
+            {(copyConfig?.insertMethod === 'copy' || copyConfig?.insertMethod === 'auto') && (
+              <div style={{ marginTop: 12, marginLeft: 24 }}>
+                <Text strong>COPY Batch veličina:</Text>
+                <InputNumber
+                  style={{ width: '100%', marginTop: 4 }}
+                  value={copyConfig?.copyBatchSize}
+                  onChange={(value) => setCopyConfig({ ...copyConfig!, copyBatchSize: value || 10000 })}
+                  min={1000}
+                  max={50000}
+                  step={1000}
+                  formatter={(value) => `${value} redova`}
+                  parser={(value) => parseInt(value?.replace(' redova', '') || '10000')}
+                />
+                <div style={{ marginTop: 4 }}>
+                  <Text type="secondary" style={{ fontSize: 11 }}>
+                    Preporučeno: 10000-25000. Veće vrednosti = brže, ali koristi više memorije
+                  </Text>
+                </div>
+
+                <div style={{ marginTop: 8 }}>
+                  <Space>
+                    <Checkbox
+                      checked={copyConfig?.fallbackToBatch}
+                      onChange={(e) => setCopyConfig({ ...copyConfig!, fallbackToBatch: e.target.checked })}
+                    >
+                      Fallback na batch INSERT ako COPY ne radi
+                    </Checkbox>
+                  </Space>
+                  <div style={{ marginTop: 4 }}>
+                    <Text type="secondary" style={{ fontSize: 11 }}>
+                      Preporučeno uključeno za maksimalnu kompatibilnost
+                    </Text>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div style={{ marginTop: 12, padding: '8px', background: '#fff', borderRadius: '4px', border: '1px solid #d9d9d9' }}>
+              <Text strong style={{ fontSize: 12, color: '#1890ff' }}>📊 Procenjene performanse:</Text>
+              <div style={{ marginTop: 4 }}>
+                {copyConfig?.insertMethod === 'batch' && (
+                  <Text style={{ fontSize: 11 }}>
+                    ⏱️ Standardna brzina: ~3-5 min/worker za 2500 GPS tačaka
+                  </Text>
+                )}
+                {copyConfig?.insertMethod === 'copy' && (
+                  <Text style={{ fontSize: 11, color: '#52c41a' }}>
+                    ⚡ COPY brzina: ~30-60s/worker za 2500 GPS tačaka (4-10x brže!)
+                  </Text>
+                )}
+                {copyConfig?.insertMethod === 'auto' && (
+                  <Text style={{ fontSize: 11, color: '#fa8c16' }}>
+                    🎯 AUTO mod: Pokušava COPY brzinu, vraća se na standardnu ako treba
+                  </Text>
+                )}
+              </div>
             </div>
           </div>
 
