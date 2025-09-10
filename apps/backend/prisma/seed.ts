@@ -77,7 +77,6 @@ async function main() {
     { name: 'vehicles:read', resource: 'vehicles', action: 'read', description: 'Pregled vozila' },
     { name: 'vehicles:update', resource: 'vehicles', action: 'update', description: 'Ažuriranje vozila' },
     { name: 'vehicles:delete', resource: 'vehicles', action: 'delete', description: 'Brisanje vozila' },
-    { name: 'vehicles:manage', resource: 'vehicles', action: 'manage', description: 'Upravljanje vozilima' },
     { name: 'vehicles:sync', resource: 'vehicles', action: 'sync', description: 'Sinhronizacija vozila' },
     
     // Dispatcher Module permissions

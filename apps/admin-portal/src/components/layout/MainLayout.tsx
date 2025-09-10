@@ -36,7 +36,7 @@ const MainLayout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
-  const { canReadUsers, canReadRoles, hasPermission } = usePermissions();
+  const { canViewUsers, canViewRoles, hasPermission } = usePermissions();
 
   // Debug - proveri permisije
   console.log('User permissions check:', {
@@ -60,12 +60,12 @@ const MainLayout: React.FC = () => {
       isOpen: usersMenuOpen,
       setOpen: setUsersMenuOpen,
       submenu: [
-        canReadUsers() && {
+        canViewUsers() && {
           name: 'Administracija Korisnika',
           href: '/users/administration',
           icon: UserCog,
         },
-        canReadRoles() && {
+        canViewRoles() && {
           name: 'Role i Permisije',
           href: '/users/roles-permissions',
           icon: Shield,
