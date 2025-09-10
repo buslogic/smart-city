@@ -308,7 +308,9 @@ const SmartSlowSyncDashboard: React.FC = () => {
   const handleStart = async () => {
     try {
       setLoading(true);
-      await api.post('/api/legacy-sync/slow-sync/start', tempConfig);
+      // Izdvoji aggressiveDetectionEnabled jer ne pripada Smart Slow Sync konfiguraciji
+      const { aggressiveDetectionEnabled, ...slowSyncConfig } = tempConfig || {};
+      await api.post('/api/legacy-sync/slow-sync/start', slowSyncConfig);
       message.success('Smart Slow Sync pokrenut uspešno!');
       await fetchProgress();
     } catch (error: any) {
@@ -398,13 +400,16 @@ const SmartSlowSyncDashboard: React.FC = () => {
     try {
       setLoading(true);
       
-      // Sačuvaj Smart Slow Sync konfiguraciju
-      await api.patch('/api/legacy-sync/slow-sync/config', tempConfig);
+      // Izdvoji aggressiveDetectionEnabled iz tempConfig jer ne pripada Smart Slow Sync konfiguraciji
+      const { aggressiveDetectionEnabled, ...slowSyncConfig } = tempConfig || {};
+      
+      // Sačuvaj Smart Slow Sync konfiguraciju (bez aggressiveDetectionEnabled)
+      await api.patch('/api/legacy-sync/slow-sync/config', slowSyncConfig);
       
       // NOVO: Sačuvaj i agresivnu detekciju u Worker Pool konfiguraciju
-      if (tempConfig?.aggressiveDetectionEnabled !== undefined) {
+      if (aggressiveDetectionEnabled !== undefined) {
         await api.post('/api/legacy-sync/config/aggressive-detection', {
-          enabled: tempConfig.aggressiveDetectionEnabled
+          enabled: aggressiveDetectionEnabled
         });
       }
       
