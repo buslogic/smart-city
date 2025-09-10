@@ -5,6 +5,7 @@ import { promisify } from 'util';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { Client } from 'pg';
+import { from as copyFrom } from 'pg-copy-streams';
 import { TimeoutManager, TimeoutError } from '../common/utils/timeout-manager';
 import { RetryManager } from '../common/utils/retry-manager';
 
@@ -15,6 +16,10 @@ interface WorkerPoolConfig {
   maxWorkers: number;
   workerTimeout: number;
   retryAttempts: number;
+  // NOVO za COPY support:
+  insertMethod?: 'batch' | 'copy' | 'auto';
+  copyBatchSize?: number;
+  fallbackToBatch?: boolean;
   resourceLimits?: {
     maxMemoryMB?: number;
     maxCpuPercent?: number;
@@ -60,6 +65,10 @@ export class LegacySyncWorkerPoolService {
     maxWorkers: 3,
     workerTimeout: 600000, // 10 minuta
     retryAttempts: 2,
+    // NOVO za COPY support:
+    insertMethod: 'batch', // default je batch za backward compatibility
+    copyBatchSize: 10000,  // veći batch za COPY metodu
+    fallbackToBatch: true, // automatski fallback ako COPY fail-uje
     resourceLimits: {
       maxMemoryMB: 512,
       maxCpuPercent: 25
@@ -110,10 +119,25 @@ export class LegacySyncWorkerPoolService {
           case 'legacy_sync.worker_pool.retry_attempts':
             this.config.retryAttempts = value as number;
             break;
+          // NOVO za COPY support:
+          case 'legacy_sync.insert_method':
+            this.config.insertMethod = value as 'batch' | 'copy' | 'auto';
+            break;
+          case 'legacy_sync.copy_batch_size':
+            this.config.copyBatchSize = value as number;
+            break;
+          case 'legacy_sync.fallback_to_batch':
+            this.config.fallbackToBatch = value as boolean;
+            break;
         }
       });
       
-      this.logger.log(`✅ Worker Pool konfiguracija učitana: ${this.config.maxWorkers} worker-a`);
+      this.logger.log(
+        `✅ Worker Pool konfiguracija učitana:\n` +
+        `   - Max Workers: ${this.config.maxWorkers}\n` +
+        `   - Insert Method: ${this.config.insertMethod || 'batch'}\n` +
+        `   - Copy Batch Size: ${this.config.copyBatchSize || 10000}`
+      );
     } catch (error) {
       this.logger.warn('Koriste se default Worker Pool podešavanja');
     }
@@ -840,9 +864,161 @@ export class LegacySyncWorkerPoolService {
   }
 
   /**
-   * Umeće batch GPS podataka u TimescaleDB
+   * Glavna metoda koja odlučuje koju insert metodu koristiti
    */
   private async insertBatch(pool: any, batch: any[]): Promise<void> {
+    // Odluči koju metodu koristiti
+    const method = this.determineInsertMethod(batch.length);
+    
+    this.logger.debug(
+      `[INSERT METHOD] Koristim ${method} metodu za ${batch.length} redova`
+    );
+    
+    if (method === 'copy') {
+      await this.insertWithCopy(pool, batch);
+    } else {
+      await this.insertWithBatch(pool, batch);
+    }
+  }
+
+  /**
+   * Helper metoda za odlučivanje koje metode koristiti
+   */
+  private determineInsertMethod(batchSize: number): 'batch' | 'copy' {
+    if (!this.config.insertMethod || this.config.insertMethod === 'batch') {
+      return 'batch';
+    }
+    
+    if (this.config.insertMethod === 'auto') {
+      // Auto logika - COPY za velike batch-ove
+      return batchSize >= 5000 ? 'copy' : 'batch';
+    }
+    
+    return this.config.insertMethod;
+  }
+
+  /**
+   * Umeće batch GPS podataka u TimescaleDB koristeći COPY metodu
+   */
+  private async insertWithCopy(pool: any, batch: any[]): Promise<void> {
+    const startTime = Date.now();
+    const client = await pool.connect();
+    
+    try {
+      await client.query('BEGIN');
+      
+      // 1. Kreiraj jedinstvenu temp tabelu
+      const tempTableName = `gps_data_temp_${Date.now()}`;
+      await client.query(`
+        CREATE TEMP TABLE ${tempTableName} (
+          LIKE gps_data INCLUDING DEFAULTS
+        ) ON COMMIT DROP
+      `);
+      
+      // 2. Pripremi COPY stream (bez location - trigger će je generisati)
+      const stream = client.query(copyFrom(`
+        COPY ${tempTableName} (
+          time, vehicle_id, garage_no, lat, lng,
+          speed, course, alt, state, in_route, data_source
+        ) FROM STDIN WITH (FORMAT csv, DELIMITER E'\\t', NULL '\\N')
+      `));
+      
+      // 3. Stream podatke u CSV formatu
+      let streamedRows = 0;
+      
+      // Promisify stream za async/await
+      const streamPromise = new Promise<void>((resolve, reject) => {
+        stream.on('error', reject);
+        stream.on('finish', resolve);
+      });
+      
+      for (const row of batch) {
+        // Format: tab-separated, \N za NULL vrednosti
+        const csvLine = [
+          row.time || new Date().toISOString(),
+          row.vehicle_id,
+          row.garage_no,
+          row.lat || 0,
+          row.lng || 0,
+          row.speed !== null && row.speed !== undefined ? row.speed : '\\N',
+          row.course !== null && row.course !== undefined ? row.course : '\\N',
+          row.alt !== null && row.alt !== undefined ? row.alt : '\\N',
+          row.state || 0,
+          row.in_route || 0,
+          'historical_import'
+        ].join('\t') + '\n';
+        
+        const written = stream.write(csvLine);
+        if (!written) {
+          // Back pressure - čekaj da se buffer oslobodi
+          await new Promise(resolve => stream.once('drain', resolve));
+        }
+        
+        streamedRows++;
+        
+        // Log progress za velike batch-ove
+        if (streamedRows % 5000 === 0) {
+          this.logger.debug(`[COPY] Streamed ${streamedRows}/${batch.length} rows...`);
+        }
+      }
+      
+      // Završi stream
+      stream.end();
+      await streamPromise;
+      
+      const streamDuration = Date.now() - startTime;
+      this.logger.log(`[COPY] Stream završen: ${streamedRows} redova za ${streamDuration}ms`);
+      
+      // 4. Prebaci iz temp tabele u glavnu sa ON CONFLICT
+      const transferStart = Date.now();
+      const result = await client.query(`
+        INSERT INTO gps_data 
+        SELECT * FROM ${tempTableName}
+        ON CONFLICT (vehicle_id, time) DO UPDATE SET
+          garage_no = EXCLUDED.garage_no,
+          lat = EXCLUDED.lat,
+          lng = EXCLUDED.lng,
+          location = EXCLUDED.location,
+          speed = EXCLUDED.speed,
+          course = EXCLUDED.course,
+          alt = EXCLUDED.alt
+        RETURNING 1
+      `);
+      
+      const transferDuration = Date.now() - transferStart;
+      const totalDuration = Date.now() - startTime;
+      
+      await client.query('COMMIT');
+      
+      // Performance logovi
+      this.logger.log(
+        `✅ [COPY METODA] ${batch.length} redova\n` +
+        `   - Stream: ${streamDuration}ms (${Math.round(batch.length / (streamDuration / 1000))} rows/s)\n` +
+        `   - Transfer: ${transferDuration}ms\n` +
+        `   - Ukupno: ${totalDuration}ms\n` +
+        `   - Inserted/Updated: ${result.rowCount} rows`
+      );
+      
+    } catch (error) {
+      await client.query('ROLLBACK');
+      this.logger.error(`[COPY ERROR]:`, error);
+      
+      // Opciono: fallback na batch metodu
+      if (this.config.fallbackToBatch) {
+        this.logger.warn(`[COPY FALLBACK] Prelazim na batch metodu`);
+        await this.insertWithBatch(pool, batch);
+      } else {
+        throw error;
+      }
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Umeće batch GPS podataka u TimescaleDB koristeći BATCH INSERT metodu
+   */
+  private async insertWithBatch(pool: any, batch: any[]): Promise<void> {
     // this.logger.debug(`Inserting batch of ${batch.length} records`);
     
     // 📊 PERFORMANCE LOG - Start TimescaleDB Insert
@@ -940,6 +1116,9 @@ export class LegacySyncWorkerPoolService {
     maxWorkers: number;
     workerTimeout: number;
     aggressiveDetectionEnabled: boolean;
+    insertMethod?: 'batch' | 'copy' | 'auto';
+    copyBatchSize?: number;
+    fallbackToBatch?: boolean;
   }> {
     // Reload configuration da imamo najnovije podatke
     await this.loadConfiguration();
@@ -947,7 +1126,10 @@ export class LegacySyncWorkerPoolService {
     return {
       maxWorkers: this.config.maxWorkers,
       workerTimeout: this.config.workerTimeout,
-      aggressiveDetectionEnabled: this.aggressiveDetectionEnabled
+      aggressiveDetectionEnabled: this.aggressiveDetectionEnabled,
+      insertMethod: this.config.insertMethod,
+      copyBatchSize: this.config.copyBatchSize,
+      fallbackToBatch: this.config.fallbackToBatch
     };
   }
 

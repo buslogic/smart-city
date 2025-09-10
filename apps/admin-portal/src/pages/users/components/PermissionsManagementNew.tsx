@@ -16,6 +16,7 @@ const PermissionsManagement: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
 
   // Check permissions
   const canView = canAccess(['permissions:view']);
@@ -118,6 +119,7 @@ const PermissionsManagement: React.FC = () => {
     }
     setSelectedRole(roleId);
     setDropdownOpen(false);
+    setExpandedNodes(new Set()); // Reset expanded nodes when changing role
   };
 
   const handlePermissionToggle = (permissionId: number) => {
@@ -289,6 +291,8 @@ const PermissionsManagement: React.FC = () => {
           <PermissionsTree
             allPermissions={allPermissions}
             selectedPermissions={rolePermissions}
+            expandedNodes={expandedNodes}
+            onExpandedNodesChange={setExpandedNodes}
             onPermissionToggle={handlePermissionToggle}
             onBulkToggle={(permissionIds, selected) => {
               if (!canUpdate) {

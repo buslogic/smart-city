@@ -45,6 +45,8 @@ interface PermissionNode {
 interface PermissionsTreeProps {
   allPermissions: Permission[];
   selectedPermissions: number[];
+  expandedNodes: Set<string>;
+  onExpandedNodesChange: (nodes: Set<string>) => void;
   onPermissionToggle: (permissionId: number) => void;
   onBulkToggle: (permissionIds: number[], selected: boolean) => void;
   readOnly?: boolean;
@@ -53,11 +55,12 @@ interface PermissionsTreeProps {
 const PermissionsTree: React.FC<PermissionsTreeProps> = ({
   allPermissions,
   selectedPermissions,
+  expandedNodes,
+  onExpandedNodesChange,
   onPermissionToggle,
   onBulkToggle,
   readOnly = false,
 }) => {
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
 
   // Organizuj permisije prema hijerarhiji menija
   const buildPermissionTree = (): PermissionNode[] => {
@@ -72,6 +75,8 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
         case 'start': return 'text-green-600';
         case 'stop': return 'text-red-600';
         case 'configure': return 'text-purple-600';
+        case 'cleanup': return 'text-amber-600';
+        case 'dashboard': return 'text-indigo-600';
         case 'sync_gps': return 'text-cyan-600';
         case 'view_map': return 'text-blue-600';
         case 'view_analytics': return 'text-indigo-600';
@@ -203,10 +208,10 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
                 name: 'GPS Real-Time Sync',
                 type: 'section',
                 children: allPermissions
-                  .filter(p => p.name === 'dispatcher:sync_gps')
+                  .filter(p => p.resource === 'dispatcher.sync')
                   .map(p => ({
                     id: `perm-${p.id}`,
-                    name: 'GPS Buffer Status',
+                    name: getPermissionLabel(p),
                     type: 'permission' as const,
                     permission: p,
                     color: getPermissionColor(p.action),
@@ -217,7 +222,7 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
                 name: 'Legacy Sync',
                 type: 'section',
                 children: allPermissions
-                  .filter(p => p.resource === 'legacy_sync')
+                  .filter(p => p.resource === 'legacy.sync')
                   .map(p => ({
                     id: `perm-${p.id}`,
                     name: getPermissionLabel(p),
@@ -528,6 +533,10 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
       'sync': 'Sinhronizacija',
       'export': 'Eksportovanje',
       'configure': 'Konfiguracija',
+      'start': 'Pokretanje',
+      'stop': 'Zaustavljanje',
+      'cleanup': 'Čišćenje',
+      'dashboard': 'Dashboard Widget',
     };
     
     if (labels[permission.action]) {
@@ -544,7 +553,7 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
     } else {
       newExpanded.add(nodeId);
     }
-    setExpandedNodes(newExpanded);
+    onExpandedNodesChange(newExpanded);
   };
 
   const isNodeExpanded = (nodeId: string) => expandedNodes.has(nodeId);
@@ -650,22 +659,42 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
             }`}
             disabled={readOnly}
           >
-            <div className={`
-              relative w-4 h-4 rounded-md transition-all duration-200
-              ${selectionState === 'all' ? 'bg-gradient-to-br from-green-500 to-green-600 border-green-600' : ''}
-              ${selectionState === 'some' ? 'bg-gradient-to-br from-amber-400 to-amber-500 border-amber-500' : ''}
-              ${selectionState === 'none' ? 'bg-white hover:bg-gray-50' : ''}
-              border-2 ${selectionState === 'none' ? 'border-gray-300 hover:border-gray-400' : ''}
-            `}>
+            <div style={{
+              position: 'relative',
+              width: '16px',
+              height: '16px',
+              borderRadius: '4px',
+              transition: 'all 200ms',
+              backgroundColor: selectionState === 'all' ? '#dcfce7' : 'white',
+              border: `2px solid ${
+                selectionState === 'all' ? '#86efac' :
+                selectionState === 'none' ? '#d1d5db' : 
+                '#6b7280'
+              }`
+            }}>
               {selectionState === 'all' && (
-                <svg className="w-3 h-3 text-white absolute top-0 left-0" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" viewBox="0 0 24 24" stroke="currentColor">
-                  <path d="M5 13l4 4L19 7"></path>
-                </svg>
+                <div style={{
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  width: '8px',
+                  height: '8px',
+                  backgroundColor: '#1f2937',
+                  borderRadius: '50%'
+                }}></div>
               )}
               {selectionState === 'some' && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-2 h-0.5 bg-white rounded-full"></div>
-                </div>
+                <div style={{
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  width: '8px',
+                  height: '8px',
+                  backgroundColor: '#1f2937',
+                  borderRadius: '50%'
+                }}></div>
               )}
             </div>
           </button>

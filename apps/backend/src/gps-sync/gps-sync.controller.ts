@@ -59,7 +59,7 @@ export class GpsSyncController {
   constructor(private readonly gpsSyncService: GpsSyncService) {}
 
   @Post('start')
-  @RequirePermissions('dispatcher:sync_gps')
+  @RequirePermissions('dispatcher.sync:start')
   @ApiOperation({ summary: 'Pokreni GPS sinhronizaciju' })
   @ApiBody({ type: StartGpsSyncDto })
   @ApiResponse({ status: 201, description: 'GPS sinhronizacija pokrenuta' })
@@ -80,7 +80,7 @@ export class GpsSyncController {
   }
 
   @Delete('stop')
-  @RequirePermissions('dispatcher:sync_gps')
+  @RequirePermissions('dispatcher.sync:stop')
   @ApiOperation({ summary: 'Zaustavi GPS sinhronizaciju' })
   @ApiResponse({ status: 200, description: 'GPS sinhronizacija zaustavljena' })
   @ApiResponse({ status: 400, description: 'Nema aktivne sinhronizacije' })
@@ -96,7 +96,7 @@ export class GpsSyncController {
   }
 
   @Delete('stop/:id')
-  @RequirePermissions('dispatcher:sync_gps')
+  @RequirePermissions('dispatcher.sync:stop')
   @ApiOperation({ summary: 'Zaustavi specifičnu GPS sinhronizaciju' })
   @ApiResponse({ status: 200, description: 'GPS sinhronizacija zaustavljena' })
   @ApiResponse({ status: 404, description: 'Sinhronizacija nije pronađena' })
@@ -112,7 +112,7 @@ export class GpsSyncController {
   }
 
   @Get('status')
-  @RequirePermissions('dispatcher:sync_gps')
+  @RequirePermissions('dispatcher.sync:view')
   @ApiOperation({ summary: 'Trenutni status GPS sinhronizacije' })
   @ApiResponse({ status: 200, description: 'Status GPS sinhronizacije' })
   async getStatus() {
@@ -120,7 +120,7 @@ export class GpsSyncController {
   }
 
   @Post('cleanup')
-  @RequirePermissions('dispatcher:sync_gps')
+  @RequirePermissions('dispatcher.sync:cleanup')
   @ApiOperation({ summary: 'Očisti stare nezavršene sinhronizacije' })
   @ApiResponse({ status: 200, description: 'Stare sinhronizacije očišćene' })
   async cleanupStale() {
@@ -128,7 +128,7 @@ export class GpsSyncController {
   }
 
   @Get('history')
-  @RequirePermissions('dispatcher:sync_gps')
+  @RequirePermissions('dispatcher.sync:view')
   @ApiOperation({ summary: 'Istorija GPS sinhronizacija' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Broj rezultata' })
   @ApiResponse({ status: 200, description: 'Lista GPS sinhronizacija' })
@@ -139,7 +139,7 @@ export class GpsSyncController {
   }
 
   @Get(':id/details')
-  @RequirePermissions('dispatcher:sync_gps')
+  @RequirePermissions('dispatcher.sync:view')
   @ApiOperation({ summary: 'Detalji GPS sinhronizacije' })
   @ApiQuery({ name: 'page', required: false, type: Number, description: 'Broj stranice' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Broj rezultata po stranici' })

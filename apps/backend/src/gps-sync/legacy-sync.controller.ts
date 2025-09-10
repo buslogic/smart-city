@@ -17,6 +17,7 @@ import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 import { LegacySyncService } from './legacy-sync.service';
 import { LegacySyncWorkerPoolService } from './legacy-sync-worker-pool.service';
 import { SmartSlowSyncService, SlowSyncPreset, SlowSyncConfig, SlowSyncProgress } from './smart-slow-sync.service';
+import { CopyConfigDto, CopyConfigResponseDto } from './dto/copy-config.dto';
 import { IsArray, IsDateString, IsNumber, IsEnum, IsOptional, IsBoolean } from 'class-validator';
 
 class VehicleWithSyncStatusDto {
@@ -132,7 +133,7 @@ export class LegacySyncController {
   ) {}
 
   @Get('vehicles')
-  @RequirePermissions('legacy_sync.view')
+  @RequirePermissions('legacy.sync:view')
   @ApiOperation({ summary: 'Dobavi listu vozila sa statusom sinhronizacije' })
   @ApiResponse({
     status: 200,
@@ -150,7 +151,7 @@ export class LegacySyncController {
   }
 
   @Post('start')
-  @RequirePermissions('legacy_sync.start')
+  @RequirePermissions('legacy.sync:start')
   @ApiOperation({ summary: 'Pokreni sinhronizaciju za odabrana vozila' })
   @ApiBody({ type: StartSyncDto })
   @ApiResponse({
@@ -180,7 +181,7 @@ export class LegacySyncController {
   }
 
   @Get('progress')
-  @RequirePermissions('legacy_sync.view')
+  @RequirePermissions('legacy.sync:view')
   @ApiOperation({ summary: 'Dobavi status trenutnih sinhronizacija' })
   @ApiQuery({ name: 'job_id', required: false })
   @ApiResponse({
@@ -231,7 +232,7 @@ export class LegacySyncController {
   }
 
   @Post('stop')
-  @RequirePermissions('legacy_sync.stop')
+  @RequirePermissions('legacy.sync:stop')
   @ApiOperation({ summary: 'Zaustavi sinhronizaciju' })
   @ApiBody({ schema: { properties: { job_id: { type: 'string' } } } })
   @ApiResponse({
@@ -249,7 +250,7 @@ export class LegacySyncController {
   }
 
   @Get('config')
-  @RequirePermissions('legacy_sync.manage')
+  @RequirePermissions('legacy.sync:configure')
   @ApiOperation({ summary: 'Dobavi konfiguraciju Worker Pool-a' })
   @ApiResponse({
     status: 200,
@@ -266,7 +267,7 @@ export class LegacySyncController {
   }
 
   @Post('config/aggressive-detection')
-  @RequirePermissions('legacy_sync.manage')
+  @RequirePermissions('legacy.sync:configure')
   @ApiOperation({ summary: 'Uključi/isključi agresivnu detekciju' })
   @ApiBody({ schema: { properties: { enabled: { type: 'boolean' } } } })
   @ApiResponse({
@@ -287,7 +288,7 @@ export class LegacySyncController {
   }
 
   @Get('test-connection')
-  @RequirePermissions('legacy_sync.view')
+  @RequirePermissions('legacy.sync:view')
   @ApiOperation({ summary: 'Test konekcije na legacy server' })
   @ApiResponse({
     status: 200,
@@ -315,7 +316,7 @@ export class LegacySyncController {
 
 
   @Post('worker-pool/toggle')
-  @RequirePermissions('legacy_sync.manage')
+  @RequirePermissions('legacy.sync:configure')
   @ApiOperation({ summary: 'Uključi/isključi Worker Pool' })
   @ApiBody({ schema: { properties: { enabled: { type: 'boolean' } } } })
   @ApiResponse({
@@ -353,7 +354,7 @@ export class LegacySyncController {
   // ============= SMART SLOW SYNC ENDPOINTS =============
 
   @Post('slow-sync/start')
-  @RequirePermissions('legacy_sync.manage')
+  @RequirePermissions('legacy.sync:configure')
   @ApiOperation({ summary: 'Pokreni Smart Slow Sync za sva vozila' })
   @ApiBody({ type: SlowSyncConfigDto, required: false })
   @ApiResponse({
@@ -371,7 +372,7 @@ export class LegacySyncController {
   }
 
   @Post('slow-sync/pause')
-  @RequirePermissions('legacy_sync.manage')
+  @RequirePermissions('legacy.sync:configure')
   @ApiOperation({ summary: 'Pauziraj Smart Slow Sync' })
   @ApiResponse({
     status: 200,
@@ -388,7 +389,7 @@ export class LegacySyncController {
   }
 
   @Post('slow-sync/resume')
-  @RequirePermissions('legacy_sync.manage')
+  @RequirePermissions('legacy.sync:configure')
   @ApiOperation({ summary: 'Nastavi Smart Slow Sync' })
   @ApiResponse({
     status: 200,
@@ -405,7 +406,7 @@ export class LegacySyncController {
   }
 
   @Post('slow-sync/stop')
-  @RequirePermissions('legacy_sync.manage')
+  @RequirePermissions('legacy.sync:configure')
   @ApiOperation({ summary: 'Zaustavi Smart Slow Sync' })
   @ApiResponse({
     status: 200,
@@ -422,7 +423,7 @@ export class LegacySyncController {
   }
 
   @Get('slow-sync/progress')
-  @RequirePermissions('legacy_sync.view')
+  @RequirePermissions('legacy.sync:view')
   @ApiOperation({ summary: 'Dobavi progress Smart Slow Sync-a' })
   @ApiResponse({
     status: 200,
@@ -438,7 +439,7 @@ export class LegacySyncController {
   }
 
   @Get('slow-sync/config')
-  @RequirePermissions('legacy_sync.view')
+  @RequirePermissions('legacy.sync:view')
   @ApiOperation({ summary: 'Dobavi trenutnu konfiguraciju Smart Slow Sync-a' })
   @ApiResponse({
     status: 200,
@@ -454,7 +455,7 @@ export class LegacySyncController {
   }
 
   @Patch('slow-sync/config')
-  @RequirePermissions('legacy_sync.manage')
+  @RequirePermissions('legacy.sync:configure')
   @ApiOperation({ summary: 'Ažuriraj konfiguraciju Smart Slow Sync-a' })
   @ApiBody({ type: SlowSyncConfigDto })
   @ApiResponse({
@@ -472,7 +473,7 @@ export class LegacySyncController {
   }
 
   @Delete('slow-sync/reset')
-  @RequirePermissions('legacy_sync.manage')
+  @RequirePermissions('legacy.sync:configure')
   @ApiOperation({ summary: 'Resetuj progress Smart Slow Sync-a' })
   @ApiResponse({
     status: 200,
@@ -490,7 +491,7 @@ export class LegacySyncController {
   }
 
   @Post('slow-sync/process-batch')
-  @RequirePermissions('legacy_sync.manage')
+  @RequirePermissions('legacy.sync:configure')
   @ApiOperation({ summary: 'Ručno pokreni jedan batch (za testiranje)' })
   @ApiResponse({
     status: 200,
@@ -508,7 +509,7 @@ export class LegacySyncController {
   }
 
   @Get('worker-status')
-  @RequirePermissions('legacy_sync.view')
+  @RequirePermissions('legacy.sync:view')
   @ApiOperation({ summary: 'Dobij status svih worker-a' })
   @ApiResponse({
     status: 200,
@@ -534,7 +535,7 @@ export class LegacySyncController {
   }
 
   @Get('slow-sync/activity-feed')
-  @RequirePermissions('legacy_sync.view')
+  @RequirePermissions('legacy.sync:view')
   @ApiOperation({ summary: 'Dobij live activity feed' })
   @ApiQuery({
     name: 'limit',
@@ -553,7 +554,7 @@ export class LegacySyncController {
   // ============= SMART SLOW SYNC VEHICLE MANAGEMENT =============
 
   @Get('slow-sync/vehicles/:vehicleId/count-points')
-  @RequirePermissions('legacy_sync.view')
+  @RequirePermissions('legacy.sync:view')
   @ApiOperation({ summary: 'Broji GPS tačke za vozilo u TimescaleDB' })
   @ApiParam({ name: 'vehicleId', type: 'number' })
   @ApiResponse({
@@ -609,7 +610,7 @@ export class LegacySyncController {
   }
 
   @Get('slow-sync/vehicles')
-  @RequirePermissions('legacy_sync.view')
+  @RequirePermissions('legacy.sync:view')
   @ApiOperation({ summary: 'Dobavi listu vozila za Smart Slow Sync' })
   @ApiResponse({
     status: 200,
@@ -648,7 +649,7 @@ export class LegacySyncController {
   }
 
   @Post('slow-sync/vehicles')
-  @RequirePermissions('legacy_sync.manage')
+  @RequirePermissions('legacy.sync:configure')
   @ApiOperation({ summary: 'Dodaj vozila u Smart Slow Sync' })
   @ApiBody({ 
     schema: { 
@@ -706,7 +707,7 @@ export class LegacySyncController {
   }
 
   @Patch('slow-sync/vehicles/:vehicleId')
-  @RequirePermissions('legacy_sync.manage')
+  @RequirePermissions('legacy.sync:configure')
   @ApiOperation({ summary: 'Ažuriraj postavke vozila u Smart Slow Sync' })
   @ApiBody({ 
     schema: { 
@@ -738,7 +739,7 @@ export class LegacySyncController {
   }
 
   @Delete('slow-sync/vehicles/:vehicleId')
-  @RequirePermissions('legacy_sync.manage')
+  @RequirePermissions('legacy.sync:configure')
   @ApiOperation({ summary: 'Ukloni vozilo iz Smart Slow Sync' })
   @ApiResponse({
     status: 200,
@@ -760,7 +761,7 @@ export class LegacySyncController {
   }
 
   @Get('slow-sync/history')
-  @RequirePermissions('legacy_sync.view')
+  @RequirePermissions('legacy.sync:view')
   @ApiOperation({ summary: 'Dobavi istoriju Smart Slow Sync-a' })
   @ApiQuery({ name: 'vehicleId', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
@@ -799,7 +800,7 @@ export class LegacySyncController {
   }
 
   @Get('slow-sync/available-vehicles')
-  @RequirePermissions('legacy_sync.view')
+  @RequirePermissions('legacy.sync:view')
   @ApiOperation({ summary: 'Dobavi vozila koja nisu u Smart Slow Sync' })
   @ApiResponse({
     status: 200,
@@ -840,7 +841,7 @@ export class LegacySyncController {
    * 🔴 FIX: Health check endpoint za monitoring Smart Slow Sync stanja
    */
   @Get('smart-slow-sync/health')
-  @RequirePermissions('legacy_sync.view')
+  @RequirePermissions('legacy.sync:view')
   @ApiOperation({ summary: 'Health check za Smart Slow Sync' })
   @ApiResponse({
     status: 200,
@@ -880,7 +881,7 @@ export class LegacySyncController {
    * 🔴 FIX: Force reset endpoint za emergency situacije
    */
   @Post('smart-slow-sync/force-reset')
-  @RequirePermissions('legacy_sync.manage')
+  @RequirePermissions('legacy.sync:configure')
   @ApiOperation({ summary: 'Force reset Smart Slow Sync sistema' })
   @ApiResponse({
     status: 200,
@@ -909,6 +910,108 @@ export class LegacySyncController {
       };
     } catch (error) {
       this.logger.error('Error during force reset', error);
+      throw error;
+    }
+  }
+
+  // ============= COPY METHOD CONFIGURATION ENDPOINTS =============
+
+  @Get('config/copy')
+  @RequirePermissions('legacy.sync:configure')
+  @ApiOperation({ summary: 'Dobavi COPY konfiguraciju' })
+  @ApiResponse({
+    status: 200,
+    description: 'COPY konfiguracija',
+    type: CopyConfigResponseDto
+  })
+  async getCopyConfig(): Promise<CopyConfigResponseDto> {
+    try {
+      const config = await this.workerPoolService.getWorkerPoolConfig();
+      
+      // Proceni brzinu na osnovu metode
+      const estimatedSpeed = config.insertMethod === 'copy' ? 8000 : 
+                            config.insertMethod === 'auto' ? 5000 : 
+                            2000;
+      
+      // Preporuči metodu na osnovu trenutnih podešavanja
+      const recommendedMethod = (config.copyBatchSize || 10000) >= 10000 ? 'copy' : 'batch';
+      
+      return {
+        insertMethod: config.insertMethod || 'batch',
+        copyBatchSize: config.copyBatchSize || 10000,
+        fallbackToBatch: config.fallbackToBatch !== false,
+        estimatedSpeed,
+        recommendedMethod
+      };
+    } catch (error) {
+      this.logger.error('Error getting COPY config', error);
+      throw error;
+    }
+  }
+
+  @Patch('config/copy')
+  @RequirePermissions('legacy.sync:configure')
+  @ApiOperation({ summary: 'Ažuriraj COPY konfiguraciju' })
+  @ApiBody({ type: CopyConfigDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Konfiguracija ažurirana',
+    type: CopyConfigResponseDto
+  })
+  async updateCopyConfig(@Body() dto: CopyConfigDto): Promise<CopyConfigResponseDto> {
+    try {
+      // Sačuvaj u SystemSettings koristeći Prisma
+      const prisma = (this.workerPoolService as any).prisma;
+      
+      await prisma.systemSettings.upsert({
+        where: { key: 'legacy_sync.insert_method' },
+        update: { value: dto.insertMethod },
+        create: {
+          key: 'legacy_sync.insert_method',
+          value: dto.insertMethod,
+          type: 'string',
+          category: 'legacy_sync',
+          description: 'Metoda za insert podataka (batch/copy/auto)'
+        }
+      });
+      
+      if (dto.copyBatchSize !== undefined) {
+        await prisma.systemSettings.upsert({
+          where: { key: 'legacy_sync.copy_batch_size' },
+          update: { value: dto.copyBatchSize.toString() },
+          create: {
+            key: 'legacy_sync.copy_batch_size',
+            value: dto.copyBatchSize.toString(),
+            type: 'number',
+            category: 'legacy_sync',
+            description: 'Veličina batch-a za COPY metodu'
+          }
+        });
+      }
+      
+      if (dto.fallbackToBatch !== undefined) {
+        await prisma.systemSettings.upsert({
+          where: { key: 'legacy_sync.fallback_to_batch' },
+          update: { value: dto.fallbackToBatch.toString() },
+          create: {
+            key: 'legacy_sync.fallback_to_batch',
+            value: dto.fallbackToBatch.toString(),
+            type: 'boolean',
+            category: 'legacy_sync',
+            description: 'Fallback na batch ako COPY fail-uje'
+          }
+        });
+      }
+      
+      // Reload konfiguraciju u servisu
+      await (this.workerPoolService as any).loadConfiguration();
+      
+      this.logger.log('COPY konfiguracija ažurirana', dto);
+      
+      // Vrati ažuriranu konfiguraciju
+      return this.getCopyConfig();
+    } catch (error) {
+      this.logger.error('Greška pri ažuriranju COPY konfiguracije', error);
       throw error;
     }
   }
