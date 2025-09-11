@@ -84,7 +84,7 @@ const AuditLogModal: React.FC<AuditLogModalProps> = ({
       key: 'endpoint',
       render: (endpoint, record) => (
         <div className="font-mono text-sm">
-          <Tag color={getMethodColor(record.method)} size="small">
+          <Tag color={getMethodColor(record.method)}>
             {record.method}
           </Tag>
           <span className="ml-1">{endpoint}</span>

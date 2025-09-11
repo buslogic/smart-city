@@ -57,7 +57,7 @@ const TimescaleDB: React.FC = () => {
     endTime: Date;
     duration: number;
     status: 'completed' | 'failed' | 'timeout';
-    rowCount?: number;
+    rowCount?: number | null;
     size?: string;
     dateRange?: { start?: string; end?: string };
   }>>([]);

@@ -1,0 +1,14 @@
+{
+  "endpoint": "http://localhost:3010",
+  "testUser": {
+    "email": "admin@example.com",
+    "password": "admin123"
+  },
+  "testApiKey": {
+    "name": "Test Swagger Key",
+    "description": "Test API ključ za pristup Swagger dokumentaciji",
+    "type": "SWAGGER_ACCESS",
+    "permissions": ["swagger:read", "api:read"],
+    "rateLimit": 100
+  }
+}
