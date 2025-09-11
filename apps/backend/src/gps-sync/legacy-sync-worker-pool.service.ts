@@ -523,8 +523,6 @@ export class LegacySyncWorkerPoolService {
       
       try {
         // Ova metoda koristi TIMESCALE_DATABASE_URL iz .env fajla
-        // Development: postgres://smartcity_ts:TimescalePass123!@localhost:5433/smartcity_gps
-        // Production: postgres://tsdbadmin:PASS@b96osgyp1w.duvl2ceai2.tsdb.cloud.timescale.com:31143/tsdb
         const result = await this.executeProductionImport(localPath, garageNo, vehicle.id);
         importSuccess = result.success;
         importedCount = result.count;

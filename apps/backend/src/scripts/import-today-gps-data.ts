@@ -76,12 +76,13 @@ async function importTodayGPSData() {
     
     // Brojanje postojećih podataka u TimescaleDB za danas
     console.log('\n🔍 Proveravam postojeće podatke u TimescaleDB...');
+    // Koristi environment varijable ili baci grešku
+    if (!process.env.TIMESCALE_DATABASE_URL) {
+      throw new Error('TIMESCALE_DATABASE_URL environment variable is not set');
+    }
+    
     pgPool = new Pool({
-      host: 'localhost',
-      port: 5433,
-      database: 'smartcity_gps',
-      user: 'smartcity_ts',
-      password: 'TimescalePass123!',
+      connectionString: process.env.TIMESCALE_DATABASE_URL,
       max: 5,
     });
 

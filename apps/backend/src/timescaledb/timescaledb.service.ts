@@ -6,9 +6,12 @@ export class TimescaledbService {
   private readonly logger = new Logger(TimescaledbService.name);
 
   private async getConnection(): Promise<Client> {
+    if (!process.env.TIMESCALE_DATABASE_URL) {
+      throw new Error('TIMESCALE_DATABASE_URL environment variable is not set');
+    }
+    
     const client = new Client({
-      connectionString: process.env.TIMESCALE_DATABASE_URL || 
-        'postgres://smartcity_ts:TimescalePass123!@localhost:5433/smartcity_gps?sslmode=disable',
+      connectionString: process.env.TIMESCALE_DATABASE_URL,
     });
     
     await client.connect();
@@ -57,15 +60,22 @@ export class TimescaledbService {
       const tablesWithRowCount = await Promise.all(
         result.rows.map(async (table) => {
           try {
-            const countQuery = `SELECT COUNT(*) as row_count FROM "${table.schemaname}"."${table.tablename}"`;
+            let countQuery: string;
+            if (table.is_hypertable) {
+              // Za hypertables koristimo TimescaleDB approximate_row_count funkciju
+              countQuery = `SELECT approximate_row_count('${table.schemaname}.${table.tablename}')::bigint as row_count`;
+            } else {
+              // Za obične tabele koristimo COUNT sa limitom
+              countQuery = `SELECT COUNT(*) as row_count FROM (SELECT 1 FROM "${table.schemaname}"."${table.tablename}" LIMIT 100000) t`;
+            }
             const countResult = await client.query(countQuery);
             return {
               ...table,
-              row_count: parseInt(countResult.rows[0].row_count),
+              row_count: parseInt(countResult.rows[0].row_count || 0),
             };
           } catch (error) {
             // Ako ne možemo da dobijemo count, vrati null
-            this.logger.warn(`Could not get row count for ${table.schemaname}.${table.tablename}`);
+            this.logger.warn(`Could not get row count for ${table.schemaname}.${table.tablename}: ${error.message}`);
             return {
               ...table,
               row_count: null,

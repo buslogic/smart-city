@@ -74,9 +74,12 @@ export class LegacySyncService {
 
       // Dobavi poslednje sync datume direktno iz TimescaleDB
       let syncDates: any[] = [];
+      if (!process.env.TIMESCALE_DATABASE_URL) {
+        throw new Error('TIMESCALE_DATABASE_URL environment variable is not set');
+      }
+      
       const pgClient = new Client({
-        connectionString: process.env.TIMESCALE_DATABASE_URL || 
-          'postgres://smartcity_ts:TimescalePass123!@localhost:5433/smartcity_gps?sslmode=disable',
+        connectionString: process.env.TIMESCALE_DATABASE_URL,
       });
       
       try {
