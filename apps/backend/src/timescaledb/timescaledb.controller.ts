@@ -55,4 +55,20 @@ export class TimescaledbController {
   ) {
     return this.timescaledbService.refreshContinuousAggregate(name, body?.startTime, body?.endTime);
   }
+
+  @Get('continuous-aggregates/status')
+  @RequirePermissions('maintenance.timescaledb:view')
+  @ApiOperation({ summary: 'Dobavi real-time status svih continuous aggregates' })
+  @ApiResponse({ status: 200, description: 'Status uspešno dobijen' })
+  async getContinuousAggregatesStatus() {
+    return this.timescaledbService.getContinuousAggregatesStatus();
+  }
+
+  @Get('continuous-aggregates/jobs')
+  @RequirePermissions('maintenance.timescaledb:view')
+  @ApiOperation({ summary: 'Dobavi istoriju i status TimescaleDB jobs' })
+  @ApiResponse({ status: 200, description: 'Jobs lista uspešno dobijena' })
+  async getTimescaleJobs() {
+    return this.timescaledbService.getTimescaleJobs();
+  }
 }

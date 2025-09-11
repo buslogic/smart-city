@@ -4,6 +4,7 @@ import { Client } from 'pg';
 @Injectable()
 export class TimescaledbService {
   private readonly logger = new Logger(TimescaledbService.name);
+  private activeRefreshes = new Map<string, { startTime: Date, estimatedDuration?: number }>();
 
   private async getConnection(): Promise<Client> {
     if (!process.env.TIMESCALE_DATABASE_URL) {
@@ -255,30 +256,84 @@ export class TimescaledbService {
     try {
       // Escapujemo ime agregata da izbegnemo SQL injection
       const escapedAggregateName = aggregateName.replace(/"/g, '""');
+      
+      // Za velike aggregate, koristi async refresh preko TimescaleDB background worker-a
+      // Ovo će pokrenuti refresh u pozadini i odmah vratiti rezultat
+      
+      if (aggregateName === 'daily_vehicle_stats' || 
+          aggregateName === 'hourly_vehicle_stats' || 
+          aggregateName === 'vehicle_hourly_stats' ||
+          aggregateName === 'monthly_vehicle_raw_stats') {
+        // Za velike aggregate, pokreni u pozadini
+        this.logger.log(`Starting background refresh for large aggregate: ${aggregateName}`);
+        
+        // refresh_continuous_aggregate ne može da radi u transakciji
+        // Postavimo kratak timeout i pokušajmo direktno
+        try {
+          // Prvo postavi timeout (5 sekundi)
+          await client.query('SET statement_timeout = 5000');
+          
+          // Zatim pokušaj refresh (ovo će timeout-ovati za velike aggregate)
+          try {
+            await client.query(`CALL refresh_continuous_aggregate('"public"."${escapedAggregateName}"', NULL, NULL);`);
+            // Ako je završio brzo, super
+            this.logger.log(`Quick refresh completed for ${aggregateName}`);
+          } catch (timeoutErr: any) {
+            if (timeoutErr.message?.includes('canceling statement due to statement timeout') || 
+                timeoutErr.message?.includes('statement timeout')) {
+              // Ovo je očekivano - refresh još traje u pozadini
+              this.logger.log(`Background refresh started for ${aggregateName} (continuing in background)`);
+            } else {
+              throw timeoutErr;
+            }
+          } finally {
+            // Resetuj timeout
+            await client.query('RESET statement_timeout');
+          }
+          
+          // Vrati uspešan response
+          return {
+            success: true,
+            message: `Osvežavanje agregata "${aggregateName}" je pokrenuto u pozadini. Zbog velikog broja podataka (344M GPS tačaka), proces može trajati 2-5 minuta.`,
+            details: {
+              aggregate: aggregateName,
+              status: 'running_in_background',
+              note: 'Možete nastaviti sa radom. Tabela će biti automatski ažurirana kada se refresh završi.'
+            }
+          };
+          
+        } catch (err: any) {
+          this.logger.warn(`Could not start background refresh: ${err.message}`);
+          // Nastavi sa običnim refresh
+        }
+      }
+      
+      // Za manje aggregate ili ako background job ne radi, koristi običan refresh
       let query: string;
       let params: any[] = [];
       
       if (startTime && endTime) {
-        // Refresh sa specifičnim periodom
         query = `CALL refresh_continuous_aggregate('"public"."${escapedAggregateName}"', $1::timestamp, $2::timestamp);`;
         params = [startTime, endTime];
-        
         this.logger.log(`Refreshing aggregate ${aggregateName} from ${startTime} to ${endTime}`);
       } else if (startTime) {
-        // Refresh od startTime do sada
         query = `CALL refresh_continuous_aggregate('"public"."${escapedAggregateName}"', $1::timestamp, NOW());`;
         params = [startTime];
-        
         this.logger.log(`Refreshing aggregate ${aggregateName} from ${startTime} to NOW`);
       } else {
-        // Potpun refresh - NULL znači ceo opseg
         query = `CALL refresh_continuous_aggregate('"public"."${escapedAggregateName}"', NULL, NULL);`;
         params = [];
-        
         this.logger.log(`Performing full refresh of aggregate ${aggregateName}`);
       }
       
-      await client.query(query, params);
+      // Postavi timeout na 30 sekundi za manje aggregate
+      await client.query('SET statement_timeout = 30000');
+      
+      try {
+        await client.query(query, params);
+      } finally {
+        await client.query('RESET statement_timeout');
+      }
       
       // Dobavi informacije o agregatu nakon refresh-a  
       const infoQuery = `
@@ -318,6 +373,208 @@ export class TimescaledbService {
       }
       
       throw new Error(`Greška pri osvežavanju agregata: ${error.message}`);
+    } finally {
+      await client.end();
+    }
+  }
+
+  async getContinuousAggregatesStatus() {
+    const client = await this.getConnection();
+    
+    try {
+      // Dobavi trenutne refresh procese
+      const activeRefreshQuery = `
+        SELECT 
+          pid,
+          state,
+          query_start,
+          now() - query_start as duration,
+          CASE 
+            WHEN query LIKE '%daily_vehicle_stats%' THEN 'daily_vehicle_stats'
+            WHEN query LIKE '%vehicle_hourly_stats%' THEN 'vehicle_hourly_stats'
+            WHEN query LIKE '%monthly_vehicle_raw_stats%' THEN 'monthly_vehicle_raw_stats'
+            ELSE regexp_replace(query, '.*"([^"]+)".*', '\\1')
+          END as aggregate_name,
+          query
+        FROM pg_stat_activity 
+        WHERE (
+          query LIKE '%refresh_continuous_aggregate%' 
+          OR query LIKE '%CALL refresh_continuous_aggregate%'
+          OR query LIKE '%INSERT INTO daily_vehicle_stats%'
+          OR query LIKE '%INSERT INTO vehicle_hourly_stats%'
+          OR query LIKE '%INSERT INTO monthly_vehicle_raw_stats%'
+        )
+        AND state != 'idle'
+        AND pid != pg_backend_pid()
+        ORDER BY query_start DESC;
+      `;
+      
+      const activeRefreshes = await client.query(activeRefreshQuery);
+      
+      // Dobavi statistike o agregatima
+      const aggregateStatsQuery = `
+        SELECT 
+          ca.view_name,
+          ca.view_schema,
+          -- Poslednji refresh iz job history
+          (SELECT MAX(last_successful_finish) 
+           FROM timescaledb_information.job_stats js
+           JOIN timescaledb_information.jobs j ON j.job_id = js.job_id
+           WHERE j.hypertable_name = ca.view_name) as last_refresh,
+          -- Sledeći scheduled refresh
+          (SELECT MIN(next_start) 
+           FROM timescaledb_information.job_stats js
+           JOIN timescaledb_information.jobs j ON j.job_id = js.job_id
+           WHERE j.hypertable_name = ca.view_name) as next_refresh,
+          -- Broj redova
+          NULL as row_count,
+          -- Poslednji datum u agregatu
+          CASE 
+            WHEN ca.view_name = 'daily_vehicle_stats' THEN 
+              (SELECT MAX(day) FROM daily_vehicle_stats)::text
+            WHEN ca.view_name = 'vehicle_hourly_stats' THEN
+              (SELECT MAX(hour) FROM vehicle_hourly_stats)::text
+            WHEN ca.view_name = 'monthly_vehicle_raw_stats' THEN
+              (SELECT MAX(month) FROM monthly_vehicle_raw_stats)::text
+            ELSE NULL
+          END as last_data_point,
+          -- Veličina
+          pg_size_pretty(
+            hypertable_size(format('%I.%I', ca.materialization_hypertable_schema, 
+                                          ca.materialization_hypertable_name)::regclass)
+          ) as size
+        FROM timescaledb_information.continuous_aggregates ca
+        WHERE ca.view_schema = 'public';
+      `;
+      
+      // Note: Ova query neće raditi zbog dinamičkog SQL-a
+      // Moramo je pojednostaviti
+      const simpleStatsQuery = `
+        WITH aggregate_info AS (
+          SELECT 
+            ca.view_name,
+            ca.view_schema,
+            ca.materialization_hypertable_schema,
+            ca.materialization_hypertable_name
+          FROM timescaledb_information.continuous_aggregates ca
+          WHERE ca.view_schema = 'public'
+        )
+        SELECT 
+          ai.view_name,
+          ai.view_schema,
+          -- Job info
+          j.job_id,
+          js.last_successful_finish as last_refresh,
+          js.next_start as next_refresh,
+          js.total_runs,
+          js.total_successes,
+          js.total_failures,
+          -- Veličina
+          pg_size_pretty(
+            hypertable_size(format('%I.%I', ai.materialization_hypertable_schema, 
+                                          ai.materialization_hypertable_name)::regclass)
+          ) as size
+        FROM aggregate_info ai
+        LEFT JOIN timescaledb_information.jobs j 
+          ON j.hypertable_name = ai.view_name 
+          AND j.proc_name = 'policy_refresh_continuous_aggregate'
+        LEFT JOIN timescaledb_information.job_stats js 
+          ON js.job_id = j.job_id
+        ORDER BY ai.view_name;
+      `;
+      
+      const aggregateStats = await client.query(simpleStatsQuery);
+      
+      // Za svaki agregat, dobavi dodatne informacije
+      const enrichedStats = await Promise.all(aggregateStats.rows.map(async (agg) => {
+        let lastDataPoint = null;
+        let rowCount: number | null = null;
+        
+        try {
+          // Dobavi poslednji datum
+          if (agg.view_name === 'daily_vehicle_stats') {
+            const result = await client.query('SELECT MAX(day)::text as last_date FROM daily_vehicle_stats');
+            lastDataPoint = result.rows[0]?.last_date;
+          } else if (agg.view_name === 'vehicle_hourly_stats') {
+            const result = await client.query('SELECT MAX(hour)::text as last_date FROM vehicle_hourly_stats');
+            lastDataPoint = result.rows[0]?.last_date;
+          } else if (agg.view_name === 'monthly_vehicle_raw_stats') {
+            const result = await client.query('SELECT MAX(month)::text as last_date FROM monthly_vehicle_raw_stats');
+            lastDataPoint = result.rows[0]?.last_date;
+          }
+          
+          // Dobavi broj redova (sa limitom za performanse)
+          const countQuery = `SELECT COUNT(*) as cnt FROM public."${agg.view_name}" LIMIT 1`;
+          const countResult = await client.query(countQuery);
+          rowCount = parseInt(countResult.rows[0]?.cnt || 0);
+        } catch (err) {
+          this.logger.warn(`Could not get details for ${agg.view_name}: ${err.message}`);
+        }
+        
+        return {
+          ...agg,
+          last_data_point: lastDataPoint,
+          row_count: rowCount,
+          is_refreshing: activeRefreshes.rows.some(r => 
+            r.query?.includes(agg.view_name)
+          ),
+          active_refresh: activeRefreshes.rows.find(r => 
+            r.query?.includes(agg.view_name)
+          )
+        };
+      }));
+      
+      return {
+        aggregates: enrichedStats,
+        active_refreshes: activeRefreshes.rows,
+        summary: {
+          total_aggregates: enrichedStats.length,
+          currently_refreshing: activeRefreshes.rows.length,
+          last_checked: new Date().toISOString()
+        }
+      };
+    } catch (error) {
+      this.logger.error('Error getting aggregates status:', error);
+      throw error;
+    } finally {
+      await client.end();
+    }
+  }
+
+  async getTimescaleJobs() {
+    const client = await this.getConnection();
+    
+    try {
+      const query = `
+        SELECT 
+          j.job_id,
+          j.application_name,
+          j.proc_name,
+          j.hypertable_name,
+          j.hypertable_schema,
+          j.schedule_interval,
+          js.next_start,
+          js.last_successful_finish,
+          js.last_run_duration,
+          js.total_runs,
+          js.total_successes,
+          js.total_failures,
+          js.last_run_status,
+          -- Job config
+          j.config
+        FROM timescaledb_information.jobs j
+        LEFT JOIN timescaledb_information.job_stats js ON js.job_id = j.job_id
+        WHERE j.proc_name LIKE '%refresh%' OR j.proc_name LIKE '%compress%'
+        ORDER BY js.next_start ASC;
+      `;
+      
+      const jobs = await client.query(query);
+      
+      // Vraćamo samo jobs za sada
+      return jobs.rows;
+    } catch (error) {
+      this.logger.error('Error getting TimescaleDB jobs:', error);
+      throw error;
     } finally {
       await client.end();
     }

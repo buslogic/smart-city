@@ -107,4 +107,24 @@ export const timescaledbService = {
     );
     return response.data;
   },
+
+  getContinuousAggregatesStatus: async (): Promise<any> => {
+    const token = TokenManager.getAccessToken();
+    const response = await axios.get(`${API_URL}/api/timescaledb/continuous-aggregates/status`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return response.data;
+  },
+
+  getTimescaleJobs: async (): Promise<any> => {
+    const token = TokenManager.getAccessToken();
+    const response = await axios.get(`${API_URL}/api/timescaledb/continuous-aggregates/jobs`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return response.data;
+  },
 };

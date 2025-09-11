@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Typography, Tabs, Table, Tag, Spin, Alert, Badge, Tooltip, Space, Button, Modal, DatePicker, message } from 'antd';
+import { Card, Typography, Tabs, Table, Tag, Spin, Alert, Badge, Tooltip, Space, Button, Modal, DatePicker, message, Switch, Empty } from 'antd';
 import { 
   DatabaseOutlined, 
   TableOutlined, 
@@ -7,11 +7,18 @@ import {
   ClockCircleOutlined,
   ReloadOutlined,
   InfoCircleOutlined,
-  SyncOutlined 
+  SyncOutlined,
+  LoadingOutlined,
+  DashboardOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  LineChartOutlined
 } from '@ant-design/icons';
 import { timescaledbService, TimescaleTable, ContinuousAggregate } from '../../../services/timescaledb.service';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
+import { formatDistanceToNow } from 'date-fns';
+import { sr } from 'date-fns/locale';
 
 const { Title, Text } = Typography;
 const { TabPane } = Tabs;
@@ -31,6 +38,29 @@ const TimescaleDB: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
   const [useFullRefresh, setUseFullRefresh] = useState(true);
+  const [refreshingAggregates, setRefreshingAggregates] = useState<Map<string, { 
+    startTime: Date, 
+    status: 'running' | 'completed' | 'failed',
+    endTime?: Date,
+    result?: any,
+    dateRange?: { start?: string; end?: string }
+  }>>(new Map());
+  const [aggregateStatus, setAggregateStatus] = useState<any[]>([]);
+  const [timescaleJobs, setTimescaleJobs] = useState<any[]>([]);
+  const [loadingStatus, setLoadingStatus] = useState(false);
+  const [loadingJobs, setLoadingJobs] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [refreshHistory, setRefreshHistory] = useState<Array<{
+    id: string;
+    aggregateName: string;
+    startTime: Date;
+    endTime: Date;
+    duration: number;
+    status: 'completed' | 'failed' | 'timeout';
+    rowCount?: number;
+    size?: string;
+    dateRange?: { start?: string; end?: string };
+  }>>([]);
 
   const fetchTables = async () => {
     setLoadingTables(true);
@@ -58,13 +88,87 @@ const TimescaleDB: React.FC = () => {
     }
   };
 
+  const fetchAggregateStatus = async () => {
+    setLoadingStatus(true);
+    try {
+      const data = await timescaledbService.getContinuousAggregatesStatus();
+      console.log('Aggregate status data:', data); // Debug log
+      setAggregateStatus(data?.aggregates || []);
+    } catch (error: any) {
+      console.error('Error fetching aggregate status:', error);
+      setAggregateStatus([]);
+    } finally {
+      setLoadingStatus(false);
+    }
+  };
+
+  const fetchTimescaleJobs = async () => {
+    setLoadingJobs(true);
+    try {
+      const data = await timescaledbService.getTimescaleJobs();
+      setTimescaleJobs(data || []);
+    } catch (error: any) {
+      console.error('Error fetching TimescaleDB jobs:', error);
+      setTimescaleJobs([]);
+    } finally {
+      setLoadingJobs(false);
+    }
+  };
+
+  // Učitaj istoriju iz localStorage pri mount-u
+  useEffect(() => {
+    const savedHistory = localStorage.getItem('timescaledb-refresh-history');
+    if (savedHistory) {
+      try {
+        const parsed = JSON.parse(savedHistory);
+        // Konvertuj string datume nazad u Date objekte i dodaj jedinstvene ID-jeve ako nedostaju
+        const history = parsed.map((item: any, index: number) => ({
+          ...item,
+          id: item.id || `${item.aggregateName}-${new Date(item.startTime).getTime()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
+          startTime: new Date(item.startTime),
+          endTime: new Date(item.endTime)
+        }));
+        // Ukloni duplikate po ID-ju
+        const uniqueHistory = history.filter((item: any, index: number, self: any[]) => 
+          index === self.findIndex((t) => t.id === item.id)
+        );
+        setRefreshHistory(uniqueHistory);
+        // Ažuriraj localStorage sa očišćenom istorijom
+        if (uniqueHistory.length !== history.length) {
+          localStorage.setItem('timescaledb-refresh-history', JSON.stringify(uniqueHistory));
+        }
+      } catch (error) {
+        console.error('Error loading refresh history:', error);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (activeTab === 'tables') {
       fetchTables();
     } else if (activeTab === 'aggregates') {
       fetchAggregates();
+    } else if (activeTab === 'monitoring') {
+      fetchAggregateStatus();
+      fetchTimescaleJobs();
     }
   }, [activeTab]);
+
+  // Auto-refresh za monitoring tab
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    
+    if (activeTab === 'monitoring' && autoRefresh) {
+      interval = setInterval(() => {
+        fetchAggregateStatus();
+        fetchTimescaleJobs();
+      }, 5000); // Refresh svakih 5 sekundi
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [activeTab, autoRefresh]);
 
   const handleRefreshAggregate = async () => {
     if (!selectedAggregate) return;
@@ -85,10 +189,106 @@ const TimescaleDB: React.FC = () => {
         endTime
       );
       
-      message.success({
-        content: result.message,
-        duration: 5,
-      });
+      // Sačuvaj informaciju o datumskom opsegu za istoriju
+      const refreshDateRange = (startTime && endTime) ? { start: startTime, end: endTime } : undefined;
+      
+      // Proveri da li je pokrenut u pozadini
+      if (result.details?.status === 'running_in_background') {
+        // Dodaj u mapu agregata koji se osvežavaju sa statusom
+        setRefreshingAggregates(prev => new Map(prev).set(selectedAggregate, {
+          startTime: new Date(),
+          status: 'running',
+          dateRange: refreshDateRange
+        }));
+        
+        message.info({
+          content: result.message,
+          duration: 8,
+          key: `refresh-${selectedAggregate}`,
+        });
+        
+        // Počni da proveravamo status svakih 30 sekundi
+        let checkCount = 0;
+        const maxChecks = 120; // Maksimalno 60 minuta (120 * 30 sekundi)
+        
+        const checkInterval = setInterval(async () => {
+          checkCount++;
+          
+          try {
+            // Proveri da li se još uvek izvršava
+            const statusData = await timescaledbService.getContinuousAggregatesStatus();
+            const stillRunning = statusData?.aggregates?.some(
+              (agg: any) => agg.view_name === selectedAggregate && agg.is_refreshing
+            );
+            
+            if (!stillRunning || checkCount >= maxChecks) {
+              clearInterval(checkInterval);
+              
+              // Osveži podatke o agregatu
+              await fetchAggregates();
+              const updatedAggregates = await timescaledbService.getContinuousAggregates();
+              const updatedAggregate = updatedAggregates.find((a: any) => a.view_name === selectedAggregate);
+              
+              // Ažuriraj status sa rezultatom
+              setRefreshingAggregates(prev => {
+                const newMap = new Map(prev);
+                const existing = newMap.get(selectedAggregate);
+                if (existing) {
+                  const endTime = new Date();
+                  const duration = Math.round((endTime.getTime() - existing.startTime.getTime()) / 1000);
+                  
+                  newMap.set(selectedAggregate, {
+                    ...existing,
+                    status: checkCount >= maxChecks ? 'completed' : 'completed',
+                    endTime: endTime,
+                    result: {
+                      duration: duration,
+                      rowCount: updatedAggregate?.row_count,
+                      size: updatedAggregate?.size,
+                      timeout: checkCount >= maxChecks
+                    }
+                  });
+                  
+                  // Dodaj u istoriju sa jedinstvenim ID
+                  const historyEntry = {
+                    id: `${selectedAggregate}-${existing.startTime.getTime()}-${Math.random().toString(36).substr(2, 9)}`,
+                    aggregateName: selectedAggregate,
+                    startTime: existing.startTime,
+                    endTime: endTime,
+                    duration: duration,
+                    status: checkCount >= maxChecks ? 'timeout' as const : 'completed' as const,
+                    rowCount: updatedAggregate?.row_count,
+                    size: updatedAggregate?.size,
+                    dateRange: existing.dateRange // Koristi sačuvanu informaciju o datumskom opsegu
+                  };
+                  
+                  setRefreshHistory(prevHistory => {
+                    const newHistory = [historyEntry, ...prevHistory].slice(0, 50); // Čuvaj maksimalno 50 unosa
+                    localStorage.setItem('timescaledb-refresh-history', JSON.stringify(newHistory));
+                    return newHistory;
+                  });
+                }
+                return newMap;
+              });
+              
+              message.success({
+                content: `Osvežavanje agregata ${selectedAggregate} je završeno nakon ${Math.round((new Date().getTime() - new Date(result.details?.startTime || new Date()).getTime()) / 60000)} minuta`,
+                duration: 5,
+                key: `refresh-${selectedAggregate}`,
+              });
+            }
+          } catch (error) {
+            console.error('Error checking refresh status:', error);
+          }
+        }, 30000); // Proveri svakih 30 sekundi
+        
+      } else {
+        // Običan refresh koji je završen odmah
+        message.success({
+          content: result.message,
+          duration: 5,
+        });
+      }
       
       // Osveži listu agregata
       fetchAggregates();
@@ -230,18 +430,23 @@ const TimescaleDB: React.FC = () => {
     {
       title: 'Akcije',
       key: 'actions',
-      width: 100,
+      width: 120,
       fixed: 'left',
-      render: (_, record) => (
-        <Button
-          type="primary"
-          size="small"
-          icon={<SyncOutlined />}
-          onClick={() => openRefreshModal(record.view_name)}
-        >
-          Osveži
-        </Button>
-      ),
+      render: (_, record) => {
+        const isRefreshing = refreshingAggregates.has(record.view_name);
+        
+        return (
+          <Button
+            type={isRefreshing ? "default" : "primary"}
+            size="small"
+            icon={isRefreshing ? <LoadingOutlined spin /> : <SyncOutlined />}
+            onClick={() => !isRefreshing && openRefreshModal(record.view_name)}
+            disabled={isRefreshing}
+          >
+            {isRefreshing ? 'Osvežava se...' : 'Osveži'}
+          </Button>
+        );
+      },
     },
     {
       title: 'Schema',
@@ -254,16 +459,23 @@ const TimescaleDB: React.FC = () => {
       title: 'Naziv agregata',
       dataIndex: 'view_name',
       key: 'view_name',
-      render: (text, record) => (
-        <Space>
-          <Text strong>{text}</Text>
-          {record.finalized && (
-            <Tooltip title="Finalizovan agregat">
-              <Tag color="success">Finalizovan</Tag>
-            </Tooltip>
-          )}
-        </Space>
-      ),
+      render: (text, record) => {
+        const isRefreshing = refreshingAggregates.has(record.view_name);
+        
+        return (
+          <Space>
+            <Text strong>{text}</Text>
+            {isRefreshing && (
+              <Badge status="processing" text="Osvežava se..." />
+            )}
+            {record.finalized && !isRefreshing && (
+              <Tooltip title="Finalizovan agregat">
+                <Tag color="success">Finalizovan</Tag>
+              </Tooltip>
+            )}
+          </Space>
+        );
+      },
     },
     {
       title: 'Broj redova',
@@ -465,6 +677,540 @@ const TimescaleDB: React.FC = () => {
                 scroll={{ x: 1400 }}
               />
             )}
+          </TabPane>
+
+          <TabPane 
+            tab={
+              <span>
+                <LineChartOutlined />
+                <span className="ml-2">Monitoring</span>
+              </span>
+            } 
+            key="monitoring"
+          >
+            <div className="space-y-6">
+              {/* Auto-refresh kontrola */}
+              <div className="flex justify-between items-center">
+                <Space>
+                  <Text type="secondary">
+                    Status agregata se ažurira {autoRefresh ? 'automatski' : 'ručno'}
+                  </Text>
+                  {autoRefresh && (
+                    <Text type="secondary">
+                      <ClockCircleOutlined /> Sledeće osvežavanje za {30 - (Date.now() % 30000) / 1000 | 0}s
+                    </Text>
+                  )}
+                </Space>
+                <Space>
+                  <Switch
+                    checked={autoRefresh}
+                    onChange={setAutoRefresh}
+                    checkedChildren="Auto-refresh ON"
+                    unCheckedChildren="Auto-refresh OFF"
+                  />
+                  <Button 
+                    icon={<ReloadOutlined />} 
+                    onClick={() => {
+                      fetchAggregateStatus();
+                      fetchTimescaleJobs();
+                    }}
+                    loading={loadingStatus || loadingJobs}
+                  >
+                    Osveži sada
+                  </Button>
+                </Space>
+              </div>
+
+              {/* Status agregata */}
+              <Card title="Real-time Status Agregata" loading={loadingStatus}>
+                {aggregateStatus && aggregateStatus.length > 0 ? (
+                  <Table
+                    dataSource={aggregateStatus}
+                    rowKey={(record) => `${record.view_name}_${record.pid || Math.random()}`}
+                    pagination={false}
+                    columns={[
+                      {
+                        title: 'Agregat',
+                        dataIndex: 'view_name',
+                        key: 'view_name',
+                        render: (text) => <Text strong>{text}</Text>,
+                      },
+                      {
+                        title: 'Status',
+                        key: 'status',
+                        render: (_, record) => {
+                          if (record.is_refreshing) {
+                            return (
+                              <Badge status="processing" text={
+                                <Space>
+                                  <LoadingOutlined spin />
+                                  <Text type="warning">Osvežava se</Text>
+                                </Space>
+                              } />
+                            );
+                          }
+                          return <Badge status="success" text="Spreman" />;
+                        },
+                      },
+                      {
+                        title: 'Broj redova',
+                        dataIndex: 'row_count',
+                        key: 'row_count',
+                        align: 'right',
+                        render: (value) => value ? formatNumber(value) : '-',
+                      },
+                      {
+                        title: 'Veličina',
+                        dataIndex: 'size',
+                        key: 'size',
+                        render: (value) => value || '-',
+                      },
+                      {
+                        title: 'Poslednji podatak',
+                        dataIndex: 'last_data_point',
+                        key: 'last_data_point',
+                        render: (text) => text ? (
+                          <Tooltip title={new Date(text).toLocaleString('sr-RS')}>
+                            <Text type="secondary">
+                              {formatDistanceToNow(new Date(text), { 
+                                addSuffix: true, 
+                                locale: sr 
+                              })}
+                            </Text>
+                          </Tooltip>
+                        ) : '-',
+                      },
+                      {
+                        title: 'Poslednje osvežavanje',
+                        dataIndex: 'last_refresh',
+                        key: 'last_refresh',
+                        render: (text) => text ? (
+                          <Tooltip title={new Date(text).toLocaleString('sr-RS')}>
+                            <Text type="secondary">
+                              {formatDistanceToNow(new Date(text), { 
+                                addSuffix: true, 
+                                locale: sr 
+                              })}
+                            </Text>
+                          </Tooltip>
+                        ) : '-',
+                      },
+                      {
+                        title: 'Sledeće osvežavanje',
+                        dataIndex: 'next_refresh',
+                        key: 'next_refresh',
+                        render: (text) => text ? (
+                          <Tooltip title={new Date(text).toLocaleString('sr-RS')}>
+                            <Text>
+                              {formatDistanceToNow(new Date(text), { 
+                                addSuffix: true, 
+                                locale: sr 
+                              })}
+                            </Text>
+                          </Tooltip>
+                        ) : '-',
+                      },
+                    ]}
+                  />
+                ) : (
+                  <Empty description="Nema aktivnih procesa" />
+                )}
+              </Card>
+
+              {/* Aktivni refresh procesi */}
+              <Card title="Refresh Procesi - Istorija" loading={loadingStatus}>
+                {refreshingAggregates.size > 0 ? (
+                  <Table
+                    dataSource={Array.from(refreshingAggregates.entries()).map(([name, data]) => ({
+                      key: name,
+                      aggregate_name: name,
+                      ...data
+                    }))}
+                    pagination={false}
+                    columns={[
+                      {
+                        title: 'Agregat',
+                        dataIndex: 'aggregate_name',
+                        key: 'aggregate_name',
+                        render: (text, record) => (
+                          <Space>
+                            {record.status === 'running' ? (
+                              <LoadingOutlined spin />
+                            ) : record.status === 'completed' ? (
+                              <CheckCircleOutlined style={{ color: '#52c41a' }} />
+                            ) : (
+                              <CloseCircleOutlined style={{ color: '#f5222d' }} />
+                            )}
+                            <Text strong>{text}</Text>
+                          </Space>
+                        ),
+                      },
+                      {
+                        title: 'Status',
+                        key: 'status',
+                        render: (_, record) => {
+                          if (record.status === 'running') {
+                            return <Badge status="processing" text="Osvežava se u pozadini" />;
+                          } else if (record.status === 'completed') {
+                            return <Badge status="success" text="Završeno" />;
+                          } else {
+                            return <Badge status="error" text="Greška" />;
+                          }
+                        },
+                      },
+                      {
+                        title: 'Trajanje',
+                        key: 'duration',
+                        render: (_, record) => {
+                          if (record.status === 'running') {
+                            const elapsed = Math.round((new Date().getTime() - record.startTime.getTime()) / 1000);
+                            return <Text>{elapsed < 60 ? `${elapsed}s` : `${Math.round(elapsed / 60)}min`}</Text>;
+                          } else if (record.result?.duration) {
+                            const dur = record.result.duration;
+                            return (
+                              <Text type={dur > 600 ? 'warning' : 'secondary'}>
+                                {dur < 60 ? `${dur}s` : `${Math.round(dur / 60)}min`}
+                              </Text>
+                            );
+                          }
+                          return '-';
+                        },
+                      },
+                      {
+                        title: 'Pokrenuto',
+                        dataIndex: 'startTime',
+                        key: 'startTime',
+                        render: (date) => (
+                          <Tooltip title={new Date(date).toLocaleString('sr-RS')}>
+                            <Text type="secondary">
+                              {formatDistanceToNow(date, { 
+                                addSuffix: true, 
+                                locale: sr 
+                              })}
+                            </Text>
+                          </Tooltip>
+                        ),
+                      },
+                      {
+                        title: 'Rezultat',
+                        key: 'result',
+                        render: (_, record) => {
+                          if (record.status === 'running') {
+                            const isLarge = ['daily_vehicle_stats', 'vehicle_hourly_stats', 'monthly_vehicle_raw_stats'].includes(record.aggregate_name);
+                            return (
+                              <Text type="secondary" className="text-xs">
+                                {isLarge ? 'Veliki agregat - može trajati 20+ minuta' : 'Osvežavanje u toku...'}
+                              </Text>
+                            );
+                          } else if (record.status === 'completed' && record.result) {
+                            return (
+                              <Space direction="vertical" size="small">
+                                <Text type="secondary" className="text-xs">
+                                  Broj redova: {record.result.rowCount ? formatNumber(record.result.rowCount) : '-'}
+                                </Text>
+                                <Text type="secondary" className="text-xs">
+                                  Veličina: {record.result.size || '-'}
+                                </Text>
+                                {record.result.timeout && (
+                                  <Text type="warning" className="text-xs">
+                                    Dosegnut timeout provere
+                                  </Text>
+                                )}
+                              </Space>
+                            );
+                          }
+                          return '-';
+                        },
+                      },
+                      {
+                        title: 'Akcije',
+                        key: 'actions',
+                        render: (_, record) => {
+                          if (record.status === 'completed') {
+                            return (
+                              <Button 
+                                size="small" 
+                                type="text"
+                                danger
+                                onClick={() => {
+                                  setRefreshingAggregates(prev => {
+                                    const newMap = new Map(prev);
+                                    newMap.delete(record.aggregate_name);
+                                    return newMap;
+                                  });
+                                }}
+                              >
+                                Ukloni
+                              </Button>
+                            );
+                          }
+                          return null;
+                        },
+                      },
+                    ]}
+                  />
+                ) : (
+                  <Empty 
+                    description="Nema aktivnih refresh procesa"
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  >
+                    <Text type="secondary" className="text-xs">
+                      Pokrenite osvežavanje agregata iz "Continuous Aggregates" taba
+                    </Text>
+                  </Empty>
+                )}
+              </Card>
+
+              {/* Istorija ručno pokrenutih refresh-ova */}
+              <Card 
+                title="Istorija Ručnih Refresh-ova" 
+                extra={
+                  refreshHistory.length > 0 && (
+                    <Button 
+                      size="small" 
+                      danger
+                      onClick={() => {
+                        Modal.confirm({
+                          title: 'Obriši istoriju',
+                          content: 'Da li ste sigurni da želite da obrišete kompletnu istoriju refresh-ova?',
+                          onOk: () => {
+                            setRefreshHistory([]);
+                            localStorage.removeItem('timescaledb-refresh-history');
+                            message.success('Istorija je obrisana');
+                          },
+                          okText: 'Da, obriši',
+                          cancelText: 'Otkaži',
+                        });
+                      }}
+                    >
+                      Obriši istoriju
+                    </Button>
+                  )
+                }
+              >
+                {refreshHistory.length > 0 ? (
+                  <Table
+                    dataSource={refreshHistory}
+                    rowKey="id"
+                    pagination={{
+                      pageSize: 10,
+                      showSizeChanger: true,
+                    }}
+                    columns={[
+                      {
+                        title: 'Agregat',
+                        dataIndex: 'aggregateName',
+                        key: 'aggregateName',
+                        render: (text) => <Text strong>{text}</Text>,
+                      },
+                      {
+                        title: 'Pokrenuto',
+                        dataIndex: 'startTime',
+                        key: 'startTime',
+                        render: (date) => (
+                          <Tooltip title={new Date(date).toLocaleString('sr-RS')}>
+                            <Text type="secondary">
+                              {formatDistanceToNow(new Date(date), { 
+                                addSuffix: true, 
+                                locale: sr 
+                              })}
+                            </Text>
+                          </Tooltip>
+                        ),
+                      },
+                      {
+                        title: 'Trajanje',
+                        dataIndex: 'duration',
+                        key: 'duration',
+                        render: (seconds) => {
+                          const minutes = Math.floor(seconds / 60);
+                          const remainingSeconds = seconds % 60;
+                          return (
+                            <Text type={seconds > 600 ? 'warning' : 'secondary'}>
+                              {minutes > 0 ? `${minutes}min ${remainingSeconds}s` : `${seconds}s`}
+                            </Text>
+                          );
+                        },
+                        sorter: (a, b) => a.duration - b.duration,
+                      },
+                      {
+                        title: 'Status',
+                        dataIndex: 'status',
+                        key: 'status',
+                        render: (status) => {
+                          if (status === 'completed') {
+                            return <Tag color="success">Završeno</Tag>;
+                          } else if (status === 'timeout') {
+                            return <Tag color="warning">Timeout</Tag>;
+                          } else {
+                            return <Tag color="error">Greška</Tag>;
+                          }
+                        },
+                        filters: [
+                          { text: 'Završeno', value: 'completed' },
+                          { text: 'Timeout', value: 'timeout' },
+                          { text: 'Greška', value: 'failed' },
+                        ],
+                        onFilter: (value, record) => record.status === value,
+                      },
+                      {
+                        title: 'Broj redova',
+                        dataIndex: 'rowCount',
+                        key: 'rowCount',
+                        align: 'right',
+                        render: (value) => value ? formatNumber(value) : '-',
+                        sorter: (a, b) => (a.rowCount || 0) - (b.rowCount || 0),
+                      },
+                      {
+                        title: 'Veličina',
+                        dataIndex: 'size',
+                        key: 'size',
+                        render: (value) => value || '-',
+                      },
+                      {
+                        title: 'Opseg datuma',
+                        dataIndex: 'dateRange',
+                        key: 'dateRange',
+                        render: (range) => {
+                          if (!range) return <Text type="secondary">Pun refresh</Text>;
+                          return (
+                            <Text type="secondary" className="text-xs">
+                              {range.start && range.end ? 
+                                `${new Date(range.start).toLocaleDateString('sr-RS')} - ${new Date(range.end).toLocaleDateString('sr-RS')}` :
+                                'Delimičan refresh'
+                              }
+                            </Text>
+                          );
+                        },
+                      },
+                    ]}
+                  />
+                ) : (
+                  <Empty 
+                    description="Nema istorije refresh-ova"
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  >
+                    <Text type="secondary" className="text-xs">
+                      Istorija će biti prikazana kada pokrenete ručno osvežavanje agregata
+                    </Text>
+                  </Empty>
+                )}
+              </Card>
+
+              {/* Job istorija */}
+              <Card title="Automatski TimescaleDB Job-ovi" loading={loadingJobs}>
+                {timescaleJobs && timescaleJobs.length > 0 ? (
+                  <Table
+                    dataSource={timescaleJobs}
+                    rowKey="job_id"
+                    pagination={{
+                      pageSize: 10,
+                      showSizeChanger: true,
+                    }}
+                    columns={[
+                      {
+                        title: 'Job ID',
+                        dataIndex: 'job_id',
+                        key: 'job_id',
+                        width: 80,
+                      },
+                      {
+                        title: 'Aplikacija',
+                        dataIndex: 'application_name',
+                        key: 'application_name',
+                        render: (text) => <Tag>{text}</Tag>,
+                      },
+                      {
+                        title: 'Hypertable',
+                        dataIndex: 'hypertable_name',
+                        key: 'hypertable_name',
+                        render: (text, record) => (
+                          <Text className="font-mono">
+                            {record.hypertable_schema}.{text}
+                          </Text>
+                        ),
+                      },
+                      {
+                        title: 'Status',
+                        dataIndex: 'last_run_status',
+                        key: 'last_run_status',
+                        render: (status) => (
+                          <Tag color={
+                            status === 'Success' ? 'green' : 
+                            status === 'Failed' ? 'red' : 
+                            'orange'
+                          }>
+                            {status || 'Unknown'}
+                          </Tag>
+                        ),
+                      },
+                      {
+                        title: 'Poslednje izvršavanje',
+                        dataIndex: 'last_successful_finish',
+                        key: 'last_successful_finish',
+                        render: (text) => text ? (
+                          <Tooltip title={new Date(text).toLocaleString('sr-RS')}>
+                            <Text type="secondary">
+                              {formatDistanceToNow(new Date(text), { 
+                                addSuffix: true, 
+                                locale: sr 
+                              })}
+                            </Text>
+                          </Tooltip>
+                        ) : '-',
+                      },
+                      {
+                        title: 'Sledeće izvršavanje',
+                        dataIndex: 'next_start',
+                        key: 'next_start',
+                        render: (text) => text ? (
+                          <Tooltip title={new Date(text).toLocaleString('sr-RS')}>
+                            <Text>
+                              {formatDistanceToNow(new Date(text), { 
+                                addSuffix: true, 
+                                locale: sr 
+                              })}
+                            </Text>
+                          </Tooltip>
+                        ) : '-',
+                      },
+                      {
+                        title: 'Trajanje',
+                        dataIndex: 'last_run_duration',
+                        key: 'last_run_duration',
+                        render: (duration) => {
+                          if (!duration) return '-';
+                          if (typeof duration === 'object' && duration.milliseconds) {
+                            const ms = duration.milliseconds;
+                            if (ms < 1000) return `${ms}ms`;
+                            if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+                            return `${(ms / 60000).toFixed(1)}min`;
+                          }
+                          return String(duration);
+                        },
+                      },
+                      {
+                        title: 'Ukupno izvršavanja',
+                        dataIndex: 'total_runs',
+                        key: 'total_runs',
+                        align: 'center',
+                      },
+                      {
+                        title: 'Neuspešnih',
+                        dataIndex: 'total_failures',
+                        key: 'total_failures',
+                        align: 'center',
+                        render: (value) => value > 0 ? (
+                          <Text type="danger">{value}</Text>
+                        ) : value,
+                      },
+                    ]}
+                  />
+                ) : (
+                  <Empty description="Nema job istorije" />
+                )}
+              </Card>
+            </div>
           </TabPane>
         </Tabs>
       </Card>
