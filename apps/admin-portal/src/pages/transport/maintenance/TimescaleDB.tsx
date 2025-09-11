@@ -207,11 +207,12 @@ const TimescaleDB: React.FC = () => {
           key: `refresh-${selectedAggregate}`,
         });
         
-        // Počni da proveravamo status svakih 30 sekundi
+        // Počni da proveravamo status - češće na početku, ređe kasnije
         let checkCount = 0;
-        const maxChecks = 120; // Maksimalno 60 minuta (120 * 30 sekundi)
+        const maxDuration = 60 * 60 * 1000; // 60 minuta maksimalno
+        const refreshStartTime = new Date();
         
-        const checkInterval = setInterval(async () => {
+        const checkStatus = async () => {
           checkCount++;
           
           try {
@@ -221,8 +222,9 @@ const TimescaleDB: React.FC = () => {
               (agg: any) => agg.view_name === selectedAggregate && agg.is_refreshing
             );
             
-            if (!stillRunning || checkCount >= maxChecks) {
-              clearInterval(checkInterval);
+            const elapsedTime = new Date().getTime() - refreshStartTime.getTime();
+            
+            if (!stillRunning || elapsedTime >= maxDuration) {
               
               // Osveži podatke o agregatu
               await fetchAggregates();
@@ -239,13 +241,13 @@ const TimescaleDB: React.FC = () => {
                   
                   newMap.set(selectedAggregate, {
                     ...existing,
-                    status: checkCount >= maxChecks ? 'completed' : 'completed',
+                    status: elapsedTime >= maxDuration ? 'timeout' as const : 'completed' as const,
                     endTime: endTime,
                     result: {
                       duration: duration,
                       rowCount: updatedAggregate?.row_count,
                       size: updatedAggregate?.size,
-                      timeout: checkCount >= maxChecks
+                      timeout: elapsedTime >= maxDuration
                     }
                   });
                   
@@ -256,7 +258,7 @@ const TimescaleDB: React.FC = () => {
                     startTime: existing.startTime,
                     endTime: endTime,
                     duration: duration,
-                    status: checkCount >= maxChecks ? 'timeout' as const : 'completed' as const,
+                    status: elapsedTime >= maxDuration ? 'timeout' as const : 'completed' as const,
                     rowCount: updatedAggregate?.row_count,
                     size: updatedAggregate?.size,
                     dateRange: existing.dateRange // Koristi sačuvanu informaciju o datumskom opsegu
@@ -272,15 +274,30 @@ const TimescaleDB: React.FC = () => {
               });
               
               message.success({
-                content: `Osvežavanje agregata ${selectedAggregate} je završeno nakon ${Math.round((new Date().getTime() - new Date(result.details?.startTime || new Date()).getTime()) / 60000)} minuta`,
+                content: `Osvežavanje agregata ${selectedAggregate} je završeno nakon ${Math.round(elapsedTime / 1000)} sekundi`,
                 duration: 5,
                 key: `refresh-${selectedAggregate}`,
               });
+            } else {
+              // Još uvek se izvršava, zakaži sledeću proveru
+              // Progresivno povećaj interval: 5s, 10s, 20s, 30s, zatim svakih 30s
+              let nextInterval;
+              if (checkCount <= 1) nextInterval = 5000;      // Prva provera nakon 5s
+              else if (checkCount === 2) nextInterval = 10000; // Druga nakon 10s
+              else if (checkCount === 3) nextInterval = 20000; // Treća nakon 20s
+              else nextInterval = 30000;                       // Sve ostale nakon 30s
+              
+              setTimeout(checkStatus, nextInterval);
             }
           } catch (error) {
             console.error('Error checking refresh status:', error);
+            // Pokušaj ponovo nakon 30 sekundi
+            setTimeout(checkStatus, 30000);
           }
-        }, 30000); // Proveri svakih 30 sekundi
+        };
+        
+        // Pokreni prvu proveru nakon 5 sekundi
+        setTimeout(checkStatus, 5000);
         
       } else {
         // Običan refresh koji je završen odmah
