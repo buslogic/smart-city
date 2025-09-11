@@ -83,6 +83,8 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
         case 'view_analytics': return 'text-indigo-600';
         case 'view_aggressive': return 'text-orange-600';
         case 'view_report': return 'text-purple-600';
+        case 'revoke': return 'text-red-600';
+        case 'audit': return 'text-indigo-600';
         default: return 'text-gray-600';
       }
     };
@@ -401,6 +403,21 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
                 color: getPermissionColor(p.action),
               })),
           },
+          {
+            id: 'api-keys',
+            name: 'API Keys',
+            type: 'section',
+            icon: <Key className="h-4 w-4" />,
+            children: allPermissions
+              .filter(p => p.resource === 'api_keys')
+              .map(p => ({
+                id: `perm-${p.id}`,
+                name: getPermissionLabel(p),
+                type: 'permission' as const,
+                permission: p,
+                color: getPermissionColor(p.action),
+              })),
+          },
         ],
       },
     ];
@@ -580,6 +597,20 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
       }
       if (permission.resource === 'dashboard.widgets.system') {
         return 'Zdravlje Sistema Widget';
+      }
+    }
+    
+    // Specifični labeli za api_keys permisije
+    if (permission.resource === 'api_keys') {
+      const apiKeysLabels: Record<string, string> = {
+        'view': 'Pregled API ključeva',
+        'create': 'Kreiranje API ključeva',
+        'update': 'Izmena API ključeva',
+        'revoke': 'Opoziv API ključeva',
+        'audit': 'Pregled audit log-a API ključeva',
+      };
+      if (apiKeysLabels[permission.action]) {
+        return apiKeysLabels[permission.action];
       }
     }
     

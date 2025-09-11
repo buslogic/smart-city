@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Pool } from 'pg';
 import { GpsPointDto } from './dto/gps-batch.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import { ApiKeysService } from '../api-keys/api-keys.service';
 import { createTimescalePool, testTimescaleConnection } from '../common/config/timescale.config';
 
 @Injectable()
@@ -9,7 +10,10 @@ export class GpsIngestService {
   private readonly logger = new Logger(GpsIngestService.name);
   private timescalePool: Pool;
 
-  constructor(private prisma: PrismaService) {
+  constructor(
+    private prisma: PrismaService,
+    private apiKeysService: ApiKeysService,
+  ) {
     // Kreiraj konekciju na TimescaleDB koristeći centralizovanu konfiguraciju
     this.timescalePool = createTimescalePool();
 
@@ -26,32 +30,44 @@ export class GpsIngestService {
   }
 
   /**
-   * Validacija API ključa
+   * Validacija API ključa - koristi novi sigurni API Keys sistem
    */
-  async validateApiKey(apiKey: string): Promise<boolean> {
+  async validateApiKey(apiKey: string, ipAddress?: string, userAgent?: string, endpoint?: string, method?: string): Promise<boolean> {
     try {
-      const result = await this.timescalePool.query(
-        `SELECT id, is_active FROM api_keys 
-         WHERE key = $1 AND is_active = true`,
-        [apiKey]
+      const validKey = await this.apiKeysService.validateApiKey(
+        apiKey, 
+        ipAddress, 
+        userAgent, 
+        endpoint, 
+        method
       );
 
-      if (result.rows.length > 0) {
-        // Ažuriraj last_used_at i request_count
-        await this.timescalePool.query(
-          `UPDATE api_keys 
-           SET last_used_at = NOW(), request_count = request_count + 1 
-           WHERE id = $1`,
-          [result.rows[0].id]
-        );
+      if (validKey) {
+        // Dodatna provera da li ključ ima potrebne permisije za GPS ingest
+        const permissions = validKey.permissions ? JSON.parse(validKey.permissions as string) : [];
+        const hasGpsPermission = permissions.includes('gps:ingest') || 
+                                permissions.includes('*') || 
+                                validKey.type === 'INTEGRATION';
+
+        if (!hasGpsPermission) {
+          this.logger.warn(`API ključ ${validKey.displayKey} nema dozvolu za GPS ingest`);
+          return false;
+        }
+
         return true;
       }
 
       return false;
     } catch (error) {
       this.logger.error('Greška pri validaciji API ključa:', error);
-      // U slučaju greške, dozvoli pristup ali logiraj
-      return apiKey === 'smartcity_legacy_gps_key_2024';
+      
+      // Fallback za legacy ključ tokom tranzicije
+      if (apiKey === 'test-api-key-2024' || apiKey === 'smartcity_legacy_gps_key_2024') {
+        this.logger.warn('Korišćen legacy API ključ - potrebna je migracija na novi sistem!');
+        return true;
+      }
+      
+      return false;
     }
   }
 

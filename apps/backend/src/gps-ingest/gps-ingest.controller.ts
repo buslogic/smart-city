@@ -7,7 +7,9 @@ import {
   HttpStatus,
   BadRequestException,
   UnauthorizedException,
-  Logger
+  Logger,
+  Ip,
+  Req
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiHeader, ApiBody } from '@nestjs/swagger';
 import { GpsIngestService } from './gps-ingest.service';
@@ -49,13 +51,25 @@ export class GpsIngestController {
   async ingestBatch(
     @Headers('x-api-key') apiKey: string,
     @Body() gpsBatchDto: GpsBatchDto,
+    @Ip() ipAddress: string,
+    @Req() req: any,
   ) {
     // Proveri API ključ
     if (!apiKey) {
       throw new UnauthorizedException('API ključ je obavezan');
     }
 
-    const isValidKey = await this.gpsIngestService.validateApiKey(apiKey);
+    const userAgent = req.headers['user-agent'];
+    const endpoint = req.originalUrl || req.url;
+    const method = req.method;
+    
+    const isValidKey = await this.gpsIngestService.validateApiKey(
+      apiKey, 
+      ipAddress, 
+      userAgent, 
+      endpoint, 
+      method
+    );
     if (!isValidKey) {
       throw new UnauthorizedException('Neispravan API ključ');
     }
@@ -114,9 +128,21 @@ export class GpsIngestController {
   async ingestSingle(
     @Headers('x-api-key') apiKey: string,
     @Body() gpsData: any,
+    @Ip() ipAddress: string,
+    @Req() req: any,
   ) {
     // Proveri API ključ
-    const isValidKey = await this.gpsIngestService.validateApiKey(apiKey);
+    const userAgent = req.headers['user-agent'];
+    const endpoint = req.originalUrl || req.url;
+    const method = req.method;
+    
+    const isValidKey = await this.gpsIngestService.validateApiKey(
+      apiKey, 
+      ipAddress, 
+      userAgent, 
+      endpoint, 
+      method
+    );
     if (!isValidKey) {
       throw new UnauthorizedException('Neispravan API ključ');
     }
@@ -145,8 +171,20 @@ export class GpsIngestController {
   @ApiResponse({ status: 200, description: 'Konekcija uspešna' })
   async testConnection(
     @Headers('x-api-key') apiKey: string,
+    @Ip() ipAddress: string,
+    @Req() req: any,
   ) {
-    const isValidKey = await this.gpsIngestService.validateApiKey(apiKey);
+    const userAgent = req.headers['user-agent'];
+    const endpoint = req.originalUrl || req.url;
+    const method = req.method;
+    
+    const isValidKey = await this.gpsIngestService.validateApiKey(
+      apiKey, 
+      ipAddress, 
+      userAgent, 
+      endpoint, 
+      method
+    );
     
     return {
       success: true,

@@ -9,6 +9,7 @@ import { LoginPage } from './pages/LoginPage';
 import UserAdministration from './pages/users/UserAdministration';
 import RolesPermissions from './pages/users/RolesPermissions';
 import GeneralSettings from './pages/settings/GeneralSettings';
+import ApiKeys from './pages/settings/ApiKeys';
 import Vehicles from './pages/transport/Vehicles';
 import VehicleSync from './pages/transport/VehicleSync';
 import MapVehicles from './pages/transport/dispatcher/MapVehicles';
@@ -79,6 +80,15 @@ function App() {
               element={
                 <PermissionGuard permissions={['settings.general:view']}>
                   <GeneralSettings />
+                </PermissionGuard>
+              } 
+            />
+            
+            <Route 
+              path="settings/api-keys" 
+              element={
+                <PermissionGuard permissions={['api_keys:view']}>
+                  <ApiKeys />
                 </PermissionGuard>
               } 
             />

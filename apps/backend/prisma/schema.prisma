@@ -26,6 +26,8 @@ model User {
   dashboardConfig          UserDashboardConfig?
   roles                    UserRole[]
   vehicleSyncLogs          VehicleSyncLog[]
+  createdApiKeys           ApiKey[]                   @relation("ApiKeyCreator")
+  revokedApiKeys           ApiKey[]                   @relation("ApiKeyRevoker")
 
   @@index([email])
   @@map("users")
@@ -573,4 +575,69 @@ model DrivingAnalysisLog {
   @@index([userId])
   @@index([createdAt])
   @@map("driving_analysis_logs")
+}
+
+model ApiKey {
+  id           Int        @id @default(autoincrement())
+  key          String     @unique
+  keyHash      String     @unique @map("key_hash")
+  displayKey   String     @map("display_key") @db.VarChar(10)
+  name         String
+  description  String?    @db.Text
+  type         ApiKeyType @default(API_ACCESS)
+  permissions  Json? // Array od string-ova sa dozvolama
+  allowedIps   Json?      @map("allowed_ips") // Array IP adresa
+  rateLimit    Int?       @default(1000) @map("rate_limit") // Zahtevi po satu
+  expiresAt    DateTime?  @map("expires_at")
+  lastUsedAt   DateTime?  @map("last_used_at")
+  lastUsedIp   String?    @map("last_used_ip")
+  usageCount   Int        @default(0) @map("usage_count")
+  isActive     Boolean    @default(true) @map("is_active")
+  revokedAt    DateTime?  @map("revoked_at")
+  revokedBy    Int?       @map("revoked_by")
+  revokeReason String?    @map("revoke_reason")
+  createdBy    Int        @map("created_by")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  // Relations
+  creator User        @relation("ApiKeyCreator", fields: [createdBy], references: [id])
+  revoker User?       @relation("ApiKeyRevoker", fields: [revokedBy], references: [id])
+  logs    ApiKeyLog[]
+
+  @@index([isActive])
+  @@index([type])
+  @@index([expiresAt])
+  @@index([createdBy])
+  @@map("api_keys")
+}
+
+model ApiKeyLog {
+  id           Int      @id @default(autoincrement())
+  apiKeyId     Int      @map("api_key_id")
+  action       String // access_granted, access_denied, key_validated, etc.
+  ipAddress    String?  @map("ip_address")
+  userAgent    String?  @map("user_agent") @db.Text
+  endpoint     String?  @db.VarChar(500)
+  method       String?  @db.VarChar(10)
+  responseCode Int?     @map("response_code")
+  responseTime Int?     @map("response_time") // ms
+  errorMessage String?  @map("error_message") @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // Relations
+  apiKey ApiKey @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+
+  @@index([apiKeyId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([ipAddress])
+  @@map("api_key_logs")
+}
+
+enum ApiKeyType {
+  SWAGGER_ACCESS
+  API_ACCESS
+  ADMIN_ACCESS
+  INTEGRATION
 }

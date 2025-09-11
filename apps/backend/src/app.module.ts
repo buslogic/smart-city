@@ -26,6 +26,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { TimescaledbModule } from './timescaledb/timescaledb.module';
 import { DrivingRecreationModule } from './safety/driving-recreation/driving-recreation.module';
+import { ApiKeysModule } from './api-keys/api-keys.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { DrivingRecreationModule } from './safety/driving-recreation/driving-rec
     DashboardModule,
     TimescaledbModule,
     DrivingRecreationModule,
+    ApiKeysModule,
   ],
   controllers: [AppController],
   providers: [

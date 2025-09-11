@@ -25,6 +25,7 @@ import {
   Radio,
   Gauge,
   Hash,
+  Key,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth.store';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -241,6 +242,12 @@ const ModernMenuV1: React.FC = () => {
           href: '/settings/general',
           icon: Sliders,
           permissions: ['settings.general:view'],
+        },
+        {
+          name: 'API Keys',
+          href: '/settings/api-keys',
+          icon: Key,
+          permissions: ['api_keys:view'],
         },
       ].filter(item => !item.permissions || item.permissions.some(p => hasPermission(p))),
     },
