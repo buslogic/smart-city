@@ -170,7 +170,7 @@ const ModernMenuV1: React.FC = () => {
               permissions: ['dispatcher:view_map'],
             },
             {
-              name: 'Analitika',
+              name: 'Analitika vozila',
               href: '/transport/dispatcher/analytics',
               icon: BarChart3,
               permissions: ['dispatcher:view_analytics'],

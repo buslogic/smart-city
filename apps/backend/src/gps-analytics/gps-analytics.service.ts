@@ -26,14 +26,29 @@ export class GpsAnalyticsService {
     endDate: string,
   ): Promise<VehicleAnalyticsDto> {
     try {
+      // DEBUGGING: Logiraj primljene datume
+      this.logger.log(`📅 ANALITIKA - Primljeni datumi:`);
+      this.logger.log(`   Start (raw): ${startDate}`);
+      this.logger.log(`   End (raw): ${endDate}`);
+      this.logger.log(`   Vehicle ID: ${vehicleId}`);
+      
       // Prvo proveri da li ima podataka
       const countQuery = `
-        SELECT COUNT(*) as count 
+        SELECT 
+          COUNT(*) as count,
+          MIN(time) as min_time,
+          MAX(time) as max_time
         FROM gps_data 
         WHERE vehicle_id = $1 AND time BETWEEN $2 AND $3
       `;
       const countResult = await this.pgPool.query(countQuery, [vehicleId, startDate, endDate]);
       const totalPoints = parseInt(countResult.rows[0]?.count || '0');
+      
+      // Logiraj rezultate
+      this.logger.log(`📊 Rezultat COUNT query:`);
+      this.logger.log(`   Total points: ${totalPoints}`);
+      this.logger.log(`   Min time in range: ${countResult.rows[0]?.min_time}`);
+      this.logger.log(`   Max time in range: ${countResult.rows[0]?.max_time}`);
       
       // Ako nema podataka, vrati prazan rezultat sa strukturom
       if (totalPoints === 0) {
@@ -131,7 +146,7 @@ export class GpsAnalyticsService {
       // Podaci po satima
       const hourlyQuery = `
         SELECT 
-          LPAD(EXTRACT(HOUR FROM time)::TEXT, 2, '0') as hour,
+          LPAD(EXTRACT(HOUR FROM time AT TIME ZONE 'Europe/Belgrade')::TEXT, 2, '0') as hour,
           COUNT(*) as points,
           COALESCE(AVG(speed) FILTER (WHERE speed > 0), 0)::NUMERIC(5,1) as avg_speed,
           COALESCE(
@@ -143,7 +158,7 @@ export class GpsAnalyticsService {
         FROM gps_data
         WHERE vehicle_id = $1
           AND time BETWEEN $2 AND $3
-        GROUP BY EXTRACT(HOUR FROM time)
+        GROUP BY EXTRACT(HOUR FROM time AT TIME ZONE 'Europe/Belgrade')
         ORDER BY hour
       `;
 
@@ -217,7 +232,7 @@ export class GpsAnalyticsService {
       if (daysDiff > 1) {
         const dailyQuery = `
           SELECT 
-            DATE(time) as date,
+            DATE(time AT TIME ZONE 'Europe/Belgrade') as date,
             COUNT(*) FILTER (WHERE speed > 0) as moving_points,
             COALESCE(AVG(speed) FILTER (WHERE speed > 0), 0)::NUMERIC(5,1) as avg_speed,
             COALESCE(
@@ -229,22 +244,44 @@ export class GpsAnalyticsService {
           FROM gps_data
           WHERE vehicle_id = $1
             AND time BETWEEN $2 AND $3
-          GROUP BY DATE(time)
+          GROUP BY DATE(time AT TIME ZONE 'Europe/Belgrade')
           ORDER BY date
         `;
+        
+        this.logger.log(`📅 Daily stats query - parametri: vehicleId=${vehicleId}, start=${startDate}, end=${endDate}`);
 
         const dailyResult = await this.pgPool.query(dailyQuery, [
           vehicleId,
           startDate,
           endDate,
         ]);
+        
+        this.logger.log(`📊 Daily stats rezultat: ${dailyResult.rows.length} dana pronađeno`);
+        if (dailyResult.rows.length > 0) {
+          this.logger.log(`   Prvi dan: ${dailyResult.rows[0].date}`);
+          this.logger.log(`   Poslednji dan: ${dailyResult.rows[dailyResult.rows.length - 1].date}`);
+        }
 
-        dailyStats = dailyResult.rows.map(row => ({
-          date: row.date.toISOString().split('T')[0],
-          distance: parseFloat(row.distance),
-          drivingHours: (row.moving_points * 30 / 3600), // Procena na osnovu broja tačaka
-          avgSpeed: parseFloat(row.avg_speed),
-        }));
+        dailyStats = dailyResult.rows.map((row, index) => {
+          // row.date je već Date objekat u lokalnom vremenu
+          // Formatuj kao YYYY-MM-DD bez konverzije u UTC
+          const year = row.date.getFullYear();
+          const month = String(row.date.getMonth() + 1).padStart(2, '0');
+          const day = String(row.date.getDate()).padStart(2, '0');
+          const dateStr = `${year}-${month}-${day}`;
+          
+          // Log samo za prvi i poslednji
+          if (index === 0 || index === dailyResult.rows.length - 1) {
+            this.logger.log(`   Formatovan datum: ${dateStr} (iz Date objekta: ${row.date})`);
+          }
+          
+          return {
+            date: dateStr,
+            distance: parseFloat(row.distance),
+            drivingHours: (row.moving_points * 30 / 3600), // Procena na osnovu broja tačaka
+            avgSpeed: parseFloat(row.avg_speed),
+          };
+        });
       }
 
       return {
