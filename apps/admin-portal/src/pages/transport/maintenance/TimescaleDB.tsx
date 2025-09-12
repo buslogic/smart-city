@@ -241,7 +241,7 @@ const TimescaleDB: React.FC = () => {
                   
                   newMap.set(selectedAggregate, {
                     ...existing,
-                    status: elapsedTime >= maxDuration ? 'timeout' as const : 'completed' as const,
+                    status: elapsedTime >= maxDuration ? 'failed' as const : 'completed' as const,
                     endTime: endTime,
                     result: {
                       duration: duration,
