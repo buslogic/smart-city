@@ -270,12 +270,31 @@ export class TimescaledbService {
         // refresh_continuous_aggregate ne može da radi u transakciji
         // Postavimo kratak timeout i pokušajmo direktno
         try {
-          // Prvo postavi timeout (5 sekundi)
-          await client.query('SET statement_timeout = 5000');
+          // Postavi timeout na 5 minuta za sve slučajeve
+          const timeoutMs = 300000; // 5 minuta
+          await client.query(`SET statement_timeout = ${timeoutMs}`);
           
           // Zatim pokušaj refresh (ovo će timeout-ovati za velike aggregate)
           try {
-            await client.query(`CALL refresh_continuous_aggregate('"public"."${escapedAggregateName}"', NULL, NULL);`);
+            // Koristi prosleđene datume ako postoje
+            let refreshQuery: string;
+            let refreshParams: any[] = [];
+            
+            if (startTime && endTime) {
+              refreshQuery = `CALL refresh_continuous_aggregate('"public"."${escapedAggregateName}"', $1::timestamp, $2::timestamp);`;
+              refreshParams = [startTime, endTime];
+              this.logger.log(`Attempting quick refresh for ${aggregateName} from ${startTime} to ${endTime}`);
+            } else if (startTime) {
+              refreshQuery = `CALL refresh_continuous_aggregate('"public"."${escapedAggregateName}"', $1::timestamp, NULL);`;
+              refreshParams = [startTime];
+              this.logger.log(`Attempting quick refresh for ${aggregateName} from ${startTime}`);
+            } else {
+              refreshQuery = `CALL refresh_continuous_aggregate('"public"."${escapedAggregateName}"', NULL, NULL);`;
+              refreshParams = [];
+              this.logger.log(`Attempting full quick refresh for ${aggregateName}`);
+            }
+            
+            await client.query(refreshQuery, refreshParams);
             // Ako je završio brzo, super
             this.logger.log(`Quick refresh completed for ${aggregateName}`);
           } catch (timeoutErr: any) {
@@ -326,8 +345,8 @@ export class TimescaledbService {
         this.logger.log(`Performing full refresh of aggregate ${aggregateName}`);
       }
       
-      // Postavi timeout na 30 sekundi za manje aggregate
-      await client.query('SET statement_timeout = 30000');
+      // Postavi timeout na 5 minuta za sve aggregate
+      await client.query('SET statement_timeout = 300000');
       
       try {
         await client.query(query, params);
