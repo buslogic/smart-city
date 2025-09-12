@@ -1,14 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Pool } from 'pg';
-import { VehicleAnalyticsDto, HourlyDataDto, SpeedDistributionDto, DailyStatsDto } from './dto/vehicle-analytics.dto';
+import { VehicleAnalyticsDto, HourlyDataDto, SpeedDistributionDto, DailyStatsDto, DrivingEventStatsDto } from './dto/vehicle-analytics.dto';
 import { createTimescalePool, testTimescaleConnection } from '../common/config/timescale.config';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class GpsAnalyticsService {
   private readonly logger = new Logger(GpsAnalyticsService.name);
   private pgPool: Pool;
 
-  constructor() {
+  constructor(private readonly prisma: PrismaService) {
     // Koristi centralizovanu konfiguraciju za TimescaleDB
     this.pgPool = createTimescalePool();
     
@@ -70,6 +71,14 @@ export class GpsAnalyticsService {
             { range: '60+ km/h', count: 0, percentage: 0 },
           ],
           dailyStats: [],
+          drivingEventStats: [
+            { severity: 1, label: 'Veoma blago', count: 0, harshBraking: 0, harshAcceleration: 0 },
+            { severity: 2, label: 'Blago', count: 0, harshBraking: 0, harshAcceleration: 0 },
+            { severity: 3, label: 'Umereno', count: 0, harshBraking: 0, harshAcceleration: 0 },
+            { severity: 4, label: 'Ozbiljno', count: 0, harshBraking: 0, harshAcceleration: 0 },
+            { severity: 5, label: 'Veoma ozbiljno', count: 0, harshBraking: 0, harshAcceleration: 0 },
+          ],
+          safetyScore: 100, // Nema podataka = savršen score
         };
       }
 
@@ -284,6 +293,62 @@ export class GpsAnalyticsService {
         });
       }
 
+      // Dohvati statistiku agresivne vožnje iz driving_events tabele
+      const drivingEventsQuery = `
+        WITH severity_stats AS (
+          SELECT 
+            severity,
+            COUNT(*) as total_count,
+            COUNT(*) FILTER (WHERE event_type = 'harsh_braking') as harsh_braking_count,
+            COUNT(*) FILTER (WHERE event_type = 'harsh_acceleration') as harsh_acceleration_count
+          FROM driving_events
+          WHERE vehicle_id = $1
+            AND time BETWEEN $2 AND $3
+          GROUP BY severity
+        )
+        SELECT 
+          severity,
+          total_count::INTEGER,
+          harsh_braking_count::INTEGER,
+          harsh_acceleration_count::INTEGER
+        FROM severity_stats
+        ORDER BY severity
+      `;
+
+      const drivingEventsResult = await this.pgPool.query(drivingEventsQuery, [
+        vehicleId,
+        startDate,
+        endDate,
+      ]);
+
+      // Mapiraj nivoe ozbiljnosti na opise
+      const severityLabels = {
+        1: 'Veoma blago',
+        2: 'Blago',
+        3: 'Umereno',
+        4: 'Ozbiljno',
+        5: 'Veoma ozbiljno'
+      };
+
+      // Kreiraj statistiku sa svim nivoima (1-5), čak i ako nema podataka
+      const drivingEventStats: DrivingEventStatsDto[] = [];
+      for (let severity = 1; severity <= 5; severity++) {
+        const eventData = drivingEventsResult.rows.find(row => row.severity === severity);
+        drivingEventStats.push({
+          severity,
+          label: severityLabels[severity],
+          count: eventData?.total_count || 0,
+          harshBraking: eventData?.harsh_braking_count || 0,
+          harshAcceleration: eventData?.harsh_acceleration_count || 0
+        });
+      }
+
+      // Kalkuliši Safety Score na osnovu konfiguracije iz baze
+      const safetyScore = await this.calculateSafetyScore(
+        drivingEventStats,
+        parseFloat(metrics.total_distance) || 0
+      );
+
       return {
         totalPoints: parseInt(metrics.total_points) || 0,
         totalDistance: parseFloat(metrics.total_distance) || 0,
@@ -296,10 +361,99 @@ export class GpsAnalyticsService {
         hourlyData,
         speedDistribution,
         dailyStats,
+        drivingEventStats,
+        safetyScore,
       };
     } catch (error) {
       this.logger.error(`Greška pri dohvatanju analitike: ${error.message}`);
       throw error;
+    }
+  }
+
+  /**
+   * Kalkuliše Safety Score na osnovu konfiguracije iz baze podataka
+   */
+  private async calculateSafetyScore(
+    drivingEventStats: DrivingEventStatsDto[],
+    totalDistanceKm: number
+  ): Promise<number> {
+    // Nema vožnje = savršen score
+    if (totalDistanceKm === 0) return 100;
+
+    try {
+      // Dohvati konfiguraciju iz baze
+      const [configs, globalConfig] = await Promise.all([
+        this.prisma.safetyScoreConfig.findMany({
+          where: { isActive: true }
+        }),
+        this.prisma.safetyScoreGlobalConfig.findMany()
+      ]);
+
+      // Konvertuj globalnu konfiguraciju u mapu
+      const globalParams = new Map(
+        globalConfig.map(g => [g.parameterName, Number(g.parameterValue)])
+      );
+
+      const baseScore = globalParams.get('base_score') ?? 100;
+      const minScore = globalParams.get('min_score') ?? 0;
+      const maxScore = globalParams.get('max_score') ?? 100;
+      const distanceNorm = globalParams.get('distance_normalization') ?? 100;
+
+      let totalPenalty = 0;
+
+      // Pronađi severity 3 (moderate) i 5 (severe) događaje
+      const moderateEvents = drivingEventStats.find(s => s.severity === 3);
+      const severeEvents = drivingEventStats.find(s => s.severity === 5);
+
+      const moderateAccelerations = moderateEvents?.harshAcceleration || 0;
+      const severeAccelerations = severeEvents?.harshAcceleration || 0;
+      const moderateBrakings = moderateEvents?.harshBraking || 0;
+      const severeBrakings = severeEvents?.harshBraking || 0;
+
+      // Procesuj svaku konfiguraciju
+      for (const config of configs) {
+        let eventCount = 0;
+
+        // Mapiraj događaje iz baze na brojeve
+        if (config.eventType === 'harsh_acceleration') {
+          eventCount = config.severity === 'severe' ? severeAccelerations : moderateAccelerations;
+        } else if (config.eventType === 'harsh_braking') {
+          eventCount = config.severity === 'severe' ? severeBrakings : moderateBrakings;
+        }
+
+        // Kalkuliši događaje po normalizovanoj distanci
+        const thresholdDistance = Number(config.thresholdDistanceKm) || 100;
+        const normalizedDistance = Math.max(totalDistanceKm, 1) * (distanceNorm / thresholdDistance);
+        const eventsPer = (eventCount / normalizedDistance) * distanceNorm;
+
+        // Kalkuliši kaznu ako je prag prekoračen
+        const thresholdEvents = Number(config.thresholdEvents) || 10;
+        if (eventsPer > thresholdEvents) {
+          const excess = eventsPer - thresholdEvents;
+          const penaltyPoints = Number(config.penaltyPoints) || 5;
+          const penaltyMultiplier = Number(config.penaltyMultiplier) || 1.5;
+          let penalty = penaltyPoints + (excess * penaltyMultiplier);
+          
+          // Primeni maksimalnu kaznu ako je konfigurisana
+          const maxPenalty = Number(config.maxPenalty);
+          if (maxPenalty > 0) {
+            penalty = Math.min(penalty, maxPenalty);
+          }
+          
+          totalPenalty += penalty;
+        }
+      }
+
+      // Kalkuliši finalni score
+      const finalScore = baseScore - totalPenalty;
+      return Math.max(minScore, Math.min(maxScore, Math.round(finalScore)));
+
+    } catch (error) {
+      this.logger.warn(`Neuspešno učitavanje Safety Score konfiguracije, koristi se default: ${error.message}`);
+      // Fallback na jednostavnu kalkulaciju ako konfiguracija nije dostupna
+      const totalEvents = drivingEventStats.reduce((sum, stat) => sum + stat.count, 0);
+      const eventsPer100km = (totalEvents / Math.max(totalDistanceKm, 1)) * 100;
+      return Math.max(0, Math.min(100, Math.round(100 - Math.min(50, eventsPer100km))));
     }
   }
 

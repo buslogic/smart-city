@@ -57,6 +57,23 @@ export class DailyStatsDto {
   avgSpeed: number;
 }
 
+export class DrivingEventStatsDto {
+  @ApiProperty({ description: 'Nivo ozbiljnosti (1-5)' })
+  severity: number;
+
+  @ApiProperty({ description: 'Opis nivoa' })
+  label: string;
+
+  @ApiProperty({ description: 'Broj događaja' })
+  count: number;
+
+  @ApiProperty({ description: 'Broj naglog kočenja' })
+  harshBraking: number;
+
+  @ApiProperty({ description: 'Broj naglog ubrzanja' })
+  harshAcceleration: number;
+}
+
 export class VehicleAnalyticsDto {
   @ApiProperty({ description: 'Ukupan broj GPS tačaka' })
   totalPoints: number;
@@ -90,4 +107,10 @@ export class VehicleAnalyticsDto {
 
   @ApiProperty({ type: [DailyStatsDto], description: 'Dnevna statistika' })
   dailyStats: DailyStatsDto[];
+
+  @ApiProperty({ type: [DrivingEventStatsDto], description: 'Statistika agresivne vožnje' })
+  drivingEventStats: DrivingEventStatsDto[];
+
+  @ApiProperty({ description: 'Safety Score (0-100)' })
+  safetyScore: number;
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Card, Select, DatePicker, Row, Col, Statistic, Table, Space, Progress, Spin, Empty, message, Button, Divider, Tabs } from 'antd';
+import { Card, Select, DatePicker, Row, Col, Statistic, Table, Space, Progress, Spin, Empty, message, Button, Divider, Tabs, Tag } from 'antd';
 import { 
   CarOutlined, 
   DashboardOutlined, 
@@ -13,7 +13,9 @@ import {
   SearchOutlined,
   ReloadOutlined,
   BarChartOutlined,
-  AreaChartOutlined
+  AreaChartOutlined,
+  WarningOutlined,
+  ExclamationCircleOutlined
 } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
 import { Line, Column, Area } from '@ant-design/plots';
@@ -27,6 +29,14 @@ interface Vehicle {
   registrationNumber: string;
   make: string;
   model: string;
+}
+
+interface DrivingEventStats {
+  severity: number;
+  label: string;
+  count: number;
+  harshBraking: number;
+  harshAcceleration: number;
 }
 
 interface GPSAnalytics {
@@ -55,6 +65,8 @@ interface GPSAnalytics {
     drivingHours: number;
     avgSpeed: number;
   }[];
+  drivingEventStats?: DrivingEventStats[];
+  safetyScore?: number;
 }
 
 export default function VehicleAnalytics() {
@@ -174,10 +186,18 @@ export default function VehicleAnalytics() {
       },
     },
     tooltip: {
-      formatter: (datum: any) => ({
-        name: 'Prosečna brzina',
-        value: `${datum.avgSpeed.toFixed(1)} km/h`
-      }),
+      customContent: (title: string, items: any[]) => {
+        if (!items || items.length === 0) return '';
+        const datum = items[0]?.data || {};
+        const hour = datum.hour || title;
+        const avgSpeed = datum.avgSpeed ?? 0;
+        return `
+          <div style="padding: 8px;">
+            <div style="font-weight: bold; margin-bottom: 4px;">Sat: ${hour}h</div>
+            <div>Prosečna brzina: ${avgSpeed.toFixed(1)} km/h</div>
+          </div>
+        `;
+      },
     },
   };
 
@@ -202,10 +222,18 @@ export default function VehicleAnalytics() {
       },
     },
     tooltip: {
-      formatter: (datum: any) => ({
-        name: 'Kilometraža',
-        value: `${datum.distance.toFixed(2)} km`
-      }),
+      customContent: (title: string, items: any[]) => {
+        if (!items || items.length === 0) return '';
+        const datum = items[0]?.data || {};
+        const hour = datum.hour || title;
+        const distance = datum.distance ?? 0;
+        return `
+          <div style="padding: 8px;">
+            <div style="font-weight: bold; margin-bottom: 4px;">Sat: ${hour}h</div>
+            <div>Kilometraža: ${distance.toFixed(2)} km</div>
+          </div>
+        `;
+      },
     },
   };
 
@@ -232,10 +260,18 @@ export default function VehicleAnalytics() {
       },
     },
     tooltip: {
-      formatter: (datum: any) => ({
-        name: 'Kilometraža',
-        value: `${datum.distance.toFixed(2)} km`
-      }),
+      customContent: (title: string, items: any[]) => {
+        if (!items || items.length === 0) return '';
+        const datum = items[0]?.data || {};
+        const dateStr = datum.date ? dayjs(datum.date).format('DD.MM.YYYY') : title;
+        const distance = datum.distance ?? 0;
+        return `
+          <div style="padding: 8px;">
+            <div style="font-weight: bold; margin-bottom: 4px;">Datum: ${dateStr}</div>
+            <div>Kilometraža: ${distance.toFixed(2)} km</div>
+          </div>
+        `;
+      },
     },
   };
 
@@ -282,10 +318,18 @@ export default function VehicleAnalytics() {
       },
     },
     tooltip: {
-      formatter: (datum: any) => ({
-        name: 'Ukupna kilometraža',
-        value: `${datum.distance.toFixed(2)} km`
-      }),
+      customContent: (title: string, items: any[]) => {
+        if (!items || items.length === 0) return '';
+        const datum = items[0]?.data || {};
+        const monthStr = datum.month ? dayjs(datum.month).format('MMMM YYYY') : title;
+        const distance = datum.distance ?? 0;
+        return `
+          <div style="padding: 8px;">
+            <div style="font-weight: bold; margin-bottom: 4px;">Mesec: ${monthStr}</div>
+            <div>Ukupna kilometraža: ${distance.toFixed(2)} km</div>
+          </div>
+        `;
+      },
     },
   };
 
@@ -337,6 +381,101 @@ export default function VehicleAnalytics() {
     if (range.includes('21-40')) return '#69c0ff';
     if (range.includes('41-60')) return '#40a9ff';
     return '#1890ff';
+  };
+
+  // Boje za severity nivoe agresivne vožnje
+  const getSeverityColor = (severity: number) => {
+    switch(severity) {
+      case 1: return '#52c41a'; // zelena - veoma blago
+      case 2: return '#73d13d'; // svetlo zelena - blago  
+      case 3: return '#faad14'; // žuta - umereno
+      case 4: return '#ff7a45'; // narandžasta - ozbiljno
+      case 5: return '#ff4d4f'; // crvena - veoma ozbiljno
+      default: return '#d9d9d9';
+    }
+  };
+
+  // Računaj ukupan broj događaja agresivne vožnje
+  const getTotalDrivingEvents = () => {
+    if (!analytics?.drivingEventStats) return 0;
+    return analytics.drivingEventStats.reduce((sum, stat) => sum + stat.count, 0);
+  };
+
+  // Koristi Safety Score iz backend-a
+  const getSafetyScore = () => {
+    // Prioritet: koristi score iz backend-a ako postoji
+    if (analytics?.safetyScore !== undefined) {
+      return analytics.safetyScore;
+    }
+    
+    // Fallback na lokalnu kalkulaciju ako backend ne vrati score
+    if (!analytics?.drivingEventStats || analytics.totalDistance === 0) return 100;
+    
+    const totalEvents = getTotalDrivingEvents();
+    const eventsPer100Km = (totalEvents / analytics.totalDistance) * 100;
+    
+    // Jednostavna fallback formula
+    let score = 100;
+    
+    analytics.drivingEventStats.forEach(stat => {
+      if (stat.severity === 5) score -= stat.count * 5;
+      else if (stat.severity === 4) score -= stat.count * 3;
+      else if (stat.severity === 3) score -= stat.count * 1;
+      else score -= stat.count * 0.5;
+    });
+    
+    if (eventsPer100Km > 100) score -= 10;
+    else if (eventsPer100Km > 50) score -= 5;
+    
+    return Math.max(0, Math.min(100, Math.round(score)));
+  };
+
+  // Pripremi podatke za tabelu agresivne vožnje
+  const prepareDrivingEventsTableData = () => {
+    if (!analytics?.drivingEventStats || !selectedVehicle) return [];
+    
+    const vehicle = vehicles.find(v => v.id === selectedVehicle);
+    if (!vehicle) return [];
+    
+    // Računaj ukupne brojeve po tipovima
+    const totalBraking = analytics.drivingEventStats.reduce((sum, stat) => sum + stat.harshBraking, 0);
+    const totalAcceleration = analytics.drivingEventStats.reduce((sum, stat) => sum + stat.harshAcceleration, 0);
+    const totalEvents = getTotalDrivingEvents();
+    
+    // Računaj normalne vožnje (procenjeno na osnovu GPS tačaka)
+    const estimatedTotalPoints = analytics.totalPoints;
+    const normalDriving = Math.max(0, estimatedTotalPoints - totalEvents);
+    const normalPercent = estimatedTotalPoints > 0 ? (normalDriving / estimatedTotalPoints * 100) : 100;
+    
+    // Severity 3 i 5 za kočenje (umereno i ozbiljno)
+    const moderateBraking = analytics.drivingEventStats.find(s => s.severity === 3)?.harshBraking || 0;
+    const severeBraking = analytics.drivingEventStats.find(s => s.severity === 5)?.harshBraking || 0;
+    
+    // Severity 3 i 5 za ubrzanje
+    const moderateAcceleration = analytics.drivingEventStats.find(s => s.severity === 3)?.harshAcceleration || 0;
+    const severeAcceleration = analytics.drivingEventStats.find(s => s.severity === 5)?.harshAcceleration || 0;
+    
+    const safetyScore = getSafetyScore();
+    const eventsPer100Km = analytics.totalDistance > 0 ? (totalEvents / analytics.totalDistance * 100) : 0;
+    
+    return [{
+      key: '1',
+      vehicle: vehicle.garageNumber,
+      registrationNumber: vehicle.registrationNumber,
+      severeBraking,
+      moderateBraking,
+      normalDriving,
+      normalPercent: normalPercent.toFixed(1),
+      moderateAcceleration,
+      severeAcceleration,
+      safetyScore,
+      totalDistance: analytics.totalDistance,
+      eventsPer100Km: eventsPer100Km.toFixed(1),
+      totalBraking: totalBraking,
+      totalAcceleration: totalAcceleration,
+      brakingPercent: estimatedTotalPoints > 0 ? (totalBraking / estimatedTotalPoints * 100).toFixed(1) : '0.0',
+      accelerationPercent: estimatedTotalPoints > 0 ? (totalAcceleration / estimatedTotalPoints * 100).toFixed(1) : '0.0'
+    }];
   };
 
   return (
@@ -546,7 +685,7 @@ export default function VehicleAnalytics() {
 
           {/* Sekundarne metrike i efikasnost */}
           <Row gutter={16} style={{ marginBottom: 16 }}>
-            <Col xs={6} sm={6} md={4}>
+            <Col xs={6} sm={6} md={3}>
               <Card hoverable>
                 <Statistic
                   title="GPS tačaka"
@@ -555,7 +694,20 @@ export default function VehicleAnalytics() {
                 />
               </Card>
             </Col>
-            <Col xs={6} sm={6} md={4}>
+            <Col xs={6} sm={6} md={3}>
+              <Card hoverable>
+                <Statistic
+                  title="Agresivna vožnja"
+                  value={getTotalDrivingEvents()}
+                  prefix={<WarningOutlined />}
+                  valueStyle={{ 
+                    color: getTotalDrivingEvents() > 100 ? '#ff4d4f' : 
+                           getTotalDrivingEvents() > 50 ? '#faad14' : '#52c41a' 
+                  }}
+                />
+              </Card>
+            </Col>
+            <Col xs={6} sm={6} md={3}>
               <Card hoverable>
                 <Statistic
                   title="Zaustavljanja"
@@ -564,7 +716,7 @@ export default function VehicleAnalytics() {
                 />
               </Card>
             </Col>
-            <Col xs={6} sm={6} md={4}>
+            <Col xs={6} sm={6} md={3}>
               <Card hoverable>
                 <Statistic
                   title="Vreme mirovanja"
@@ -613,6 +765,186 @@ export default function VehicleAnalytics() {
               </Card>
             </Col>
           </Row>
+
+          {/* Tabela analize agresivne vožnje */}
+          {analytics.drivingEventStats && analytics.drivingEventStats.length > 0 && (
+            <Card 
+              title={
+                <Space>
+                  <ExclamationCircleOutlined />
+                  <span>Analiza agresivne vožnje</span>
+                </Space>
+              }
+              style={{ marginBottom: 16 }}
+              hoverable
+            >
+              <Table
+                dataSource={prepareDrivingEventsTableData()}
+                pagination={false}
+                size="middle"
+                bordered
+                columns={[
+                  {
+                    title: 'Vozilo',
+                    dataIndex: 'vehicle',
+                    key: 'vehicle',
+                    fixed: 'left',
+                    width: 100,
+                    render: (text: string, record: any) => (
+                      <div>
+                        <div style={{ fontWeight: 'bold' }}>{text}</div>
+                        <div style={{ fontSize: 11, color: '#666' }}>{record.registrationNumber}</div>
+                      </div>
+                    )
+                  },
+                  {
+                    title: 'Agresivno kočenje',
+                    children: [
+                      {
+                        title: 'Ozbiljno',
+                        dataIndex: 'severeBraking',
+                        key: 'severeBraking',
+                        width: 100,
+                        align: 'center' as const,
+                        render: (val: number, record: any) => (
+                          <Tag color={val > 0 ? "red" : "default"}>
+                            {val} ({(val / analytics.totalPoints * 100).toFixed(1)}%)
+                          </Tag>
+                        )
+                      },
+                      {
+                        title: 'Umereno',
+                        dataIndex: 'moderateBraking',
+                        key: 'moderateBraking',
+                        width: 100,
+                        align: 'center' as const,
+                        render: (val: number, record: any) => (
+                          <Tag color={val > 0 ? "orange" : "default"}>
+                            {val} ({(val / analytics.totalPoints * 100).toFixed(1)}%)
+                          </Tag>
+                        )
+                      }
+                    ]
+                  },
+                  {
+                    title: 'Normalna vožnja',
+                    dataIndex: 'normalDriving',
+                    key: 'normalDriving',
+                    width: 120,
+                    align: 'center' as const,
+                    render: (val: number, record: any) => (
+                      <Tag color="green" style={{ fontWeight: 'bold' }}>
+                        {val} ({record.normalPercent}%)
+                      </Tag>
+                    )
+                  },
+                  {
+                    title: 'Agresivno ubrzanje',
+                    children: [
+                      {
+                        title: 'Umereno',
+                        dataIndex: 'moderateAcceleration',
+                        key: 'moderateAcceleration',
+                        width: 100,
+                        align: 'center' as const,
+                        render: (val: number, record: any) => (
+                          <Tag color={val > 0 ? "orange" : "default"}>
+                            {val} ({(val / analytics.totalPoints * 100).toFixed(1)}%)
+                          </Tag>
+                        )
+                      },
+                      {
+                        title: 'Ozbiljno',
+                        dataIndex: 'severeAcceleration',
+                        key: 'severeAcceleration',
+                        width: 100,
+                        align: 'center' as const,
+                        render: (val: number, record: any) => (
+                          <Tag color={val > 0 ? "red" : "default"}>
+                            {val} ({(val / analytics.totalPoints * 100).toFixed(1)}%)
+                          </Tag>
+                        )
+                      }
+                    ]
+                  },
+                  {
+                    title: 'Safety Score',
+                    dataIndex: 'safetyScore',
+                    key: 'safetyScore',
+                    width: 100,
+                    align: 'center' as const,
+                    render: (score: number) => {
+                      let color = '#52c41a';
+                      if (score < 60) color = '#ff4d4f';
+                      else if (score < 80) color = '#faad14';
+                      
+                      return (
+                        <Tag color={color} style={{ fontSize: '14px', fontWeight: 'bold' }}>
+                          {score}/100
+                        </Tag>
+                      );
+                    }
+                  },
+                  {
+                    title: 'Kilometraža',
+                    dataIndex: 'totalDistance',
+                    key: 'totalDistance',
+                    width: 100,
+                    align: 'right' as const,
+                    render: (val: number) => `${val.toFixed(2)} km`
+                  },
+                  {
+                    title: 'Događaji/100km',
+                    dataIndex: 'eventsPer100Km',
+                    key: 'eventsPer100Km',
+                    width: 110,
+                    align: 'center' as const,
+                    render: (val: string) => (
+                      <span style={{ fontWeight: parseFloat(val) > 50 ? 'bold' : 'normal', color: parseFloat(val) > 50 ? '#ff4d4f' : 'inherit' }}>
+                        {val}
+                      </span>
+                    )
+                  }
+                ]}
+              />
+              
+              {/* Dodatna statistika ispod tabele */}
+              <Row gutter={16} style={{ marginTop: 16 }}>
+                <Col span={8}>
+                  <div style={{ padding: 12, background: '#f0f7ff', borderRadius: 8 }}>
+                    <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>Ukupno agresivnih kočenja</div>
+                    <div style={{ fontSize: 18, fontWeight: 'bold', color: '#1890ff' }}>
+                      {prepareDrivingEventsTableData()[0]?.totalBraking || 0} ({prepareDrivingEventsTableData()[0]?.brakingPercent || '0.0'}%)
+                    </div>
+                  </div>
+                </Col>
+                <Col span={8}>
+                  <div style={{ padding: 12, background: '#fff7e6', borderRadius: 8 }}>
+                    <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>Ukupno agresivnih ubrzanja</div>
+                    <div style={{ fontSize: 18, fontWeight: 'bold', color: '#fa8c16' }}>
+                      {prepareDrivingEventsTableData()[0]?.totalAcceleration || 0} ({prepareDrivingEventsTableData()[0]?.accelerationPercent || '0.0'}%)
+                    </div>
+                  </div>
+                </Col>
+                <Col span={8}>
+                  <div style={{ 
+                    padding: 12, 
+                    background: getSafetyScore() >= 80 ? '#f6ffed' : getSafetyScore() >= 60 ? '#fffbe6' : '#fff1f0', 
+                    borderRadius: 8 
+                  }}>
+                    <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>Ocena bezbednosti</div>
+                    <div style={{ 
+                      fontSize: 18, 
+                      fontWeight: 'bold', 
+                      color: getSafetyScore() >= 80 ? '#52c41a' : getSafetyScore() >= 60 ? '#faad14' : '#ff4d4f' 
+                    }}>
+                      {getSafetyScore() >= 80 ? 'Odlična' : getSafetyScore() >= 60 ? 'Dobra' : 'Potrebna pažnja'}
+                    </div>
+                  </div>
+                </Col>
+              </Row>
+            </Card>
+          )}
 
           {/* Grafikoni sa Tabs */}
           <Card 
