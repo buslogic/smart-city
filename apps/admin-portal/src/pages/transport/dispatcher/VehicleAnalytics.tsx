@@ -147,6 +147,16 @@ export default function VehicleAnalytics() {
           endDate: formattedEndDate
         }
       });
+      
+      // Debug logging za tooltip problem
+      console.log('📊 Primljeni podaci sa backend-a:', response.data);
+      if (response.data.dailyStats && response.data.dailyStats.length > 0) {
+        console.log('📅 Daily stats primer:', response.data.dailyStats[0]);
+      }
+      if (response.data.hourlyData && response.data.hourlyData.length > 0) {
+        console.log('⏰ Hourly data primer:', response.data.hourlyData[0]);
+      }
+      
       setAnalytics(response.data);
       
       if (response.data.totalPoints === 0) {
@@ -187,14 +197,19 @@ export default function VehicleAnalytics() {
     },
     tooltip: {
       customContent: (title: string, items: any[]) => {
+        console.log('🔍 Speed Tooltip - title:', title, 'items:', items);
         if (!items || items.length === 0) return '';
+        
         const datum = items[0]?.data || {};
-        const hour = datum.hour || title;
-        const avgSpeed = datum.avgSpeed ?? 0;
+        console.log('🔍 Speed Tooltip - datum:', datum);
+        
+        const hour = datum.hour !== undefined && datum.hour !== null ? datum.hour : title;
+        const avgSpeed = datum.avgSpeed !== undefined && datum.avgSpeed !== null ? datum.avgSpeed : 0;
+        
         return `
-          <div style="padding: 8px;">
-            <div style="font-weight: bold; margin-bottom: 4px;">Sat: ${hour}h</div>
-            <div>Prosečna brzina: ${avgSpeed.toFixed(1)} km/h</div>
+          <div style="padding: 8px; background: white; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div style="font-weight: bold; margin-bottom: 4px; color: #333;">Sat: ${hour}h</div>
+            <div style="color: #666;">Prosečna brzina: <span style="color: #1890ff; font-weight: bold;">${avgSpeed.toFixed(1)} km/h</span></div>
           </div>
         `;
       },
@@ -223,14 +238,19 @@ export default function VehicleAnalytics() {
     },
     tooltip: {
       customContent: (title: string, items: any[]) => {
+        console.log('🔍 Distance Tooltip - title:', title, 'items:', items);
         if (!items || items.length === 0) return '';
+        
         const datum = items[0]?.data || {};
-        const hour = datum.hour || title;
-        const distance = datum.distance ?? 0;
+        console.log('🔍 Distance Tooltip - datum:', datum);
+        
+        const hour = datum.hour !== undefined && datum.hour !== null ? datum.hour : title;
+        const distance = datum.distance !== undefined && datum.distance !== null ? datum.distance : 0;
+        
         return `
-          <div style="padding: 8px;">
-            <div style="font-weight: bold; margin-bottom: 4px;">Sat: ${hour}h</div>
-            <div>Kilometraža: ${distance.toFixed(2)} km</div>
+          <div style="padding: 8px; background: white; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div style="font-weight: bold; margin-bottom: 4px; color: #333;">Sat: ${hour}h</div>
+            <div style="color: #666;">Kilometraža: <span style="color: #1890ff; font-weight: bold;">${distance.toFixed(2)} km</span></div>
           </div>
         `;
       },
@@ -260,17 +280,13 @@ export default function VehicleAnalytics() {
       },
     },
     tooltip: {
-      customContent: (title: string, items: any[]) => {
-        if (!items || items.length === 0) return '';
-        const datum = items[0]?.data || {};
-        const dateStr = datum.date ? dayjs(datum.date).format('DD.MM.YYYY') : title;
-        const distance = datum.distance ?? 0;
-        return `
-          <div style="padding: 8px;">
-            <div style="font-weight: bold; margin-bottom: 4px;">Datum: ${dateStr}</div>
-            <div>Kilometraža: ${distance.toFixed(2)} km</div>
-          </div>
-        `;
+      fields: ['date', 'distance'],
+      formatter: (datum: any) => {
+        console.log('🔍 Daily Tooltip datum:', datum);
+        return {
+          name: 'Kilometraža',
+          value: `${(datum.distance || 0).toFixed(2)} km`
+        };
       },
     },
   };
@@ -318,17 +334,13 @@ export default function VehicleAnalytics() {
       },
     },
     tooltip: {
-      customContent: (title: string, items: any[]) => {
-        if (!items || items.length === 0) return '';
-        const datum = items[0]?.data || {};
-        const monthStr = datum.month ? dayjs(datum.month).format('MMMM YYYY') : title;
-        const distance = datum.distance ?? 0;
-        return `
-          <div style="padding: 8px;">
-            <div style="font-weight: bold; margin-bottom: 4px;">Mesec: ${monthStr}</div>
-            <div>Ukupna kilometraža: ${distance.toFixed(2)} km</div>
-          </div>
-        `;
+      fields: ['month', 'distance'],
+      formatter: (datum: any) => {
+        console.log('🔍 Monthly Tooltip datum:', datum);
+        return {
+          name: 'Kilometraža',
+          value: `${(datum.distance || 0).toFixed(2)} km`
+        };
       },
     },
   };
