@@ -635,10 +635,20 @@ export class TimescaledbService {
         SELECT 
           j.schedule_interval,
           j.config->>'start_offset' as start_offset,
-          j.config->>'end_offset' as end_offset
+          j.config->>'end_offset' as end_offset,
+          j.job_id
         FROM timescaledb_information.jobs j
         WHERE j.proc_name = 'policy_refresh_continuous_aggregate'
-        AND j.hypertable_name = $1
+        AND j.config::jsonb @> jsonb_build_object('mat_hypertable_id', 
+          (SELECT ht.id::text
+           FROM _timescaledb_catalog.hypertable ht
+           WHERE ht.schema_name = '_timescaledb_internal'
+           AND ht.table_name = (
+             SELECT ca.materialization_hypertable_name
+             FROM timescaledb_information.continuous_aggregates ca
+             WHERE ca.view_name = $1
+           ))
+        )
       `;
       
       const policyInfo = await client.query(policyQuery, [aggregateName]);
@@ -656,6 +666,14 @@ export class TimescaledbService {
           end_offset: policyInfo.rows[0].end_offset
         };
         this.logger.log(`Pronađena refresh politika: ${JSON.stringify(policyConfig)}`);
+      } else {
+        this.logger.warn(`Nema postojeće refresh politike za ${aggregateName} - koristićemo default vrednosti`);
+        // Default policy vrednosti ako ne postoji
+        policyConfig = {
+          schedule_interval: '01:00:00',  // svakih sat vremena
+          start_offset: '30 days',        // poslednih 30 dana
+          end_offset: '1 hour'             // do pre 1 sat
+        };
       }
       
       // Korak 3: DROP postojeći agregat (ovo automatski briše i politike)
@@ -678,9 +696,9 @@ export class TimescaledbService {
       
       await client.query(createQuery);
       
-      // Korak 5: Ako je postojala politika, ponovo je dodaj
-      if (hasPolicy && policyConfig) {
-        this.logger.log(`Vraćanje refresh politike za ${aggregateName}`);
+      // Korak 5: UVEK dodaj refresh politiku (postojeću ili default)
+      if (policyConfig) {
+        this.logger.log(`Dodavanje refresh politike za ${aggregateName}: ${JSON.stringify(policyConfig)}`);
         const addPolicyQuery = `
           SELECT add_continuous_aggregate_policy(
             $1,
@@ -691,12 +709,18 @@ export class TimescaledbService {
           )
         `;
         
-        await client.query(addPolicyQuery, [
-          aggregateName,
-          policyConfig.start_offset,
-          policyConfig.end_offset,
-          policyConfig.schedule_interval
-        ]);
+        try {
+          const result = await client.query(addPolicyQuery, [
+            aggregateName,
+            policyConfig.start_offset,
+            policyConfig.end_offset,
+            policyConfig.schedule_interval
+          ]);
+          this.logger.log(`Refresh politika uspešno dodata. Job ID: ${result.rows[0]?.add_continuous_aggregate_policy}`);
+        } catch (policyError: any) {
+          this.logger.error(`Greška pri dodavanju refresh politike: ${policyError.message}`);
+          // Ne prekidamo proces ako policy ne uspe
+        }
       }
       
       // Korak 6: Proveri da je agregat prazan
@@ -719,9 +743,10 @@ export class TimescaledbService {
           aggregate: aggregateName,
           status: 'reset_completed',
           rowsAfterReset: 0,
-          policyRestored: hasPolicy,
+          policyRestored: true,  // Uvek pokušavamo da vratimo policy
+          hadPreviousPolicy: hasPolicy,
           policyConfig: policyConfig,
-          nextStep: 'Agregat je sada prazan. Koristite Refresh dugme da ponovo popunite podatke.'
+          nextStep: 'Agregat je sada prazan. Koristite Refresh dugme da ponovo popunite podatke ili sačekajte automatski refresh.'
         }
       };
       
