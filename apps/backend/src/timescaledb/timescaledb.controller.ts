@@ -71,4 +71,16 @@ export class TimescaledbController {
   async getTimescaleJobs() {
     return this.timescaledbService.getTimescaleJobs();
   }
+
+  @Post('continuous-aggregates/:name/reset')
+  @RequirePermissions('maintenance.timescaledb:manage')
+  @ApiOperation({ summary: 'Resetuj (isprazni) continuous aggregate' })
+  @ApiResponse({ status: 200, description: 'Aggregate uspešno resetovan' })
+  @ApiResponse({ status: 403, description: 'Nemate permisiju za ovu akciju' })
+  @ApiResponse({ status: 400, description: 'Greška pri resetovanju agregata' })
+  async resetContinuousAggregate(
+    @Param('name') name: string,
+  ) {
+    return this.timescaledbService.resetContinuousAggregate(name);
+  }
 }

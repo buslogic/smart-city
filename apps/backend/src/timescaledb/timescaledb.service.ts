@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { Client } from 'pg';
 
 @Injectable()
@@ -401,7 +401,7 @@ export class TimescaledbService {
     const client = await this.getConnection();
     
     try {
-      // Dobavi trenutne refresh procese
+      // Dobavi trenutne refresh procese - poboljšan query
       const activeRefreshQuery = `
         SELECT 
           pid,
@@ -412,6 +412,9 @@ export class TimescaledbService {
             WHEN query LIKE '%daily_vehicle_stats%' THEN 'daily_vehicle_stats'
             WHEN query LIKE '%vehicle_hourly_stats%' THEN 'vehicle_hourly_stats'
             WHEN query LIKE '%monthly_vehicle_raw_stats%' THEN 'monthly_vehicle_raw_stats'
+            WHEN query LIKE '%"public"."daily_vehicle_stats"%' THEN 'daily_vehicle_stats'
+            WHEN query LIKE '%"public"."vehicle_hourly_stats"%' THEN 'vehicle_hourly_stats'
+            WHEN query LIKE '%"public"."monthly_vehicle_raw_stats"%' THEN 'monthly_vehicle_raw_stats'
             ELSE regexp_replace(query, '.*"([^"]+)".*', '\\1')
           END as aggregate_name,
           query
@@ -419,12 +422,12 @@ export class TimescaledbService {
         WHERE (
           query LIKE '%refresh_continuous_aggregate%' 
           OR query LIKE '%CALL refresh_continuous_aggregate%'
-          OR query LIKE '%INSERT INTO daily_vehicle_stats%'
-          OR query LIKE '%INSERT INTO vehicle_hourly_stats%'
-          OR query LIKE '%INSERT INTO monthly_vehicle_raw_stats%'
+          OR query LIKE '%INSERT INTO%_timescaledb_internal%'
+          OR query LIKE '%materialized_hypertable%'
         )
-        AND state != 'idle'
+        AND state IN ('active', 'idle in transaction')
         AND pid != pg_backend_pid()
+        AND query NOT LIKE '%pg_stat_activity%'
         ORDER BY query_start DESC;
       `;
       
@@ -594,6 +597,145 @@ export class TimescaledbService {
     } catch (error) {
       this.logger.error('Error getting TimescaleDB jobs:', error);
       throw error;
+    } finally {
+      await client.end();
+    }
+  }
+
+  async resetContinuousAggregate(aggregateName: string) {
+    const client = await this.getConnection();
+    
+    try {
+      this.logger.log(`Početak RESET procesa za continuous aggregate: ${aggregateName}`);
+      
+      // Korak 1: Dobavi sve informacije o agregatu PRE brisanja
+      const aggregateInfoQuery = `
+        SELECT 
+          ca.view_name,
+          ca.view_definition,
+          ca.materialization_hypertable_schema,
+          ca.materialization_hypertable_name
+        FROM timescaledb_information.continuous_aggregates ca
+        WHERE ca.view_name = $1
+      `;
+      
+      const aggregateInfo = await client.query(aggregateInfoQuery, [aggregateName]);
+      
+      if (aggregateInfo.rows.length === 0) {
+        throw new Error(`Continuous aggregate "${aggregateName}" ne postoji`);
+      }
+      
+      const { view_definition } = aggregateInfo.rows[0];
+      
+      // VAŽNO: Sačuvaj originalnu definiciju jer će biti obrisana sa DROP
+      this.logger.log(`Sačuvana definicija agregata: ${aggregateName}`);
+      
+      // Korak 2: Dobavi refresh politiku ako postoji
+      const policyQuery = `
+        SELECT 
+          j.schedule_interval,
+          j.config->>'start_offset' as start_offset,
+          j.config->>'end_offset' as end_offset
+        FROM timescaledb_information.jobs j
+        WHERE j.proc_name = 'policy_refresh_continuous_aggregate'
+        AND j.hypertable_name = $1
+      `;
+      
+      const policyInfo = await client.query(policyQuery, [aggregateName]);
+      const hasPolicy = policyInfo.rows.length > 0;
+      let policyConfig: {
+        schedule_interval: string;
+        start_offset: string;
+        end_offset: string;
+      } | null = null;
+      
+      if (hasPolicy) {
+        policyConfig = {
+          schedule_interval: policyInfo.rows[0].schedule_interval,
+          start_offset: policyInfo.rows[0].start_offset,
+          end_offset: policyInfo.rows[0].end_offset
+        };
+        this.logger.log(`Pronađena refresh politika: ${JSON.stringify(policyConfig)}`);
+      }
+      
+      // Korak 3: DROP postojeći agregat (ovo automatski briše i politike)
+      this.logger.log(`Brisanje postojećeg agregata: ${aggregateName}`);
+      await client.query(`DROP MATERIALIZED VIEW IF EXISTS ${aggregateName} CASCADE`);
+      
+      // Korak 4: Recreate agregat sa istom definicijom ali praznom (WITH NO DATA)
+      this.logger.log(`Ponovno kreiranje agregata: ${aggregateName}`);
+      
+      // view_definition već sadrži kompletan SELECT sa GROUP BY
+      // Moramo da uklonimo trailing semicolon ako postoji
+      const cleanedViewDef = view_definition.replace(/;\s*$/, '');
+      
+      const createQuery = `
+        CREATE MATERIALIZED VIEW ${aggregateName}
+        WITH (timescaledb.continuous) AS
+        ${cleanedViewDef}
+        WITH NO DATA
+      `;
+      
+      await client.query(createQuery);
+      
+      // Korak 5: Ako je postojala politika, ponovo je dodaj
+      if (hasPolicy && policyConfig) {
+        this.logger.log(`Vraćanje refresh politike za ${aggregateName}`);
+        const addPolicyQuery = `
+          SELECT add_continuous_aggregate_policy(
+            $1,
+            start_offset => $2::interval,
+            end_offset => $3::interval,
+            schedule_interval => $4::interval,
+            if_not_exists => true
+          )
+        `;
+        
+        await client.query(addPolicyQuery, [
+          aggregateName,
+          policyConfig.start_offset,
+          policyConfig.end_offset,
+          policyConfig.schedule_interval
+        ]);
+      }
+      
+      // Korak 6: Proveri da je agregat prazan
+      const countQuery = `
+        SELECT COUNT(*) as count FROM ${aggregateName}
+      `;
+      const countResult = await client.query(countQuery);
+      const rowCount = parseInt(countResult.rows[0].count);
+      
+      if (rowCount > 0) {
+        throw new Error(`Reset nije potpuno uspeo - agregat još uvek ima ${rowCount} redova`);
+      }
+      
+      this.logger.log(`RESET uspešno završen za agregat: ${aggregateName}`);
+      
+      return {
+        success: true,
+        message: `Continuous aggregate "${aggregateName}" je uspešno resetovan`,
+        details: {
+          aggregate: aggregateName,
+          status: 'reset_completed',
+          rowsAfterReset: 0,
+          policyRestored: hasPolicy,
+          policyConfig: policyConfig,
+          nextStep: 'Agregat je sada prazan. Koristite Refresh dugme da ponovo popunite podatke.'
+        }
+      };
+      
+    } catch (error: any) {
+      this.logger.error(`Greška pri RESET agregata ${aggregateName}:`, error);
+      
+      // Proveri specifične greške
+      if (error.message?.includes('ne postoji')) {
+        throw new BadRequestException(error.message);
+      }
+      
+      throw new InternalServerErrorException(
+        `Greška pri resetovanju agregata: ${error.message || 'Nepoznata greška'}`
+      );
     } finally {
       await client.end();
     }

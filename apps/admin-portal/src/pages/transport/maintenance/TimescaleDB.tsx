@@ -12,7 +12,8 @@ import {
   DashboardOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
-  LineChartOutlined
+  LineChartOutlined,
+  ClearOutlined
 } from '@ant-design/icons';
 import { timescaledbService, TimescaleTable, ContinuousAggregate } from '../../../services/timescaledb.service';
 import type { ColumnsType } from 'antd/es/table';
@@ -34,8 +35,10 @@ const TimescaleDB: React.FC = () => {
   const [errorAggregates, setErrorAggregates] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('tables');
   const [refreshModalVisible, setRefreshModalVisible] = useState(false);
+  const [resetModalVisible, setResetModalVisible] = useState(false);
   const [selectedAggregate, setSelectedAggregate] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
   const [useFullRefresh, setUseFullRefresh] = useState(true);
   const [refreshingAggregates, setRefreshingAggregates] = useState<Map<string, { 
@@ -207,6 +210,13 @@ const TimescaleDB: React.FC = () => {
           key: `refresh-${selectedAggregate}`,
         });
         
+        // VAŽNO: Zatvori modal kada se pokrene refresh u pozadini
+        setRefreshModalVisible(false);
+        setRefreshing(false); // Zaustavi spinner u modalu
+        setSelectedAggregate(null);
+        setDateRange(null);
+        setUseFullRefresh(true);
+        
         // Počni da proveravamo status - češće na početku, ređe kasnije
         let checkCount = 0;
         const maxDuration = 60 * 60 * 1000; // 60 minuta maksimalno
@@ -218,13 +228,20 @@ const TimescaleDB: React.FC = () => {
           try {
             // Proveri da li se još uvek izvršava
             const statusData = await timescaledbService.getContinuousAggregatesStatus();
-            const stillRunning = statusData?.aggregates?.some(
-              (agg: any) => agg.view_name === selectedAggregate && agg.is_refreshing
+            const aggregateStatus = statusData?.aggregates?.find(
+              (agg: any) => agg.view_name === selectedAggregate
             );
+            
+            const stillRunning = aggregateStatus?.is_refreshing;
+            
+            // Dodatna provera: ako se broj redova promenio, znači da je refresh završen
+            const previousRowCount = aggregates.find(a => a.view_name === selectedAggregate)?.row_count || 0;
+            const currentRowCount = aggregateStatus?.row_count || 0;
+            const rowCountChanged = currentRowCount !== previousRowCount && currentRowCount > 0;
             
             const elapsedTime = new Date().getTime() - refreshStartTime.getTime();
             
-            if (!stillRunning || elapsedTime >= maxDuration) {
+            if (!stillRunning || rowCountChanged || elapsedTime >= maxDuration) {
               
               // Osveži podatke o agregatu
               await fetchAggregates();
@@ -250,6 +267,20 @@ const TimescaleDB: React.FC = () => {
                       timeout: elapsedTime >= maxDuration
                     }
                   });
+                  
+                  // Automatski ukloni completed status nakon 10 sekundi
+                  if (elapsedTime < maxDuration) {
+                    setTimeout(() => {
+                      setRefreshingAggregates(prev => {
+                        const newMap = new Map(prev);
+                        const status = newMap.get(selectedAggregate);
+                        if (status?.status === 'completed') {
+                          newMap.delete(selectedAggregate);
+                        }
+                        return newMap;
+                      });
+                    }, 10000);
+                  }
                   
                   // Dodaj u istoriju sa jedinstvenim ID
                   const historyEntry = {
@@ -328,6 +359,41 @@ const TimescaleDB: React.FC = () => {
   const openRefreshModal = (aggregateName: string) => {
     setSelectedAggregate(aggregateName);
     setRefreshModalVisible(true);
+  };
+
+  const openResetModal = (aggregateName: string) => {
+    setSelectedAggregate(aggregateName);
+    setResetModalVisible(true);
+  };
+
+  const handleResetAggregate = async () => {
+    if (!selectedAggregate) return;
+    
+    setResetting(true);
+    try {
+      const result = await timescaledbService.resetContinuousAggregate(selectedAggregate);
+      
+      if (result.success) {
+        message.success({
+          content: result.message,
+          duration: 5,
+        });
+        
+        // Osveži listu agregata nakon reset-a
+        await fetchAggregates();
+        
+        // Zatvori modal
+        setResetModalVisible(false);
+      } else {
+        message.error('Greška pri resetovanju agregata');
+      }
+    } catch (error: any) {
+      console.error('Reset error:', error);
+      message.error(error.response?.data?.message || 'Greška pri resetovanju agregata');
+    } finally {
+      setResetting(false);
+      setSelectedAggregate(null);
+    }
   };
 
   const formatNumber = (num: number | null): string => {
@@ -447,21 +513,33 @@ const TimescaleDB: React.FC = () => {
     {
       title: 'Akcije',
       key: 'actions',
-      width: 120,
+      width: 200,
       fixed: 'left',
       render: (_, record) => {
-        const isRefreshing = refreshingAggregates.has(record.view_name);
+        const refreshStatus = refreshingAggregates.get(record.view_name);
+        const isRefreshing = refreshStatus?.status === 'running';
         
         return (
-          <Button
-            type={isRefreshing ? "default" : "primary"}
-            size="small"
-            icon={isRefreshing ? <LoadingOutlined spin /> : <SyncOutlined />}
-            onClick={() => !isRefreshing && openRefreshModal(record.view_name)}
-            disabled={isRefreshing}
-          >
-            {isRefreshing ? 'Osvežava se...' : 'Osveži'}
-          </Button>
+          <Space size="small">
+            <Button
+              type={isRefreshing ? "default" : "primary"}
+              size="small"
+              icon={isRefreshing ? <LoadingOutlined spin /> : <SyncOutlined />}
+              onClick={() => !isRefreshing && openRefreshModal(record.view_name)}
+              disabled={isRefreshing}
+            >
+              {isRefreshing ? 'Osvežava se...' : 'Osveži'}
+            </Button>
+            <Button
+              danger
+              size="small"
+              icon={<ClearOutlined />}
+              onClick={() => openResetModal(record.view_name)}
+              disabled={isRefreshing}
+            >
+              Reset
+            </Button>
+          </Space>
         );
       },
     },
@@ -477,7 +555,8 @@ const TimescaleDB: React.FC = () => {
       dataIndex: 'view_name',
       key: 'view_name',
       render: (text, record) => {
-        const isRefreshing = refreshingAggregates.has(record.view_name);
+        const refreshStatus = refreshingAggregates.get(record.view_name);
+        const isRefreshing = refreshStatus?.status === 'running';
         
         return (
           <Space>
@@ -485,7 +564,12 @@ const TimescaleDB: React.FC = () => {
             {isRefreshing && (
               <Badge status="processing" text="Osvežava se..." />
             )}
-            {record.finalized && !isRefreshing && (
+            {refreshStatus?.status === 'completed' && (
+              <Tooltip title="Refresh završen">
+                <Tag color="success" icon={<CheckCircleOutlined />}>Završeno</Tag>
+              </Tooltip>
+            )}
+            {record.finalized && !isRefreshing && !refreshStatus && (
               <Tooltip title="Finalizovan agregat">
                 <Tag color="success">Finalizovan</Tag>
               </Tooltip>
@@ -943,8 +1027,22 @@ const TimescaleDB: React.FC = () => {
                         title: 'Akcije',
                         key: 'actions',
                         render: (_, record) => {
-                          if (record.status === 'completed') {
-                            return (
+                          return (
+                            <Space size="small">
+                              {record.status === 'running' && (
+                                <Tooltip title="Refresh može još biti u toku. Proveri Monitoring tab.">
+                                  <Button 
+                                    size="small" 
+                                    type="text"
+                                    onClick={() => {
+                                      // Prvo proveri status
+                                      fetchAggregateStatus();
+                                    }}
+                                  >
+                                    Proveri
+                                  </Button>
+                                </Tooltip>
+                              )}
                               <Button 
                                 size="small" 
                                 type="text"
@@ -955,13 +1053,15 @@ const TimescaleDB: React.FC = () => {
                                     newMap.delete(record.aggregate_name);
                                     return newMap;
                                   });
+                                  if (record.status === 'running') {
+                                    message.info('Status uklonjen. Refresh može još biti u toku u pozadini.');
+                                  }
                                 }}
                               >
                                 Ukloni
                               </Button>
-                            );
-                          }
-                          return null;
+                            </Space>
+                          );
                         },
                       },
                     ]}
@@ -1306,6 +1406,58 @@ const TimescaleDB: React.FC = () => {
             type="info"
             showIcon
           />
+        </Space>
+      </Modal>
+
+      <Modal
+        title={
+          <Space>
+            <ClearOutlined style={{ color: '#ff4d4f' }} />
+            <span>Reset Continuous Aggregate: {selectedAggregate}</span>
+          </Space>
+        }
+        open={resetModalVisible}
+        onOk={handleResetAggregate}
+        onCancel={() => {
+          setResetModalVisible(false);
+          setSelectedAggregate(null);
+        }}
+        confirmLoading={resetting}
+        okText="Reset"
+        cancelText="Otkaži"
+        okButtonProps={{ danger: true }}
+        width={600}
+      >
+        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+          <Alert
+            message="Upozorenje!"
+            description="Ova akcija će potpuno obrisati sve podatke iz agregata i ponovo ga kreirati prazan. Svi postojeći podaci će biti izgubljeni!"
+            type="warning"
+            showIcon
+          />
+          
+          <div>
+            <Text strong>Šta će se desiti:</Text>
+            <ul style={{ marginTop: 8 }}>
+              <li>Agregat će biti obrisan (DROP)</li>
+              <li>Ponovo će biti kreiran sa istom definicijom</li>
+              <li>Refresh politika će biti vraćena (ako postoji)</li>
+              <li>Agregat će biti prazan - bez podataka</li>
+            </ul>
+          </div>
+
+          <Alert
+            message="Nakon reset-a"
+            description="Koristite dugme 'Osveži' da ponovo popunite agregat sa podacima."
+            type="info"
+            showIcon
+          />
+          
+          <div style={{ marginTop: 16 }}>
+            <Text type="secondary">
+              Da li ste sigurni da želite da resetujete agregat <Text code>{selectedAggregate}</Text>?
+            </Text>
+          </div>
         </Space>
       </Modal>
     </div>

@@ -62,4 +62,7 @@ END $$;
 -- migrate:down
 -- Rollback is not practical for this migration as we're fixing a bug
 -- The old aggregate was missing data for vehicles 1 and 2
-RAISE EXCEPTION 'This migration cannot be rolled back. The previous aggregate was missing data for vehicles 1 and 2.';
+DO $$
+BEGIN
+    RAISE EXCEPTION 'This migration cannot be rolled back. The previous aggregate was missing data for vehicles 1 and 2.';
+END $$;

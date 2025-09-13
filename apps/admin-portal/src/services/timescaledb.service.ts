@@ -127,4 +127,18 @@ export const timescaledbService = {
     });
     return response.data;
   },
+
+  resetContinuousAggregate: async (name: string): Promise<any> => {
+    const token = TokenManager.getAccessToken();
+    const response = await axios.post(
+      `${API_URL}/api/timescaledb/continuous-aggregates/${name}/reset`,
+      {},
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    return response.data;
+  },
 };
