@@ -14,10 +14,6 @@ export class CreateUserDto {
   @IsString()
   lastName: string;
 
-  @ApiProperty({ example: 'password123', minLength: 6 })
-  @IsString()
-  @MinLength(6)
-  password: string;
 
   @ApiProperty({ example: true, required: false, default: true })
   @IsBoolean()

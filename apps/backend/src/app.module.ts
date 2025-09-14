@@ -27,6 +27,8 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { TimescaledbModule } from './timescaledb/timescaledb.module';
 import { DrivingRecreationModule } from './safety/driving-recreation/driving-recreation.module';
 import { ApiKeysModule } from './api-keys/api-keys.module';
+import { MailModule } from './mail/mail.module';
+import { EmailTemplatesModule } from './email-templates/email-templates.module';
 
 @Module({
   imports: [
@@ -55,6 +57,8 @@ import { ApiKeysModule } from './api-keys/api-keys.module';
     TimescaledbModule,
     DrivingRecreationModule,
     ApiKeysModule,
+    MailModule,
+    EmailTemplatesModule,
   ],
   controllers: [AppController],
   providers: [

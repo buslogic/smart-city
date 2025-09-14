@@ -382,26 +382,63 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
         color: 'text-gray-700',
         bgColor: 'bg-gray-50',
         children: [
+          // Opšta submenu
           {
             id: 'opsta',
             name: 'Opšta',
-            type: 'section',
+            type: 'submenu',
             icon: <Sliders className="h-4 w-4" />,
-            children: allPermissions
-              .filter(p => 
-                p.resource === 'settings.general' ||
-                p.resource === 'settings.api' ||
-                p.resource === 'settings.system' ||
-                p.resource === 'settings.legacy.databases' ||
-                p.resource === 'legacy_tables'
-              )
-              .map(p => ({
-                id: `perm-${p.id}`,
-                name: getPermissionLabel(p),
-                type: 'permission' as const,
-                permission: p,
-                color: getPermissionColor(p.action),
-              })),
+            children: [
+              {
+                id: 'general-settings-section',
+                name: 'Opšta Podešavanja',
+                type: 'section',
+                children: allPermissions
+                  .filter(p =>
+                    p.resource === 'settings.general' ||
+                    p.resource === 'settings.api' ||
+                    p.resource === 'settings.system'
+                  )
+                  .map(p => ({
+                    id: `perm-${p.id}`,
+                    name: getPermissionLabel(p),
+                    type: 'permission' as const,
+                    permission: p,
+                    color: getPermissionColor(p.action),
+                  })),
+              },
+              {
+                id: 'legacy-databases-section',
+                name: 'Legacy Baze',
+                type: 'section',
+                children: allPermissions
+                  .filter(p =>
+                    p.resource === 'settings.legacy.databases' ||
+                    p.resource === 'legacy_tables'
+                  )
+                  .map(p => ({
+                    id: `perm-${p.id}`,
+                    name: getPermissionLabel(p),
+                    type: 'permission' as const,
+                    permission: p,
+                    color: getPermissionColor(p.action),
+                  })),
+              },
+              {
+                id: 'email-templates-section',
+                name: 'Email Šabloni',
+                type: 'section',
+                children: allPermissions
+                  .filter(p => p.resource === 'settings.email_templates')
+                  .map(p => ({
+                    id: `perm-${p.id}`,
+                    name: getPermissionLabel(p),
+                    type: 'permission' as const,
+                    permission: p,
+                    color: getPermissionColor(p.action),
+                  })),
+              },
+            ],
           },
           {
             id: 'api-keys',
@@ -568,6 +605,19 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
       };
       if (legacyDbLabels[permission.action]) {
         return legacyDbLabels[permission.action];
+      }
+    }
+
+    if (permission.resource === 'settings.email_templates') {
+      const emailTemplatesLabels: Record<string, string> = {
+        'view': 'Pregled email šablona',
+        'create': 'Kreiranje email šablona',
+        'update': 'Ažuriranje email šablona',
+        'delete': 'Brisanje email šablona',
+        'test': 'Testiranje email šablona',
+      };
+      if (emailTemplatesLabels[permission.action]) {
+        return emailTemplatesLabels[permission.action];
       }
     }
     

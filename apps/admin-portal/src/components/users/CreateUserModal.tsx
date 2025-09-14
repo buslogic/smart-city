@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Form, Input, Select, Button, message, Row, Col, Spin } from 'antd';
+import { Modal, Form, Input, Select, Button, message, Row, Col, Spin, Alert } from 'antd';
 import { UserOutlined, MailOutlined, LockOutlined } from '@ant-design/icons';
 import { userService } from '../../services/userService';
 import { rbacService } from '../../services/rbacService';
@@ -18,8 +18,6 @@ interface CreateUserForm {
   email: string;
   firstName: string;
   lastName: string;
-  password: string;
-  confirmPassword: string;
   roles: string[];
   isActive: boolean;
 }
@@ -71,17 +69,12 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
       setLoading(true);
 
       // Validacija lozinki
-      if (values.password !== values.confirmPassword) {
-        message.error('Lozinke se ne poklapaju');
-        return;
-      }
 
       // Priprema podataka
       const userData = {
         email: values.email.trim(),
         firstName: values.firstName.trim(),
         lastName: values.lastName.trim(),
-        password: values.password,
         isActive: values.isActive ?? true,
         roles: values.roles,
       };
@@ -172,48 +165,13 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
           />
         </Form.Item>
 
-        <Row gutter={16}>
-          <Col span={12}>
-            <Form.Item
-              name="password"
-              label="Lozinka"
-              rules={[
-                { required: true, message: 'Lozinka je obavezna' },
-                { min: 6, message: 'Lozinka mora imati najmanje 6 karaktera' },
-              ]}
-            >
-              <Input.Password
-                prefix={<LockOutlined />}
-                placeholder="Unesite lozinku"
-                autoComplete="new-password"
-              />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item
-              name="confirmPassword"
-              label="Potvrdi lozinku"
-              dependencies={['password']}
-              rules={[
-                { required: true, message: 'Potvrda lozinke je obavezna' },
-                ({ getFieldValue }) => ({
-                  validator(_, value) {
-                    if (!value || getFieldValue('password') === value) {
-                      return Promise.resolve();
-                    }
-                    return Promise.reject(new Error('Lozinke se ne poklapaju'));
-                  },
-                }),
-              ]}
-            >
-              <Input.Password
-                prefix={<LockOutlined />}
-                placeholder="Potvrdite lozinku"
-                autoComplete="new-password"
-              />
-            </Form.Item>
-          </Col>
-        </Row>
+        <Alert
+          message="Napomena o lozinki"
+          description="Sistem će automatski generisati sigurnu lozinku i poslati je korisniku na email adresu."
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
 
         <Form.Item
           name="roles"

@@ -20,8 +20,6 @@ interface EditUserForm {
   email: string;
   firstName: string;
   lastName: string;
-  password?: string;
-  confirmPassword?: string;
   roles: string[];
   isActive: boolean;
 }
@@ -35,7 +33,6 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
   const [form] = Form.useForm<EditUserForm>();
   const [loading, setLoading] = useState(false);
   const [loadingRoles, setLoadingRoles] = useState(false);
-  const [changePassword, setChangePassword] = useState(false);
   const [availableRoles, setAvailableRoles] = useState<Role[]>([]);
   const { canUpdateUsers } = usePermissions();
 
@@ -51,7 +48,6 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
           roles: user.roles || [],
           isActive: user.isActive,
         });
-        setChangePassword(false);
       }
     }
   }, [visible, user, form]);
@@ -79,17 +75,6 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
       setLoading(true);
 
       // Validacija lozinki ako se menjaju
-      if (changePassword) {
-        if (values.password !== values.confirmPassword) {
-          message.error('Lozinke se ne poklapaju');
-          return;
-        }
-        if (!values.password || values.password.length < 6) {
-          message.error('Lozinka mora imati najmanje 6 karaktera');
-          return;
-        }
-      }
-
       // Priprema podataka
       const userData: any = {
         email: values.email.trim(),
@@ -99,16 +84,10 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
         roles: values.roles,
       };
 
-      // Dodaj lozinku samo ako se menja
-      if (changePassword && values.password) {
-        userData.password = values.password;
-      }
-
       await userService.updateUser(user.id, userData);
       
       message.success('Korisnik je uspešno ažuriran');
       form.resetFields();
-      setChangePassword(false);
       onSuccess();
       onClose();
     } catch (error: any) {
@@ -122,7 +101,6 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
 
   const handleCancel = () => {
     form.resetFields();
-    setChangePassword(false);
     onClose();
   };
 
@@ -187,58 +165,6 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
           />
         </Form.Item>
 
-        <Form.Item>
-          <Button 
-            type="link" 
-            onClick={() => setChangePassword(!changePassword)}
-            className="p-0"
-          >
-            {changePassword ? 'Otkaži promenu lozinke' : 'Promeni lozinku'}
-          </Button>
-        </Form.Item>
-
-        {changePassword && (
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="password"
-                label="Nova lozinka"
-                rules={changePassword ? [
-                  { required: true, message: 'Nova lozinka je obavezna' },
-                  { min: 6, message: 'Lozinka mora imati najmanje 6 karaktera' },
-                ] : []}
-              >
-                <Input.Password
-                  prefix={<LockOutlined />}
-                  placeholder="Unesite novu lozinku"
-                />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                name="confirmPassword"
-                label="Potvrdi novu lozinku"
-                dependencies={['password']}
-                rules={changePassword ? [
-                  { required: true, message: 'Potvrda lozinke je obavezna' },
-                  ({ getFieldValue }) => ({
-                    validator(_, value) {
-                      if (!value || getFieldValue('password') === value) {
-                        return Promise.resolve();
-                      }
-                      return Promise.reject(new Error('Lozinke se ne poklapaju'));
-                    },
-                  }),
-                ] : []}
-              >
-                <Input.Password
-                  prefix={<LockOutlined />}
-                  placeholder="Potvrdite novu lozinku"
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-        )}
 
         <Form.Item
           name="roles"

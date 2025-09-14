@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Form, Input, Button, Card, Typography, Alert } from 'antd';
 import { UserOutlined, LockOutlined, LoginOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/auth.store';
 import { LoginRequest } from '../../types/auth';
+import { ForgotPasswordModal } from './ForgotPasswordModal';
 
 const { Title, Text } = Typography;
 
@@ -12,6 +13,7 @@ interface LoginFormProps {
 
 export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
   const [form] = Form.useForm();
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
   const { login, isLoading, error, clearError } = useAuthStore();
 
   const handleSubmit = async (values: LoginRequest) => {
@@ -91,6 +93,16 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
             />
           </Form.Item>
 
+          <div className="flex justify-end mb-4">
+            <Button
+              type="link"
+              onClick={() => setShowForgotPassword(true)}
+              className="p-0 text-sm"
+            >
+              Zaboravili ste lozinku?
+            </Button>
+          </div>
+
           <Form.Item className="mb-0">
             <Button
               type="primary"
@@ -103,6 +115,11 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
             </Button>
           </Form.Item>
         </Form>
+
+        <ForgotPasswordModal
+          visible={showForgotPassword}
+          onClose={() => setShowForgotPassword(false)}
+        />
       </Card>
     </div>
   );

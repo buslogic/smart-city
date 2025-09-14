@@ -20,8 +20,10 @@ import MonthlyReport from './pages/transport/safety/MonthlyReport';
 import DataRecreation from './pages/transport/safety/DataRecreation';
 import { LegacySyncPage } from './pages/legacy-sync/LegacySyncPage';
 import Profile from './pages/users/Profile';
+import ChangePassword from './pages/users/ChangePassword';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import TimescaleDB from './pages/transport/maintenance/TimescaleDB';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
 
 function App() {
   return (
@@ -30,6 +32,7 @@ function App() {
         <Routes>
           {/* Public routes */}
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           
           {/* Protected routes */}
           <Route 
@@ -69,9 +72,14 @@ function App() {
               } 
             />
             
-            <Route 
-              path="users/profile" 
-              element={<Profile />} 
+            <Route
+              path="users/profile"
+              element={<Profile />}
+            />
+
+            <Route
+              path="users/change-password"
+              element={<ChangePassword />}
             />
             
             <Route 

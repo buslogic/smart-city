@@ -28,6 +28,8 @@ model User {
   vehicleSyncLogs          VehicleSyncLog[]
   createdApiKeys           ApiKey[]                   @relation("ApiKeyCreator")
   revokedApiKeys           ApiKey[]                   @relation("ApiKeyRevoker")
+  createdEmailTemplates    EmailTemplate[]            @relation("EmailTemplateCreator")
+  updatedEmailTemplates    EmailTemplate[]            @relation("EmailTemplateUpdater")
 
   @@index([email])
   @@map("users")
@@ -640,4 +642,30 @@ enum ApiKeyType {
   API_ACCESS
   ADMIN_ACCESS
   INTEGRATION
+}
+
+model EmailTemplate {
+  id         String    @id @default(uuid())
+  name       String
+  slug       String    @unique
+  subject    String
+  body       String    @db.Text
+  bodyHtml   String?   @map("body_html") @db.Text
+  category   String    @default("general")
+  variables  Json?
+  isActive   Boolean   @default(true) @map("is_active")
+  usageCount Int       @default(0) @map("usage_count")
+  lastUsedAt DateTime? @map("last_used_at")
+  createdBy  Int       @map("created_by")
+  updatedBy  Int?      @map("updated_by")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  creator User  @relation("EmailTemplateCreator", fields: [createdBy], references: [id])
+  updater User? @relation("EmailTemplateUpdater", fields: [updatedBy], references: [id])
+
+  @@index([slug])
+  @@index([category])
+  @@index([isActive])
+  @@map("email_templates")
 }

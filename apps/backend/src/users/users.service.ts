@@ -1,13 +1,19 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponseDto } from './dto/user-response.dto';
+import { MailService } from '../mail/mail.service';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(UsersService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private mailService: MailService,
+  ) {}
 
   async create(createUserDto: CreateUserDto): Promise<UserResponseDto> {
     const existingUser = await this.prisma.user.findUnique({
@@ -18,7 +24,9 @@ export class UsersService {
       throw new ConflictException('User with this email already exists');
     }
 
-    const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
+    // Automatski generiši sigurnu lozinku
+    const temporaryPassword = this.generateSecurePassword();
+    const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
     const { roles, ...userData } = createUserDto;
 
     const user = await this.prisma.user.create({
@@ -64,7 +72,35 @@ export class UsersService {
         },
       });
 
-      return new UserResponseDto(updatedUser);
+      // Pošalji welcome email
+      try {
+        await this.mailService.sendWelcomeEmail({
+          email: updatedUser!.email,
+          firstName: updatedUser!.firstName,
+          lastName: updatedUser!.lastName,
+          temporaryPassword,
+        });
+        this.logger.log(`Welcome email sent to ${updatedUser!.email}`);
+      } catch (error) {
+        this.logger.error(`Failed to send welcome email to ${updatedUser!.email}:`, error);
+        // Ne prekidamo proces ako email ne prođe
+      }
+
+      return new UserResponseDto(updatedUser!);
+    }
+
+    // Pošalji welcome email (ako nema role)
+    try {
+      await this.mailService.sendWelcomeEmail({
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        temporaryPassword,
+      });
+      this.logger.log(`Welcome email sent to ${user.email}`);
+    } catch (error) {
+      this.logger.error(`Failed to send welcome email to ${user.email}:`, error);
+      // Ne prekidamo proces ako email ne prođe
     }
 
     return new UserResponseDto(user);
@@ -147,15 +183,10 @@ export class UsersService {
     }
 
     const { roles, ...userData } = updateUserDto;
-    const updateData = { ...userData };
-    
-    if (updateUserDto.password) {
-      updateData.password = await bcrypt.hash(updateUserDto.password, 10);
-    }
 
     const user = await this.prisma.user.update({
       where: { id },
-      data: updateData,
+      data: userData,
       include: {
         roles: {
           include: {
@@ -309,5 +340,25 @@ export class UsersService {
     }
 
     return user;
+  }
+
+  private generateSecurePassword(): string {
+    const length = 12;
+    const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%&*+-=';
+    let password = '';
+
+    // Ensure at least one of each type
+    password += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[Math.floor(Math.random() * 26)];
+    password += 'abcdefghijklmnopqrstuvwxyz'[Math.floor(Math.random() * 26)];
+    password += '0123456789'[Math.floor(Math.random() * 10)];
+    password += '!@#$%&*+-='[Math.floor(Math.random() * 10)];
+
+    // Fill the rest randomly
+    for (let i = password.length; i < length; i++) {
+      password += charset.charAt(Math.floor(Math.random() * charset.length));
+    }
+
+    // Shuffle the password
+    return password.split('').sort(() => Math.random() - 0.5).join('');
   }
 }

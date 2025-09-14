@@ -37,6 +37,24 @@ class AuthService {
     const { data } = await api.get('/api/auth/profile');
     return data;
   }
+
+  async requestPasswordReset(email: string): Promise<void> {
+    await axios.post(`${API_URL}/api/auth/request-password-reset`, { email });
+  }
+
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    await axios.post(`${API_URL}/api/auth/reset-password`, {
+      token,
+      newPassword
+    });
+  }
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    await api.post('/api/auth/change-password', {
+      currentPassword,
+      newPassword
+    });
+  }
 }
 
 export const authService = new AuthService();

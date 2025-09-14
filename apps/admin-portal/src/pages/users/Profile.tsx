@@ -413,7 +413,7 @@ const Profile: React.FC = () => {
         <Space>
           <Button 
             icon={<LockOutlined />}
-            onClick={() => navigate('/change-password')}
+            onClick={() => navigate('/users/change-password')}
           >
             Promeni lozinku
           </Button>

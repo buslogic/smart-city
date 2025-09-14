@@ -1,18 +1,23 @@
-import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
 import * as bcrypt from 'bcrypt';
 import { LoginDto } from './dto/login.dto';
 import { LoginResponseDto } from './dto/login-response.dto';
 import { v4 as uuidv4 } from 'uuid';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private mailService: MailService,
   ) {}
 
   async validateUser(email: string, password: string) {
@@ -253,5 +258,140 @@ export class AuthService {
       where: { id: userId },
       data: { refreshToken: null },
     });
+  }
+
+  async requestPasswordReset(email: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+    });
+
+    // Ne otkrivamo da li email postoji u sistemu
+    if (!user) {
+      this.logger.log(`Password reset requested for non-existent email: ${email}`);
+      return;
+    }
+
+    // Generiši reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenHash = crypto
+      .createHash('sha256')
+      .update(resetToken)
+      .digest('hex');
+
+    // Sačuvaj hash tokena u bazi (trebalo bi dodati reset_token i reset_token_expires polja u User model)
+    // Za sada ćemo koristiti refreshToken polje privremeno
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 sata
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        refreshToken: `reset_${resetTokenHash}_${expiresAt.toISOString()}`,
+      },
+    });
+
+    // Pošalji email
+    try {
+      await this.mailService.sendPasswordResetEmail({
+        email: user.email,
+        firstName: user.firstName,
+        resetToken,
+      });
+      this.logger.log(`Password reset email sent to ${user.email}`);
+    } catch (error) {
+      this.logger.error(`Failed to send password reset email to ${user.email}:`, error);
+      throw new BadRequestException('Greška pri slanju emaila za resetovanje lozinke');
+    }
+  }
+
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    // Hash-uj token
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(token)
+      .digest('hex');
+
+    // Pronađi korisnika sa ovim tokenom
+    const users = await this.prisma.user.findMany({
+      where: {
+        refreshToken: {
+          contains: `reset_${tokenHash}`,
+        },
+      },
+    });
+
+    if (users.length === 0) {
+      throw new BadRequestException('Neispravan ili istekao token za resetovanje lozinke');
+    }
+
+    const user = users[0];
+
+    // Proveri da li je token istekao
+    const tokenParts = user.refreshToken?.split('_');
+    if (tokenParts && tokenParts.length === 3) {
+      const expiresAt = new Date(tokenParts[2]);
+      if (expiresAt < new Date()) {
+        throw new BadRequestException('Token za resetovanje lozinke je istekao');
+      }
+    }
+
+    // Hash-uj novu lozinku
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Ažuriraj lozinku i obriši reset token
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        refreshToken: null,
+      },
+    });
+
+    // Obriši sve postojeće sesije korisnika
+    await this.prisma.session.deleteMany({
+      where: { userId: user.id },
+    });
+
+    this.logger.log(`Password reset successful for user ${user.email}`);
+  }
+
+  async changePassword(userId: number, currentPassword: string, newPassword: string): Promise<void> {
+    // Pronađi korisnika
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        password: true,
+        email: true,
+      },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Korisnik nije pronađen');
+    }
+
+    // Proveri trenutnu lozinku
+    const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Trenutna lozinka nije ispravna');
+    }
+
+    // Proveri da nova lozinka nije ista kao trenutna
+    const isSamePassword = await bcrypt.compare(newPassword, user.password);
+    if (isSamePassword) {
+      throw new BadRequestException('Nova lozinka mora biti različita od trenutne');
+    }
+
+    // Hash-uj novu lozinku
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Ažuriraj lozinku
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        password: hashedPassword,
+      },
+    });
+
+    this.logger.log(`Password changed successfully for user ${user.email}`);
   }
 }

@@ -1,24 +1,25 @@
 // Autentifikacija i autorizacija kontroler - upravljanje korisničkim sesijama
-import { 
-  Controller, 
-  Post, 
-  Body, 
-  UseGuards, 
+import {
+  Controller,
+  Post,
+  Body,
+  UseGuards,
   Request,
   HttpCode,
   HttpStatus,
-  Get 
+  Get
 } from '@nestjs/common';
-import { 
-  ApiTags, 
-  ApiOperation, 
-  ApiResponse, 
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
   ApiBody,
-  ApiBearerAuth 
+  ApiBearerAuth
 } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginResponseDto } from './dto/login-response.dto';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -110,5 +111,68 @@ export class AuthController {
   })
   async getProfile(@CurrentUser() user: any) {
     return { user };
+  }
+
+  @Public()
+  @Post('request-password-reset')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Zahtev za resetovanje lozinke' })
+  @ApiBody({ schema: { properties: { email: { type: 'string' } } } })
+  @ApiResponse({
+    status: 200,
+    description: 'Email za resetovanje lozinke je poslat',
+  })
+  async requestPasswordReset(@Body('email') email: string) {
+    await this.authService.requestPasswordReset(email);
+    return { message: 'Ukoliko postoji nalog sa ovom email adresom, poslat je link za resetovanje lozinke.' };
+  }
+
+  @Public()
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Resetovanje lozinke' })
+  @ApiBody({
+    schema: {
+      properties: {
+        token: { type: 'string' },
+        newPassword: { type: 'string' }
+      }
+    }
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lozinka je uspešno resetovana',
+  })
+  async resetPassword(
+    @Body('token') token: string,
+    @Body('newPassword') newPassword: string,
+  ) {
+    await this.authService.resetPassword(token, newPassword);
+    return { message: 'Lozinka je uspešno promenjena. Možete se prijaviti sa novom lozinkom.' };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Promena lozinke za ulogovanog korisnika' })
+  @ApiResponse({
+    status: 200,
+    description: 'Lozinka je uspešno promenjena',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Neispravna trenutna lozinka',
+  })
+  async changePassword(
+    @CurrentUser() user: any,
+    @Body() changePasswordDto: ChangePasswordDto,
+  ) {
+    await this.authService.changePassword(
+      user.id,
+      changePasswordDto.currentPassword,
+      changePasswordDto.newPassword
+    );
+    return { message: 'Lozinka je uspešno promenjena' };
   }
 }

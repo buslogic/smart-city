@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Tabs, Card, Typography } from 'antd';
-import { DatabaseOutlined, SettingOutlined, ApiOutlined, CloudServerOutlined, TableOutlined } from '@ant-design/icons';
+import { DatabaseOutlined, SettingOutlined, MailOutlined, CloudServerOutlined, TableOutlined } from '@ant-design/icons';
 import { usePermissions } from '../../hooks/usePermissions';
 import LegacyDatabases from './components/LegacyDatabases';
 import LegacyTableMappings from './components/LegacyTableMappings';
+import EmailTemplates from './components/EmailTemplates';
 
 const { Title } = Typography;
 
@@ -43,20 +44,19 @@ const GeneralSettings: React.FC = () => {
       permission: 'legacy_tables:read',
     },
     {
-      key: 'api-settings',
+      key: 'email-templates',
       label: (
         <span>
-          <ApiOutlined />
-          API Podešavanja
+          <MailOutlined />
+          Email Šabloni
         </span>
       ),
       children: (
         <div className="p-4">
-          <div>API Podešavanja - Uskoro</div>
+          <EmailTemplates />
         </div>
       ),
-      permission: 'settings:api:read',
-      disabled: true,
+      permission: 'settings.email_templates:view',
     },
     {
       key: 'system-settings',
