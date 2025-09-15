@@ -455,16 +455,32 @@ const MonthlyReport: React.FC = () => {
 
   // Executive Summary PDF Export je premešten u MonthlyReportPdfMake.tsx
   // jer podržava Unicode karaktere kroz pdfMake biblioteku
-  
+
   // Ova funkcija više nije potrebna - koristi se exportExecutivePDFWithUnicode
   // Stara exportExecutivePDF funkcija je uklonjena
   // Koristi se nova verzija iz MonthlyReportPdfMake.tsx
-  
+
   /* Stari kod uklonjen - sada koristi pdfMake */
-  
-  // Nova funkcija koja poziva pdfMake verziju
-  const exportExecutivePDF = () => {
-    exportExecutivePDFWithUnicode(reportData, dateRange);
+
+  // Nova funkcija koja poziva pdfMake verziju i prosleđuje konfiguraciju
+  const exportExecutivePDF = async () => {
+    try {
+      // Učitaj trenutnu konfiguraciju sa backend-a
+      const safetyConfig = await drivingBehaviorService.getSafetyScoreConfig();
+
+      // Pozovi PDF export sa konfiguracijom
+      exportExecutivePDFWithUnicode(reportData, dateRange, safetyConfig);
+    } catch (error) {
+      console.error('Error loading safety config for PDF:', error);
+      // Ako ne uspe učitavanje konfiguracije, koristi default vrednosti
+      const defaultConfig = {
+        severeAccel: { threshold: 2, distance: 100, penalty: 15 },
+        moderateAccel: { threshold: 10, distance: 100, penalty: 5 },
+        severeBrake: { threshold: 2, distance: 100, penalty: 15 },
+        moderateBrake: { threshold: 10, distance: 100, penalty: 5 }
+      };
+      exportExecutivePDFWithUnicode(reportData, dateRange, defaultConfig);
+    }
   };
 
   // Detailed Table PDF Export - koristi pdfMake za Unicode podršku

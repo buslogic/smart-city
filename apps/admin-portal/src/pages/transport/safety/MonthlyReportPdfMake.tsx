@@ -7,7 +7,7 @@ import pdfFonts from 'pdfmake/build/vfs_fonts';
 // @ts-ignore
 pdfMake.vfs = pdfFonts.pdfMake ? pdfFonts.pdfMake.vfs : pdfFonts;
 
-export const exportExecutivePDFWithUnicode = (reportData: any[], dateRange: any[]) => {
+export const exportExecutivePDFWithUnicode = (reportData: any[], dateRange: any[], safetyConfig?: any) => {
   if (reportData.length === 0) {
     return;
   }
@@ -323,16 +323,584 @@ export const exportExecutivePDFWithUnicode = (reportData: any[], dateRange: any[
           }
         ],
         columnGap: 20
-      }
+      },
+
+      // DODAJ DRUGU STRANU SA PODEŠAVANJIMA AKO POSTOJE
+      ...(safetyConfig ? [
+        { text: '', pageBreak: 'after' }, // Prelazak na drugu stranu
+
+        // NASLOV DRUGE STRANE
+        {
+          text: 'PARAMETRI SAFETY SCORE BODOVANJA',
+          fontSize: 18,
+          bold: true,
+          alignment: 'center',
+          margin: [0, 0, 0, 8]
+        },
+        {
+          text: 'Konfiguracija korišćena za generisanje ovog izveštaja',
+          fontSize: 11,
+          alignment: 'center',
+          margin: [0, 0, 0, 20],
+          color: '#666'
+        },
+
+        // OPIS FORMULE
+        {
+          text: 'FORMULA ZA IZRAČUNAVANJE',
+          fontSize: 13,
+          bold: true,
+          margin: [0, 0, 0, 8]
+        },
+        {
+          text: 'Safety Score = 100 - Σ(kazne za prekoračenja pragova)',
+          fontSize: 11,
+          italics: true,
+          margin: [0, 0, 0, 4]
+        },
+        {
+          text: 'Kazna se računa kao: osnovnaKazna + (brojDogađaja - prag) × multiplikator',
+          fontSize: 10,
+          color: '#666',
+          margin: [0, 0, 0, 15]
+        },
+
+        // TABELA SA KONFIGURACIJAMA
+        {
+          text: 'TRENUTNA PODEŠAVANJA',
+          fontSize: 13,
+          bold: true,
+          margin: [0, 0, 0, 10]
+        },
+        {
+          table: {
+            headerRows: 1,
+            widths: ['*', 'auto', 'auto', 'auto'],
+            body: [
+              // Header
+              [
+                { text: 'Tip događaja', fillColor: '#2962ff', color: 'white', bold: true },
+                { text: 'Prag (na 100km)', fillColor: '#2962ff', color: 'white', bold: true, alignment: 'center' },
+                { text: 'Distanca (km)', fillColor: '#2962ff', color: 'white', bold: true, alignment: 'center' },
+                { text: 'Kazna (poeni)', fillColor: '#2962ff', color: 'white', bold: true, alignment: 'center' }
+              ],
+              // Ozbiljna ubrzanja
+              [
+                {
+                  text: 'OZBILJNA UBRZANJA',
+                  fillColor: '#ffebee',
+                  color: '#c62828',
+                  bold: true
+                },
+                {
+                  text: safetyConfig?.severeAccel?.threshold?.toString() || '2',
+                  fillColor: '#ffebee',
+                  alignment: 'center'
+                },
+                {
+                  text: safetyConfig?.severeAccel?.distance?.toString() || '100',
+                  fillColor: '#ffebee',
+                  alignment: 'center'
+                },
+                {
+                  text: safetyConfig?.severeAccel?.penalty?.toString() || '15',
+                  fillColor: '#ffebee',
+                  alignment: 'center',
+                  bold: true
+                }
+              ],
+              // Umerena ubrzanja
+              [
+                {
+                  text: 'UMERENA UBRZANJA',
+                  fillColor: '#fff3e0',
+                  color: '#e65100',
+                  bold: true
+                },
+                {
+                  text: safetyConfig?.moderateAccel?.threshold?.toString() || '10',
+                  fillColor: '#fff3e0',
+                  alignment: 'center'
+                },
+                {
+                  text: safetyConfig?.moderateAccel?.distance?.toString() || '100',
+                  fillColor: '#fff3e0',
+                  alignment: 'center'
+                },
+                {
+                  text: safetyConfig?.moderateAccel?.penalty?.toString() || '5',
+                  fillColor: '#fff3e0',
+                  alignment: 'center',
+                  bold: true
+                }
+              ],
+              // Ozbiljna kočenja
+              [
+                {
+                  text: 'OZBILJNA KOČENJA',
+                  fillColor: '#ffebee',
+                  color: '#c62828',
+                  bold: true
+                },
+                {
+                  text: safetyConfig?.severeBrake?.threshold?.toString() || '2',
+                  fillColor: '#ffebee',
+                  alignment: 'center'
+                },
+                {
+                  text: safetyConfig?.severeBrake?.distance?.toString() || '100',
+                  fillColor: '#ffebee',
+                  alignment: 'center'
+                },
+                {
+                  text: safetyConfig?.severeBrake?.penalty?.toString() || '15',
+                  fillColor: '#ffebee',
+                  alignment: 'center',
+                  bold: true
+                }
+              ],
+              // Umerena kočenja
+              [
+                {
+                  text: 'UMERENA KOČENJA',
+                  fillColor: '#fff3e0',
+                  color: '#e65100',
+                  bold: true
+                },
+                {
+                  text: safetyConfig?.moderateBrake?.threshold?.toString() || '10',
+                  fillColor: '#fff3e0',
+                  alignment: 'center'
+                },
+                {
+                  text: safetyConfig?.moderateBrake?.distance?.toString() || '100',
+                  fillColor: '#fff3e0',
+                  alignment: 'center'
+                },
+                {
+                  text: safetyConfig?.moderateBrake?.penalty?.toString() || '5',
+                  fillColor: '#fff3e0',
+                  alignment: 'center',
+                  bold: true
+                }
+              ]
+            ]
+          },
+          layout: {
+            hLineWidth: () => 1,
+            vLineWidth: () => 1,
+            hLineColor: () => '#e0e0e0',
+            vLineColor: () => '#e0e0e0',
+            paddingLeft: () => 8,
+            paddingRight: () => 8,
+            paddingTop: () => 6,
+            paddingBottom: () => 6
+          }
+        },
+
+        // OBJAŠNJENJA
+        {
+          margin: [0, 20, 0, 0],
+          columns: [
+            {
+              width: '*',
+              stack: [
+                { text: 'ZNAČENJE PARAMETARA', fontSize: 11, bold: true, margin: [0, 0, 0, 8] },
+                { text: '• Prag: Broj događaja koji se tolerišu bez kazne', fontSize: 9, margin: [0, 0, 0, 3] },
+                { text: '• Distanca: Referentna distanca za računanje (obično 100km)', fontSize: 9, margin: [0, 0, 0, 3] },
+                { text: '• Kazna: Broj poena koji se oduzima od maksimalnog skora (100)', fontSize: 9 }
+              ]
+            },
+            {
+              width: '*',
+              stack: [
+                { text: 'PRIMERI BODOVANJA', fontSize: 11, bold: true, margin: [0, 0, 0, 8] },
+                { text: 'Vozilo sa 5 ozbiljnih ubrzanja na 100km:', fontSize: 9, margin: [0, 0, 0, 2] },
+                { text: 'Prag=2, Kazna=15 → Oduzima se 15 poena', fontSize: 9, color: '#666', margin: [0, 0, 0, 3] },
+                { text: 'Vozilo sa 0 prekršaja:', fontSize: 9, margin: [0, 0, 0, 2] },
+                { text: 'Safety Score = 100 (maksimalan skor)', fontSize: 9, color: '#666' }
+              ]
+            }
+          ]
+        },
+
+        // NAPOMENA NA DNU
+        {
+          margin: [0, 25, 0, 0],
+          table: {
+            widths: ['*'],
+            body: [
+              [
+                {
+                  stack: [
+                    { text: '📋 NAPOMENA', fontSize: 10, bold: true, margin: [0, 0, 0, 3] },
+                    {
+                      text: 'Ovi parametri mogu biti prilagođeni u sistemu preko opcije "Podešavanja" kako bi odgovarali specifičnim potrebama i standardima bezbednosti vožnje.',
+                      fontSize: 9,
+                      color: '#555'
+                    }
+                  ],
+                  fillColor: '#f5f5f5',
+                  border: [true, true, true, true]
+                }
+              ]
+            ]
+          },
+          layout: {
+            hLineColor: () => '#ddd',
+            vLineColor: () => '#ddd',
+            hLineWidth: () => 1,
+            vLineWidth: () => 1,
+            paddingLeft: () => 12,
+            paddingRight: () => 12,
+            paddingTop: () => 8,
+            paddingBottom: () => 8
+          }
+        }/*,
+
+        // TREĆA STRANA - PRAGOVI ZA DETEKCIJU AGRESIVNE VOŽNJE - ZAKOMENTARISANO ZA SADA
+        { text: '', pageBreak: 'after' },
+
+        // NASLOV TREĆE STRANE
+        {
+          text: 'PRAGOVI DETEKCIJE AGRESIVNE VOŽNJE',
+          fontSize: 16,
+          bold: true,
+          alignment: 'center',
+          margin: [0, 0, 0, 6]
+        },
+        {
+          text: 'Fizički parametri za klasifikaciju događaja ubrzanja i kočenja',
+          fontSize: 10,
+          alignment: 'center',
+          margin: [0, 0, 0, 15],
+          color: '#666'
+        },
+
+        // UVOD
+        {
+          text: 'METODOLOGIJA DETEKCIJE',
+          fontSize: 12,
+          bold: true,
+          margin: [0, 0, 0, 8]
+        },
+        {
+          text: 'Sistem analizira GPS podatke i računa promene brzine (akceleraciju) između uzastopnih merenja. Na osnovu intenziteta ubrzanja ili kočenja u m/s², događaji se klasifikuju u tri kategorije prilagođene za gradske autobuse sa putnicima.',
+          fontSize: 9,
+          margin: [0, 0, 0, 15],
+          alignment: 'justify'
+        },
+
+        // TABELA SA PRAGOVIMA
+        {
+          text: 'PRAGOVI PRILAGOĐENI ZA AUTOBUSE SA PUTNICIMA',
+          fontSize: 12,
+          bold: true,
+          margin: [0, 0, 0, 10]
+        },
+        {
+          columns: [
+            // Kolona za UBRZANJE
+            {
+              width: '48%',
+              stack: [
+                {
+                  table: {
+                    widths: ['*'],
+                    body: [
+                      [
+                        {
+                          text: '🚀 UBRZANJE',
+                          fontSize: 12,
+                          bold: true,
+                          fillColor: '#e3f2fd',
+                          color: '#1565c0',
+                          alignment: 'center'
+                        }
+                      ]
+                    ]
+                  },
+                  layout: {
+                    hLineWidth: () => 0,
+                    vLineWidth: () => 0,
+                    paddingTop: () => 6,
+                    paddingBottom: () => 6
+                  }
+                },
+                {
+                  margin: [0, 8, 0, 0],
+                  table: {
+                    widths: ['auto', '*', 'auto'],
+                    body: [
+                      [
+                        { text: 'Kategorija', bold: true, fillColor: '#f5f5f5' },
+                        { text: 'Opseg', bold: true, fillColor: '#f5f5f5', alignment: 'center' },
+                        { text: 'Opis', bold: true, fillColor: '#f5f5f5' }
+                      ],
+                      [
+                        {
+                          text: 'NORMALNO',
+                          fillColor: '#e8f5e9',
+                          color: '#2e7d32',
+                          bold: true
+                        },
+                        {
+                          text: '1.0 - 1.5 m/s²',
+                          alignment: 'center'
+                        },
+                        {
+                          text: 'Komforno za putnike',
+                          fontSize: 9,
+                          color: '#666'
+                        }
+                      ],
+                      [
+                        {
+                          text: 'UMERENO',
+                          fillColor: '#fff3e0',
+                          color: '#ef6c00',
+                          bold: true
+                        },
+                        {
+                          text: '1.5 - 2.5 m/s²',
+                          alignment: 'center'
+                        },
+                        {
+                          text: 'Primetno, ali prihvatljivo',
+                          fontSize: 9,
+                          color: '#666'
+                        }
+                      ],
+                      [
+                        {
+                          text: 'OZBILJNO',
+                          fillColor: '#ffebee',
+                          color: '#c62828',
+                          bold: true
+                        },
+                        {
+                          text: '> 2.5 m/s²',
+                          alignment: 'center'
+                        },
+                        {
+                          text: 'Nekomforno, rizik pada',
+                          fontSize: 9,
+                          color: '#666'
+                        }
+                      ]
+                    ]
+                  },
+                  layout: 'lightHorizontalLines'
+                }
+              ]
+            },
+            // Separator
+            { width: '4%', text: '' },
+            // Kolona za KOČENJE
+            {
+              width: '48%',
+              stack: [
+                {
+                  table: {
+                    widths: ['*'],
+                    body: [
+                      [
+                        {
+                          text: '🛑 KOČENJE',
+                          fontSize: 12,
+                          bold: true,
+                          fillColor: '#ffebee',
+                          color: '#c62828',
+                          alignment: 'center'
+                        }
+                      ]
+                    ]
+                  },
+                  layout: {
+                    hLineWidth: () => 0,
+                    vLineWidth: () => 0,
+                    paddingTop: () => 6,
+                    paddingBottom: () => 6
+                  }
+                },
+                {
+                  margin: [0, 8, 0, 0],
+                  table: {
+                    widths: ['auto', '*', 'auto'],
+                    body: [
+                      [
+                        { text: 'Kategorija', bold: true, fillColor: '#f5f5f5' },
+                        { text: 'Opseg', bold: true, fillColor: '#f5f5f5', alignment: 'center' },
+                        { text: 'Opis', bold: true, fillColor: '#f5f5f5' }
+                      ],
+                      [
+                        {
+                          text: 'NORMALNO',
+                          fillColor: '#e8f5e9',
+                          color: '#2e7d32',
+                          bold: true
+                        },
+                        {
+                          text: '-1.0 do -2.0 m/s²',
+                          alignment: 'center'
+                        },
+                        {
+                          text: 'Kontrolisano zaustavljanje',
+                          fontSize: 9,
+                          color: '#666'
+                        }
+                      ],
+                      [
+                        {
+                          text: 'UMERENO',
+                          fillColor: '#fff3e0',
+                          color: '#ef6c00',
+                          bold: true
+                        },
+                        {
+                          text: '-2.0 do -3.5 m/s²',
+                          alignment: 'center'
+                        },
+                        {
+                          text: 'Nagle izmene brzine',
+                          fontSize: 9,
+                          color: '#666'
+                        }
+                      ],
+                      [
+                        {
+                          text: 'OZBILJNO',
+                          fillColor: '#ffebee',
+                          color: '#c62828',
+                          bold: true
+                        },
+                        {
+                          text: '< -3.5 m/s²',
+                          alignment: 'center'
+                        },
+                        {
+                          text: 'Naglo kočenje, opasnost',
+                          fontSize: 9,
+                          color: '#666'
+                        }
+                      ]
+                    ]
+                  },
+                  layout: 'lightHorizontalLines'
+                }
+              ]
+            }
+          ]
+        },
+
+        // OBJAŠNJENJE FIZIKE
+        {
+          margin: [0, 15, 0, 0],
+          columns: [
+            {
+              width: '48%',
+              stack: [
+                { text: '📐 RAZUMEVANJE VREDNOSTI', fontSize: 10, bold: true, margin: [0, 0, 0, 6] },
+                { text: '• 1 m/s² = ubrzanje od 0 do 3.6 km/h za 1 sekund', fontSize: 8, margin: [0, 0, 0, 2] },
+                { text: '• 2.5 m/s² = ubrzanje od 0 do 9 km/h za 1 sekund', fontSize: 8, margin: [0, 0, 0, 2] },
+                { text: '• Gravitacija = 9.81 m/s² (referentna vrednost)', fontSize: 8, margin: [0, 0, 0, 2] },
+                { text: '• 0.25g = 2.45 m/s² (prag nekomfora za putnike)', fontSize: 8, bold: true, color: '#d32f2f' }
+              ]
+            },
+            {
+              width: '4%',
+              text: ''
+            },
+            {
+              width: '48%',
+              stack: [
+                { text: '⚡ FORMULA RAČUNANJA', fontSize: 10, bold: true, margin: [0, 0, 0, 6] },
+                {
+                  text: 'a = Δv / Δt',
+                  fontSize: 10,
+                  bold: true,
+                  italics: true,
+                  margin: [0, 0, 0, 4],
+                  alignment: 'center',
+                  fillColor: '#f5f5f5'
+                },
+                { text: 'gde je:', fontSize: 8, margin: [0, 3, 0, 2] },
+                { text: 'a = akceleracija (m/s²)', fontSize: 8, margin: [5, 0, 0, 1] },
+                { text: 'Δv = promena brzine (m/s)', fontSize: 8, margin: [5, 0, 0, 1] },
+                { text: 'Δt = vremenski interval (s)', fontSize: 8, margin: [5, 0, 0, 1] }
+              ]
+            }
+          ]
+        },
+
+        // NAPOMENA O STANDARDIMA
+        {
+          margin: [0, 15, 0, 0],
+          table: {
+            widths: ['*'],
+            body: [
+              [
+                {
+                  stack: [
+                    { text: '🚌 BEZBEDNOSNI STANDARDI ZA GRADSKE AUTOBUSE', fontSize: 9, bold: true, margin: [0, 0, 0, 3] },
+                    {
+                      text: 'Pragovi su postavljeni na osnovu međunarodnih standarda za bezbednost i komfor putnika u gradskom prevozu. Vrednosti preko 2.5 m/s² za ubrzanje i ispod -3.5 m/s² za kočenje mogu uzrokovati pad putnika koji stoje, posebno starijih osoba i osoba sa invaliditetom.',
+                      fontSize: 8,
+                      color: '#555',
+                      alignment: 'justify'
+                    }
+                  ],
+                  fillColor: '#fef9e7',
+                  border: [true, true, true, true]
+                }
+              ]
+            ]
+          },
+          layout: {
+            hLineColor: () => '#f39c12',
+            vLineColor: () => '#f39c12',
+            hLineWidth: () => 1,
+            vLineWidth: () => 1,
+            paddingLeft: () => 10,
+            paddingRight: () => 10,
+            paddingTop: () => 6,
+            paddingBottom: () => 6
+          }
+        }*/
+      ] : [])
     ],
 
     // Footer
-    footer: (currentPage: number) => {
+    footer: (currentPage: number, pageCount: number) => {
+      let pageTitle = 'Izvršni pregled';
+      if (currentPage === 2) pageTitle = 'Parametri bodovanja';
+      // if (currentPage === 3) pageTitle = 'Pragovi detekcije'; // Zakomentarisano
+
       return {
-        text: `Generisan: ${new Date().toLocaleDateString('sr-RS')} | Smart City Platform`,
-        alignment: 'center',
-        fontSize: 9,
-        margin: [0, 30, 0, 0]
+        columns: [
+          {
+            text: pageTitle,
+            alignment: 'left',
+            fontSize: 9,
+            margin: [40, 30, 0, 0],
+            color: '#666'
+          },
+          {
+            text: `Strana ${currentPage} od ${pageCount}`,
+            alignment: 'center',
+            fontSize: 9,
+            margin: [0, 30, 0, 0]
+          },
+          {
+            // Zakomentarisano po zahtevu
+            // text: `Generisan: ${new Date().toLocaleDateString('sr-RS')} | Smart City Platform`,
+            text: 'Smart City Platform',
+            alignment: 'right',
+            fontSize: 9,
+            margin: [0, 30, 40, 0],
+            color: '#666'
+          }
+        ]
       };
     }
   };
@@ -529,7 +1097,9 @@ export const exportDetailedPDFWithUnicode = (reportData: any[], dateRange: any[]
       return {
         columns: [
           { text: `Strana ${currentPage} od ${pageCount}`, alignment: 'left', fontSize: 9, margin: [30, 0] },
-          { text: `Generisan: ${new Date().toLocaleDateString('sr-RS')} | Smart City Platform`, alignment: 'right', fontSize: 9, margin: [0, 0, 30, 0] }
+          // Zakomentarisano po zahtevu
+          // { text: `Generisan: ${new Date().toLocaleDateString('sr-RS')} | Smart City Platform`, alignment: 'right', fontSize: 9, margin: [0, 0, 30, 0] }
+          { text: 'Smart City Platform', alignment: 'right', fontSize: 9, margin: [0, 0, 30, 0] }
         ],
         margin: [0, 20, 0, 0]
       };
