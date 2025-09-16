@@ -78,7 +78,7 @@ export class MigrationService {
     let currentDay = 0;
     const totalDays = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
     const startTime = Date.now();
-    const batchSize = 50000; // Povećan batch size za bolju performansu
+    const batchSize = 200000; // Povećan batch size sa 50k na 200k za velike dataset-e (17M+ zapisa dnevno)
 
     this.logger.log(`Will process ${totalDays} days with batch size ${batchSize}`);
 
