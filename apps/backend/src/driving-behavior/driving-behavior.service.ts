@@ -441,15 +441,24 @@ export class DrivingBehaviorService {
           GROUP BY vehicle_id
         ),
         distance_stats AS (
-          -- Use pre-calculated hourly stats for distance (MUCH FASTER!)
-          SELECT 
+          -- Za tačne Belgrade km, moramo direktno iz gps_data sa Belgrade timezone range
+          -- Aggregate ne može pravilno podeliti UTC buckete za Belgrade mesece
+          SELECT
             vehicle_id,
-            COALESCE(SUM(distance_km), 0)::NUMERIC(10,2) as total_km,
-            COUNT(DISTINCT DATE(hour)) as active_days
-          FROM vehicle_hourly_stats
+            COALESCE(
+              ST_Length(
+                ST_MakeLine(location ORDER BY time)::geography
+              ) / 1000.0,
+              0
+            )::NUMERIC(10,2) as total_km,
+            COUNT(DISTINCT DATE(time AT TIME ZONE 'Europe/Belgrade')) as active_days
+          FROM gps_data
           WHERE vehicle_id = ANY($1::int[])
-            AND hour >= $2::date
-            AND hour < $3::date + INTERVAL '1 day'
+            -- Belgrade timezone aware range
+            -- Za npr. August 2025: od 31.07 22:00 UTC do 31.08 21:59:59 UTC
+            AND time >= ($2::date::timestamp AT TIME ZONE 'Europe/Belgrade')
+            AND time < (($3::date + INTERVAL '1 day')::timestamp AT TIME ZONE 'Europe/Belgrade')
+            AND speed > 0
           GROUP BY vehicle_id
         ),
         garage_names AS (
