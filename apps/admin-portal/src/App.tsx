@@ -23,6 +23,7 @@ import Profile from './pages/users/Profile';
 import ChangePassword from './pages/users/ChangePassword';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import TimescaleDB from './pages/transport/maintenance/TimescaleDB';
+import MigrationPage from './pages/migration/MigrationPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 
 function App() {
@@ -199,13 +200,22 @@ function App() {
               } 
             />
             
-            <Route 
-              path="transport/maintenance/timescaledb" 
+            <Route
+              path="transport/maintenance/timescaledb"
               element={
                 <PermissionGuard permissions={['maintenance.timescaledb:view']}>
                   <TimescaleDB />
                 </PermissionGuard>
-              } 
+              }
+            />
+
+            <Route
+              path="migration"
+              element={
+                <PermissionGuard permissions={['system.manage']}>
+                  <MigrationPage />
+                </PermissionGuard>
+              }
             />
           </Route>
         </Routes>

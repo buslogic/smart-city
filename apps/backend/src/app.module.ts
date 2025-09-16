@@ -29,6 +29,7 @@ import { DrivingRecreationModule } from './safety/driving-recreation/driving-rec
 import { ApiKeysModule } from './api-keys/api-keys.module';
 import { MailModule } from './mail/mail.module';
 import { EmailTemplatesModule } from './email-templates/email-templates.module';
+import { MigrationModule } from './migration/migration.module';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { EmailTemplatesModule } from './email-templates/email-templates.module';
     ApiKeysModule,
     MailModule,
     EmailTemplatesModule,
+    MigrationModule,
   ],
   controllers: [AppController],
   providers: [

@@ -440,6 +440,31 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
               },
             ],
           },
+
+          // System menu
+          {
+            id: 'system',
+            name: 'Sistem',
+            type: 'submenu',
+            icon: <Settings className="h-4 w-4" />,
+            children: [
+              {
+                id: 'system-operations',
+                name: 'Sistemske Operacije',
+                type: 'section',
+                children: allPermissions
+                  .filter(p => p.resource === 'system')
+                  .map(p => ({
+                    id: `perm-${p.id}`,
+                    name: getPermissionLabel(p),
+                    type: 'permission' as const,
+                    permission: p,
+                    color: getPermissionColor(p.action),
+                  })),
+              },
+            ],
+          },
+
           {
             id: 'api-keys',
             name: 'API Keys',
@@ -563,6 +588,18 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
       }
     }
     
+    // Specifični labeli za system permisije
+    if (permission.resource === 'system') {
+      const systemLabels: Record<string, string> = {
+        'manage': 'Upravljanje sistemskim operacijama (migracije, backup, itd.)',
+        'view': 'Pregled sistemskih informacija',
+        'configure': 'Konfiguracija sistema',
+      };
+      if (systemLabels[permission.action]) {
+        return systemLabels[permission.action];
+      }
+    }
+
     // Specifični labeli za settings permisije
     if (permission.resource === 'settings.general') {
       const generalLabels: Record<string, string> = {

@@ -92,7 +92,14 @@ const ModernMenuV1: React.FC = () => {
       href: '/dashboard',
       permissions: ['dashboard:view'],
     },
-    
+
+    {
+      name: '🚨 GPS Migration',
+      icon: LayoutDashboard,
+      href: '/migration',
+      permissions: ['system.manage'],
+    },
+
     {
       name: 'Korisnici',
       icon: Users,
