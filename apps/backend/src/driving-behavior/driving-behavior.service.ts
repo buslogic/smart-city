@@ -441,25 +441,51 @@ export class DrivingBehaviorService {
           GROUP BY vehicle_id
         ),
         distance_stats AS (
-          -- Za tačne Belgrade km, moramo direktno iz gps_data sa Belgrade timezone range
-          -- Aggregate ne može pravilno podeliti UTC buckete za Belgrade mesece
+          -- Kombinacija monthly i hourly agregata za tačne Belgrade km
+          -- Monthly daje UTC bucket, hourly koriguje za UTC+2 offset
+          WITH monthly_base AS (
+            SELECT
+              vehicle_id,
+              total_km as km_monthly,
+              active_days
+            FROM monthly_vehicle_distance
+            WHERE vehicle_id = ANY($1::int[])
+              AND month_utc = DATE_TRUNC('month', $2::date)::timestamptz
+          ),
+          hourly_start_correction AS (
+            -- Dodaj sate od prethodnog meseca koji pripadaju Belgrade mesecu
+            -- Npr. za avgust: 31.07 22:00-23:59 UTC = 01.08 00:00-01:59 Belgrade
+            SELECT
+              vehicle_id,
+              COALESCE(SUM(total_km), 0) as km_to_add
+            FROM hourly_vehicle_distance
+            WHERE vehicle_id = ANY($1::int[])
+              AND hour_utc >= (DATE_TRUNC('month', $2::date) - INTERVAL '2 hours')::timestamptz
+              AND hour_utc < DATE_TRUNC('month', $2::date)::timestamptz
+            GROUP BY vehicle_id
+          ),
+          hourly_end_correction AS (
+            -- Oduzmi sate koji ne pripadaju Belgrade mesecu
+            -- Npr. za avgust: 31.08 22:00-23:59 UTC = 01.09 00:00-01:59 Belgrade
+            SELECT
+              vehicle_id,
+              COALESCE(SUM(total_km), 0) as km_to_subtract
+            FROM hourly_vehicle_distance
+            WHERE vehicle_id = ANY($1::int[])
+              AND hour_utc >= (DATE_TRUNC('month', $3::date + INTERVAL '1 day') - INTERVAL '2 hours')::timestamptz
+              AND hour_utc < DATE_TRUNC('month', $3::date + INTERVAL '1 day')::timestamptz
+            GROUP BY vehicle_id
+          )
           SELECT
-            vehicle_id,
-            COALESCE(
-              ST_Length(
-                ST_MakeLine(location ORDER BY time)::geography
-              ) / 1000.0,
-              0
-            )::NUMERIC(10,2) as total_km,
-            COUNT(DISTINCT DATE(time AT TIME ZONE 'Europe/Belgrade')) as active_days
-          FROM gps_data
-          WHERE vehicle_id = ANY($1::int[])
-            -- Belgrade timezone aware range
-            -- Za npr. August 2025: od 31.07 22:00 UTC do 31.08 21:59:59 UTC
-            AND time >= ($2::date::timestamp AT TIME ZONE 'Europe/Belgrade')
-            AND time < (($3::date + INTERVAL '1 day')::timestamp AT TIME ZONE 'Europe/Belgrade')
-            AND speed > 0
-          GROUP BY vehicle_id
+            COALESCE(m.vehicle_id, hs.vehicle_id, he.vehicle_id) as vehicle_id,
+            COALESCE(m.km_monthly, 0) +
+            COALESCE(hs.km_to_add, 0) -
+            COALESCE(he.km_to_subtract, 0) as total_km,
+            COALESCE(m.active_days, 0) as active_days
+          FROM monthly_base m
+          FULL OUTER JOIN hourly_start_correction hs ON m.vehicle_id = hs.vehicle_id
+          FULL OUTER JOIN hourly_end_correction he ON
+            COALESCE(m.vehicle_id, hs.vehicle_id) = he.vehicle_id
         ),
         garage_names AS (
           SELECT DISTINCT ON (vehicle_id)
