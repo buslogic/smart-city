@@ -30,6 +30,7 @@ import {
 @Controller('driving-recreation')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class DrivingRecreationController {
+  // Deploy trigger: 16.09.2025 - Ensure driving-recreation module is deployed
   constructor(private readonly drivingRecreationService: DrivingRecreationService) {}
 
   @Get('vehicles')
