@@ -86,6 +86,35 @@ export class GpsProcessorService {
   }
 
   /**
+   * Konvertuje Belgrade vreme u UTC
+   * VAŽNO: MySQL DATETIME kolone čuvaju vreme bez timezone info
+   * koje je zapravo Belgrade lokalno vreme
+   */
+  private convertBelgradeToUTC(dateTimeValue: any): string {
+    // Handle različite input formate
+    let dateStr: string;
+
+    if (dateTimeValue instanceof Date) {
+      // Ako je već Date objekat, konvertuj u string
+      dateStr = dateTimeValue.toISOString().replace('T', ' ').substring(0, 19);
+    } else if (typeof dateTimeValue === 'string') {
+      dateStr = dateTimeValue;
+    } else {
+      // Fallback na trenutno vreme ako je nevalidan input
+      this.logger.warn(`Invalid datetime value: ${dateTimeValue}`);
+      return new Date().toISOString();
+    }
+
+    // Dodaj Belgrade timezone offset
+    // NAPOMENA: Ovo je pojednostavljeno za +02:00 (letnje vreme)
+    // Za potpunu podršku DST, koristiti moment-timezone ili date-fns-tz
+    const belgradeTime = new Date(dateStr + ' GMT+0200');
+
+    // Vrati ISO string sa UTC vremenom
+    return belgradeTime.toISOString();
+  }
+
+  /**
    * Cron job koji se pokreće svakih 30 sekundi
    * Prebacuje podatke iz MySQL buffer-a u TimescaleDB
    * Koristi Worker Pool Pattern za paralelno procesiranje
@@ -590,7 +619,9 @@ export class GpsProcessorService {
         const bufferData = {
           vehicleId: point.vehicleId,
           garageNo: point.garageNo || '',
-          timestamp: new Date((point.timestamp || Math.floor(Date.now() / 1000)) * 1000), // Convert Unix timestamp to Date
+          timestamp: new Date(this.convertBelgradeToUTC(
+            new Date((point.timestamp || Math.floor(Date.now() / 1000)) * 1000)
+          )), // Convert Unix timestamp to Date sa Belgrade->UTC konverzijom
           lat: parseFloat(point.lat),
           lng: parseFloat(point.lng),
           speed: parseInt(point.speed) || 0,
@@ -707,55 +738,74 @@ export class GpsProcessorService {
       // this.logger.debug('⏸️ Buffer Cleanup cron je pauziran');
       return;
     }
-    
+
     try {
       let totalDeleted = 0;
-      
-      // 1. Briši processed zapise (batch delete sa LIMIT)
-      let deletedProcessed = 0;
-      for (let i = 0; i < 5; i++) { // Maksimalno 5 batch-eva po 10000
-        const result = await this.prisma.$executeRaw`
-          DELETE FROM gps_raw_buffer 
-          WHERE process_status = 'processed' 
-          AND processed_at < DATE_SUB(NOW(), INTERVAL ${this.settings.cleanupProcessedMinutes} MINUTE)
-          LIMIT 10000
-        `;
-        
-        deletedProcessed += result;
-        if (result < 10000) break; // Nema više za brisanje
-      }
-      
-      if (deletedProcessed > 0) {
-        // this.logger.log(`🧹 Obrisano ${deletedProcessed} processed GPS zapisa`);
-      }
-      
-      // 2. Briši failed zapise starije od X sati (batch delete sa LIMIT)
-      let deletedFailed = 0;
-      for (let i = 0; i < 5; i++) { // Maksimalno 5 batch-eva po 10000
-        const result = await this.prisma.$executeRaw`
-          DELETE FROM gps_raw_buffer 
-          WHERE process_status = 'failed' 
-          AND received_at < DATE_SUB(NOW(), INTERVAL ${this.settings.cleanupFailedHours} HOUR)
-          LIMIT 10000
-        `;
-        
-        deletedFailed += result;
-        if (result < 10000) break; // Nema više za brisanje
-      }
-      
-      if (deletedFailed > 0) {
-        // this.logger.log(`🧹 Obrisano ${deletedFailed} failed GPS zapisa starijih od ${this.settings.cleanupFailedHours}h`);
-      }
-      
-      totalDeleted = deletedProcessed + deletedFailed;
-      
+
+      // Koristi transakciju koja automatski upravlja konekcijama
+      await this.prisma.$transaction(async (tx) => {
+        // 1. Briši processed zapise (batch delete sa LIMIT)
+        let deletedProcessed = 0;
+        for (let i = 0; i < 5; i++) { // Maksimalno 5 batch-eva po 10000
+          const result = await tx.$executeRaw`
+            DELETE FROM gps_raw_buffer
+            WHERE process_status = 'processed'
+            AND processed_at < DATE_SUB(NOW(), INTERVAL ${this.settings.cleanupProcessedMinutes} MINUTE)
+            LIMIT 10000
+          `;
+
+          deletedProcessed += result;
+          if (result < 10000) break; // Nema više za brisanje
+        }
+
+        if (deletedProcessed > 0) {
+          // this.logger.log(`🧹 Obrisano ${deletedProcessed} processed GPS zapisa`);
+        }
+
+        // 2. Briši failed zapise starije od X sati (batch delete sa LIMIT)
+        let deletedFailed = 0;
+        for (let i = 0; i < 5; i++) { // Maksimalno 5 batch-eva po 10000
+          const result = await tx.$executeRaw`
+            DELETE FROM gps_raw_buffer
+            WHERE process_status = 'failed'
+            AND received_at < DATE_SUB(NOW(), INTERVAL ${this.settings.cleanupFailedHours} HOUR)
+            LIMIT 10000
+          `;
+
+          deletedFailed += result;
+          if (result < 10000) break; // Nema više za brisanje
+        }
+
+        if (deletedFailed > 0) {
+          // this.logger.log(`🧹 Obrisano ${deletedFailed} failed GPS zapisa starijih od ${this.settings.cleanupFailedHours}h`);
+        }
+
+        totalDeleted = deletedProcessed + deletedFailed;
+      }, {
+        maxWait: 5000, // Čekaj max 5 sekundi na slobodnu konekciju
+        timeout: 30000, // Timeout za celu transakciju je 30 sekundi
+      });
+
       // Ažuriraj vreme poslednjeg izvršavanja
       const { GpsSyncDashboardController } = require('../gps-sync/gps-sync-dashboard.controller');
       GpsSyncDashboardController.updateCronLastRun('cleanup');
-      
+
       return totalDeleted;
     } catch (error) {
       this.logger.error('Greška pri čišćenju buffer zapisa:', error);
+
+      // Ako je problem sa konekcijama, forsiraj reconnect
+      if (error.code === 'P2024' || error.code === 'P2010' || error.code === 'P2034') {
+        this.logger.warn('🔄 Detektovan connection pool problem, forsiram reconnect...');
+        try {
+          await this.prisma.$disconnect();
+          await this.prisma.$connect();
+          this.logger.log('✅ Prisma reconnect uspešan');
+        } catch (reconnectError) {
+          this.logger.error('❌ Prisma reconnect neuspešan:', reconnectError);
+        }
+      }
+
       return 0;
     }
   }
@@ -771,27 +821,46 @@ export class GpsProcessorService {
       // this.logger.debug('⏸️ Stats Cleanup cron je pauziran');
       return;
     }
-    
+
     try {
       const daysAgo = new Date();
       daysAgo.setDate(daysAgo.getDate() - this.settings.cleanupStatsDays);
-      
-      const result = await this.prisma.$executeRaw`
-        DELETE FROM gps_processing_stats
-        WHERE hour_slot < ${daysAgo}
-      `;
+
+      // Koristi transakciju za sigurno upravljanje konekcijama
+      const result = await this.prisma.$transaction(async (tx) => {
+        return await tx.$executeRaw`
+          DELETE FROM gps_processing_stats
+          WHERE hour_slot < ${daysAgo}
+        `;
+      }, {
+        maxWait: 5000,
+        timeout: 10000,
+      });
 
       if (result > 0) {
         // this.logger.log(`📊 Obrisano ${result} starih statistika (starije od ${this.settings.cleanupStatsDays} dana`);
       }
-      
+
       // Ažuriraj vreme poslednjeg izvršavanja
       const { GpsSyncDashboardController } = require('../gps-sync/gps-sync-dashboard.controller');
       GpsSyncDashboardController.updateCronLastRun('statsCleanup');
-      
+
       return result;
     } catch (error) {
       this.logger.error('Greška pri čišćenju starih statistika:', error);
+
+      // Ako je problem sa konekcijama, forsiraj reconnect
+      if (error.code === 'P2024' || error.code === 'P2010' || error.code === 'P2034') {
+        this.logger.warn('🔄 Detektovan connection pool problem u stats cleanup, forsiram reconnect...');
+        try {
+          await this.prisma.$disconnect();
+          await this.prisma.$connect();
+          this.logger.log('✅ Prisma reconnect uspešan');
+        } catch (reconnectError) {
+          this.logger.error('❌ Prisma reconnect neuspešan:', reconnectError);
+        }
+      }
+
       return 0;
     }
   }
@@ -855,8 +924,9 @@ export class GpsProcessorService {
       let paramIndex = 1;
       
       for (const point of batchPoints) {
-        // Track time range
-        const pointTime = new Date(point.timestamp);
+        // Track time range - VAŽNO: konvertuj Belgrade->UTC
+        const convertedTime = this.convertBelgradeToUTC(point.timestamp);
+        const pointTime = new Date(convertedTime);
         if (!minTime || pointTime < minTime) minTime = pointTime;
         if (!maxTime || pointTime > maxTime) maxTime = pointTime;
 
@@ -871,7 +941,7 @@ export class GpsProcessorService {
 
         // Dodaj vrednosti
         batchValues.push(
-          point.timestamp,                    // time
+          convertedTime,                      // time - konvertovano u UTC
           point.vehicle_id || point.vehicleId, // vehicle_id
           point.garage_no || point.garageNo,   // garage_no
           parseFloat(point.lat),              // lat

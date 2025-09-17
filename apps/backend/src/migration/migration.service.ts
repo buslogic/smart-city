@@ -78,7 +78,7 @@ export class MigrationService {
     let currentDay = 0;
     const totalDays = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
     const startTime = Date.now();
-    const batchSize = 1000000; // OPTIMIZOVANO: Povećan na 1M za 3-5x brže izvršavanje!
+    const batchSize = 200000; // Povećan batch size sa 50k na 200k za velike dataset-e (17M+ zapisa dnevno)
 
     this.logger.log(`Will process ${totalDays} days with batch size ${batchSize}`);
 
@@ -109,9 +109,8 @@ export class MigrationService {
         const beforeCount = parseInt(beforeCountResult.rows[0].count);
 
         // Pozovi migrate_single_day proceduru za jedan dan
-        // VAŽNO: Procedura ima OUT parametre, moramo koristiti SELECT umesto CALL
         const procResult = await this.timescalePool.query(`
-          SELECT * FROM migrate_single_day($1::date, $2)
+          CALL migrate_single_day($1::date, NULL, NULL, $2)
         `, [currentDateStr, batchSize]);
 
         // Prebroj zapise u gps_data_fixed posle migracije SAMO za trenutni dan

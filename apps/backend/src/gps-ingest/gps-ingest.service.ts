@@ -30,6 +30,35 @@ export class GpsIngestService {
   }
 
   /**
+   * Konvertuje Belgrade vreme u UTC
+   * VAŽNO: MySQL DATETIME kolone čuvaju vreme bez timezone info
+   * koje je zapravo Belgrade lokalno vreme
+   */
+  private convertBelgradeToUTC(dateTimeValue: any): string {
+    // Handle različite input formate
+    let dateStr: string;
+
+    if (dateTimeValue instanceof Date) {
+      // Ako je već Date objekat, konvertuj u string
+      dateStr = dateTimeValue.toISOString().replace('T', ' ').substring(0, 19);
+    } else if (typeof dateTimeValue === 'string') {
+      dateStr = dateTimeValue;
+    } else {
+      // Fallback na trenutno vreme ako je nevalidan input
+      this.logger.warn(`Invalid datetime value: ${dateTimeValue}`);
+      return new Date().toISOString();
+    }
+
+    // Dodaj Belgrade timezone offset
+    // NAPOMENA: Ovo je pojednostavljeno za +02:00 (letnje vreme)
+    // Za potpunu podršku DST, koristiti moment-timezone ili date-fns-tz
+    const belgradeTime = new Date(dateStr + ' GMT+0200');
+
+    // Vrati ISO string sa UTC vremenom
+    return belgradeTime.toISOString();
+  }
+
+  /**
    * Validacija API ključa - koristi novi sigurni API Keys sistem
    */
   async validateApiKey(apiKey: string, ipAddress?: string, userAgent?: string, endpoint?: string, method?: string): Promise<boolean> {
@@ -105,7 +134,7 @@ export class GpsIngestService {
             vehicleId: vehicleId,
             garageNo: point.garageNo || '',
             imei: point.imei || null,
-            timestamp: new Date(timestamp),
+            timestamp: new Date(this.convertBelgradeToUTC(timestamp)),
             lat: parseFloat(point.lat.toString()),
             lng: parseFloat(point.lng.toString()),
             speed: point.speed || 0,
@@ -192,7 +221,9 @@ export class GpsIngestService {
 
           // Dodaj vrednosti za ovaj red
           const rowValues = [
-            new Date(point.captured || point.timestamp || new Date().toISOString()), // time
+            new Date(this.convertBelgradeToUTC(
+              point.captured || point.timestamp || new Date().toISOString()
+            )), // time - konvertovano u UTC
             vehicleId, // vehicle_id
             point.garageNo, // garage_no
             point.lat, // lat
