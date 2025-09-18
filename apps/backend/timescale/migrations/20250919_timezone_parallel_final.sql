@@ -322,7 +322,12 @@ BEGIN
 END
 $$;
 
-RAISE NOTICE 'Timezone parallel migration completed successfully!';
+-- Završna poruka u DO bloku
+DO $$
+BEGIN
+    RAISE NOTICE 'Timezone parallel migration completed successfully!';
+END
+$$;
 
 -- migrate:down
 -- Ne briši funkcije jer su potrebne za aplikaciju
