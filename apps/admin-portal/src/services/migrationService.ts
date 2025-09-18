@@ -33,6 +33,15 @@ export interface VerificationResult {
   }>;
 }
 
+export interface RangeProgress {
+  rangeName: string;
+  startTime: string;
+  endTime: string;
+  estimatedRecords: number;
+  migratedRecords: number;
+  progressPercent: number;
+}
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3010';
 
 class MigrationService {
@@ -51,8 +60,8 @@ class MigrationService {
     return response.data;
   }
 
-  async startMigration(startDate?: string, endDate?: string): Promise<{ success: boolean; message: string }> {
-    console.log('MigrationService.startMigration called with:', { startDate, endDate });
+  async startMigration(startDate?: string, endDate?: string, resume?: boolean, useParallel?: boolean): Promise<{ success: boolean; message: string }> {
+    console.log('MigrationService.startMigration called with:', { startDate, endDate, resume, useParallel });
     console.log('API_URL:', API_URL);
     console.log('Full URL:', `${API_URL}/api/migration/start`);
     console.log('Headers:', this.getHeaders());
@@ -62,7 +71,9 @@ class MigrationService {
         `${API_URL}/api/migration/start`,
         {
           startDate,
-          endDate
+          endDate,
+          resume: resume || false,
+          useParallel: useParallel !== false // Default true
         },
         {
           headers: this.getHeaders()
@@ -92,6 +103,13 @@ class MigrationService {
 
   async getLogs(limit: number = 50): Promise<{ logs: MigrationLog[] }> {
     const response = await axios.get(`${API_URL}/api/migration/logs?limit=${limit}`, {
+      headers: this.getHeaders()
+    });
+    return response.data;
+  }
+
+  async getRangeProgress(date: string): Promise<{ date: string; ranges: RangeProgress[] }> {
+    const response = await axios.get(`${API_URL}/api/migration/range-progress/${date}`, {
       headers: this.getHeaders()
     });
     return response.data;

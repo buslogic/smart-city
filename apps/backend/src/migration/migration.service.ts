@@ -1,20 +1,23 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Pool } from 'pg';
 import { createTimescalePool } from '../common/config/timescale.config';
+import { MigrationParallelService } from './migration-parallel.service';
 
 @Injectable()
 export class MigrationService {
   private readonly logger = new Logger(MigrationService.name);
   private timescalePool: Pool;
+  private parallelService: MigrationParallelService;
 
   constructor() {
     this.timescalePool = createTimescalePool();
+    this.parallelService = new MigrationParallelService();
   }
 
   async getMigrationStatus() {
     try {
       const result = await this.timescalePool.query(
-        `SELECT * FROM check_migration_progress()`
+        `SELECT * FROM check_migration_progress()`,
       );
 
       if (result.rows.length === 0) {
@@ -23,7 +26,7 @@ export class MigrationService {
           progressPercent: 0,
           recordsMigrated: 0,
           estimatedTotal: 304000000,
-          message: 'Migration has not been started yet'
+          message: 'Migration has not been started yet',
         };
       }
 
@@ -56,13 +59,13 @@ export class MigrationService {
         eta: status.eta,
         startDate: dateRange?.start_date,
         endDate: dateRange?.end_date,
-        lastLogs: logsResult.rows.map(log => ({
+        lastLogs: logsResult.rows.map((log) => ({
           id: log.id,
           action: log.action,
           message: log.message,
           recordsAffected: log.records_affected,
-          createdAt: log.created_at
-        }))
+          createdAt: log.created_at,
+        })),
       };
     } catch (error) {
       this.logger.error('Error getting migration status:', error);
@@ -70,75 +73,101 @@ export class MigrationService {
     }
   }
 
-  private async runDayByDayMigration(startDate: string, endDate: string) {
+  private async runDayByDayMigration(
+    startDate: string,
+    endDate: string,
+    useParallel: boolean = true,
+  ) {
     const start = new Date(startDate);
     const end = new Date(endDate);
-    let current = new Date(startDate);
+    const current = new Date(startDate);
     let totalMigrated = 0;
     let currentDay = 0;
-    const totalDays = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    const totalDays =
+      Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
     const startTime = Date.now();
-    const batchSize = 400000; // Povećan batch size sa 200k na 400k za velike dataset-e (17M+ zapisa dnevno)
+    const batchSize = 400000;
 
-    this.logger.log(`Will process ${totalDays} days with batch size ${batchSize}`);
+    this.logger.log(
+      `Will process ${totalDays} days with ${useParallel ? 'PARALLEL' : 'SEQUENTIAL'} mode`,
+    );
 
     // Log početak migracije
-    await this.timescalePool.query(`
+    await this.timescalePool.query(
+      `
       SELECT log_migration_progress(
         'timezone_fix_2025',
         'MIGRATION_START',
         $1,
         NULL
       )
-    `, [`Starting migration from ${startDate} to ${endDate} (${totalDays} days)`]);
+    `,
+      [
+        `Starting ${useParallel ? 'PARALLEL' : 'SEQUENTIAL'} migration from ${startDate} to ${endDate} (${totalDays} days)`,
+      ],
+    );
 
     while (current <= end) {
       const currentDateStr = current.toISOString().split('T')[0];
       currentDay++;
 
       try {
-        // Tiho procesiranje bez logovanja svakog dana
+        let dayRecords = 0;
 
-        // Prebroj zapise u gps_data_fixed pre migracije SAMO za trenutni dan
-        const beforeCountResult = await this.timescalePool.query(`
-          SELECT COUNT(*) as count
-          FROM gps_data_fixed
-          WHERE time >= $1::date - INTERVAL '2 hours'
-            AND time < ($1::date + INTERVAL '1 day') - INTERVAL '2 hours'
-        `, [currentDateStr]);
-        const beforeCount = parseInt(beforeCountResult.rows[0].count);
+        if (useParallel) {
+          // NOVA PARALELNA MIGRACIJA
+          this.logger.log(`Starting PARALLEL migration for ${currentDateStr}`);
 
-        // Pozovi migrate_single_day proceduru za jedan dan
-        const procResult = await this.timescalePool.query(`
-          CALL migrate_single_day($1::date, NULL, NULL, $2)
-        `, [currentDateStr, batchSize]);
+          const result = await this.parallelService.runParallelDayMigration({
+            date: currentDateStr,
+            parts: 4, // Podeli dan na 4 dela (00-06, 06-12, 12-18, 18-24)
+            maxConcurrent: 2, // Maksimalno 2 paralelna procesa
+            batchSize: 400000,
+          });
 
-        // Prebroj zapise u gps_data_fixed posle migracije SAMO za trenutni dan
-        const afterCountResult = await this.timescalePool.query(`
-          SELECT COUNT(*) as count
-          FROM gps_data_fixed
-          WHERE time >= $1::date - INTERVAL '2 hours'
-            AND time < ($1::date + INTERVAL '1 day') - INTERVAL '2 hours'
-        `, [currentDateStr]);
-        const afterCount = parseInt(afterCountResult.rows[0].count);
+          dayRecords = result.totalRecords;
 
-        // Izračunaj koliko je stvarno migrirano za ovaj dan
-        const dayRecords = afterCount - beforeCount;
+          this.logger.log(
+            `Parallel migration for ${currentDateStr} completed: ${dayRecords} records in ${result.totalDurationMs}ms`,
+          );
+        } else {
+          // STARA SEKVENCIJALNA MIGRACIJA (sa optimizovanom procedurom)
+          this.logger.log(
+            `Starting OPTIMIZED sequential migration for ${currentDateStr}`,
+          );
+
+          const result = await this.parallelService.runOptimizedDayMigration(
+            currentDateStr,
+            batchSize,
+          );
+          dayRecords = result.recordsMigrated;
+
+          this.logger.log(
+            `Sequential migration for ${currentDateStr} completed: ${dayRecords} records in ${result.durationMs}ms`,
+          );
+        }
+
         totalMigrated += dayRecords;
 
-
         // Log završetak dana
-        await this.timescalePool.query(`
+        await this.timescalePool.query(
+          `
           SELECT log_migration_progress(
             'timezone_fix_2025',
             'DAY_COMPLETED',
             $1,
             $2::integer
           )
-        `, [`Date ${currentDateStr} migrated: ${dayRecords} records`, dayRecords]);
+        `,
+          [
+            `Date ${currentDateStr} migrated: ${dayRecords} records`,
+            dayRecords,
+          ],
+        );
 
         // Update status
-        await this.timescalePool.query(`
+        await this.timescalePool.query(
+          `
           UPDATE migration_status
           SET
             current_batch = $1,
@@ -146,20 +175,24 @@ export class MigrationService {
             processing_date = $3::date,
             last_update = NOW()
           WHERE migration_name = 'timezone_fix_2025'
-        `, [currentDay, totalMigrated, currentDateStr]);
-
+        `,
+          [currentDay, totalMigrated, currentDateStr],
+        );
       } catch (error) {
         this.logger.error(`Error processing date ${currentDateStr}:`, error);
 
         // Log grešku ali nastavi sa sledećim danom
-        await this.timescalePool.query(`
+        await this.timescalePool.query(
+          `
           SELECT log_migration_progress(
             'timezone_fix_2025',
             'DAY_ERROR',
             $1,
             NULL
           )
-        `, [`Error on date ${currentDateStr}: ${error.message}`]);
+        `,
+          [`Error on date ${currentDateStr}: ${error.message}`],
+        );
       }
 
       // Prelazi na sledeći dan
@@ -168,7 +201,8 @@ export class MigrationService {
 
     // Završi migraciju
     const duration = (Date.now() - startTime) / 1000;
-    await this.timescalePool.query(`
+    await this.timescalePool.query(
+      `
       UPDATE migration_status
       SET
         status = 'completed',
@@ -176,30 +210,50 @@ export class MigrationService {
         records_processed = $1,
         last_update = NOW()
       WHERE migration_name = 'timezone_fix_2025'
-    `, [totalMigrated]);
+    `,
+      [totalMigrated],
+    );
 
-    await this.timescalePool.query(`
+    await this.timescalePool.query(
+      `
       SELECT log_migration_progress(
         'timezone_fix_2025',
         'MIGRATION_COMPLETED',
         $1,
         $2::integer
       )
-    `, [`Migration completed: ${totalMigrated} records in ${duration} seconds`, totalMigrated]);
+    `,
+      [
+        `Migration completed: ${totalMigrated} records in ${duration} seconds`,
+        totalMigrated,
+      ],
+    );
 
-    this.logger.log(`Migration completed: ${totalMigrated} records in ${duration} seconds`);
+    this.logger.log(
+      `Migration completed: ${totalMigrated} records in ${duration} seconds`,
+    );
   }
 
-  async startMigration(startDate?: string, endDate?: string, resume: boolean = false) {
+  async startMigration(
+    startDate?: string,
+    endDate?: string,
+    resume: boolean = false,
+    useParallel: boolean = true,
+  ) {
     try {
       this.logger.log(`=== START MIGRATION CALLED ===`);
-      this.logger.log(`Received startDate: ${startDate}, endDate: ${endDate}, resume: ${resume}`);
+      this.logger.log(
+        `Received startDate: ${startDate}, endDate: ${endDate}, resume: ${resume}`,
+      );
 
       // Definiši datume na početku
       const migrationStartDate = startDate || '2025-06-16';
-      const migrationEndDate = endDate || new Date().toISOString().split('T')[0];
+      const migrationEndDate =
+        endDate || new Date().toISOString().split('T')[0];
 
-      this.logger.log(`Using dates: ${migrationStartDate} to ${migrationEndDate}`);
+      this.logger.log(
+        `Using dates: ${migrationStartDate} to ${migrationEndDate}`,
+      );
 
       // Proveri da li migracija već radi
       const statusResult = await this.timescalePool.query(`
@@ -207,7 +261,9 @@ export class MigrationService {
         WHERE migration_name = 'timezone_fix_2025'
       `);
 
-      this.logger.log(`Current status: ${statusResult.rows[0]?.status || 'NOT FOUND'}`);
+      this.logger.log(
+        `Current status: ${statusResult.rows[0]?.status || 'NOT FOUND'}`,
+      );
 
       if (statusResult.rows.length > 0) {
         const currentStatus = statusResult.rows[0].status;
@@ -217,7 +273,7 @@ export class MigrationService {
         if (currentStatus === 'running') {
           return {
             success: false,
-            message: 'Migration is already running'
+            message: 'Migration is already running',
           };
         }
 
@@ -228,10 +284,13 @@ export class MigrationService {
           const nextDate = new Date(lastProcessedDate);
           nextDate.setDate(nextDate.getDate() + 1);
           actualStartDate = nextDate.toISOString().split('T')[0];
-          this.logger.log(`Resuming from ${actualStartDate} (last processed: ${lastProcessedDate})`);
+          this.logger.log(
+            `Resuming from ${actualStartDate} (last processed: ${lastProcessedDate})`,
+          );
         } else if (!resume) {
           // Reset ako nije resume
-          await this.timescalePool.query(`
+          await this.timescalePool.query(
+            `
             UPDATE migration_status
             SET status = 'initialized',
                 started_at = NULL,
@@ -252,13 +311,18 @@ export class MigrationService {
                   )
                 )
             WHERE migration_name = 'timezone_fix_2025'
-          `, [migrationStartDate, migrationEndDate]);
+          `,
+            [migrationStartDate, migrationEndDate],
+          );
 
-          this.logger.log(`Reset migration for new date range: ${migrationStartDate} to ${migrationEndDate}`);
+          this.logger.log(
+            `Reset migration for new date range: ${migrationStartDate} to ${migrationEndDate}`,
+          );
         }
       } else {
         // Ako ne postoji uopšte, kreiraj novi zapis
-        await this.timescalePool.query(`
+        await this.timescalePool.query(
+          `
           INSERT INTO migration_status (migration_name, status, metadata)
           VALUES ('timezone_fix_2025', 'initialized', jsonb_build_object(
             'date_range', jsonb_build_object(
@@ -266,13 +330,17 @@ export class MigrationService {
               'end_date', $2::text
             )
           ))
-        `, [migrationStartDate, migrationEndDate]);
+        `,
+          [migrationStartDate, migrationEndDate],
+        );
 
         // NE BRIŠI - prva migracija će samo dodati podatke
         this.logger.log('First migration - table ready');
       }
 
-      this.logger.log(`Starting migration from ${migrationStartDate} to ${migrationEndDate}`);
+      this.logger.log(
+        `Starting migration from ${migrationStartDate} to ${migrationEndDate}`,
+      );
 
       // Prvo update-uj status na 'running'
       await this.timescalePool.query(`
@@ -287,31 +355,38 @@ export class MigrationService {
       // NAPOMENA: Ovo će pokrenuti dugotrajan proces
       // Radimo dan-po-dan sa commit-om između dana
       // Koristi actualStartDate ako je resume
-      const finalStartDate = resume && statusResult.rows[0]?.processing_date
-        ? (() => {
-            const nextDate = new Date(statusResult.rows[0].processing_date);
-            nextDate.setDate(nextDate.getDate() + 1);
-            return nextDate.toISOString().split('T')[0];
-          })()
-        : migrationStartDate;
+      const finalStartDate =
+        resume && statusResult.rows[0]?.processing_date
+          ? (() => {
+              const nextDate = new Date(statusResult.rows[0].processing_date);
+              nextDate.setDate(nextDate.getDate() + 1);
+              return nextDate.toISOString().split('T')[0];
+            })()
+          : migrationStartDate;
 
-      this.logger.log(`Starting day-by-day migration from ${finalStartDate} to ${migrationEndDate}`);
+      this.logger.log(
+        `Starting day-by-day ${useParallel ? 'PARALLEL' : 'SEQUENTIAL'} migration from ${finalStartDate} to ${migrationEndDate}`,
+      );
 
-      this.runDayByDayMigration(finalStartDate, migrationEndDate)
-      .then(() => {
-        this.logger.log('Migration completed successfully');
-      }).catch(error => {
-        this.logger.error('Migration background process error:', error);
-        this.logger.error('Error details:', error.stack);
-        // Update status to error
-        this.timescalePool.query(`
+      this.runDayByDayMigration(finalStartDate, migrationEndDate, useParallel)
+        .then(() => {
+          this.logger.log('Migration completed successfully');
+        })
+        .catch((error) => {
+          this.logger.error('Migration background process error:', error);
+          this.logger.error('Error details:', error.stack);
+          // Update status to error
+          this.timescalePool.query(
+            `
           UPDATE migration_status
           SET status = 'error',
               error_message = $1,
               last_update = NOW()
           WHERE migration_name = 'timezone_fix_2025'
-        `, [error.message]);
-      });
+        `,
+            [error.message],
+          );
+        });
 
       this.logger.log('Migration started successfully');
 
@@ -320,7 +395,7 @@ export class MigrationService {
         message: 'Migration started successfully',
         startDate: migrationStartDate,
         endDate: migrationEndDate,
-        note: 'Migration is running in background. Check status for progress.'
+        note: 'Migration is running in background. Check status for progress.',
       };
     } catch (error) {
       this.logger.error('Error starting migration:', error);
@@ -334,7 +409,7 @@ export class MigrationService {
 
       return {
         success: true,
-        message: 'Migration aborted successfully'
+        message: 'Migration aborted successfully',
       };
     } catch (error) {
       this.logger.error('Error aborting migration:', error);
@@ -345,16 +420,16 @@ export class MigrationService {
   async verifyMigration() {
     try {
       const result = await this.timescalePool.query(
-        `SELECT * FROM verify_migration()`
+        `SELECT * FROM verify_migration()`,
       );
 
       return {
-        checks: result.rows.map(row => ({
+        checks: result.rows.map((row) => ({
           checkName: row.check_name,
           originalValue: row.original_table_value,
           fixedValue: row.fixed_table_value,
-          status: row.status
-        }))
+          status: row.status,
+        })),
       };
     } catch (error) {
       this.logger.error('Error verifying migration:', error);
@@ -364,22 +439,25 @@ export class MigrationService {
 
   async getMigrationLogs(limit: number = 50) {
     try {
-      const result = await this.timescalePool.query(`
+      const result = await this.timescalePool.query(
+        `
         SELECT * FROM migration_log
         WHERE migration_name = 'timezone_fix_2025'
         ORDER BY created_at DESC
         LIMIT $1
-      `, [limit]);
+      `,
+        [limit],
+      );
 
       return {
-        logs: result.rows.map(log => ({
+        logs: result.rows.map((log) => ({
           id: log.id,
           action: log.action,
           message: log.message,
           recordsAffected: log.records_affected,
           durationMs: log.duration_ms,
-          createdAt: log.created_at
-        }))
+          createdAt: log.created_at,
+        })),
       };
     } catch (error) {
       this.logger.error('Error getting migration logs:', error);

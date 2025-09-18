@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Progress, Button, Space, Tag, Alert, Table, Statistic, Row, Col, Timeline, Modal, Spin, message, DatePicker, Form } from 'antd';
-import { PlayCircleOutlined, PauseCircleOutlined, StopOutlined, CheckCircleOutlined, ReloadOutlined, WarningOutlined, CalendarOutlined } from '@ant-design/icons';
-import migrationService, { MigrationStatus, MigrationLog, VerificationResult } from '../../services/migrationService';
+import { Card, Progress, Button, Space, Tag, Alert, Table, Statistic, Row, Col, Timeline, Modal, Spin, message, DatePicker, Form, Switch, Tooltip, Divider } from 'antd';
+import { PlayCircleOutlined, PauseCircleOutlined, StopOutlined, CheckCircleOutlined, ReloadOutlined, WarningOutlined, CalendarOutlined, ThunderboltOutlined, RocketOutlined } from '@ant-design/icons';
+import migrationService, { MigrationStatus, MigrationLog, VerificationResult, RangeProgress } from '../../services/migrationService';
 import { formatDistanceToNow } from 'date-fns';
 import { sr } from 'date-fns/locale';
 import dayjs from 'dayjs';
@@ -16,6 +16,8 @@ const MigrationPage: React.FC = () => {
   const [startingMigration, setStartingMigration] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
+  const [useParallel, setUseParallel] = useState(true);
+  const [rangeProgress, setRangeProgress] = useState<RangeProgress[]>([]);
 
   // Fetch status
   const fetchStatus = async () => {
@@ -29,6 +31,16 @@ const MigrationPage: React.FC = () => {
       if (data.status === 'running' || data.status === 'completed') {
         const logsData = await migrationService.getLogs(20);
         setLogs(logsData.logs || []);
+      }
+
+      // Fetch range progress ako je migracija u toku i imamo currentDate
+      if (data.status === 'running' && data.currentDate && useParallel) {
+        try {
+          const progressData = await migrationService.getRangeProgress(data.currentDate);
+          setRangeProgress(progressData.ranges || []);
+        } catch (err) {
+          console.error('Error fetching range progress:', err);
+        }
       }
     } catch (error) {
       console.error('Error fetching status:', error);
@@ -67,7 +79,8 @@ const MigrationPage: React.FC = () => {
     try {
       console.log('Calling migration service...');
       console.log('API URL:', import.meta.env.VITE_API_URL || 'http://localhost:3010');
-      const result = await migrationService.startMigration(startDate, endDate);
+      console.log('Use parallel mode:', useParallel);
+      const result = await migrationService.startMigration(startDate, endDate, false, useParallel);
       console.log('Migration result:', result);
 
       if (result.success) {
@@ -220,7 +233,7 @@ const MigrationPage: React.FC = () => {
         </div>
 
       {/* Date Range Selection Card */}
-      <Card className="mb-6" title="Odabir Datumskog Opsega">
+      <Card className="mb-6" title="Odabir Datumskog Opsega i Opcija">
         <Form layout="vertical">
           <Form.Item label="Odaberite period za migraciju">
             <Space direction="vertical" size={12} style={{ width: '100%' }}>
@@ -262,6 +275,44 @@ const MigrationPage: React.FC = () => {
                 </ul>
               </div>
             </Space>
+          </Form.Item>
+
+          <Divider />
+
+          <Form.Item label="Način migracije">
+            <Space direction="horizontal" size={16} align="center">
+              <Switch
+                checked={useParallel}
+                onChange={setUseParallel}
+                disabled={status?.status === 'running'}
+                checkedChildren={<RocketOutlined />}
+                unCheckedChildren={<CalendarOutlined />}
+              />
+              <span style={{ fontSize: '14px' }}>
+                {useParallel ? (
+                  <Tooltip title="Podeli dan na 4 dela i obradi paralelno (4-6x brže)">
+                    <Tag color="blue" icon={<ThunderboltOutlined />}>
+                      Paralelna migracija (BRŽA)
+                    </Tag>
+                  </Tooltip>
+                ) : (
+                  <Tooltip title="Obradi ceo dan sekvencijalno">
+                    <Tag color="orange">
+                      Sekvencijalna migracija (SIGURNIJA)
+                    </Tag>
+                  </Tooltip>
+                )}
+              </span>
+            </Space>
+            {useParallel && (
+              <Alert
+                className="mt-3"
+                type="info"
+                message="Paralelni mod"
+                description="Dan će biti podeljen na 4 dela (00-06, 06-12, 12-18, 18-24) koji se obrađuju paralelno. Ovo može biti 4-6 puta brže, ali koristi više resursa."
+                showIcon
+              />
+            )}
           </Form.Item>
         </Form>
       </Card>
@@ -344,6 +395,36 @@ const MigrationPage: React.FC = () => {
             />
           </Col>
         </Row>
+
+        {/* Range Progress (samo ako je paralelni mod i ima podataka) */}
+        {useParallel && rangeProgress.length > 0 && status?.status === 'running' && (
+          <Card className="mt-6" size="small" title={
+            <Space>
+              <ThunderboltOutlined />
+              <span>Napredak po vremenskim intervalima - {status?.currentDate}</span>
+            </Space>
+          }>
+            <Row gutter={[16, 16]}>
+              {rangeProgress.map((range, idx) => (
+                <Col span={12} key={range.rangeName}>
+                  <Card type="inner" size="small">
+                    <div className="mb-2">
+                      <strong>{range.rangeName}</strong>
+                      <div className="text-xs text-gray-500">
+                        {formatNumber(range.migratedRecords)} / {formatNumber(range.estimatedRecords)} zapisa
+                      </div>
+                    </div>
+                    <Progress
+                      percent={range.progressPercent}
+                      status={range.progressPercent === 100 ? 'success' : 'active'}
+                      strokeColor={range.progressPercent === 100 ? '#52c41a' : '#1890ff'}
+                    />
+                  </Card>
+                </Col>
+              ))}
+            </Row>
+          </Card>
+        )}
 
         {/* Controls */}
         <div className="mt-6">
