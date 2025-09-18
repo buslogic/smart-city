@@ -12,11 +12,12 @@ function decryptPassword(encryptedPassword: string): string {
     if (parts.length !== 2) {
       return encryptedPassword;
     }
-    
+
     const algorithm = 'aes-256-cbc';
-    const keySource = process.env.DATABASE_ENCRYPTION_KEY || 'default-key-for-dev-only';
+    const keySource =
+      process.env.DATABASE_ENCRYPTION_KEY || 'default-key-for-dev-only';
     const key = crypto.scryptSync(keySource, 'salt', 32);
-    
+
     const iv = Buffer.from(parts[0], 'hex');
     const encryptedText = parts[1];
     const decipher = crypto.createDecipheriv(algorithm, key, iv);
@@ -32,11 +33,13 @@ function decryptPassword(encryptedPassword: string): string {
 async function importTodayGPSData() {
   let mysqlConnection: mysql.Connection | null = null;
   let pgPool: Pool | null = null;
-  
+
   // Početak merenja vremena
   const startTime = Date.now();
-  console.log(`⏱️ Početak sinhronizacije: ${new Date().toLocaleString('sr-RS')}`);
-  
+  console.log(
+    `⏱️ Početak sinhronizacije: ${new Date().toLocaleString('sr-RS')}`,
+  );
+
   try {
     // 1. Dohvati kredencijale za legacy bazu
     console.log('\n📋 Dohvatam kredencijale za legacy bazu...');
@@ -52,7 +55,7 @@ async function importTodayGPSData() {
     }
 
     const password = decryptPassword(legacyDb.password);
-    
+
     // 2. Konektuj se na legacy MySQL bazu
     console.log('🔗 Povezujem se na legacy GPS bazu...');
     mysqlConnection = await mysql.createConnection({
@@ -68,33 +71,38 @@ async function importTodayGPSData() {
 
     // 3. Preuzmi podatke za CEL DANAŠNJI DAN
     const vehicleGarageNo = 'P93597';
-    console.log(`\n📊 Preuzimam podatke za vozilo ${vehicleGarageNo} za CEL DANAŠNJI DAN...`);
-    
+    console.log(
+      `\n📊 Preuzimam podatke za vozilo ${vehicleGarageNo} za CEL DANAŠNJI DAN...`,
+    );
+
     // Početak današnjeg dana (00:00:00)
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
-    
+
     // Brojanje postojećih podataka u TimescaleDB za danas
     console.log('\n🔍 Proveravam postojeće podatke u TimescaleDB...');
     // Koristi environment varijable ili baci grešku
     if (!process.env.TIMESCALE_DATABASE_URL) {
       throw new Error('TIMESCALE_DATABASE_URL environment variable is not set');
     }
-    
+
     pgPool = new Pool({
       connectionString: process.env.TIMESCALE_DATABASE_URL,
       max: 5,
     });
 
-    const existingCountResult = await pgPool.query(`
+    const existingCountResult = await pgPool.query(
+      `
       SELECT COUNT(*) as existing_count,
              MIN(time) as first_point,
              MAX(time) as last_point
       FROM gps_data
       WHERE garage_no = $1
         AND time >= $2::timestamp
-    `, [vehicleGarageNo, todayStart.toISOString()]);
-    
+    `,
+      [vehicleGarageNo, todayStart.toISOString()],
+    );
+
     const existingData = existingCountResult.rows[0];
     console.log(`📌 Postojeći podaci za danas:`);
     console.log(`   - Broj tačaka: ${existingData.existing_count}`);
@@ -102,7 +110,7 @@ async function importTodayGPSData() {
       console.log(`   - Prva tačka: ${existingData.first_point}`);
       console.log(`   - Poslednja tačka: ${existingData.last_point}`);
     }
-    
+
     // Query za ceo današnji dan
     const queryStartTime = Date.now();
     const [rows] = await mysqlConnection.execute(`
@@ -127,7 +135,9 @@ async function importTodayGPSData() {
 
     const gpsData = rows as any[];
     console.log(`\n✅ Pronađeno ${gpsData.length} GPS tačaka za današnji dan`);
-    console.log(`⏱️ Vreme čitanja iz MySQL: ${(queryTime / 1000).toFixed(2)} sekundi`);
+    console.log(
+      `⏱️ Vreme čitanja iz MySQL: ${(queryTime / 1000).toFixed(2)} sekundi`,
+    );
 
     if (gpsData.length === 0) {
       console.log('⚠️ Nema podataka za današnji dan');
@@ -147,11 +157,15 @@ async function importTodayGPSData() {
     });
 
     const vehicleId = vehicle?.id || null;
-    console.log(`\n🚌 Vehicle ID za ${vehicleGarageNo}: ${vehicleId || 'nije pronađen'}`);
+    console.log(
+      `\n🚌 Vehicle ID za ${vehicleGarageNo}: ${vehicleId || 'nije pronađen'}`,
+    );
 
     // 5. Ubaci podatke u TimescaleDB sa merenjem vremena
-    console.log(`\n📥 Započinje ubacivanje ${gpsData.length} GPS tačaka u TimescaleDB...`);
-    
+    console.log(
+      `\n📥 Započinje ubacivanje ${gpsData.length} GPS tačaka u TimescaleDB...`,
+    );
+
     const insertStartTime = Date.now();
     let inserted = 0;
     let updated = 0;
@@ -162,7 +176,7 @@ async function importTodayGPSData() {
     for (let i = 0; i < gpsData.length; i += batchSize) {
       const batch = gpsData.slice(i, i + batchSize);
       const batchStartTime = Date.now();
-      
+
       for (const point of batch) {
         try {
           const query = `
@@ -193,39 +207,45 @@ async function importTodayGPSData() {
             point.alt || 0,
             point.state || 0,
             point.inroute || 0,
-            'legacy_import_today'
+            'legacy_import_today',
           ]);
-          
+
           if (result.rows[0]?.is_inserted) {
             inserted++;
           } else {
             updated++;
           }
-          
         } catch (error: any) {
           console.error(`❌ Greška pri unosu tačke:`, error.message);
           failed++;
         }
       }
-      
+
       const batchTime = Date.now() - batchStartTime;
       const progress = Math.min(i + batchSize, gpsData.length);
-      console.log(`  Batch ${Math.floor(i/batchSize) + 1}: Obrađeno ${progress}/${gpsData.length} tačaka (${(batchTime/1000).toFixed(2)}s)`);
+      console.log(
+        `  Batch ${Math.floor(i / batchSize) + 1}: Obrađeno ${progress}/${gpsData.length} tačaka (${(batchTime / 1000).toFixed(2)}s)`,
+      );
     }
-    
+
     const insertTime = Date.now() - insertStartTime;
-    
+
     console.log(`\n✅ Import završen!`);
     console.log(`   - Novo ubačeno: ${inserted} tačaka`);
     console.log(`   - Ažurirano: ${updated} tačaka`);
     console.log(`   - Neuspešno: ${failed} tačaka`);
-    console.log(`⏱️ Vreme ubacivanja: ${(insertTime / 1000).toFixed(2)} sekundi`);
-    console.log(`📊 Brzina: ${(gpsData.length / (insertTime / 1000)).toFixed(0)} tačaka/sekund`);
+    console.log(
+      `⏱️ Vreme ubacivanja: ${(insertTime / 1000).toFixed(2)} sekundi`,
+    );
+    console.log(
+      `📊 Brzina: ${(gpsData.length / (insertTime / 1000)).toFixed(0)} tačaka/sekund`,
+    );
 
     // 6. Finalna statistika u TimescaleDB
     console.log('\n📊 Finalna statistika u TimescaleDB za danas:');
-    
-    const finalStats = await pgPool.query(`
+
+    const finalStats = await pgPool.query(
+      `
       SELECT 
         COUNT(*) as total_points,
         MIN(time) as oldest_point,
@@ -236,7 +256,9 @@ async function importTodayGPSData() {
       FROM gps_data
       WHERE garage_no = $1
         AND time >= $2::timestamp
-    `, [vehicleGarageNo, todayStart.toISOString()]);
+    `,
+      [vehicleGarageNo, todayStart.toISOString()],
+    );
 
     const stats = finalStats.rows[0];
     console.log(`   - Ukupno tačaka danas: ${stats.total_points}`);
@@ -247,7 +269,8 @@ async function importTodayGPSData() {
     console.log(`   - Aktivnih sati: ${stats.active_hours}`);
 
     // 7. Računaj kilometražu za danas
-    const distanceResult = await pgPool.query(`
+    const distanceResult = await pgPool.query(
+      `
       WITH ordered_points AS (
         SELECT 
           time,
@@ -276,26 +299,43 @@ async function importTodayGPSData() {
         )::NUMERIC(10,2) as avg_segment_meters
       FROM ordered_points
       WHERE prev_location IS NOT NULL
-    `, [vehicleGarageNo, todayStart.toISOString()]);
+    `,
+      [vehicleGarageNo, todayStart.toISOString()],
+    );
 
     const distance = distanceResult.rows[0];
     console.log(`\n🗺️ PostGIS kalkulacije za danas:`);
     console.log(`   - Segmenata rute: ${distance.segments}`);
-    console.log(`   - Ukupna kilometraža: ${parseFloat(distance.total_km).toFixed(2)} km`);
-    console.log(`   - Prosečna dužina segmenta: ${distance.avg_segment_meters} m`);
+    console.log(
+      `   - Ukupna kilometraža: ${parseFloat(distance.total_km).toFixed(2)} km`,
+    );
+    console.log(
+      `   - Prosečna dužina segmenta: ${distance.avg_segment_meters} m`,
+    );
 
     // 8. Finalno vreme izvršavanja
     const totalTime = Date.now() - startTime;
-    console.log(`\n⏱️ UKUPNO VREME SINHRONIZACIJE: ${(totalTime / 1000).toFixed(2)} sekundi`);
-    console.log(`   - Čitanje iz MySQL: ${(queryTime / 1000).toFixed(2)} sekundi (${((queryTime/totalTime)*100).toFixed(1)}%)`);
-    console.log(`   - Ubacivanje u TimescaleDB: ${(insertTime / 1000).toFixed(2)} sekundi (${((insertTime/totalTime)*100).toFixed(1)}%)`);
-    console.log(`   - Ostale operacije: ${((totalTime - queryTime - insertTime) / 1000).toFixed(2)} sekundi`);
-    
+    console.log(
+      `\n⏱️ UKUPNO VREME SINHRONIZACIJE: ${(totalTime / 1000).toFixed(2)} sekundi`,
+    );
+    console.log(
+      `   - Čitanje iz MySQL: ${(queryTime / 1000).toFixed(2)} sekundi (${((queryTime / totalTime) * 100).toFixed(1)}%)`,
+    );
+    console.log(
+      `   - Ubacivanje u TimescaleDB: ${(insertTime / 1000).toFixed(2)} sekundi (${((insertTime / totalTime) * 100).toFixed(1)}%)`,
+    );
+    console.log(
+      `   - Ostale operacije: ${((totalTime - queryTime - insertTime) / 1000).toFixed(2)} sekundi`,
+    );
+
     // Performanse
     console.log(`\n📈 Performanse:`);
-    console.log(`   - Ukupna brzina: ${(gpsData.length / (totalTime / 1000)).toFixed(0)} tačaka/sekund`);
-    console.log(`   - Prosečno vreme po tački: ${(totalTime / gpsData.length).toFixed(2)} ms`);
-
+    console.log(
+      `   - Ukupna brzina: ${(gpsData.length / (totalTime / 1000)).toFixed(0)} tačaka/sekund`,
+    );
+    console.log(
+      `   - Prosečno vreme po tački: ${(totalTime / gpsData.length).toFixed(2)} ms`,
+    );
   } catch (error) {
     console.error('❌ Greška:', error);
     const errorTime = Date.now() - startTime;
@@ -313,5 +353,5 @@ async function importTodayGPSData() {
 
 // Pokreni import
 console.log('🚀 Započinje import GPS podataka za DANAŠNJI DAN...\n');
-console.log('=' .repeat(60));
+console.log('='.repeat(60));
 importTodayGPSData().catch(console.error);

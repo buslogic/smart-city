@@ -1,9 +1,20 @@
-import { IsArray, IsOptional, IsString, ValidateNested, IsNumber, IsDateString } from 'class-validator';
+import {
+  IsArray,
+  IsOptional,
+  IsString,
+  ValidateNested,
+  IsNumber,
+  IsDateString,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class GpsPointDto {
-  @ApiProperty({ description: 'IMEI uređaja', example: '352093084123456', required: false })
+  @ApiProperty({
+    description: 'IMEI uređaja',
+    example: '352093084123456',
+    required: false,
+  })
   @IsOptional()
   @IsString()
   imei?: string;
@@ -28,7 +39,11 @@ export class GpsPointDto {
   @IsNumber()
   course: number;
 
-  @ApiProperty({ description: 'Nadmorska visina', example: 120, required: false })
+  @ApiProperty({
+    description: 'Nadmorska visina',
+    example: 120,
+    required: false,
+  })
   @IsOptional()
   @IsNumber()
   alt?: number;
@@ -38,7 +53,11 @@ export class GpsPointDto {
   @IsNumber()
   state?: number;
 
-  @ApiProperty({ description: 'Da li je na ruti (0/1)', example: 1, required: false })
+  @ApiProperty({
+    description: 'Da li je na ruti (0/1)',
+    example: 1,
+    required: false,
+  })
   @IsOptional()
   @IsNumber()
   inRoute?: number;
@@ -78,51 +97,67 @@ export class GpsPointDto {
   @IsNumber()
   satellites?: number;
 
-  @ApiProperty({ description: 'Nadmorska visina (alternativno ime)', example: 120, required: false })
+  @ApiProperty({
+    description: 'Nadmorska visina (alternativno ime)',
+    example: 120,
+    required: false,
+  })
   @IsOptional()
   @IsNumber()
   altitude?: number;
 
-  @ApiProperty({ description: 'Vreme GPS očitavanja', example: '2024-01-15T10:30:00Z', required: false })
+  @ApiProperty({
+    description: 'Vreme GPS očitavanja',
+    example: '2024-01-15T10:30:00Z',
+    required: false,
+  })
   @IsOptional()
   @IsDateString()
   captured?: string;
 
-  @ApiProperty({ description: 'Vreme GPS očitavanja (alternativno ime)', example: '2024-01-15T10:30:00Z', required: false })
+  @ApiProperty({
+    description: 'Vreme GPS očitavanja (alternativno ime)',
+    example: '2024-01-15T10:30:00Z',
+    required: false,
+  })
   @IsOptional()
   @IsDateString()
   timestamp?: string;
 
-  @ApiProperty({ description: 'Vreme poslednje izmene', example: '2024-01-15T10:30:01Z', required: false })
+  @ApiProperty({
+    description: 'Vreme poslednje izmene',
+    example: '2024-01-15T10:30:01Z',
+    required: false,
+  })
   @IsOptional()
   @IsDateString()
   edited?: string;
 }
 
 export class GpsBatchDto {
-  @ApiProperty({ 
-    description: 'Niz GPS tačaka', 
+  @ApiProperty({
+    description: 'Niz GPS tačaka',
     type: [GpsPointDto],
-    isArray: true 
+    isArray: true,
   })
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => GpsPointDto)
   data: GpsPointDto[];
 
-  @ApiProperty({ 
-    description: 'Izvor podataka', 
+  @ApiProperty({
+    description: 'Izvor podataka',
     example: 'legacy',
-    required: false 
+    required: false,
   })
   @IsOptional()
   @IsString()
   source?: string;
 
-  @ApiProperty({ 
-    description: 'Timestamp batch-a', 
+  @ApiProperty({
+    description: 'Timestamp batch-a',
     example: '2024-01-15T10:30:00Z',
-    required: false 
+    required: false,
   })
   @IsOptional()
   @IsDateString()

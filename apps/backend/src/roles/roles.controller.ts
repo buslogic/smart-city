@@ -1,16 +1,16 @@
-import { 
-  Controller, 
-  Get, 
-  Post, 
-  Body, 
-  Patch, 
-  Param, 
-  Delete, 
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
   ParseIntPipe,
   HttpCode,
   HttpStatus,
   Query,
-  Put
+  Put,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { RolesService } from './roles.service';
@@ -23,7 +23,10 @@ export class RolesController {
   @Post()
   @ApiOperation({ summary: 'Create a new role' })
   @ApiResponse({ status: 201, description: 'Role successfully created' })
-  @ApiResponse({ status: 409, description: 'Role with this name already exists' })
+  @ApiResponse({
+    status: 409,
+    description: 'Role with this name already exists',
+  })
   create(@Body() createRoleDto: { name: string; description?: string }) {
     return this.rolesService.create(createRoleDto);
   }
@@ -31,10 +34,7 @@ export class RolesController {
   @Get()
   @ApiOperation({ summary: 'Get all roles' })
   @ApiResponse({ status: 200, description: 'Roles retrieved successfully' })
-  findAll(
-    @Query('page') page?: string,
-    @Query('pageSize') pageSize?: string,
-  ) {
+  findAll(@Query('page') page?: string, @Query('pageSize') pageSize?: string) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const size = pageSize ? parseInt(pageSize, 10) : 10;
     return this.rolesService.findAll(pageNum, size);
@@ -53,8 +53,8 @@ export class RolesController {
   @ApiResponse({ status: 200, description: 'Role updated successfully' })
   @ApiResponse({ status: 404, description: 'Role not found' })
   update(
-    @Param('id', ParseIntPipe) id: number, 
-    @Body() updateRoleDto: { name?: string; description?: string }
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateRoleDto: { name?: string; description?: string },
   ) {
     return this.rolesService.update(id, updateRoleDto);
   }
@@ -70,7 +70,10 @@ export class RolesController {
 
   @Get(':id/permissions')
   @ApiOperation({ summary: 'Get role permissions' })
-  @ApiResponse({ status: 200, description: 'Permissions retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Permissions retrieved successfully',
+  })
   @ApiResponse({ status: 404, description: 'Role not found' })
   getRolePermissions(@Param('id', ParseIntPipe) id: number) {
     return this.rolesService.getRolePermissions(id);
@@ -82,7 +85,7 @@ export class RolesController {
   @ApiResponse({ status: 404, description: 'Role not found' })
   updateRolePermissions(
     @Param('id', ParseIntPipe) id: number,
-    @Body('permissionIds') permissionIds: number[]
+    @Body('permissionIds') permissionIds: number[],
   ) {
     return this.rolesService.updateRolePermissions(id, permissionIds);
   }
@@ -93,7 +96,7 @@ export class RolesController {
   @ApiResponse({ status: 404, description: 'Role or permission not found' })
   addPermissionToRole(
     @Param('roleId', ParseIntPipe) roleId: number,
-    @Param('permissionId', ParseIntPipe) permissionId: number
+    @Param('permissionId', ParseIntPipe) permissionId: number,
   ) {
     return this.rolesService.addPermissionToRole(roleId, permissionId);
   }
@@ -105,7 +108,7 @@ export class RolesController {
   @ApiResponse({ status: 404, description: 'Role or permission not found' })
   removePermissionFromRole(
     @Param('roleId', ParseIntPipe) roleId: number,
-    @Param('permissionId', ParseIntPipe) permissionId: number
+    @Param('permissionId', ParseIntPipe) permissionId: number,
   ) {
     return this.rolesService.removePermissionFromRole(roleId, permissionId);
   }

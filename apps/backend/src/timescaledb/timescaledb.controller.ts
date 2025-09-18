@@ -1,5 +1,10 @@
 import { Controller, Get, Post, Param, Body, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
@@ -24,7 +29,10 @@ export class TimescaledbController {
   @Get('continuous-aggregates')
   @RequirePermissions('maintenance.timescaledb:view')
   @ApiOperation({ summary: 'Dobavi listu svih continuous aggregates' })
-  @ApiResponse({ status: 200, description: 'Lista aggregates uspešno dobijena' })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista aggregates uspešno dobijena',
+  })
   @ApiResponse({ status: 403, description: 'Nemate permisiju za pristup' })
   async getContinuousAggregates() {
     return this.timescaledbService.getContinuousAggregates();
@@ -53,12 +61,18 @@ export class TimescaledbController {
     @Param('name') name: string,
     @Body() body?: { startTime?: string; endTime?: string },
   ) {
-    return this.timescaledbService.refreshContinuousAggregate(name, body?.startTime, body?.endTime);
+    return this.timescaledbService.refreshContinuousAggregate(
+      name,
+      body?.startTime,
+      body?.endTime,
+    );
   }
 
   @Get('continuous-aggregates/status')
   @RequirePermissions('maintenance.timescaledb:view')
-  @ApiOperation({ summary: 'Dobavi real-time status svih continuous aggregates' })
+  @ApiOperation({
+    summary: 'Dobavi real-time status svih continuous aggregates',
+  })
   @ApiResponse({ status: 200, description: 'Status uspešno dobijen' })
   async getContinuousAggregatesStatus() {
     return this.timescaledbService.getContinuousAggregatesStatus();
@@ -78,9 +92,7 @@ export class TimescaledbController {
   @ApiResponse({ status: 200, description: 'Aggregate uspešno resetovan' })
   @ApiResponse({ status: 403, description: 'Nemate permisiju za ovu akciju' })
   @ApiResponse({ status: 400, description: 'Greška pri resetovanju agregata' })
-  async resetContinuousAggregate(
-    @Param('name') name: string,
-  ) {
+  async resetContinuousAggregate(@Param('name') name: string) {
     return this.timescaledbService.resetContinuousAggregate(name);
   }
 }

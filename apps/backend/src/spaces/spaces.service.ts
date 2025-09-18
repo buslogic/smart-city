@@ -38,7 +38,10 @@ export class SpacesService {
 
   constructor(private configService: ConfigService) {
     this.region = this.configService.get('DO_SPACES_REGION', 'fra1');
-    this.bucketName = this.configService.get('DO_SPACES_BUCKET', 'smart-city-storage');
+    this.bucketName = this.configService.get(
+      'DO_SPACES_BUCKET',
+      'smart-city-storage',
+    );
     this.endpoint = `https://${this.region}.digitaloceanspaces.com`;
     this.cdnEndpoint = this.configService.get('DO_SPACES_CDN_ENDPOINT');
 
@@ -128,7 +131,10 @@ export class SpacesService {
       }
       const buffer = Buffer.concat(chunks);
 
-      return this.uploadFile(buffer, { ...options, fileName: key.split('/').pop() });
+      return this.uploadFile(buffer, {
+        ...options,
+        fileName: key.split('/').pop(),
+      });
     } catch (error) {
       this.logger.error('Error uploading stream:', error);
       throw error;
@@ -188,12 +194,12 @@ export class SpacesService {
 
       const response = await this.s3Client.send(command);
       const stream = response.Body as Readable;
-      
+
       const chunks: Buffer[] = [];
       for await (const chunk of stream) {
         chunks.push(chunk);
       }
-      
+
       return Buffer.concat(chunks);
     } catch (error) {
       this.logger.error('Error downloading file:', error);
@@ -229,7 +235,7 @@ export class SpacesService {
       const command = new DeleteObjectsCommand({
         Bucket: this.bucketName,
         Delete: {
-          Objects: keys.map(key => ({ Key: key })),
+          Objects: keys.map((key) => ({ Key: key })),
         },
       });
 
@@ -294,7 +300,7 @@ export class SpacesService {
    * Validacija tipa fajla
    */
   validateFileType(mimetype: string, allowedTypes: string[]): boolean {
-    return allowedTypes.some(type => {
+    return allowedTypes.some((type) => {
       if (type.endsWith('*')) {
         return mimetype.startsWith(type.slice(0, -1));
       }
@@ -310,7 +316,7 @@ export class SpacesService {
     const random = Math.random().toString(36).substring(7);
     const extension = originalName.split('.').pop();
     const baseName = prefix || originalName.split('.').slice(0, -1).join('.');
-    
+
     return `${baseName}-${timestamp}-${random}.${extension}`;
   }
 }

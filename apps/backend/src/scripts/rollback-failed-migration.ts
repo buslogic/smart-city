@@ -11,7 +11,6 @@ async function rollbackFailed() {
       AND (finished_at IS NULL OR applied_steps_count = 0)
     `);
     console.log('Removed failed migration records');
-    
   } catch (error) {
     console.error('Error:', error);
   } finally {

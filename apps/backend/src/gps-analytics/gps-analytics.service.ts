@@ -1,7 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Pool } from 'pg';
-import { VehicleAnalyticsDto, HourlyDataDto, SpeedDistributionDto, DailyStatsDto, DrivingEventStatsDto } from './dto/vehicle-analytics.dto';
-import { createTimescalePool, testTimescaleConnection } from '../common/config/timescale.config';
+import {
+  VehicleAnalyticsDto,
+  HourlyDataDto,
+  SpeedDistributionDto,
+  DailyStatsDto,
+  DrivingEventStatsDto,
+} from './dto/vehicle-analytics.dto';
+import {
+  createTimescalePool,
+  testTimescaleConnection,
+} from '../common/config/timescale.config';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -12,11 +21,13 @@ export class GpsAnalyticsService {
   constructor(private readonly prisma: PrismaService) {
     // Koristi centralizovanu konfiguraciju za TimescaleDB
     this.pgPool = createTimescalePool();
-    
+
     // Test connection - quiet initialization
-    testTimescaleConnection(this.pgPool).then(success => {
+    testTimescaleConnection(this.pgPool).then((success) => {
       if (!success) {
-        this.logger.error('❌ GpsAnalyticsService nije mogao da se poveže na TimescaleDB');
+        this.logger.error(
+          '❌ GpsAnalyticsService nije mogao da se poveže na TimescaleDB',
+        );
       }
     });
   }
@@ -32,7 +43,7 @@ export class GpsAnalyticsService {
       this.logger.log(`   Start (raw): ${startDate}`);
       this.logger.log(`   End (raw): ${endDate}`);
       this.logger.log(`   Vehicle ID: ${vehicleId}`);
-      
+
       // Prvo proveri da li ima podataka
       const countQuery = `
         SELECT 
@@ -42,15 +53,19 @@ export class GpsAnalyticsService {
         FROM gps_data 
         WHERE vehicle_id = $1 AND time BETWEEN $2 AND $3
       `;
-      const countResult = await this.pgPool.query(countQuery, [vehicleId, startDate, endDate]);
+      const countResult = await this.pgPool.query(countQuery, [
+        vehicleId,
+        startDate,
+        endDate,
+      ]);
       const totalPoints = parseInt(countResult.rows[0]?.count || '0');
-      
+
       // Logiraj rezultate
       this.logger.log(`📊 Rezultat COUNT query:`);
       this.logger.log(`   Total points: ${totalPoints}`);
       this.logger.log(`   Min time in range: ${countResult.rows[0]?.min_time}`);
       this.logger.log(`   Max time in range: ${countResult.rows[0]?.max_time}`);
-      
+
       // Ako nema podataka, vrati prazan rezultat sa strukturom
       if (totalPoints === 0) {
         return {
@@ -72,11 +87,41 @@ export class GpsAnalyticsService {
           ],
           dailyStats: [],
           drivingEventStats: [
-            { severity: 1, label: 'Veoma blago', count: 0, harshBraking: 0, harshAcceleration: 0 },
-            { severity: 2, label: 'Blago', count: 0, harshBraking: 0, harshAcceleration: 0 },
-            { severity: 3, label: 'Umereno', count: 0, harshBraking: 0, harshAcceleration: 0 },
-            { severity: 4, label: 'Ozbiljno', count: 0, harshBraking: 0, harshAcceleration: 0 },
-            { severity: 5, label: 'Veoma ozbiljno', count: 0, harshBraking: 0, harshAcceleration: 0 },
+            {
+              severity: 1,
+              label: 'Veoma blago',
+              count: 0,
+              harshBraking: 0,
+              harshAcceleration: 0,
+            },
+            {
+              severity: 2,
+              label: 'Blago',
+              count: 0,
+              harshBraking: 0,
+              harshAcceleration: 0,
+            },
+            {
+              severity: 3,
+              label: 'Umereno',
+              count: 0,
+              harshBraking: 0,
+              harshAcceleration: 0,
+            },
+            {
+              severity: 4,
+              label: 'Ozbiljno',
+              count: 0,
+              harshBraking: 0,
+              harshAcceleration: 0,
+            },
+            {
+              severity: 5,
+              label: 'Veoma ozbiljno',
+              count: 0,
+              harshBraking: 0,
+              harshAcceleration: 0,
+            },
           ],
           safetyScore: 100, // Nema podataka = savršen score
         };
@@ -177,7 +222,7 @@ export class GpsAnalyticsService {
         endDate,
       ]);
 
-      const hourlyData: HourlyDataDto[] = hourlyResult.rows.map(row => ({
+      const hourlyData: HourlyDataDto[] = hourlyResult.rows.map((row) => ({
         hour: row.hour,
         distance: parseFloat(row.distance),
         avgSpeed: parseFloat(row.avg_speed),
@@ -225,15 +270,17 @@ export class GpsAnalyticsService {
         endDate,
       ]);
 
-      const speedDistribution: SpeedDistributionDto[] = speedDistResult.rows.map(row => ({
-        range: row.range,
-        count: row.count,
-        percentage: parseFloat(row.percentage),
-      }));
+      const speedDistribution: SpeedDistributionDto[] =
+        speedDistResult.rows.map((row) => ({
+          range: row.range,
+          count: row.count,
+          percentage: parseFloat(row.percentage),
+        }));
 
       // Dnevna statistika (ako je period duži od jednog dana)
       const daysDiff = Math.ceil(
-        (new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)
+        (new Date(endDate).getTime() - new Date(startDate).getTime()) /
+          (1000 * 60 * 60 * 24),
       );
 
       let dailyStats: DailyStatsDto[] = [];
@@ -256,19 +303,25 @@ export class GpsAnalyticsService {
           GROUP BY DATE(time AT TIME ZONE 'Europe/Belgrade')
           ORDER BY date
         `;
-        
-        this.logger.log(`📅 Daily stats query - parametri: vehicleId=${vehicleId}, start=${startDate}, end=${endDate}`);
+
+        this.logger.log(
+          `📅 Daily stats query - parametri: vehicleId=${vehicleId}, start=${startDate}, end=${endDate}`,
+        );
 
         const dailyResult = await this.pgPool.query(dailyQuery, [
           vehicleId,
           startDate,
           endDate,
         ]);
-        
-        this.logger.log(`📊 Daily stats rezultat: ${dailyResult.rows.length} dana pronađeno`);
+
+        this.logger.log(
+          `📊 Daily stats rezultat: ${dailyResult.rows.length} dana pronađeno`,
+        );
         if (dailyResult.rows.length > 0) {
           this.logger.log(`   Prvi dan: ${dailyResult.rows[0].date}`);
-          this.logger.log(`   Poslednji dan: ${dailyResult.rows[dailyResult.rows.length - 1].date}`);
+          this.logger.log(
+            `   Poslednji dan: ${dailyResult.rows[dailyResult.rows.length - 1].date}`,
+          );
         }
 
         dailyStats = dailyResult.rows.map((row, index) => {
@@ -278,16 +331,18 @@ export class GpsAnalyticsService {
           const month = String(row.date.getMonth() + 1).padStart(2, '0');
           const day = String(row.date.getDate()).padStart(2, '0');
           const dateStr = `${year}-${month}-${day}`;
-          
+
           // Log samo za prvi i poslednji
           if (index === 0 || index === dailyResult.rows.length - 1) {
-            this.logger.log(`   Formatovan datum: ${dateStr} (iz Date objekta: ${row.date})`);
+            this.logger.log(
+              `   Formatovan datum: ${dateStr} (iz Date objekta: ${row.date})`,
+            );
           }
-          
+
           return {
             date: dateStr,
             distance: parseFloat(row.distance),
-            drivingHours: (row.moving_points * 30 / 3600), // Procena na osnovu broja tačaka
+            drivingHours: (row.moving_points * 30) / 3600, // Procena na osnovu broja tačaka
             avgSpeed: parseFloat(row.avg_speed),
           };
         });
@@ -327,26 +382,28 @@ export class GpsAnalyticsService {
         2: 'Blago',
         3: 'Umereno',
         4: 'Ozbiljno',
-        5: 'Veoma ozbiljno'
+        5: 'Veoma ozbiljno',
       };
 
       // Kreiraj statistiku sa svim nivoima (1-5), čak i ako nema podataka
       const drivingEventStats: DrivingEventStatsDto[] = [];
       for (let severity = 1; severity <= 5; severity++) {
-        const eventData = drivingEventsResult.rows.find(row => row.severity === severity);
+        const eventData = drivingEventsResult.rows.find(
+          (row) => row.severity === severity,
+        );
         drivingEventStats.push({
           severity,
           label: severityLabels[severity],
           count: eventData?.total_count || 0,
           harshBraking: eventData?.harsh_braking_count || 0,
-          harshAcceleration: eventData?.harsh_acceleration_count || 0
+          harshAcceleration: eventData?.harsh_acceleration_count || 0,
         });
       }
 
       // Kalkuliši Safety Score na osnovu konfiguracije iz baze
       const safetyScore = await this.calculateSafetyScore(
         drivingEventStats,
-        parseFloat(metrics.total_distance) || 0
+        parseFloat(metrics.total_distance) || 0,
       );
 
       return {
@@ -375,7 +432,7 @@ export class GpsAnalyticsService {
    */
   private async calculateSafetyScore(
     drivingEventStats: DrivingEventStatsDto[],
-    totalDistanceKm: number
+    totalDistanceKm: number,
   ): Promise<number> {
     // Nema vožnje = savršen score
     if (totalDistanceKm === 0) return 100;
@@ -384,14 +441,14 @@ export class GpsAnalyticsService {
       // Dohvati konfiguraciju iz baze
       const [configs, globalConfig] = await Promise.all([
         this.prisma.safetyScoreConfig.findMany({
-          where: { isActive: true }
+          where: { isActive: true },
         }),
-        this.prisma.safetyScoreGlobalConfig.findMany()
+        this.prisma.safetyScoreGlobalConfig.findMany(),
       ]);
 
       // Konvertuj globalnu konfiguraciju u mapu
       const globalParams = new Map(
-        globalConfig.map(g => [g.parameterName, Number(g.parameterValue)])
+        globalConfig.map((g) => [g.parameterName, Number(g.parameterValue)]),
       );
 
       const baseScore = globalParams.get('base_score') ?? 100;
@@ -402,8 +459,8 @@ export class GpsAnalyticsService {
       let totalPenalty = 0;
 
       // Pronađi severity 3 (moderate) i 5 (severe) događaje
-      const moderateEvents = drivingEventStats.find(s => s.severity === 3);
-      const severeEvents = drivingEventStats.find(s => s.severity === 5);
+      const moderateEvents = drivingEventStats.find((s) => s.severity === 3);
+      const severeEvents = drivingEventStats.find((s) => s.severity === 5);
 
       const moderateAccelerations = moderateEvents?.harshAcceleration || 0;
       const severeAccelerations = severeEvents?.harshAcceleration || 0;
@@ -416,14 +473,19 @@ export class GpsAnalyticsService {
 
         // Mapiraj događaje iz baze na brojeve
         if (config.eventType === 'harsh_acceleration') {
-          eventCount = config.severity === 'severe' ? severeAccelerations : moderateAccelerations;
+          eventCount =
+            config.severity === 'severe'
+              ? severeAccelerations
+              : moderateAccelerations;
         } else if (config.eventType === 'harsh_braking') {
-          eventCount = config.severity === 'severe' ? severeBrakings : moderateBrakings;
+          eventCount =
+            config.severity === 'severe' ? severeBrakings : moderateBrakings;
         }
 
         // Kalkuliši događaje po normalizovanoj distanci
         const thresholdDistance = Number(config.thresholdDistanceKm) || 100;
-        const normalizedDistance = Math.max(totalDistanceKm, 1) * (distanceNorm / thresholdDistance);
+        const normalizedDistance =
+          Math.max(totalDistanceKm, 1) * (distanceNorm / thresholdDistance);
         const eventsPer = (eventCount / normalizedDistance) * distanceNorm;
 
         // Kalkuliši kaznu ako je prag prekoračen
@@ -432,14 +494,14 @@ export class GpsAnalyticsService {
           const excess = eventsPer - thresholdEvents;
           const penaltyPoints = Number(config.penaltyPoints) || 5;
           const penaltyMultiplier = Number(config.penaltyMultiplier) || 1.5;
-          let penalty = penaltyPoints + (excess * penaltyMultiplier);
-          
+          let penalty = penaltyPoints + excess * penaltyMultiplier;
+
           // Primeni maksimalnu kaznu ako je konfigurisana
           const maxPenalty = Number(config.maxPenalty);
           if (maxPenalty > 0) {
             penalty = Math.min(penalty, maxPenalty);
           }
-          
+
           totalPenalty += penalty;
         }
       }
@@ -447,13 +509,20 @@ export class GpsAnalyticsService {
       // Kalkuliši finalni score
       const finalScore = baseScore - totalPenalty;
       return Math.max(minScore, Math.min(maxScore, Math.round(finalScore)));
-
     } catch (error) {
-      this.logger.warn(`Neuspešno učitavanje Safety Score konfiguracije, koristi se default: ${error.message}`);
+      this.logger.warn(
+        `Neuspešno učitavanje Safety Score konfiguracije, koristi se default: ${error.message}`,
+      );
       // Fallback na jednostavnu kalkulaciju ako konfiguracija nije dostupna
-      const totalEvents = drivingEventStats.reduce((sum, stat) => sum + stat.count, 0);
+      const totalEvents = drivingEventStats.reduce(
+        (sum, stat) => sum + stat.count,
+        0,
+      );
       const eventsPer100km = (totalEvents / Math.max(totalDistanceKm, 1)) * 100;
-      return Math.max(0, Math.min(100, Math.round(100 - Math.min(50, eventsPer100km))));
+      return Math.max(
+        0,
+        Math.min(100, Math.round(100 - Math.min(50, eventsPer100km))),
+      );
     }
   }
 

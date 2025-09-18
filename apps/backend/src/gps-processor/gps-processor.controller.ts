@@ -1,5 +1,10 @@
 import { Controller, Get, Post, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { GpsProcessorService } from './gps-processor.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
@@ -14,8 +19,8 @@ export class GpsProcessorController {
   @Get('status')
   @RequirePermissions('gps.monitor')
   @ApiOperation({ summary: 'Dohvati status GPS buffer-a' })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Status buffer-a',
     schema: {
       type: 'object',
@@ -35,8 +40,8 @@ export class GpsProcessorController {
   @Post('process')
   @RequirePermissions('gps.manage')
   @ApiOperation({ summary: 'Ručno pokreni procesiranje buffer-a' })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Procesiranje pokrenuto',
     schema: {
       type: 'object',
@@ -53,8 +58,8 @@ export class GpsProcessorController {
   @Post('cleanup')
   @RequirePermissions('gps.manage')
   @ApiOperation({ summary: 'Počisti stare failed zapise' })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Broj obrisanih zapisa',
     schema: {
       type: 'object',

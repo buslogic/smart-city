@@ -9,13 +9,21 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 import { DashboardConfigService } from './dashboard-config.service';
 import { DashboardWidgetsService } from './dashboard-widgets.service';
-import { UpdateDashboardConfigDto, ToggleWidgetDto } from './dto/update-dashboard-config.dto';
+import {
+  UpdateDashboardConfigDto,
+  ToggleWidgetDto,
+} from './dto/update-dashboard-config.dto';
 
 @ApiTags('Dashboard')
 @ApiBearerAuth()
@@ -46,7 +54,9 @@ export class DashboardController {
 
   @Get('config')
   @RequirePermissions('dashboard:view')
-  @ApiOperation({ summary: 'Dobavi konfiguraciju dashboard-a za trenutnog korisnika' })
+  @ApiOperation({
+    summary: 'Dobavi konfiguraciju dashboard-a za trenutnog korisnika',
+  })
   @ApiResponse({ status: 200, description: 'Konfiguracija uspešno dobijena' })
   async getUserDashboardConfig(@Request() req) {
     return this.configService.getUserConfig(req.user.id);
@@ -54,7 +64,9 @@ export class DashboardController {
 
   @Put('config')
   @RequirePermissions('dashboard:update')
-  @ApiOperation({ summary: 'Ažuriraj konfiguraciju dashboard-a za trenutnog korisnika' })
+  @ApiOperation({
+    summary: 'Ažuriraj konfiguraciju dashboard-a za trenutnog korisnika',
+  })
   @ApiResponse({ status: 200, description: 'Konfiguracija uspešno ažurirana' })
   async updateUserDashboardConfig(
     @Request() req,
@@ -91,10 +103,7 @@ export class DashboardController {
   @RequirePermissions('dashboard:update')
   @ApiOperation({ summary: 'Uključi/isključi widget za korisnika' })
   @ApiResponse({ status: 200, description: 'Widget status ažuriran' })
-  async toggleWidget(
-    @Request() req,
-    @Body() toggleDto: ToggleWidgetDto,
-  ) {
+  async toggleWidget(@Request() req, @Body() toggleDto: ToggleWidgetDto) {
     return this.configService.toggleWidget(
       req.user.id,
       toggleDto.widgetId,

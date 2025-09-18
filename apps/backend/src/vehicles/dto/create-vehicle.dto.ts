@@ -1,5 +1,14 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsInt, IsBoolean, IsOptional, IsDateString, Min, Max, IsNotEmpty } from 'class-validator';
+import {
+  IsString,
+  IsInt,
+  IsBoolean,
+  IsOptional,
+  IsDateString,
+  Min,
+  Max,
+  IsNotEmpty,
+} from 'class-validator';
 
 export class CreateVehicleDto {
   @ApiProperty({ description: 'Legacy ID iz originalne baze', required: false })
@@ -12,7 +21,11 @@ export class CreateVehicleDto {
   @IsString()
   garageNumber: string;
 
-  @ApiProperty({ description: 'Registarska oznaka', example: 'BG-123-AB', required: false })
+  @ApiProperty({
+    description: 'Registarska oznaka',
+    example: 'BG-123-AB',
+    required: false,
+  })
   @IsOptional()
   @IsString()
   registrationNumber?: string;
@@ -22,17 +35,29 @@ export class CreateVehicleDto {
   @IsString()
   vehicleNumber?: string;
 
-  @ApiProperty({ description: 'Tip vozila (ID)', example: 110, required: false })
+  @ApiProperty({
+    description: 'Tip vozila (ID)',
+    example: 110,
+    required: false,
+  })
   @IsOptional()
   @IsInt()
   vehicleType?: number;
 
-  @ApiProperty({ description: 'Brend vozila (ID)', example: 1, required: false })
+  @ApiProperty({
+    description: 'Brend vozila (ID)',
+    example: 1,
+    required: false,
+  })
   @IsOptional()
   @IsInt()
   vehicleBrand?: number;
 
-  @ApiProperty({ description: 'Model vozila (ID)', example: 1, required: false })
+  @ApiProperty({
+    description: 'Model vozila (ID)',
+    example: 1,
+    required: false,
+  })
   @IsOptional()
   @IsInt()
   vehicleModel?: number;
@@ -58,7 +83,11 @@ export class CreateVehicleDto {
   @Max(100)
   seatCapacity: number = 0;
 
-  @ApiProperty({ description: 'Broj mesta za stajanje', example: 65, default: 0 })
+  @ApiProperty({
+    description: 'Broj mesta za stajanje',
+    example: 65,
+    default: 0,
+  })
   @IsInt()
   @Min(0)
   @Max(200)
@@ -91,7 +120,10 @@ export class CreateVehicleDto {
   @IsBoolean()
   airCondition: boolean = false;
 
-  @ApiProperty({ description: 'Da li vozilo ima rampu za invalide', default: false })
+  @ApiProperty({
+    description: 'Da li vozilo ima rampu za invalide',
+    default: false,
+  })
   @IsBoolean()
   rampForDisabled: boolean = false;
 
@@ -118,12 +150,18 @@ export class CreateVehicleDto {
   @IsString()
   gpsModel?: string;
 
-  @ApiProperty({ description: 'Datum početka tehničkog pregleda', required: false })
+  @ApiProperty({
+    description: 'Datum početka tehničkog pregleda',
+    required: false,
+  })
   @IsOptional()
   @IsDateString()
   technicalControlFrom?: string;
 
-  @ApiProperty({ description: 'Datum isteka tehničkog pregleda', required: false })
+  @ApiProperty({
+    description: 'Datum isteka tehničkog pregleda',
+    required: false,
+  })
   @IsOptional()
   @IsDateString()
   technicalControlTo?: string;

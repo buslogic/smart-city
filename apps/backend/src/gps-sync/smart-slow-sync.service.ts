@@ -1,13 +1,16 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { LegacySyncWorkerPoolService, WorkerResult } from './legacy-sync-worker-pool.service';
+import {
+  LegacySyncWorkerPoolService,
+  WorkerResult,
+} from './legacy-sync-worker-pool.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
 export enum SlowSyncPreset {
   FAST = 'fast',
-  BALANCED = 'balanced', 
+  BALANCED = 'balanced',
   CONSERVATIVE = 'conservative',
-  CUSTOM = 'custom'
+  CUSTOM = 'custom',
 }
 
 export interface SlowSyncConfig {
@@ -27,10 +30,16 @@ export interface SlowSyncConfig {
 }
 
 export interface SlowSyncProgress {
-  status: 'idle' | 'running' | 'paused' | 'waiting_for_next_batch' | 'completed' | 'error';
+  status:
+    | 'idle'
+    | 'running'
+    | 'paused'
+    | 'waiting_for_next_batch'
+    | 'completed'
+    | 'error';
   startedAt?: Date;
   lastBatchAt?: Date;
-  nextBatchStartTime?: Date;  // Novo: vreme kada će početi sledeći batch
+  nextBatchStartTime?: Date; // Novo: vreme kada će početi sledeći batch
   completedAt?: Date;
   totalVehicles: number;
   processedVehicles: number;
@@ -106,16 +115,23 @@ export class SmartSlowSyncService implements OnModuleInit {
 
   async onModuleInit() {
     await this.initializeProgress();
-    
+
     // 🔴 FIX: Učitaj isRunning iz baze pri pokretanju
-    const savedIsRunning = await this.getSetting<boolean>('smart_slow_sync.is_running');
+    const savedIsRunning = await this.getSetting<boolean>(
+      'smart_slow_sync.is_running',
+    );
     if (savedIsRunning !== null) {
       this.isRunning = savedIsRunning;
-      
+
       // Proveri konzistentnost pri pokretanju
       if (this.isRunning && this.progress?.status === 'completed') {
-        this.logger.warn('⚠️ Nekonzistentno stanje pri pokretanju - resetujem isRunning');
-        await this.setRunningState(false, 'Konzistentnost check pri pokretanju');
+        this.logger.warn(
+          '⚠️ Nekonzistentno stanje pri pokretanju - resetujem isRunning',
+        );
+        await this.setRunningState(
+          false,
+          'Konzistentnost check pri pokretanju',
+        );
       } else {
         this.logger.log(`📌 isRunning učitan iz baze: ${this.isRunning}`);
       }
@@ -140,18 +156,25 @@ export class SmartSlowSyncService implements OnModuleInit {
   }
 
   private async setSetting<T = any>(key: string, value: T): Promise<void> {
-    const stringValue = value === null ? null : (typeof value === 'string' ? value : JSON.stringify(value));
+    const stringValue =
+      value === null
+        ? null
+        : typeof value === 'string'
+          ? value
+          : JSON.stringify(value);
 
     if (stringValue === null) {
-      await this.prisma.systemSettings.delete({
-        where: { key }
-      }).catch(() => {});
+      await this.prisma.systemSettings
+        .delete({
+          where: { key },
+        })
+        .catch(() => {});
       return;
     }
 
     await this.prisma.systemSettings.upsert({
       where: { key },
-      update: { 
+      update: {
         value: stringValue,
         updatedAt: new Date(),
       },
@@ -167,9 +190,9 @@ export class SmartSlowSyncService implements OnModuleInit {
 
   private async initializeProgress() {
     const savedProgress = await this.getSetting<SlowSyncProgress>(
-      this.SETTINGS_KEY + '_progress'
+      this.SETTINGS_KEY + '_progress',
     );
-    
+
     if (savedProgress) {
       this.progress = savedProgress;
       // this.logger.log(`Učitan postojeći progress: ${this.progress.processedVehicles}/${this.progress.totalVehicles} vozila`);
@@ -193,22 +216,29 @@ export class SmartSlowSyncService implements OnModuleInit {
     }
 
     const savedConfig = await this.getSetting<SlowSyncConfig>(
-      this.SETTINGS_KEY + '_config'
+      this.SETTINGS_KEY + '_config',
     );
-    
+
     // this.logger.debug(`Saved config from DB:`, JSON.stringify(savedConfig, null, 2));
-    
-    if (savedConfig && savedConfig.preset && savedConfig.vehiclesPerBatch && savedConfig.workersPerBatch) {
+
+    if (
+      savedConfig &&
+      savedConfig.preset &&
+      savedConfig.vehiclesPerBatch &&
+      savedConfig.workersPerBatch
+    ) {
       // this.logger.log(`Koristim saved config sa preset: ${savedConfig.preset}`);
       this.currentConfig = savedConfig;
     } else {
       // this.logger.log('Saved config je prazan ili neispravan, koristim default config');
       this.currentConfig = this.getDefaultConfig();
     }
-    
+
     // Učitaj forceProcess kao separan setting
-    const forceProcessSetting = await this.getSetting<boolean>('smart_slow_sync.force_process');
-    
+    const forceProcessSetting = await this.getSetting<boolean>(
+      'smart_slow_sync.force_process',
+    );
+
     if (forceProcessSetting !== null && forceProcessSetting !== undefined) {
       this.currentConfig.forceProcess = forceProcessSetting;
       // this.logger.log(`Učitan forceProcess iz baze: ${forceProcessSetting}`);
@@ -218,7 +248,7 @@ export class SmartSlowSyncService implements OnModuleInit {
       await this.setSetting('smart_slow_sync.force_process', false);
       // this.logger.log(`Postavljen default forceProcess: false (UNCHECKED - poštuje noćne sate)`);
     }
-    
+
     // this.logger.debug(`Final currentConfig:`, JSON.stringify(this.currentConfig, null, 2));
   }
 
@@ -235,7 +265,9 @@ export class SmartSlowSyncService implements OnModuleInit {
     } as SlowSyncConfig;
   }
 
-  async startSlowSync(config?: Partial<SlowSyncConfig>): Promise<SlowSyncProgress> {
+  async startSlowSync(
+    config?: Partial<SlowSyncConfig>,
+  ): Promise<SlowSyncProgress> {
     // Osiguraj da je config inicijalizovan
     if (!this.currentConfig) {
       this.logger.log('Config nije inicijalizovan, inicijalizujem...');
@@ -257,11 +289,8 @@ export class SmartSlowSyncService implements OnModuleInit {
       } else {
         this.currentConfig = { ...this.currentConfig, ...config };
       }
-      
-      await this.setSetting(
-        this.SETTINGS_KEY + '_config',
-        this.currentConfig
-      );
+
+      await this.setSetting(this.SETTINGS_KEY + '_config', this.currentConfig);
     }
 
     if (this.isPaused) {
@@ -273,14 +302,20 @@ export class SmartSlowSyncService implements OnModuleInit {
       return this.progress;
     }
 
-    this.logger.log(`Pokrećem Smart Slow Sync sa preset: ${this.currentConfig.preset}`);
-    this.logger.log(`Konfiguracija: ${this.currentConfig.vehiclesPerBatch} vozila po batch-u, ${this.currentConfig.workersPerBatch} worker-a`);
+    this.logger.log(
+      `Pokrećem Smart Slow Sync sa preset: ${this.currentConfig.preset}`,
+    );
+    this.logger.log(
+      `Konfiguracija: ${this.currentConfig.vehiclesPerBatch} vozila po batch-u, ${this.currentConfig.workersPerBatch} worker-a`,
+    );
 
     await this.initializeVehicleQueue();
-    
+
     // Ako nema vozila za sinhronizaciju, završi odmah
     if (this.vehicleQueue.length === 0) {
-      this.logger.warn('Nema vozila za sinhronizaciju - završavam Smart Slow Sync odmah');
+      this.logger.warn(
+        'Nema vozila za sinhronizaciju - završavam Smart Slow Sync odmah',
+      );
       this.isRunning = false;
       this.progress.status = 'completed';
       this.progress.startedAt = new Date();
@@ -291,19 +326,21 @@ export class SmartSlowSyncService implements OnModuleInit {
       await this.saveProgress();
       return this.progress;
     }
-    
+
     this.isRunning = true;
     this.progress.status = 'running';
     this.progress.startedAt = new Date();
     this.progress.currentBatch = 0;
     this.progress.totalBatches = Math.ceil(
-      this.vehicleQueue.length / this.currentConfig.vehiclesPerBatch
+      this.vehicleQueue.length / this.currentConfig.vehiclesPerBatch,
     );
 
     await this.saveProgress();
-    
-    this.logger.log(`Započinjem sinhronizaciju ${this.vehicleQueue.length} vozila u ${this.progress.totalBatches} batch-ova`);
-    
+
+    this.logger.log(
+      `Započinjem sinhronizaciju ${this.vehicleQueue.length} vozila u ${this.progress.totalBatches} batch-ova`,
+    );
+
     return this.progress;
   }
 
@@ -316,7 +353,7 @@ export class SmartSlowSyncService implements OnModuleInit {
     this.isPaused = true;
     this.progress.status = 'paused';
     await this.saveProgress();
-    
+
     return this.progress;
   }
 
@@ -330,7 +367,7 @@ export class SmartSlowSyncService implements OnModuleInit {
     this.isRunning = true;
     this.progress.status = 'running';
     await this.saveProgress();
-    
+
     return this.progress;
   }
 
@@ -347,27 +384,32 @@ export class SmartSlowSyncService implements OnModuleInit {
     this.progress.status = 'idle';
     this.progress.vehiclesInCurrentBatch = [];
     await this.saveProgress();
-    
+
     return this.progress;
   }
 
   async getProgress(): Promise<SlowSyncProgress> {
     if (this.progress.status === 'running' && this.progress.totalBatches > 0) {
       const averageTimePerBatch = this.progress.stats.averageTimePerBatch || 45;
-      const remainingBatches = this.progress.totalBatches - this.progress.currentBatch;
+      const remainingBatches =
+        this.progress.totalBatches - this.progress.currentBatch;
       const remainingMinutes = remainingBatches * averageTimePerBatch;
-      
-      const hoursPerDay = this.currentConfig.nightHoursEnd >= this.currentConfig.nightHoursStart 
-        ? this.currentConfig.nightHoursEnd - this.currentConfig.nightHoursStart
-        : (24 - this.currentConfig.nightHoursStart) + this.currentConfig.nightHoursEnd;
-      
+
+      const hoursPerDay =
+        this.currentConfig.nightHoursEnd >= this.currentConfig.nightHoursStart
+          ? this.currentConfig.nightHoursEnd -
+            this.currentConfig.nightHoursStart
+          : 24 -
+            this.currentConfig.nightHoursStart +
+            this.currentConfig.nightHoursEnd;
+
       const remainingDays = Math.ceil(remainingMinutes / (hoursPerDay * 60));
-      
+
       this.progress.estimatedCompletion = new Date(
-        Date.now() + remainingDays * 24 * 60 * 60 * 1000
+        Date.now() + remainingDays * 24 * 60 * 60 * 1000,
       );
     }
-    
+
     return this.progress;
   }
 
@@ -377,11 +419,16 @@ export class SmartSlowSyncService implements OnModuleInit {
 
   async updateConfig(config: Partial<SlowSyncConfig>): Promise<SlowSyncConfig> {
     // Zabrani menjanje konfiguracije dok je sync aktivan (running ili waiting_for_next_batch)
-    const isActiveSync = this.isRunning && !this.isPaused && 
-      (this.progress?.status === 'running' || this.progress?.status === 'waiting_for_next_batch');
-    
+    const isActiveSync =
+      this.isRunning &&
+      !this.isPaused &&
+      (this.progress?.status === 'running' ||
+        this.progress?.status === 'waiting_for_next_batch');
+
     if (isActiveSync) {
-      throw new Error('Konfiguraciju ne možete menjati dok je sinhronizacija u toku. Prvo zaustavite ili pauzirajte proces.');
+      throw new Error(
+        'Konfiguraciju ne možete menjati dok je sinhronizacija u toku. Prvo zaustavite ili pauzirajte proces.',
+      );
     }
 
     if (config.preset) {
@@ -396,21 +443,23 @@ export class SmartSlowSyncService implements OnModuleInit {
 
     // Sačuvaj forceProcess kao poseban setting
     if (config.forceProcess !== undefined) {
-      await this.setSetting('smart_slow_sync.force_process', config.forceProcess);
+      await this.setSetting(
+        'smart_slow_sync.force_process',
+        config.forceProcess,
+      );
       this.logger.log(`forceProcess ažuriran u bazi: ${config.forceProcess}`);
     }
-    
+
     // Sačuvaj ostatak konfiguracije (bez forceProcess da ne bude duplo)
     const configToSave = { ...this.currentConfig };
     delete (configToSave as any).forceProcess; // Ukloni da ne bude duplo
-    
-    await this.setSetting(
-      this.SETTINGS_KEY + '_config',
-      configToSave
+
+    await this.setSetting(this.SETTINGS_KEY + '_config', configToSave);
+
+    this.logger.log(
+      `Konfiguracija ažurirana: ${JSON.stringify(this.currentConfig)}`,
     );
 
-    this.logger.log(`Konfiguracija ažurirana: ${JSON.stringify(this.currentConfig)}`);
-    
     return this.currentConfig;
   }
 
@@ -418,64 +467,84 @@ export class SmartSlowSyncService implements OnModuleInit {
   async checkBatchSchedule() {
     // 🔴 FIX: Proveri konzistentnost stanja pre svega
     if (this.isRunning && this.progress?.status === 'completed') {
-      this.logger.warn('⚠️ Detektovano nekonzistentno stanje: isRunning=true ali status=completed. Resetujem...');
+      this.logger.warn(
+        '⚠️ Detektovano nekonzistentno stanje: isRunning=true ali status=completed. Resetujem...',
+      );
       this.isRunning = false;
       await this.saveProgress(); // Sačuvaj izmenu
     }
-    
+
     if (!this.isRunning || this.isPaused) {
       return;
     }
-    
+
     // NOVA PROVERA - ako je status 'running' ali još procesira trenutni batch, ne diraj
-    if (this.progress && 
-        this.progress.status === 'running' && 
-        this.progress.vehiclesInCurrentBatch && 
-        this.progress.vehiclesInCurrentBatch.length > 0) {
-      this.logger.debug(`⏳ CRON: Batch ${this.progress.currentBatch} još uvek u toku, čekam da završi...`);
+    if (
+      this.progress &&
+      this.progress.status === 'running' &&
+      this.progress.vehiclesInCurrentBatch &&
+      this.progress.vehiclesInCurrentBatch.length > 0
+    ) {
+      this.logger.debug(
+        `⏳ CRON: Batch ${this.progress.currentBatch} još uvek u toku, čekam da završi...`,
+      );
       return;
     }
-    
+
     // Posebno rukuj waiting_for_next_batch stanjem
     if (this.progress && this.progress.status === 'waiting_for_next_batch') {
       const now = new Date();
-      
+
       if (this.progress.nextBatchStartTime) {
         const nextBatchTime = new Date(this.progress.nextBatchStartTime);
-        
+
         if (now >= nextBatchTime) {
-          this.logger.log(`⏰ CRON: Vreme je za sledeći batch! Prebacujem iz waiting u running...`);
+          this.logger.log(
+            `⏰ CRON: Vreme je za sledeći batch! Prebacujem iz waiting u running...`,
+          );
           this.progress.status = 'running';
           await this.saveProgress();
           await this.processBatch(true);
         } else {
-          const remainingMinutes = Math.ceil((nextBatchTime.getTime() - now.getTime()) / 60000);
-          this.logger.log(`⏱️ CRON: Još ${remainingMinutes} minuta do sledećeg batch-a (waiting stanje)`);
+          const remainingMinutes = Math.ceil(
+            (nextBatchTime.getTime() - now.getTime()) / 60000,
+          );
+          this.logger.log(
+            `⏱️ CRON: Još ${remainingMinutes} minuta do sledećeg batch-a (waiting stanje)`,
+          );
         }
       }
       return;
     }
-    
+
     // Originalna logika za running stanje
     if (this.vehicleQueue && this.vehicleQueue.length > 0) {
       // Ako nije pokrenut nijedan batch još uvek, pokreni prvi
       if (!this.progress.lastBatchAt && this.progress.currentBatch === 0) {
-        this.logger.log(`⏰ CRON: Pokrećem prvi batch (forceProcess: ${this.currentConfig.forceProcess})...`);
+        this.logger.log(
+          `⏰ CRON: Pokrećem prvi batch (forceProcess: ${this.currentConfig.forceProcess})...`,
+        );
         await this.processBatch(this.currentConfig.forceProcess);
-      } 
+      }
       // Inače proveri da li je vreme za sledeći batch
       else if (this.progress.lastBatchAt) {
         const lastBatch = new Date(this.progress.lastBatchAt);
         const now = new Date();
         const delayMs = this.currentConfig.batchDelayMinutes * 60 * 1000;
         const nextRunTime = new Date(lastBatch.getTime() + delayMs);
-        
+
         if (now >= nextRunTime) {
-          this.logger.log(`⏰ CRON: Vreme je za sledeći batch (forceProcess: ${this.currentConfig.forceProcess})!`);
+          this.logger.log(
+            `⏰ CRON: Vreme je za sledeći batch (forceProcess: ${this.currentConfig.forceProcess})!`,
+          );
           await this.processBatch(this.currentConfig.forceProcess);
         } else {
-          const remainingMinutes = Math.ceil((nextRunTime.getTime() - now.getTime()) / 60000);
-          this.logger.log(`⏱️ CRON: Još ${remainingMinutes} minuta do sledećeg batch-a`);
+          const remainingMinutes = Math.ceil(
+            (nextRunTime.getTime() - now.getTime()) / 60000,
+          );
+          this.logger.log(
+            `⏱️ CRON: Još ${remainingMinutes} minuta do sledećeg batch-a`,
+          );
         }
       }
     }
@@ -487,39 +556,53 @@ export class SmartSlowSyncService implements OnModuleInit {
     const belgradeDateFormatter = new Intl.DateTimeFormat('en-US', {
       timeZone: 'Europe/Belgrade',
       hour: 'numeric',
-      hour12: false
+      hour12: false,
     });
     const belgradeHour = parseInt(belgradeDateFormatter.format(now));
-    
-    this.logger.log(`ProcessBatch pokrenut - isRunning: ${this.isRunning}, isPaused: ${this.isPaused}, vehicleQueue.length: ${this.vehicleQueue?.length || 0}`);
-    this.logger.log(`Vreme - Server UTC: ${now.toISOString()}, Belgrade hour: ${belgradeHour}, forceProcess: ${forceProcess}`);
-    
+
+    this.logger.log(
+      `ProcessBatch pokrenut - isRunning: ${this.isRunning}, isPaused: ${this.isPaused}, vehicleQueue.length: ${this.vehicleQueue?.length || 0}`,
+    );
+    this.logger.log(
+      `Vreme - Server UTC: ${now.toISOString()}, Belgrade hour: ${belgradeHour}, forceProcess: ${forceProcess}`,
+    );
+
     if (!this.isRunning || this.isPaused) {
-      this.logger.log(`Batch processing preskočen - isRunning: ${this.isRunning}, isPaused: ${this.isPaused}`);
+      this.logger.log(
+        `Batch processing preskočen - isRunning: ${this.isRunning}, isPaused: ${this.isPaused}`,
+      );
       return;
     }
 
     // Koristi Belgrade vreme za proveru noćnih sati
     const isNightTime = this.isInNightHours(belgradeHour);
-    this.logger.log(`Vremenska provera - Belgrade hour: ${belgradeHour}, nightHoursStart: ${this.currentConfig.nightHoursStart}, nightHoursEnd: ${this.currentConfig.nightHoursEnd}, isNightTime: ${isNightTime}`);
+    this.logger.log(
+      `Vremenska provera - Belgrade hour: ${belgradeHour}, nightHoursStart: ${this.currentConfig.nightHoursStart}, nightHoursEnd: ${this.currentConfig.nightHoursEnd}, isNightTime: ${isNightTime}`,
+    );
 
     if (!forceProcess && !isNightTime) {
-      this.logger.log(`Trenutno je ${belgradeHour}h po Belgrade vremenu, čekam noćne sate (${this.currentConfig.nightHoursStart}h-${this.currentConfig.nightHoursEnd}h). Koristi forceProcess=true za prinudno pokretanje.`);
+      this.logger.log(
+        `Trenutno je ${belgradeHour}h po Belgrade vremenu, čekam noćne sate (${this.currentConfig.nightHoursStart}h-${this.currentConfig.nightHoursEnd}h). Koristi forceProcess=true za prinudno pokretanje.`,
+      );
       return;
     }
 
     const dailyBatchesProcessed = await this.getDailyBatchCount();
     if (dailyBatchesProcessed >= this.currentConfig.maxDailyBatches) {
-      this.logger.log(`Dostignut dnevni limit od ${this.currentConfig.maxDailyBatches} batch-ova`);
+      this.logger.log(
+        `Dostignut dnevni limit od ${this.currentConfig.maxDailyBatches} batch-ova`,
+      );
       return;
     }
 
     if (!this.vehicleQueue || this.vehicleQueue.length === 0) {
-      this.logger.log('Sva vozila su procesirana ili vehicleQueue nije inicijalizovan!');
-      
+      this.logger.log(
+        'Sva vozila su procesirana ili vehicleQueue nije inicijalizovan!',
+      );
+
       // Pokušaj da reinicijalizuješ queue ako je prazan
       await this.initializeVehicleQueue();
-      
+
       if (this.vehicleQueue.length === 0) {
         this.progress.status = 'completed';
         this.progress.completedAt = new Date();
@@ -531,45 +614,52 @@ export class SmartSlowSyncService implements OnModuleInit {
 
     try {
       await this.performHealthCheck();
-      
-      const batchVehicles = this.vehicleQueue.splice(0, this.currentConfig.vehiclesPerBatch);
-      
+
+      const batchVehicles = this.vehicleQueue.splice(
+        0,
+        this.currentConfig.vehiclesPerBatch,
+      );
+
       // Proveri da batch nije prazan
       if (batchVehicles.length === 0) {
-        this.logger.warn(`Batch ${this.progress.currentBatch + 1} je prazan - završavam Smart Slow Sync`);
+        this.logger.warn(
+          `Batch ${this.progress.currentBatch + 1} je prazan - završavam Smart Slow Sync`,
+        );
         this.progress.status = 'completed';
         this.progress.completedAt = new Date();
         this.isRunning = false;
         await this.saveProgress();
         return;
       }
-      
+
       // Dobavi garažne brojeve za vozila u batch-u
       const vehicles = await this.prisma.busVehicle.findMany({
         where: { id: { in: batchVehicles } },
-        select: { id: true, garageNumber: true }
+        select: { id: true, garageNumber: true },
       });
-      
+
       // Kreiraj mapu ID -> garažni broj
-      const vehicleMap = new Map(vehicles.map(v => [v.id, v.garageNumber]));
-      
+      const vehicleMap = new Map(vehicles.map((v) => [v.id, v.garageNumber]));
+
       this.progress.currentBatch++;
       // Koristi garažne brojeve umesto ID-eva
-      this.progress.vehiclesInCurrentBatch = batchVehicles.map(id => {
+      this.progress.vehiclesInCurrentBatch = batchVehicles.map((id) => {
         const garageNumber = vehicleMap.get(id);
         return garageNumber || `ID:${id}`; // Fallback na ID ako nema garažnog broja
       });
       this.progress.lastBatchAt = new Date();
-      
-      this.logger.log(`Rozpoczinjem batch ${this.progress.currentBatch}/${this.progress.totalBatches} sa ${batchVehicles.length} vozila`);
-      
+
+      this.logger.log(
+        `Rozpoczinjem batch ${this.progress.currentBatch}/${this.progress.totalBatches} sa ${batchVehicles.length} vozila`,
+      );
+
       const startTime = Date.now();
-      
+
       // Koristi Worker Pool servis za batch sinhronizaciju
       const syncFrom = new Date();
       syncFrom.setDate(syncFrom.getDate() - this.currentConfig.syncDaysBack);
       const syncTo = new Date();
-      
+
       const workerResults = await this.workerPoolService.startWorkerPoolSync(
         batchVehicles,
         syncFrom,
@@ -577,26 +667,28 @@ export class SmartSlowSyncService implements OnModuleInit {
         `slow-sync-batch-${this.progress.currentBatch}`,
         false, // Slow Sync NIKAD ne osvežava aggregates odmah (štedi resurse)
         this.progress.currentBatch > 1, // Zadrži completed statuse ako nije prvi batch
-        this.currentConfig.workersPerBatch // Prosleđuje broj workera iz Smart Slow Sync konfiguracije
+        this.currentConfig.workersPerBatch, // Prosleđuje broj workera iz Smart Slow Sync konfiguracije
       );
-      
+
       // NOVA VERIFIKACIJA - proveri da li su svi rezultati vraćeni
       if (workerResults.size !== batchVehicles.length) {
         this.logger.warn(
           `⚠️ UPOZORENJE: Očekivano ${batchVehicles.length} rezultata, ` +
-          `dobijeno ${workerResults.size}! Proveravam koja vozila nedostaju...`
+            `dobijeno ${workerResults.size}! Proveravam koja vozila nedostaju...`,
         );
-        
+
         // Pronađi koja vozila nedostaju
         const missingVehicles = batchVehicles.filter(
-          vehicleId => !workerResults.has(vehicleId)
+          (vehicleId) => !workerResults.has(vehicleId),
         );
-        
+
         if (missingVehicles.length > 0) {
-          this.logger.error(`❌ Nedostaju rezultati za vozila sa ID: ${missingVehicles.join(', ')}`);
-          
+          this.logger.error(
+            `❌ Nedostaju rezultati za vozila sa ID: ${missingVehicles.join(', ')}`,
+          );
+
           // Označi nedostajuća vozila kao failed
-          missingVehicles.forEach(vehicleId => {
+          missingVehicles.forEach((vehicleId) => {
             workerResults.set(vehicleId, {
               workerId: 0,
               vehicleId,
@@ -607,18 +699,19 @@ export class SmartSlowSyncService implements OnModuleInit {
               startTime: new Date(),
               endTime: new Date(),
               duration: 0,
-              error: 'Rezultat nije vraćen iz Worker Pool-a - mogući timeout ili greška',
-              logs: ['Worker nije vratio rezultat za ovo vozilo']
+              error:
+                'Rezultat nije vraćen iz Worker Pool-a - mogući timeout ili greška',
+              logs: ['Worker nije vratio rezultat za ovo vozilo'],
             } as any);
           });
         }
       }
-      
+
       // Konvertuj rezultate u format koji o\u010dekujemo
       let successCount = 0;
       let totalGpsPoints = 0;
       const failedVehicles: number[] = [];
-      
+
       workerResults.forEach((result, vehicleId) => {
         if (result.status === 'completed') {
           successCount++;
@@ -627,23 +720,23 @@ export class SmartSlowSyncService implements OnModuleInit {
           failedVehicles.push(vehicleId);
         }
       });
-      
+
       const result = {
         successCount,
         totalGpsPoints,
-        failedVehicles
+        failedVehicles,
       };
 
       const duration = (Date.now() - startTime) / 1000 / 60; // minuti
-      
+
       this.progress.processedVehicles += result.successCount;
       this.progress.stats.totalPointsProcessed += result.totalGpsPoints || 0;
-      
+
       // Ažuriraj statistike za svako vozilo
       for (const vehicleId of batchVehicles) {
         const wasSuccessful = !failedVehicles.includes(vehicleId);
         const vehicleResult = workerResults.get(vehicleId);
-        
+
         // Snimi istoriju sync-a
         await this.prisma.smartSlowSyncHistory.create({
           data: {
@@ -653,13 +746,15 @@ export class SmartSlowSyncService implements OnModuleInit {
             syncEndDate: syncTo,
             status: wasSuccessful ? 'completed' : 'failed',
             pointsProcessed: vehicleResult?.processedRecords || 0,
-            processingTimeMs: Math.round(duration * 60 * 1000 / batchVehicles.length),
+            processingTimeMs: Math.round(
+              (duration * 60 * 1000) / batchVehicles.length,
+            ),
             startedAt: new Date(startTime),
             completedAt: new Date(),
             error: wasSuccessful ? null : vehicleResult?.error || null,
           },
         });
-        
+
         // Ažuriraj glavnu tabelu vozila
         await this.prisma.smartSlowSyncVehicle.update({
           where: { vehicleId },
@@ -669,12 +764,14 @@ export class SmartSlowSyncService implements OnModuleInit {
             totalSyncCount: { increment: 1 },
             successfulSyncCount: wasSuccessful ? { increment: 1 } : undefined,
             failedSyncCount: !wasSuccessful ? { increment: 1 } : undefined,
-            totalPointsProcessed: { increment: vehicleResult?.processedRecords || 0 },
+            totalPointsProcessed: {
+              increment: vehicleResult?.processedRecords || 0,
+            },
             lastError: wasSuccessful ? null : vehicleResult?.error || null,
           },
         });
       }
-      
+
       // Snimi batch informacije - koristi upsert da izbegne duplicate key error
       await this.prisma.smartSlowSyncBatch.upsert({
         where: {
@@ -701,12 +798,17 @@ export class SmartSlowSyncService implements OnModuleInit {
           processingTimeMs: Math.round(duration * 60 * 1000),
         },
       });
-      
-      const totalTime = this.progress.stats.averageTimePerBatch * (this.progress.currentBatch - 1);
-      this.progress.stats.averageTimePerBatch = (totalTime + duration) / this.progress.currentBatch;
-      
-      this.progress.stats.successRate = (this.progress.processedVehicles / 
-        (this.progress.processedVehicles + this.progress.errors.length)) * 100;
+
+      const totalTime =
+        this.progress.stats.averageTimePerBatch *
+        (this.progress.currentBatch - 1);
+      this.progress.stats.averageTimePerBatch =
+        (totalTime + duration) / this.progress.currentBatch;
+
+      this.progress.stats.successRate =
+        (this.progress.processedVehicles /
+          (this.progress.processedVehicles + this.progress.errors.length)) *
+        100;
 
       if (result.failedVehicles && result.failedVehicles.length > 0) {
         for (const failed of result.failedVehicles) {
@@ -721,11 +823,17 @@ export class SmartSlowSyncService implements OnModuleInit {
       await this.saveProgress();
       await this.createCheckpoint();
 
-      if (this.progress.currentBatch % this.currentConfig.compressAfterBatches === 0) {
+      if (
+        this.progress.currentBatch % this.currentConfig.compressAfterBatches ===
+        0
+      ) {
         await this.performCompression();
       }
 
-      if (this.progress.currentBatch % this.currentConfig.vacuumAfterBatches === 0) {
+      if (
+        this.progress.currentBatch % this.currentConfig.vacuumAfterBatches ===
+        0
+      ) {
         await this.performVacuum();
       }
 
@@ -742,52 +850,66 @@ export class SmartSlowSyncService implements OnModuleInit {
 • Preostalo u queue: ${this.vehicleQueue.length}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       `);
-      
+
       // Ako ima još vozila, prebaci u waiting stanje
       if (this.vehicleQueue && this.vehicleQueue.length > 0) {
-        this.logger.log(`⏸️ Pauziram ${this.currentConfig.batchDelayMinutes} minuta pre sledećeg batch-a...`);
-        this.logger.log(`📊 Preostalo vozila u queue: ${this.vehicleQueue.length}`);
-        this.logger.log(`🔄 CRON će automatski pokrenuti sledeći batch nakon pauze (proverava svake 2 minuta)`);
-        
+        this.logger.log(
+          `⏸️ Pauziram ${this.currentConfig.batchDelayMinutes} minuta pre sledećeg batch-a...`,
+        );
+        this.logger.log(
+          `📊 Preostalo vozila u queue: ${this.vehicleQueue.length}`,
+        );
+        this.logger.log(
+          `🔄 CRON će automatski pokrenuti sledeći batch nakon pauze (proverava svake 2 minuta)`,
+        );
+
         // Izračunaj kada će početi sledeći batch
         // ISPRAVKA: Koristi setTime() umesto setMinutes() da bi pravilno rukovalo preliv minuta
         const nextBatchTime = new Date();
         const delayMs = this.currentConfig.batchDelayMinutes * 60 * 1000;
-        this.logger.log(`⏱️ DEBUG: batchDelayMinutes=${this.currentConfig.batchDelayMinutes}, delayMs=${delayMs}ms`);
+        this.logger.log(
+          `⏱️ DEBUG: batchDelayMinutes=${this.currentConfig.batchDelayMinutes}, delayMs=${delayMs}ms`,
+        );
         nextBatchTime.setTime(nextBatchTime.getTime() + delayMs);
-        this.logger.log(`⏱️ DEBUG: Sledeći batch u ${nextBatchTime.toISOString()}`);
-        
-        
+        this.logger.log(
+          `⏱️ DEBUG: Sledeći batch u ${nextBatchTime.toISOString()}`,
+        );
+
         // ATOMSKI UPDATE - sve promene odjednom da se izbegne race condition
         this.progress = {
           ...this.progress,
           status: 'waiting_for_next_batch',
           vehiclesInCurrentBatch: [], // Očisti kartice vozila
           lastBatchAt: new Date(),
-          nextBatchStartTime: nextBatchTime
+          nextBatchStartTime: nextBatchTime,
         };
-        
+
         await this.saveProgress();
       } else {
-        this.logger.log(`✅ Svi batch-ovi završeni! Ukupno procesiranih vozila: ${this.progress.processedVehicles}`);
-        
+        this.logger.log(
+          `✅ Svi batch-ovi završeni! Ukupno procesiranih vozila: ${this.progress.processedVehicles}`,
+        );
+
         // ATOMSKI UPDATE - sve promene odjednom
         this.progress = {
           ...this.progress,
           status: 'completed',
           completedAt: new Date(),
-          vehiclesInCurrentBatch: [] // Očisti i za completed
+          vehiclesInCurrentBatch: [], // Očisti i za completed
         };
-        
+
         await this.saveProgress();
-        
+
         // 🔴 FIX: Resetuj isRunning flag kada su svi batch-ovi završeni
         this.isRunning = false;
-        this.logger.log('🔄 isRunning resetovan na false - svi batch-ovi završeni');
+        this.logger.log(
+          '🔄 isRunning resetovan na false - svi batch-ovi završeni',
+        );
       }
-      
     } catch (error) {
-      this.logger.error(`Greška u batch ${this.progress.currentBatch}: ${error.message}`);
+      this.logger.error(
+        `Greška u batch ${this.progress.currentBatch}: ${error.message}`,
+      );
       // Vraćamo originalne vehicle ID-eve nazad u queue
       // Već imamo batchVehicles koji sadrži ID-eve, ali moramo ga ponovo dobiti iz vehiclesInCurrentBatch
       // ako je error nastao nakon što smo izgubili batchVehicles scope
@@ -800,7 +922,7 @@ export class SmartSlowSyncService implements OnModuleInit {
           // Ako je garažni broj, moramo pronaći ID
           const vehicle = await this.prisma.busVehicle.findUnique({
             where: { garageNumber: vehicleInfo },
-            select: { id: true }
+            select: { id: true },
           });
           if (vehicle) {
             vehiclesToReturn.push(vehicle.id);
@@ -817,7 +939,9 @@ export class SmartSlowSyncService implements OnModuleInit {
     } finally {
       // 🔴 FIX: Dodatna provera da se isRunning resetuje ako je sync završen
       if (this.progress?.status === 'completed' && this.isRunning) {
-        this.logger.log('🔄 Finally blok: Resetujem isRunning flag jer je status completed');
+        this.logger.log(
+          '🔄 Finally blok: Resetujem isRunning flag jer je status completed',
+        );
         this.isRunning = false;
       }
     }
@@ -838,47 +962,60 @@ export class SmartSlowSyncService implements OnModuleInit {
     const syncVehicles = await this.prisma.smartSlowSyncVehicle.findMany({
       where: whereCondition,
       orderBy: [
-        { priority: 'desc' },  // Viši prioritet prvi
-        { lastSyncAt: 'asc' },  // Najstariji sync prvi
+        { priority: 'desc' }, // Viši prioritet prvi
+        { lastSyncAt: 'asc' }, // Najstariji sync prvi
       ],
-      select: { 
+      select: {
         vehicleId: true,
         priority: true,
         lastSuccessfulSyncAt: true,
       },
     });
 
-    this.vehicleQueue = syncVehicles.map(v => v.vehicleId);
+    this.vehicleQueue = syncVehicles.map((v) => v.vehicleId);
     this.progress.totalVehicles = this.vehicleQueue.length;
-    
+
     // Dodaj detaljnije logovanje
-    const skippedVehiclesCount = !this.currentConfig.syncAlreadySyncedVehicles 
-      ? (await this.prisma.smartSlowSyncVehicle.count({
-          where: { enabled: true, lastSuccessfulSyncAt: { not: null } }
-        }))
+    const skippedVehiclesCount = !this.currentConfig.syncAlreadySyncedVehicles
+      ? await this.prisma.smartSlowSyncVehicle.count({
+          where: { enabled: true, lastSuccessfulSyncAt: { not: null } },
+        })
       : 0;
 
-    this.logger.log(`Inicijalizovan queue sa ${this.vehicleQueue.length} vozila za Smart Slow Sync`);
-    if (!this.currentConfig.syncAlreadySyncedVehicles && skippedVehiclesCount > 0) {
-      this.logger.log(`Preskočeno ${skippedVehiclesCount} već sinhronizovanih vozila (syncAlreadySyncedVehicles=false)`);
+    this.logger.log(
+      `Inicijalizovan queue sa ${this.vehicleQueue.length} vozila za Smart Slow Sync`,
+    );
+    if (
+      !this.currentConfig.syncAlreadySyncedVehicles &&
+      skippedVehiclesCount > 0
+    ) {
+      this.logger.log(
+        `Preskočeno ${skippedVehiclesCount} već sinhronizovanih vozila (syncAlreadySyncedVehicles=false)`,
+      );
     }
-    
+
     if (this.vehicleQueue.length === 0) {
-      const totalEnabledVehicles = await this.prisma.smartSlowSyncVehicle.count({
-        where: { enabled: true }
-      });
-      
+      const totalEnabledVehicles = await this.prisma.smartSlowSyncVehicle.count(
+        {
+          where: { enabled: true },
+        },
+      );
+
       if (totalEnabledVehicles === 0) {
-        this.logger.warn('Nema vozila označenih za Smart Slow Sync! Dodajte vozila u smart_slow_sync_vehicles tabelu.');
+        this.logger.warn(
+          'Nema vozila označenih za Smart Slow Sync! Dodajte vozila u smart_slow_sync_vehicles tabelu.',
+        );
       } else {
-        this.logger.warn(`Sva ${totalEnabledVehicles} aktivna vozila su već sinhronizovana. Uključi "Sinhronizuj već sinhronizovana vozila" za ponovnu sinhronizaciju.`);
+        this.logger.warn(
+          `Sva ${totalEnabledVehicles} aktivna vozila su već sinhronizovana. Uključi "Sinhronizuj već sinhronizovana vozila" za ponovnu sinhronizaciju.`,
+        );
       }
     }
   }
 
   private isInNightHours(hour: number): boolean {
     const { nightHoursStart, nightHoursEnd } = this.currentConfig;
-    
+
     if (nightHoursStart < nightHoursEnd) {
       return hour >= nightHoursStart && hour < nightHoursEnd;
     } else {
@@ -889,12 +1026,13 @@ export class SmartSlowSyncService implements OnModuleInit {
   private async getDailyBatchCount(): Promise<number> {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
-    
-    const checkpoints = await this.getSetting<SlowSyncCheckpoint[]>(
-      this.SETTINGS_KEY + '_checkpoints'
-    ) || [];
-    
-    return checkpoints.filter(c => c.createdAt >= todayStart).length;
+
+    const checkpoints =
+      (await this.getSetting<SlowSyncCheckpoint[]>(
+        this.SETTINGS_KEY + '_checkpoints',
+      )) || [];
+
+    return checkpoints.filter((c) => c.createdAt >= todayStart).length;
   }
 
   private async performHealthCheck() {
@@ -905,7 +1043,7 @@ export class SmartSlowSyncService implements OnModuleInit {
         FROM information_schema.PROCESSLIST 
         WHERE DB = DATABASE()
       `;
-      
+
       const connectionCount = parseInt(connections[0]?.count || '0');
       if (connectionCount > 90) {
         throw new Error(`Previše database konekcija: ${connectionCount}`);
@@ -919,7 +1057,7 @@ export class SmartSlowSyncService implements OnModuleInit {
         FROM information_schema.TABLES 
         WHERE table_schema = DATABASE()
       `;
-      
+
       if (dbInfo[0]) {
         const sizeMB = parseFloat(dbInfo[0].db_size_mb || '0');
         if (sizeMB >= 1024) {
@@ -939,11 +1077,13 @@ export class SmartSlowSyncService implements OnModuleInit {
         WHERE table_schema = DATABASE()
           AND table_name IN ('smart_slow_sync_vehicles', 'smart_slow_sync_logs', 'smart_slow_sync_batches')
       `;
-      
+
       // Log table sizes
       for (const table of tableInfo) {
         if (table.table_size_mb > 1000) {
-          this.logger.warn(`Tabela ${table.table_name} je velika: ${table.table_size_mb} MB, ${table.row_count} redova. Razmotrite arhiviranje starih podataka.`);
+          this.logger.warn(
+            `Tabela ${table.table_name} je velika: ${table.table_size_mb} MB, ${table.row_count} redova. Razmotrite arhiviranje starih podataka.`,
+          );
         }
       }
 
@@ -954,15 +1094,18 @@ export class SmartSlowSyncService implements OnModuleInit {
         WHERE COMMAND != 'Sleep' 
           AND INFO NOT LIKE '%PROCESSLIST%'
       `;
-      
+
       const activeCount = parseInt(activeQueries[0]?.count || '0');
       if (activeCount > 10) {
-        this.logger.warn(`Previše aktivnih query-ja: ${activeCount}. Čekam da se završe...`);
-        await new Promise(resolve => setTimeout(resolve, 30000)); // Čekaj 30 sekundi
+        this.logger.warn(
+          `Previše aktivnih query-ja: ${activeCount}. Čekam da se završe...`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, 30000)); // Čekaj 30 sekundi
       }
 
-      this.logger.debug(`Health check passed - Connections: ${connectionCount}, DB Size: ${this.progress.stats.diskSpaceUsed}, Active queries: ${activeCount}`);
-      
+      this.logger.debug(
+        `Health check passed - Connections: ${connectionCount}, DB Size: ${this.progress.stats.diskSpaceUsed}, Active queries: ${activeCount}`,
+      );
     } catch (error) {
       this.logger.error(`Health check failed: ${error.message}`);
       throw error;
@@ -973,7 +1116,7 @@ export class SmartSlowSyncService implements OnModuleInit {
     // MySQL nema TimescaleDB kompresiju
     // Možemo samo da arhiviramo stare podatke
     this.logger.log('Provera starih podataka za arhiviranje...');
-    
+
     try {
       // Proveri koliko ima starih sync history zapisa (starijih od 30 dana)
       const oldHistory = await this.prisma.$queryRaw<any[]>`
@@ -981,57 +1124,65 @@ export class SmartSlowSyncService implements OnModuleInit {
         FROM smart_slow_sync_history 
         WHERE started_at < DATE_SUB(NOW(), INTERVAL 30 DAY)
       `;
-      
+
       const oldCount = parseInt(oldHistory[0]?.count || '0');
       if (oldCount > 10000) {
-        this.logger.warn(`Ima ${oldCount} starih history zapisa. Razmotrite arhiviranje.`);
-        
+        this.logger.warn(
+          `Ima ${oldCount} starih history zapisa. Razmotrite arhiviranje.`,
+        );
+
         // Možemo obrisati veoma stare history zapise (starije od 90 dana)
-        const deletedHistory = await this.prisma.smartSlowSyncHistory.deleteMany({
-          where: {
-            startedAt: {
-              lt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
-            }
-          }
-        });
-        
+        const deletedHistory =
+          await this.prisma.smartSlowSyncHistory.deleteMany({
+            where: {
+              startedAt: {
+                lt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000),
+              },
+            },
+          });
+
         if (deletedHistory.count > 0) {
-          this.logger.log(`Obrisano ${deletedHistory.count} starih history zapisa`);
+          this.logger.log(
+            `Obrisano ${deletedHistory.count} starih history zapisa`,
+          );
         }
       }
-      
+
       // Proveri batch tabelu
       const oldBatches = await this.prisma.$queryRaw<any[]>`
         SELECT COUNT(*) as count 
         FROM smart_slow_sync_batches 
         WHERE created_at < DATE_SUB(NOW(), INTERVAL 30 DAY)
       `;
-      
+
       const oldBatchCount = parseInt(oldBatches[0]?.count || '0');
       if (oldBatchCount > 1000) {
-        this.logger.warn(`Ima ${oldBatchCount} starih batch zapisa. Razmotrite arhiviranje.`);
+        this.logger.warn(
+          `Ima ${oldBatchCount} starih batch zapisa. Razmotrite arhiviranje.`,
+        );
       }
-      
+
       // Postavi stats za prikaz
       this.progress.stats.compressionRatio = 1; // Nema kompresije u MySQL
-      
     } catch (error) {
-      this.logger.error(`Greška pri čišćenju starih podataka: ${error.message}`);
+      this.logger.error(
+        `Greška pri čišćenju starih podataka: ${error.message}`,
+      );
       // Ne prekidaj proces zbog greške
     }
   }
 
   private async performVacuum() {
     this.logger.log('Pokrećem optimizaciju tabela...');
-    
+
     try {
       // MySQL koristi OPTIMIZE TABLE umesto VACUUM
       const tables = [
         'smart_slow_sync_vehicles',
-        'smart_slow_sync_logs', 
-        'smart_slow_sync_batches'
+        'smart_slow_sync_logs',
+        'smart_slow_sync_batches',
       ];
-      
+
       for (const table of tables) {
         try {
           await this.prisma.$executeRawUnsafe(`OPTIMIZE TABLE ${table}`);
@@ -1040,7 +1191,7 @@ export class SmartSlowSyncService implements OnModuleInit {
           this.logger.warn(`Ne mogu optimizovati ${table}: ${error.message}`);
         }
       }
-      
+
       // Proveri veličinu tabela nakon optimizacije
       const tableStats = await this.prisma.$queryRaw<any[]>`
         SELECT 
@@ -1051,13 +1202,14 @@ export class SmartSlowSyncService implements OnModuleInit {
         WHERE table_schema = DATABASE()
           AND table_name IN ('smart_slow_sync_vehicles', 'smart_slow_sync_logs', 'smart_slow_sync_batches')
       `;
-      
+
       if (tableStats && tableStats.length > 0) {
         for (const stat of tableStats) {
-          this.logger.log(`Tabela ${stat.table_name}: ${stat.size_mb} MB, ${stat.table_rows} redova`);
+          this.logger.log(
+            `Tabela ${stat.table_name}: ${stat.size_mb} MB, ${stat.table_rows} redova`,
+          );
         }
       }
-      
     } catch (error) {
       this.logger.error(`Greška pri optimizaciji tabela: ${error.message}`);
       // Ne prekidaj proces zbog greške u optimizaciji
@@ -1065,10 +1217,11 @@ export class SmartSlowSyncService implements OnModuleInit {
   }
 
   private async createCheckpoint() {
-    const checkpoints = await this.getSetting<SlowSyncCheckpoint[]>(
-      this.SETTINGS_KEY + '_checkpoints'
-    ) || [];
-    
+    const checkpoints =
+      (await this.getSetting<SlowSyncCheckpoint[]>(
+        this.SETTINGS_KEY + '_checkpoints',
+      )) || [];
+
     // Konvertuj garažne brojeve nazad u ID-eve za checkpoint
     const vehicleIds: number[] = [];
     for (const vehicleInfo of this.progress.vehiclesInCurrentBatch) {
@@ -1078,14 +1231,14 @@ export class SmartSlowSyncService implements OnModuleInit {
         // Ako je garažni broj, pronađi ID
         const vehicle = await this.prisma.busVehicle.findUnique({
           where: { garageNumber: vehicleInfo },
-          select: { id: true }
+          select: { id: true },
         });
         if (vehicle) {
           vehicleIds.push(vehicle.id);
         }
       }
     }
-    
+
     const newCheckpoint: SlowSyncCheckpoint = {
       batchNumber: this.progress.currentBatch,
       vehiclesProcessed: vehicleIds,
@@ -1093,25 +1246,19 @@ export class SmartSlowSyncService implements OnModuleInit {
       totalPoints: this.progress.stats.totalPointsProcessed,
       createdAt: new Date(),
     };
-    
+
     checkpoints.push(newCheckpoint);
-    
+
     // Čuvaj samo poslednjih 100 checkpoint-ova
     if (checkpoints.length > 100) {
       checkpoints.shift();
     }
-    
-    await this.setSetting(
-      this.SETTINGS_KEY + '_checkpoints',
-      checkpoints
-    );
+
+    await this.setSetting(this.SETTINGS_KEY + '_checkpoints', checkpoints);
   }
 
   private async saveProgress() {
-    await this.setSetting(
-      this.SETTINGS_KEY + '_progress',
-      this.progress
-    );
+    await this.setSetting(this.SETTINGS_KEY + '_progress', this.progress);
   }
 
   /**
@@ -1120,12 +1267,14 @@ export class SmartSlowSyncService implements OnModuleInit {
   private async setRunningState(value: boolean, reason: string): Promise<void> {
     const oldValue = this.isRunning;
     this.isRunning = value;
-    
+
     // Log svaku promenu
     if (oldValue !== value) {
-      this.logger.log(`🔄 isRunning: ${oldValue} → ${value} (Razlog: ${reason})`);
+      this.logger.log(
+        `🔄 isRunning: ${oldValue} → ${value} (Razlog: ${reason})`,
+      );
     }
-    
+
     // Sačuvaj u bazu za perzistentnost
     await this.setSetting('smart_slow_sync.is_running', value);
   }
@@ -1135,7 +1284,7 @@ export class SmartSlowSyncService implements OnModuleInit {
     this.isRunning = false;
     this.isPaused = false;
     await this.setSetting('smart_slow_sync.is_running', false);
-    
+
     this.progress = {
       status: 'idle',
       totalVehicles: 0,
@@ -1152,21 +1301,25 @@ export class SmartSlowSyncService implements OnModuleInit {
         compressionRatio: 1,
       },
     };
-    
+
     await this.setSetting(this.SETTINGS_KEY + '_progress', null);
     await this.setSetting(this.SETTINGS_KEY + '_checkpoints', null);
-    
-    this.logger.log('Progress resetovan - isRunning i isPaused postavljeni na false');
+
+    this.logger.log(
+      'Progress resetovan - isRunning i isPaused postavljeni na false',
+    );
   }
 
   /**
    * Dobij activity feed sa live porukama
    */
-  async getActivityFeed(limit: number = 50): Promise<Array<{
-    timestamp: string;
-    message: string;
-    type: 'info' | 'success' | 'warning' | 'error';
-  }>> {
+  async getActivityFeed(limit: number = 50): Promise<
+    Array<{
+      timestamp: string;
+      message: string;
+      type: 'info' | 'success' | 'warning' | 'error';
+    }>
+  > {
     // Kombinuj različite izvore activity feed-a
     const activities: Array<{
       timestamp: string;
@@ -1176,7 +1329,7 @@ export class SmartSlowSyncService implements OnModuleInit {
 
     // 1. Worker Pool statuses kao activity
     const workers = this.workerPoolService.getWorkerStatuses();
-    workers.forEach(worker => {
+    workers.forEach((worker) => {
       if (worker.status !== 'idle') {
         let message = '';
         let type: 'info' | 'success' | 'warning' | 'error' = 'info';
@@ -1213,20 +1366,24 @@ export class SmartSlowSyncService implements OnModuleInit {
         }
 
         activities.push({
-          timestamp: worker.startTime?.toISOString() || new Date().toISOString(),
+          timestamp:
+            worker.startTime?.toISOString() || new Date().toISOString(),
           message,
-          type
+          type,
         });
       }
     });
 
     // 2. Progress errors kao activity
     if (this.progress?.errors) {
-      this.progress.errors.slice(-10).forEach(error => {
+      this.progress.errors.slice(-10).forEach((error) => {
         activities.push({
-          timestamp: typeof error.timestamp === 'string' ? error.timestamp : new Date(error.timestamp).toISOString(),
+          timestamp:
+            typeof error.timestamp === 'string'
+              ? error.timestamp
+              : new Date(error.timestamp).toISOString(),
           message: `❌ Vozilo ID:${error.vehicleId} - ${error.error}`,
-          type: 'error' as const
+          type: 'error' as const,
         });
       });
     }
@@ -1236,21 +1393,22 @@ export class SmartSlowSyncService implements OnModuleInit {
       activities.push({
         timestamp: new Date().toISOString(),
         message: `🚀 Batch ${this.progress.currentBatch}/${this.progress.totalBatches} - ${this.progress.vehiclesInCurrentBatch.length} vozila u obradi`,
-        type: 'info'
+        type: 'info',
       });
     }
 
     // 4. Checkpoints kao activity
     try {
-      const checkpoints = await this.getSetting<SlowSyncCheckpoint[]>(
-        this.SETTINGS_KEY + '_checkpoints'
-      ) || [];
-      
-      checkpoints.slice(-5).forEach(checkpoint => {
+      const checkpoints =
+        (await this.getSetting<SlowSyncCheckpoint[]>(
+          this.SETTINGS_KEY + '_checkpoints',
+        )) || [];
+
+      checkpoints.slice(-5).forEach((checkpoint) => {
         activities.push({
           timestamp: checkpoint.createdAt.toISOString(),
           message: `📋 Checkpoint ${checkpoint.batchNumber}: ${checkpoint.vehiclesProcessed.length} vozila, ${checkpoint.totalPoints.toLocaleString()} GPS tačaka`,
-          type: 'info'
+          type: 'info',
         });
       });
     } catch (error) {
@@ -1259,7 +1417,10 @@ export class SmartSlowSyncService implements OnModuleInit {
 
     // Sortiraj po vremenu (najnoviji prvi) i ograniči
     return activities
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .sort(
+        (a, b) =>
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+      )
       .slice(0, limit);
   }
 }

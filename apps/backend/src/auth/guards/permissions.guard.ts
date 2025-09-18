@@ -1,4 +1,9 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PERMISSIONS_KEY } from '../decorators/permissions.decorator';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
@@ -13,7 +18,7 @@ export class PermissionsGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
-    
+
     if (isPublic) {
       return true;
     }
@@ -28,7 +33,7 @@ export class PermissionsGuard implements CanActivate {
     }
 
     const { user } = context.switchToHttp().getRequest();
-    
+
     if (!user) {
       console.error('PermissionsGuard: Korisnik nije autentifikovan');
       throw new ForbiddenException('Korisnik nije autentifikovan');
@@ -43,7 +48,9 @@ export class PermissionsGuard implements CanActivate {
     );
 
     if (!hasPermission) {
-      console.error(`PermissionsGuard: Korisnik ${user.email} nema permisiju. Potrebno: ${requiredPermissions.join(', ')}, Ima: ${user.permissions?.join(', ') || 'none'}`);
+      console.error(
+        `PermissionsGuard: Korisnik ${user.email} nema permisiju. Potrebno: ${requiredPermissions.join(', ')}, Ima: ${user.permissions?.join(', ') || 'none'}`,
+      );
       throw new ForbiddenException(
         `Nemate dozvolu za pristup ovom resursu. Potrebne permisije: ${requiredPermissions.join(', ')}`,
       );

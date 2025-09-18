@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { LegacyDatabasesService } from '../legacy-databases/legacy-databases.service';
 import { CreateTableMappingDto } from './dto/create-table-mapping.dto';
@@ -20,7 +24,9 @@ export class LegacyTableMappingsService {
     });
 
     if (!legacyDb) {
-      throw new NotFoundException(`Legacy database sa ID ${createTableMappingDto.legacyDatabaseId} nije pronađena`);
+      throw new NotFoundException(
+        `Legacy database sa ID ${createTableMappingDto.legacyDatabaseId} nije pronađena`,
+      );
     }
 
     // Check if mapping already exists
@@ -33,7 +39,9 @@ export class LegacyTableMappingsService {
     });
 
     if (existingMapping) {
-      throw new BadRequestException('Mapiranje za ovu kombinaciju tabela već postoji');
+      throw new BadRequestException(
+        'Mapiranje za ovu kombinaciju tabela već postoji',
+      );
     }
 
     return this.prisma.legacyTableMapping.create({
@@ -97,11 +105,15 @@ export class LegacyTableMappingsService {
     });
 
     if (!legacyDb) {
-      throw new NotFoundException(`Legacy database sa ID ${legacyDatabaseId} nije pronađena`);
+      throw new NotFoundException(
+        `Legacy database sa ID ${legacyDatabaseId} nije pronađena`,
+      );
     }
 
     // Decrypt password for connection
-    const decryptedPassword = this.legacyDatabasesService.decryptPassword(legacyDb.password);
+    const decryptedPassword = this.legacyDatabasesService.decryptPassword(
+      legacyDb.password,
+    );
 
     try {
       switch (legacyDb.type) {
@@ -110,10 +122,14 @@ export class LegacyTableMappingsService {
         case 'postgresql':
           return await this.getPostgreSQLTables(legacyDb, decryptedPassword);
         default:
-          throw new BadRequestException(`Tip baze "${legacyDb.type}" nije podržan za listing tabela`);
+          throw new BadRequestException(
+            `Tip baze "${legacyDb.type}" nije podržan za listing tabela`,
+          );
       }
     } catch (error) {
-      throw new BadRequestException(`Greška pri dobavljanju tabela: ${error.message}`);
+      throw new BadRequestException(
+        `Greška pri dobavljanju tabela: ${error.message}`,
+      );
     }
   }
 
@@ -149,9 +165,9 @@ export class LegacyTableMappingsService {
     try {
       await client.connect();
       const result = await client.query(
-        "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
+        "SELECT tablename FROM pg_tables WHERE schemaname = 'public'",
       );
-      const tables = result.rows.map(row => row.tablename);
+      const tables = result.rows.map((row) => row.tablename);
       await client.end();
       return tables;
     } catch (error) {
@@ -170,10 +186,12 @@ export class LegacyTableMappingsService {
         AND table_type = 'BASE TABLE'
         ORDER BY table_name
       `;
-      
+
       return tables.map((t: any) => t.table_name || t.TABLE_NAME);
     } catch (error) {
-      throw new BadRequestException(`Greška pri dobavljanju lokalnih tabela: ${error.message}`);
+      throw new BadRequestException(
+        `Greška pri dobavljanju lokalnih tabela: ${error.message}`,
+      );
     }
   }
 }

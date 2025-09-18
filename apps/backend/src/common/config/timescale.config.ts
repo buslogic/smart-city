@@ -18,9 +18,11 @@ export function createTimescalePool(): Pool {
   // Prioritet 2: Fallback na pojedinačne environment varijable
   // Baci grešku ako nisu postavljene kredencijali
   if (!process.env.TIMESCALE_HOST || !process.env.TIMESCALE_PASSWORD) {
-    throw new Error('TimescaleDB connection parameters are not properly configured. Please set TIMESCALE_DATABASE_URL or individual TIMESCALE_* environment variables.');
+    throw new Error(
+      'TimescaleDB connection parameters are not properly configured. Please set TIMESCALE_DATABASE_URL or individual TIMESCALE_* environment variables.',
+    );
   }
-  
+
   return new Pool({
     host: process.env.TIMESCALE_HOST,
     port: parseInt(process.env.TIMESCALE_PORT || '5432'),

@@ -46,14 +46,19 @@ export class UserResponseDto {
 
   constructor(partial: any) {
     if (!partial) return;
-    
+
     Object.assign(this, partial);
-    
+
     // Transform roles if they come from Prisma with nested structure
     if (partial.roles && Array.isArray(partial.roles)) {
       if (partial.roles.length > 0) {
-        if (typeof partial.roles[0] === 'object' && 'role' in partial.roles[0]) {
-          this.roles = partial.roles.map((userRole: any) => userRole.role?.name).filter(Boolean);
+        if (
+          typeof partial.roles[0] === 'object' &&
+          'role' in partial.roles[0]
+        ) {
+          this.roles = partial.roles
+            .map((userRole: any) => userRole.role?.name)
+            .filter(Boolean);
         } else if (typeof partial.roles[0] === 'string') {
           this.roles = partial.roles;
         } else {

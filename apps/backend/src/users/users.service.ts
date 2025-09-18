@@ -1,4 +1,9 @@
-import { Injectable, ConflictException, NotFoundException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+  Logger,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -82,7 +87,10 @@ export class UsersService {
         });
         this.logger.log(`Welcome email sent to ${updatedUser!.email}`);
       } catch (error) {
-        this.logger.error(`Failed to send welcome email to ${updatedUser!.email}:`, error);
+        this.logger.error(
+          `Failed to send welcome email to ${updatedUser!.email}:`,
+          error,
+        );
         // Ne prekidamo proces ako email ne prođe
       }
 
@@ -99,7 +107,10 @@ export class UsersService {
       });
       this.logger.log(`Welcome email sent to ${user.email}`);
     } catch (error) {
-      this.logger.error(`Failed to send welcome email to ${user.email}:`, error);
+      this.logger.error(
+        `Failed to send welcome email to ${user.email}:`,
+        error,
+      );
       // Ne prekidamo proces ako email ne prođe
     }
 
@@ -108,8 +119,8 @@ export class UsersService {
 
   async findAll(page = 1, pageSize = 10, search?: string) {
     const skip = (page - 1) * pageSize;
-    
-    const where = search 
+
+    const where = search
       ? {
           OR: [
             { email: { contains: search } },
@@ -137,7 +148,7 @@ export class UsersService {
     ]);
 
     return {
-      data: users.map(user => new UserResponseDto(user)),
+      data: users.map((user) => new UserResponseDto(user)),
       total,
       page,
       pageSize,
@@ -163,7 +174,10 @@ export class UsersService {
     return new UserResponseDto(user);
   }
 
-  async update(id: number, updateUserDto: UpdateUserDto): Promise<UserResponseDto> {
+  async update(
+    id: number,
+    updateUserDto: UpdateUserDto,
+  ): Promise<UserResponseDto> {
     const existingUser = await this.prisma.user.findUnique({
       where: { id },
     });
@@ -299,22 +313,27 @@ export class UsersService {
     if (process.env.NODE_ENV === 'development' && data.avatar === null) {
       const user = await this.prisma.user.findUnique({
         where: { id },
-        select: { avatar: true }
+        select: { avatar: true },
       });
-      
+
       if (user?.avatar && user.avatar.includes('/uploads/avatars/')) {
         const filename = user.avatar.split('/').pop();
         if (filename) {
           const fs = require('fs');
           const path = require('path');
-          const filePath = path.join(process.cwd(), 'uploads', 'avatars', filename);
+          const filePath = path.join(
+            process.cwd(),
+            'uploads',
+            'avatars',
+            filename,
+          );
           if (fs.existsSync(filePath)) {
             fs.unlinkSync(filePath);
           }
         }
       }
     }
-    
+
     return this.prisma.user.update({
       where: { id },
       data: {
@@ -344,7 +363,8 @@ export class UsersService {
 
   private generateSecurePassword(): string {
     const length = 12;
-    const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%&*+-=';
+    const charset =
+      'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%&*+-=';
     let password = '';
 
     // Ensure at least one of each type
@@ -359,6 +379,9 @@ export class UsersService {
     }
 
     // Shuffle the password
-    return password.split('').sort(() => Math.random() - 0.5).join('');
+    return password
+      .split('')
+      .sort(() => Math.random() - 0.5)
+      .join('');
   }
 }

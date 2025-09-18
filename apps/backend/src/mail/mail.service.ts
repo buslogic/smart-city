@@ -29,7 +29,7 @@ export class MailService {
         data: Buffer | string;
         contentType?: string;
       }>;
-    }
+    },
   ) {
     // Get template from database
     const template = await this.prisma.emailTemplate.findUnique({
@@ -37,7 +37,9 @@ export class MailService {
     });
 
     if (!template) {
-      throw new NotFoundException(`Email template with slug '${templateSlug}' not found`);
+      throw new NotFoundException(
+        `Email template with slug '${templateSlug}' not found`,
+      );
     }
 
     if (!template.isActive) {
@@ -49,7 +51,7 @@ export class MailService {
     let body = template.body;
     let bodyHtml = template.bodyHtml;
 
-    Object.keys(variables).forEach(key => {
+    Object.keys(variables).forEach((key) => {
       const value = variables[key];
       const regex = new RegExp(`{{${key}}}`, 'g');
       subject = subject.replace(regex, value);
@@ -95,7 +97,8 @@ export class MailService {
     lastName: string;
     temporaryPassword?: string;
   }) {
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3011';
+    const frontendUrl =
+      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3011';
 
     const variables = {
       firstName: user.firstName,
@@ -117,7 +120,8 @@ export class MailService {
     firstName: string;
     resetToken: string;
   }) {
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3011';
+    const frontendUrl =
+      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3011';
     const resetUrl = `${frontendUrl}/reset-password?token=${user.resetToken}`;
 
     const variables = {
@@ -147,7 +151,7 @@ export class MailService {
         data: Buffer | string;
         contentType?: string;
       }>;
-    }
+    },
   ) {
     return this.mailgunService.sendEmail({
       to,
@@ -170,13 +174,15 @@ export class MailService {
     });
 
     if (!template) {
-      throw new NotFoundException(`Email template with slug '${templateSlug}' not found`);
+      throw new NotFoundException(
+        `Email template with slug '${templateSlug}' not found`,
+      );
     }
 
     // Create sample variables
     const sampleVariables: Record<string, any> = {};
     if (template.variables && Array.isArray(template.variables)) {
-      (template.variables as string[]).forEach(variable => {
+      (template.variables as string[]).forEach((variable) => {
         sampleVariables[variable] = `[${variable}]`;
       });
     }
@@ -187,7 +193,8 @@ export class MailService {
     sampleVariables.email = testEmail;
     sampleVariables.registrationDate = new Date().toLocaleDateString('sr-RS');
     sampleVariables.loginUrl = 'http://localhost:3011';
-    sampleVariables.resetUrl = 'http://localhost:3011/reset-password?token=test-token';
+    sampleVariables.resetUrl =
+      'http://localhost:3011/reset-password?token=test-token';
     sampleVariables.expirationHours = '24';
     sampleVariables.password = 'Test123!';
 

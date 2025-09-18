@@ -1,7 +1,7 @@
-import { 
-  Controller, 
-  Post, 
-  Get, 
+import {
+  Controller,
+  Post,
+  Get,
   Delete,
   Body,
   Query,
@@ -13,8 +13,23 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiBody, ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNumber, IsOptional, IsDateString, Min, Max } from 'class-validator';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiQuery,
+  ApiBody,
+  ApiProperty,
+} from '@nestjs/swagger';
+import {
+  IsString,
+  IsNumber,
+  IsOptional,
+  IsDateString,
+  Min,
+  Max,
+} from 'class-validator';
 import { GpsSyncService } from './gps-sync.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
@@ -64,10 +79,7 @@ export class GpsSyncController {
   @ApiBody({ type: StartGpsSyncDto })
   @ApiResponse({ status: 201, description: 'GPS sinhronizacija pokrenuta' })
   @ApiResponse({ status: 400, description: 'Sinhronizacija već u toku' })
-  async startSync(
-    @Request() req,
-    @Body() dto: StartGpsSyncDto,
-  ) {
+  async startSync(@Request() req, @Body() dto: StartGpsSyncDto) {
     try {
       const result = await this.gpsSyncService.startSync(req.user.id, dto);
       return result;
@@ -130,7 +142,12 @@ export class GpsSyncController {
   @Get('history')
   @RequirePermissions('dispatcher.sync:view')
   @ApiOperation({ summary: 'Istorija GPS sinhronizacija' })
-  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Broj rezultata' })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Broj rezultata',
+  })
   @ApiResponse({ status: 200, description: 'Lista GPS sinhronizacija' })
   async getHistory(
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
@@ -141,8 +158,18 @@ export class GpsSyncController {
   @Get(':id/details')
   @RequirePermissions('dispatcher.sync:view')
   @ApiOperation({ summary: 'Detalji GPS sinhronizacije' })
-  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Broj stranice' })
-  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Broj rezultata po stranici' })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Broj stranice',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Broj rezultata po stranici',
+  })
   @ApiResponse({ status: 200, description: 'Detalji GPS sinhronizacije' })
   async getSyncDetails(
     @Param('id', ParseIntPipe) id: number,

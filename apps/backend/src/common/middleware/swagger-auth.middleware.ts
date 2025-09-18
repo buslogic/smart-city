@@ -8,11 +8,13 @@ export class SwaggerAuthMiddleware implements NestMiddleware {
 
   async use(req: Request, res: Response, next: NextFunction) {
     // Dozvoli pristup static resursima (CSS, JS, favicon) bez autentifikacije
-    if (req.originalUrl.includes('.css') || 
-        req.originalUrl.includes('.js') || 
-        req.originalUrl.includes('.png') || 
-        req.originalUrl.includes('.ico') ||
-        req.originalUrl.includes('favicon')) {
+    if (
+      req.originalUrl.includes('.css') ||
+      req.originalUrl.includes('.js') ||
+      req.originalUrl.includes('.png') ||
+      req.originalUrl.includes('.ico') ||
+      req.originalUrl.includes('favicon')
+    ) {
       return next();
     }
 
@@ -81,8 +83,8 @@ export class SwaggerAuthMiddleware implements NestMiddleware {
       hint: 'Dodajte API ključ kao X-API-Key header ili ?api_key=YOUR_KEY u URL',
       examples: [
         'http://localhost:3010/api/docs?api_key=sk_prod_swagger_...',
-        'Ili dodajte X-API-Key: sk_prod_swagger_... header'
-      ]
+        'Ili dodajte X-API-Key: sk_prod_swagger_... header',
+      ],
     });
   }
 

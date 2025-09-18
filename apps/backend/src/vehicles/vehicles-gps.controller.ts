@@ -15,8 +15,13 @@ export class VehiclesGpsController {
 
   @Get('export')
   @Public()
-  @ApiOperation({ summary: 'Export vozila za GPS legacy sistem (samo aktivna vozila)' })
-  @ApiResponse({ status: 200, description: 'Lista vozila sa id i garageNumber' })
+  @ApiOperation({
+    summary: 'Export vozila za GPS legacy sistem (samo aktivna vozila)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista vozila sa id i garageNumber',
+  })
   @ApiResponse({ status: 401, description: 'Neispravna API key' })
   @ApiHeader({
     name: 'X-API-Key',

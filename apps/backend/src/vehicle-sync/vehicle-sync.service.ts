@@ -1,4 +1,8 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { LegacyDatabasesService } from '../legacy-databases/legacy-databases.service';
 import { VehiclesService } from '../vehicles/vehicles.service';
@@ -22,9 +26,9 @@ export class VehicleSyncService {
 
   // Pokreni sinhronizaciju
   async startSync(
-    userId: number, 
+    userId: number,
     syncType: 'full' | 'incremental' = 'full',
-    config?: { batchSize?: number; delay?: number }
+    config?: { batchSize?: number; delay?: number },
   ) {
     if (this.isRunning) {
       throw new BadRequestException('Sinhronizacija je već u toku');
@@ -56,19 +60,19 @@ export class VehicleSyncService {
       if (disabledMapping) {
         throw new BadRequestException(
           '⚠️ VAŽNO: Sinhronizacija je onemogućena!\n\n' +
-          'Mapiranje za bus_vehicles tabelu postoji ali opcija "Omogući sinhronizaciju" NIJE OZNAČENA.\n\n' +
-          '✅ Rešenje:\n' +
-          '1. Idite na Podešavanja > Legacy baze\n' +
-          '2. Pronađite mapiranje za bus_vehicles tabelu\n' +
-          '3. OZNAČITE checkbox "Omogući sinhronizaciju"\n' +
-          '4. Sačuvajte izmene\n' +
-          '5. Pokušajte ponovo sinhronizaciju'
+            'Mapiranje za bus_vehicles tabelu postoji ali opcija "Omogući sinhronizaciju" NIJE OZNAČENA.\n\n' +
+            '✅ Rešenje:\n' +
+            '1. Idite na Podešavanja > Legacy baze\n' +
+            '2. Pronađite mapiranje za bus_vehicles tabelu\n' +
+            '3. OZNAČITE checkbox "Omogući sinhronizaciju"\n' +
+            '4. Sačuvajte izmene\n' +
+            '5. Pokušajte ponovo sinhronizaciju',
         );
       }
 
       throw new NotFoundException(
         'Mapiranje za bus_vehicles tabelu nije konfigurisano. ' +
-        'Molim idite na Podešavanja > Legacy baze i konfiguršite mapiranje tabele pre pokretanja sinhronizacije.'
+          'Molim idite na Podešavanja > Legacy baze i konfiguršite mapiranje tabele pre pokretanja sinhronizacije.',
       );
     }
 
@@ -88,13 +92,15 @@ export class VehicleSyncService {
     this.shouldStop = false;
 
     // Pokreni sync u pozadini
-    this.processSyncJob(syncLog.id, mapping.legacyDatabase, config).catch(error => {
-      console.error('Sync job error:', error);
-      this.updateSyncStatus(syncLog.id, 'failed', error.message);
-    }).finally(() => {
-      this.isRunning = false;
-      this.currentSyncLogId = null;
-    });
+    this.processSyncJob(syncLog.id, mapping.legacyDatabase, config)
+      .catch((error) => {
+        console.error('Sync job error:', error);
+        this.updateSyncStatus(syncLog.id, 'failed', error.message);
+      })
+      .finally(() => {
+        this.isRunning = false;
+        this.currentSyncLogId = null;
+      });
 
     return {
       syncLogId: syncLog.id,
@@ -109,7 +115,7 @@ export class VehicleSyncService {
     }
 
     this.shouldStop = true;
-    
+
     if (this.currentSyncLogId) {
       await this.updateSyncStatus(this.currentSyncLogId, 'cancelled');
     }
@@ -119,9 +125,9 @@ export class VehicleSyncService {
 
   // Procesiraj sync job
   private async processSyncJob(
-    syncLogId: number, 
-    legacyDb: any, 
-    config?: { batchSize?: number; delay?: number }
+    syncLogId: number,
+    legacyDb: any,
+    config?: { batchSize?: number; delay?: number },
   ) {
     let connection: Connection | null = null;
 
@@ -134,8 +140,10 @@ export class VehicleSyncService {
       await this.updateSyncStatus(syncLogId, 'in_progress');
 
       // Konektuj se na legacy bazu
-      const password = this.legacyDatabasesService.decryptPassword(legacyDb.password);
-      
+      const password = this.legacyDatabasesService.decryptPassword(
+        legacyDb.password,
+      );
+
       connection = await createConnection({
         host: legacyDb.host,
         port: legacyDb.port,
@@ -145,7 +153,9 @@ export class VehicleSyncService {
       });
 
       // Prebaci ukupan broj vozila
-      const [countResult] = await connection.execute('SELECT COUNT(*) as total FROM bus_vehicle');
+      const [countResult] = await connection.execute(
+        'SELECT COUNT(*) as total FROM bus_vehicle',
+      );
       const totalRecords = (countResult as any)[0].total;
 
       await this.prisma.vehicleSyncLog.update({
@@ -163,7 +173,7 @@ export class VehicleSyncService {
       while (offset < totalRecords && !this.shouldStop) {
         // Učitaj batch vozila iz legacy baze
         const [vehicles] = await connection.execute(
-          `SELECT * FROM bus_vehicle LIMIT ${batchSize} OFFSET ${offset}`
+          `SELECT * FROM bus_vehicle LIMIT ${batchSize} OFFSET ${offset}`,
         );
 
         // Procesiraj batch
@@ -172,7 +182,7 @@ export class VehicleSyncService {
 
           try {
             const result = await this.processVehicle(syncLogId, legacyVehicle);
-            
+
             switch (result.action) {
               case 'create':
                 createdCount++;
@@ -186,12 +196,23 @@ export class VehicleSyncService {
             }
           } catch (error) {
             errorCount++;
-            const vehicleId = legacyVehicle.ID || legacyVehicle.id || legacyVehicle.BusVehicleID || 0;
-            
-            
+            const vehicleId =
+              legacyVehicle.ID ||
+              legacyVehicle.id ||
+              legacyVehicle.BusVehicleID ||
+              0;
+
             // Skrati error poruku na max 255 karaktera
-            const errorMsg = error.message ? error.message.substring(0, 255) : 'Unknown error';
-            await this.logSyncDetail(syncLogId, vehicleId, 'error', null, errorMsg);
+            const errorMsg = error.message
+              ? error.message.substring(0, 255)
+              : 'Unknown error';
+            await this.logSyncDetail(
+              syncLogId,
+              vehicleId,
+              'error',
+              null,
+              errorMsg,
+            );
           }
         }
 
@@ -219,7 +240,6 @@ export class VehicleSyncService {
       // Završi sync
       const finalStatus = this.shouldStop ? 'cancelled' : 'completed';
       await this.updateSyncStatus(syncLogId, finalStatus);
-
     } catch (error) {
       await this.updateSyncStatus(syncLogId, 'failed', error.message);
       throw error;
@@ -235,12 +255,13 @@ export class VehicleSyncService {
   // Procesiraj pojedinačno vozilo
   private async processVehicle(syncLogId: number, legacyVehicle: any) {
     // Pronađi ID polje - može biti ID, id, ili BusVehicleID
-    const legacyId = legacyVehicle.ID || legacyVehicle.id || legacyVehicle.BusVehicleID;
-    
+    const legacyId =
+      legacyVehicle.ID || legacyVehicle.id || legacyVehicle.BusVehicleID;
+
     if (!legacyId) {
       throw new Error('Legacy vehicle has no ID field');
     }
-    
+
     // Proveri da li vozilo već postoji
     const existingVehicle = await this.prisma.busVehicle.findUnique({
       where: { legacyId: legacyId },
@@ -268,7 +289,7 @@ export class VehicleSyncService {
     } else {
       // Proveri da li ima promena
       const changes = this.detectChanges(existingVehicle, vehicleData);
-      
+
       if (Object.keys(changes).length > 0) {
         // Update postojeće vozilo
         try {
@@ -296,20 +317,20 @@ export class VehicleSyncService {
   // Helper funkcija za validaciju datuma
   private parseValidDate(dateValue: any): Date | null {
     if (!dateValue) return null;
-    
+
     const date = new Date(dateValue);
-    
+
     // Proveri da li je datum validan
     if (isNaN(date.getTime())) {
       return null;
     }
-    
+
     // Proveri da li je u razumnom opsegu (1900-2100)
     const year = date.getFullYear();
     if (year < 1900 || year > 2100) {
       return null;
     }
-    
+
     return date;
   }
 
@@ -318,10 +339,11 @@ export class VehicleSyncService {
     // Generiši jedinstveni garageNumber koristeći ID ako je garage_no prazan
     const garageNo = legacy.garage_no || legacy.garazni_broj;
     const uniqueGarageNumber = garageNo || `AUTO_${legacy.id}`;
-    
+
     return {
       garageNumber: uniqueGarageNumber,
-      registrationNumber: legacy.bus_registration || legacy.registracijski_broj || null,
+      registrationNumber:
+        legacy.bus_registration || legacy.registracijski_broj || null,
       vehicleNumber: legacy.vehicle_number || null,
       vehicleType: legacy.vehicle_type || legacy.tip || null,
       vehicleBrand: legacy.vehicle_brand || null,
@@ -331,7 +353,9 @@ export class VehicleSyncService {
       yearOfManufacture: this.parseValidDate(legacy.godina_proizvodnje),
       seatCapacity: parseInt(legacy.broj_sedecih) || 0,
       standingCapacity: parseInt(legacy.broj_stajacih) || 0,
-      totalCapacity: (parseInt(legacy.broj_sedecih) || 0) + (parseInt(legacy.broj_stajacih) || 0),
+      totalCapacity:
+        (parseInt(legacy.broj_sedecih) || 0) +
+        (parseInt(legacy.broj_stajacih) || 0),
       fuelType: legacy.fuel_type || null,
       active: legacy.active === 1, // 1 = aktivno, 0 = neaktivno
       visible: legacy.show_image_in_public === 1,
@@ -346,7 +370,9 @@ export class VehicleSyncService {
       technicalControlFrom: this.parseValidDate(legacy.tech_control_from),
       technicalControlTo: this.parseValidDate(legacy.tech_control_to),
       registrationValidTo: this.parseValidDate(legacy.validate_to),
-      firstRegistrationDate: this.parseValidDate(legacy.first_registration_date),
+      firstRegistrationDate: this.parseValidDate(
+        legacy.first_registration_date,
+      ),
       centralPointId: parseInt(legacy.central_point_db_id) || null,
       centralPointName: legacy.central_point_name || null,
       note: legacy.note || legacy.napomena_vozilo || null,
@@ -381,7 +407,7 @@ export class VehicleSyncService {
     legacyId: number,
     action: string,
     changes: any = null,
-    errorMessage: string | null = null
+    errorMessage: string | null = null,
   ) {
     await this.prisma.vehicleSyncDetail.create({
       data: {
@@ -395,10 +421,18 @@ export class VehicleSyncService {
   }
 
   // Update sync status
-  private async updateSyncStatus(syncLogId: number, status: string, errorMessage?: string) {
+  private async updateSyncStatus(
+    syncLogId: number,
+    status: string,
+    errorMessage?: string,
+  ) {
     const updateData: any = { status };
-    
-    if (status === 'completed' || status === 'failed' || status === 'cancelled') {
+
+    if (
+      status === 'completed' ||
+      status === 'failed' ||
+      status === 'cancelled'
+    ) {
       updateData.completedAt = new Date();
     }
 
@@ -414,7 +448,7 @@ export class VehicleSyncService {
 
   // Delay helper
   private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   // Dobavi trenutni status
@@ -460,7 +494,11 @@ export class VehicleSyncService {
   }
 
   // Dobavi detalje sync-a
-  async getSyncDetails(syncLogId: number, page: number = 1, limit: number = 50) {
+  async getSyncDetails(
+    syncLogId: number,
+    page: number = 1,
+    limit: number = 50,
+  ) {
     const skip = (page - 1) * limit;
 
     const [details, total] = await Promise.all([

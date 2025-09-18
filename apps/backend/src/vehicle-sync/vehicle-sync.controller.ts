@@ -1,7 +1,7 @@
-import { 
-  Controller, 
-  Post, 
-  Get, 
+import {
+  Controller,
+  Post,
+  Get,
   Delete,
   Query,
   Param,
@@ -10,7 +10,13 @@ import {
   DefaultValuePipe,
   Request,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { VehicleSyncService } from './vehicle-sync.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
@@ -30,20 +36,37 @@ export class VehicleSyncController {
   @Post('start')
   @RequirePermissions('vehicles.sync:start')
   @ApiOperation({ summary: 'Pokreni sinhronizaciju vozila' })
-  @ApiQuery({ name: 'type', required: false, enum: ['full', 'incremental'], description: 'Tip sinhronizacije' })
-  @ApiQuery({ name: 'batchSize', required: false, type: Number, description: 'Veličina batch-a (default: 50)' })
-  @ApiQuery({ name: 'delay', required: false, type: Number, description: 'Pauza između batch-ova u ms (default: 2000)' })
+  @ApiQuery({
+    name: 'type',
+    required: false,
+    enum: ['full', 'incremental'],
+    description: 'Tip sinhronizacije',
+  })
+  @ApiQuery({
+    name: 'batchSize',
+    required: false,
+    type: Number,
+    description: 'Veličina batch-a (default: 50)',
+  })
+  @ApiQuery({
+    name: 'delay',
+    required: false,
+    type: Number,
+    description: 'Pauza između batch-ova u ms (default: 2000)',
+  })
   @ApiResponse({ status: 200, description: 'Sinhronizacija pokrenuta' })
   @ApiResponse({ status: 400, description: 'Sinhronizacija već u toku' })
   async startSync(
     @Request() req,
-    @Query('type', new DefaultValuePipe('full')) syncType: 'full' | 'incremental',
-    @Query('batchSize', new DefaultValuePipe(50), ParseIntPipe) batchSize: number,
+    @Query('type', new DefaultValuePipe('full'))
+    syncType: 'full' | 'incremental',
+    @Query('batchSize', new DefaultValuePipe(50), ParseIntPipe)
+    batchSize: number,
     @Query('delay', new DefaultValuePipe(2000), ParseIntPipe) delay: number,
   ) {
     return this.vehicleSyncService.startSync(req.user.id, syncType, {
       batchSize,
-      delay
+      delay,
     });
   }
 
@@ -75,7 +98,12 @@ export class VehicleSyncController {
   @Get('history')
   @RequirePermissions('vehicles.sync:view')
   @ApiOperation({ summary: 'Istorija sinhronizacija' })
-  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Broj rezultata' })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Broj rezultata',
+  })
   @ApiResponse({ status: 200, description: 'Lista sinhronizacija' })
   async getHistory(
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
@@ -86,8 +114,18 @@ export class VehicleSyncController {
   @Get(':id/details')
   @RequirePermissions('vehicles:read')
   @ApiOperation({ summary: 'Detalji sinhronizacije' })
-  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Broj stranice' })
-  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Broj rezultata po stranici' })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Broj stranice',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Broj rezultata po stranici',
+  })
   @ApiResponse({ status: 200, description: 'Detalji sinhronizacije' })
   async getSyncDetails(
     @Param('id', ParseIntPipe) id: number,

@@ -1,5 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
+import {
+  IsDateString,
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export enum EventType {
@@ -75,12 +81,20 @@ export class GetEventsQueryDto {
   @IsDateString()
   endDate?: string;
 
-  @ApiProperty({ enum: SeverityLevel, required: false, description: 'Filter by severity' })
+  @ApiProperty({
+    enum: SeverityLevel,
+    required: false,
+    description: 'Filter by severity',
+  })
   @IsOptional()
   @IsEnum(SeverityLevel)
   severity?: SeverityLevel;
 
-  @ApiProperty({ enum: EventType, required: false, description: 'Filter by event type' })
+  @ApiProperty({
+    enum: EventType,
+    required: false,
+    description: 'Filter by event type',
+  })
   @IsOptional()
   @IsEnum(EventType)
   eventType?: EventType;

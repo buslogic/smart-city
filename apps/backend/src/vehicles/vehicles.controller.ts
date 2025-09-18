@@ -12,7 +12,13 @@ import {
   ParseBoolPipe,
   DefaultValuePipe,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { VehiclesService } from './vehicles.service';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
@@ -31,7 +37,10 @@ export class VehiclesController {
   @RequirePermissions('vehicles:create')
   @ApiOperation({ summary: 'Kreiranje novog vozila' })
   @ApiResponse({ status: 201, description: 'Vozilo uspešno kreirano' })
-  @ApiResponse({ status: 409, description: 'Vozilo sa tim garažnim brojem već postoji' })
+  @ApiResponse({
+    status: 409,
+    description: 'Vozilo sa tim garažnim brojem već postoji',
+  })
   create(@Body() createVehicleDto: CreateVehicleDto) {
     return this.vehiclesService.create(createVehicleDto);
   }
@@ -39,11 +48,36 @@ export class VehiclesController {
   @Get()
   @RequirePermissions('vehicles:read')
   @ApiOperation({ summary: 'Lista svih vozila sa paginacijom i filterima' })
-  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Broj stranice' })
-  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Broj rezultata po stranici' })
-  @ApiQuery({ name: 'search', required: false, type: String, description: 'Pretraga po garažnom broju, registraciji, itd.' })
-  @ApiQuery({ name: 'active', required: false, type: Boolean, description: 'Filter po statusu (aktivan/neaktivan)' })
-  @ApiQuery({ name: 'vehicleType', required: false, type: Number, description: 'Filter po tipu vozila' })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Broj stranice',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Broj rezultata po stranici',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Pretraga po garažnom broju, registraciji, itd.',
+  })
+  @ApiQuery({
+    name: 'active',
+    required: false,
+    type: Boolean,
+    description: 'Filter po statusu (aktivan/neaktivan)',
+  })
+  @ApiQuery({
+    name: 'vehicleType',
+    required: false,
+    type: Number,
+    description: 'Filter po tipu vozila',
+  })
   findAll(
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
@@ -51,10 +85,17 @@ export class VehiclesController {
     @Query('active') active?: string,
     @Query('vehicleType') vehicleType?: string,
   ) {
-    const activeBoolean = active === 'true' ? true : active === 'false' ? false : undefined;
+    const activeBoolean =
+      active === 'true' ? true : active === 'false' ? false : undefined;
     const vehicleTypeNumber = vehicleType ? parseInt(vehicleType) : undefined;
-    
-    return this.vehiclesService.findAll(page, limit, search, activeBoolean, vehicleTypeNumber);
+
+    return this.vehiclesService.findAll(
+      page,
+      limit,
+      search,
+      activeBoolean,
+      vehicleTypeNumber,
+    );
   }
 
   @Get('statistics')
@@ -68,7 +109,12 @@ export class VehiclesController {
   @Get('expiring-documents')
   @RequirePermissions('vehicles:read')
   @ApiOperation({ summary: 'Vozila sa dokumentima koji ističu' })
-  @ApiQuery({ name: 'days', required: false, type: Number, description: 'Broj dana unapred (default: 30)' })
+  @ApiQuery({
+    name: 'days',
+    required: false,
+    type: Number,
+    description: 'Broj dana unapred (default: 30)',
+  })
   getExpiringDocuments(
     @Query('days', new DefaultValuePipe(30), ParseIntPipe) days: number,
   ) {
@@ -101,7 +147,6 @@ export class VehiclesController {
   findByLegacyId(@Param('legacyId', ParseIntPipe) legacyId: number) {
     return this.vehiclesService.findByLegacyId(legacyId);
   }
-
 
   @Patch(':id')
   @RequirePermissions('vehicles:update')

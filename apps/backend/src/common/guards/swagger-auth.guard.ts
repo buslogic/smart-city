@@ -1,4 +1,9 @@
-import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Request, Response } from 'express';
 import { ApiKeysService } from '../../api-keys/api-keys.service';
 
@@ -34,10 +39,11 @@ export class SwaggerAuthGuard implements CanActivate {
       }
 
       // Proverava da li ključ ima SWAGGER_ACCESS tip ili swagger permisiju
-      const hasSwaggerAccess = 
+      const hasSwaggerAccess =
         validKey.type === 'SWAGGER_ACCESS' ||
         validKey.type === 'ADMIN_ACCESS' ||
-        (validKey.permissions && JSON.parse(validKey.permissions as string).includes('swagger:read'));
+        (validKey.permissions &&
+          JSON.parse(validKey.permissions as string).includes('swagger:read'));
 
       if (!hasSwaggerAccess) {
         this.sendForbiddenResponse(response);
@@ -83,7 +89,7 @@ export class SwaggerAuthGuard implements CanActivate {
   private sendForbiddenResponse(response: Response): void {
     response.status(403).json({
       message: 'API ključ nema dozvolu za pristup Swagger dokumentaciji',
-      error: 'Forbidden', 
+      error: 'Forbidden',
       statusCode: 403,
       hint: 'Potreban je API ključ tipa SWAGGER_ACCESS, ADMIN_ACCESS ili sa swagger:read permisijom',
     });

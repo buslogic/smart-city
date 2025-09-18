@@ -8,7 +8,6 @@ async function checkTables() {
       SHOW TABLES LIKE 'user_dashboard%'
     `;
     console.log('Dashboard tables:', tables);
-    
   } catch (error) {
     console.error('Error:', error);
   } finally {

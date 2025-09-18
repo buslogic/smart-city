@@ -11,8 +11,22 @@ import { CommonModule } from '../common/common.module';
 
 @Module({
   imports: [PrismaModule, CommonModule],
-  controllers: [GpsSyncController, GpsSyncDashboardController, LegacySyncController],
-  providers: [GpsSyncService, LegacySyncService, LegacySyncWorkerPoolService, SmartSlowSyncService],
-  exports: [GpsSyncService, LegacySyncService, LegacySyncWorkerPoolService, SmartSlowSyncService],
+  controllers: [
+    GpsSyncController,
+    GpsSyncDashboardController,
+    LegacySyncController,
+  ],
+  providers: [
+    GpsSyncService,
+    LegacySyncService,
+    LegacySyncWorkerPoolService,
+    SmartSlowSyncService,
+  ],
+  exports: [
+    GpsSyncService,
+    LegacySyncService,
+    LegacySyncWorkerPoolService,
+    SmartSlowSyncService,
+  ],
 })
 export class GpsSyncModule {}

@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateEmailTemplateDto } from './dto/create-email-template.dto';
 import { UpdateEmailTemplateDto } from './dto/update-email-template.dto';
@@ -18,7 +22,9 @@ export class EmailTemplatesService {
     });
 
     if (existing) {
-      throw new ConflictException(`Template with slug '${createEmailTemplateDto.slug}' already exists`);
+      throw new ConflictException(
+        `Template with slug '${createEmailTemplateDto.slug}' already exists`,
+      );
     }
 
     return this.prisma.emailTemplate.create({
@@ -70,10 +76,7 @@ export class EmailTemplatesService {
           },
         },
       },
-      orderBy: [
-        { category: 'asc' },
-        { name: 'asc' },
-      ],
+      orderBy: [{ category: 'asc' }, { name: 'asc' }],
     });
   }
 
@@ -107,7 +110,11 @@ export class EmailTemplatesService {
     return template;
   }
 
-  async update(id: string, updateEmailTemplateDto: UpdateEmailTemplateDto, userId: number) {
+  async update(
+    id: string,
+    updateEmailTemplateDto: UpdateEmailTemplateDto,
+    userId: number,
+  ) {
     const template = await this.prisma.emailTemplate.findUnique({
       where: { id },
     });
@@ -117,13 +124,18 @@ export class EmailTemplatesService {
     }
 
     // Check if new slug already exists (if slug is being changed)
-    if (updateEmailTemplateDto.slug && updateEmailTemplateDto.slug !== template.slug) {
+    if (
+      updateEmailTemplateDto.slug &&
+      updateEmailTemplateDto.slug !== template.slug
+    ) {
       const existing = await this.prisma.emailTemplate.findUnique({
         where: { slug: updateEmailTemplateDto.slug },
       });
 
       if (existing) {
-        throw new ConflictException(`Template with slug '${updateEmailTemplateDto.slug}' already exists`);
+        throw new ConflictException(
+          `Template with slug '${updateEmailTemplateDto.slug}' already exists`,
+        );
       }
     }
 
@@ -179,7 +191,10 @@ export class EmailTemplatesService {
       throw new NotFoundException(`Email template with ID '${id}' not found`);
     }
 
-    const result = await this.mailService.testEmailTemplate(template.slug, testEmail);
+    const result = await this.mailService.testEmailTemplate(
+      template.slug,
+      testEmail,
+    );
 
     return {
       message: `Test email sent successfully to ${testEmail}`,
@@ -229,7 +244,9 @@ export class EmailTemplatesService {
     });
 
     if (!template) {
-      throw new NotFoundException(`Email template with slug '${slug}' not found`);
+      throw new NotFoundException(
+        `Email template with slug '${slug}' not found`,
+      );
     }
 
     return template;

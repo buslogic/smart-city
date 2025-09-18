@@ -43,9 +43,11 @@ export class UploadsController {
       }),
       fileFilter: (req, file, cb) => {
         const allowedTypes = /jpeg|jpg|png|gif|webp/;
-        const extName = allowedTypes.test(extname(file.originalname).toLowerCase());
+        const extName = allowedTypes.test(
+          extname(file.originalname).toLowerCase(),
+        );
         const mimeType = allowedTypes.test(file.mimetype);
-        
+
         if (extName && mimeType) {
           cb(null, true);
         } else {
@@ -83,7 +85,7 @@ export class UploadsController {
   @ApiOperation({ summary: 'Briši avatar sliku' })
   async deleteAvatar(@Param('filename') filename: string) {
     const filePath = join(process.cwd(), 'uploads', 'avatars', filename);
-    
+
     if (existsSync(filePath)) {
       unlinkSync(filePath);
     }
@@ -96,12 +98,9 @@ export class UploadsController {
 
   @Get('avatars/:filename')
   @ApiOperation({ summary: 'Serviraj avatar sliku' })
-  async getAvatar(
-    @Param('filename') filename: string,
-    @Res() res: Response,
-  ) {
+  async getAvatar(@Param('filename') filename: string, @Res() res: Response) {
     const filePath = join(process.cwd(), 'uploads', 'avatars', filename);
-    
+
     if (!existsSync(filePath)) {
       return res.status(404).json({ message: 'Slika nije pronađena' });
     }

@@ -28,17 +28,27 @@ export class EmailTemplatesController {
   @Post()
   @RequirePermissions('settings.email_templates:create')
   @ApiOperation({ summary: 'Create new email template' })
-  create(@Body() createEmailTemplateDto: CreateEmailTemplateDto, @Request() req) {
-    return this.emailTemplatesService.create(createEmailTemplateDto, req.user.id);
+  create(
+    @Body() createEmailTemplateDto: CreateEmailTemplateDto,
+    @Request() req,
+  ) {
+    return this.emailTemplatesService.create(
+      createEmailTemplateDto,
+      req.user.id,
+    );
   }
 
   @Get()
   @RequirePermissions('settings.email_templates:view')
   @ApiOperation({ summary: 'Get all email templates' })
-  findAll(@Query('category') category?: string, @Query('isActive') isActive?: string) {
+  findAll(
+    @Query('category') category?: string,
+    @Query('isActive') isActive?: string,
+  ) {
     return this.emailTemplatesService.findAll({
       category,
-      isActive: isActive === 'true' ? true : isActive === 'false' ? false : undefined,
+      isActive:
+        isActive === 'true' ? true : isActive === 'false' ? false : undefined,
     });
   }
 
@@ -55,9 +65,13 @@ export class EmailTemplatesController {
   update(
     @Param('id') id: string,
     @Body() updateEmailTemplateDto: UpdateEmailTemplateDto,
-    @Request() req
+    @Request() req,
   ) {
-    return this.emailTemplatesService.update(id, updateEmailTemplateDto, req.user.id);
+    return this.emailTemplatesService.update(
+      id,
+      updateEmailTemplateDto,
+      req.user.id,
+    );
   }
 
   @Delete(':id')

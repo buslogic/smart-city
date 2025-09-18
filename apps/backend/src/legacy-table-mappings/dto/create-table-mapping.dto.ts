@@ -14,27 +14,36 @@ export class CreateTableMappingDto {
   @IsString()
   localTableName: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Tip mapiranja',
     enum: ['one_way', 'two_way', 'manual'],
-    default: 'one_way'
+    default: 'one_way',
   })
   @IsOptional()
   @IsString()
   @IsIn(['one_way', 'two_way', 'manual'])
   mappingType?: string;
 
-  @ApiProperty({ description: 'Da li je sinhronizacija omogućena', default: false })
+  @ApiProperty({
+    description: 'Da li je sinhronizacija omogućena',
+    default: false,
+  })
   @IsOptional()
   @IsBoolean()
   syncEnabled?: boolean;
 
-  @ApiProperty({ description: 'Frekvencija sinhronizacije (cron expression)', required: false })
+  @ApiProperty({
+    description: 'Frekvencija sinhronizacije (cron expression)',
+    required: false,
+  })
   @IsOptional()
   @IsString()
   syncFrequency?: string;
 
-  @ApiProperty({ description: 'Konfiguracija mapiranja polja (JSON)', required: false })
+  @ApiProperty({
+    description: 'Konfiguracija mapiranja polja (JSON)',
+    required: false,
+  })
   @IsOptional()
   @IsString()
   mappingConfig?: string;

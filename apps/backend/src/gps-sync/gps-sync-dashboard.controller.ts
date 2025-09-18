@@ -1,12 +1,10 @@
-import { 
-  Controller, 
-  Get, 
-  Post,
-  Body,
-  UseGuards,
-  Logger,
-} from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Get, Post, Body, UseGuards, Logger } from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
@@ -28,18 +26,19 @@ export class GpsSyncDashboardController {
   private static cronLastRun = {
     processor: null as Date | null,
     cleanup: null as Date | null,
-    statsCleanup: null as Date | null
+    statsCleanup: null as Date | null,
   };
-  
+
   constructor(private readonly prisma: PrismaService) {}
-  
+
   // Helper metoda za SSH komandu
   private getSSHCommand(): string {
     const legacyHost = process.env.LEGACY_SERVER_HOST || '79.101.48.11';
-    const sshKeyPath = process.env.LEGACY_SSH_KEY_PATH || '~/.ssh/hp-notebook-2025-buslogic';
+    const sshKeyPath =
+      process.env.LEGACY_SSH_KEY_PATH || '~/.ssh/hp-notebook-2025-buslogic';
     return `ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${sshKeyPath} root@${legacyHost}`;
   }
-  
+
   // Metoda koju će pozivati cron servisi da ažuriraju svoje vreme
   static updateCronLastRun(cronName: 'processor' | 'cleanup' | 'statsCleanup') {
     this.cronLastRun[cronName] = new Date();
@@ -48,32 +47,62 @@ export class GpsSyncDashboardController {
   @Get('buffer-status')
   @RequirePermissions('dispatcher:view_sync_dashboard')
   @ApiOperation({ summary: 'Status GPS buffer tabele' })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Status buffer tabele',
     schema: {
       type: 'object',
       properties: {
-        totalRecords: { type: 'number', description: 'Ukupan broj slogova u buffer tabeli' },
-        pendingRecords: { type: 'number', description: 'Broj slogova za procesiranje' },
-        processedRecords: { type: 'number', description: 'Broj procesiranih slogova' },
-        errorRecords: { type: 'number', description: 'Broj slogova sa greškama' },
-        oldestRecord: { type: 'string', format: 'date-time', description: 'Najstariji slog' },
-        newestRecord: { type: 'string', format: 'date-time', description: 'Najnoviji slog' },
-        lastProcessedAt: { type: 'string', format: 'date-time', description: 'Vreme poslednjeg procesiranja' },
+        totalRecords: {
+          type: 'number',
+          description: 'Ukupan broj slogova u buffer tabeli',
+        },
+        pendingRecords: {
+          type: 'number',
+          description: 'Broj slogova za procesiranje',
+        },
+        processedRecords: {
+          type: 'number',
+          description: 'Broj procesiranih slogova',
+        },
+        errorRecords: {
+          type: 'number',
+          description: 'Broj slogova sa greškama',
+        },
+        oldestRecord: {
+          type: 'string',
+          format: 'date-time',
+          description: 'Najstariji slog',
+        },
+        newestRecord: {
+          type: 'string',
+          format: 'date-time',
+          description: 'Najnoviji slog',
+        },
+        lastProcessedAt: {
+          type: 'string',
+          format: 'date-time',
+          description: 'Vreme poslednjeg procesiranja',
+        },
         recordsByStatus: {
           type: 'object',
           properties: {
             pending: { type: 'number' },
             processing: { type: 'number' },
             processed: { type: 'number' },
-            error: { type: 'number' }
-          }
+            error: { type: 'number' },
+          },
         },
-        vehicleCount: { type: 'number', description: 'Broj jedinstvenih vozila' },
-        averageProcessingTime: { type: 'number', description: 'Prosečno vreme procesiranja (ms)' }
-      }
-    }
+        vehicleCount: {
+          type: 'number',
+          description: 'Broj jedinstvenih vozila',
+        },
+        averageProcessingTime: {
+          type: 'number',
+          description: 'Prosečno vreme procesiranja (ms)',
+        },
+      },
+    },
   })
   async getBufferStatus() {
     // Dobijanje statistika iz gps_raw_buffer tabele
@@ -82,7 +111,7 @@ export class GpsSyncDashboardController {
       oldestRecord,
       newestRecord,
       vehicleCount,
-      lastProcessed
+      lastProcessed,
     ] = await Promise.all([
       // OPTIMIZOVANO: Samo jedan query za status count (koristi idx_status_only)
       this.prisma.$queryRaw<Array<{ process_status: string; count: bigint }>>`
@@ -90,7 +119,7 @@ export class GpsSyncDashboardController {
         FROM gps_raw_buffer 
         GROUP BY process_status
       `,
-      
+
       // Najstariji slog
       this.prisma.$queryRaw<{ received_at: Date }[]>`
         SELECT received_at 
@@ -99,7 +128,7 @@ export class GpsSyncDashboardController {
         ORDER BY received_at ASC 
         LIMIT 1
       `,
-      
+
       // Najnoviji slog
       this.prisma.$queryRaw<{ received_at: Date }[]>`
         SELECT received_at 
@@ -107,7 +136,7 @@ export class GpsSyncDashboardController {
         ORDER BY received_at DESC 
         LIMIT 1
       `,
-      
+
       // OPTIMIZOVANO: Broj jedinstvenih vozila - samo prvih 1000 za brzinu
       this.prisma.$queryRaw<{ count: bigint }[]>`
         SELECT COUNT(DISTINCT vehicle_id) as count 
@@ -118,13 +147,13 @@ export class GpsSyncDashboardController {
           LIMIT 10000
         ) as subquery
       `,
-      
+
       // Poslednje procesiranje
       this.prisma.$queryRaw<{ processed_at: Date }[]>`
         SELECT MAX(processed_at) as processed_at 
         FROM gps_raw_buffer 
         WHERE process_status = 'processed'
-      `
+      `,
     ]);
 
     // Organizovanje statusa iz prvog query-ja
@@ -132,7 +161,7 @@ export class GpsSyncDashboardController {
       pending: 0,
       processing: 0,
       processed: 0,
-      error: 0
+      error: 0,
     };
 
     // Računaj ukupan broj iz statusCounts
@@ -143,7 +172,9 @@ export class GpsSyncDashboardController {
     });
 
     // OPTIMIZOVANO: Prosečno vreme - samo poslednji 100 zapisa za brzinu
-    const avgProcessingTime = await this.prisma.$queryRaw<{ avg_time: number | null }[]>`
+    const avgProcessingTime = await this.prisma.$queryRaw<
+      { avg_time: number | null }[]
+    >`
       SELECT AVG(TIMESTAMPDIFF(MICROSECOND, received_at, processed_at)) / 1000 as avg_time
       FROM (
         SELECT received_at, processed_at
@@ -165,30 +196,34 @@ export class GpsSyncDashboardController {
         avgTime = 0;
       }
     }
-    
+
     // Dodaj statistike procesiranja za procentualni prikaz
     // Gledamo poslednji sat za realističnije brojeve
     const lastHour = new Date(new Date().getTime() - 60 * 60 * 1000);
-    const hourStats = await this.prisma.$queryRaw<{ 
-      total_processed: bigint;
-      avg_timescale_time: number;
-    }[]>`
+    const hourStats = await this.prisma.$queryRaw<
+      {
+        total_processed: bigint;
+        avg_timescale_time: number;
+      }[]
+    >`
       SELECT 
         COALESCE(SUM(processed_count), 0) as total_processed,
         COALESCE(AVG(avg_processing_time_ms), 0) as avg_timescale_time
       FROM gps_processing_stats
       WHERE hour_slot >= ${lastHour}
     `;
-    
+
     const totalProcessedHour = Number(hourStats[0]?.total_processed || 0);
     const avgTimescaleTime = Math.round(hourStats[0]?.avg_timescale_time || 0);
-    
+
     // Računaj procenat procesiranja (pendingRecords vs processed u zadnjem satu)
     let processingPercent = 0;
     if (totalRecords > 0) {
       // Ako imamo pending, pokazujemo koliko je ostalo za procesiranje
       if (recordsByStatus.pending > 0) {
-        processingPercent = Math.round(((totalRecords - recordsByStatus.pending) / totalRecords) * 100);
+        processingPercent = Math.round(
+          ((totalRecords - recordsByStatus.pending) / totalRecords) * 100,
+        );
       } else {
         // Ako nema pending, sve je procesirano
         processingPercent = 100;
@@ -209,16 +244,16 @@ export class GpsSyncDashboardController {
       totalProcessedLastHour: totalProcessedHour,
       averageTimescaleInsertTime: avgTimescaleTime,
       processingPercent: processingPercent,
-      timestamp: new Date()
+      timestamp: new Date(),
     };
   }
 
   @Get('processing-stats')
   @RequirePermissions('dispatcher:view_sync_dashboard')
   @ApiOperation({ summary: 'Statistike procesiranja GPS podataka' })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Statistike procesiranja'
+  @ApiResponse({
+    status: 200,
+    description: 'Statistike procesiranja',
   })
   async getProcessingStats() {
     const now = new Date();
@@ -226,11 +261,13 @@ export class GpsSyncDashboardController {
     const last1h = new Date(now.getTime() - 60 * 60 * 1000);
 
     // Dohvati statistike iz stats tabele za 24h
-    const processedStats24h = await this.prisma.$queryRaw<{ 
-      total_received: bigint;
-      total_processed: bigint;
-      avg_time: number;
-    }[]>`
+    const processedStats24h = await this.prisma.$queryRaw<
+      {
+        total_received: bigint;
+        total_processed: bigint;
+        avg_time: number;
+      }[]
+    >`
       SELECT 
         COALESCE(SUM(received_count), 0) as total_received,
         COALESCE(SUM(processed_count), 0) as total_processed,
@@ -238,69 +275,76 @@ export class GpsSyncDashboardController {
       FROM gps_processing_stats
       WHERE hour_slot >= ${last24h}
     `;
-    
+
     // Dohvati trenutno pending i error iz buffer-a
-    const currentBufferStats = await this.prisma.$queryRaw<{ 
-      pending: bigint;
-      errors: bigint;
-    }[]>`
+    const currentBufferStats = await this.prisma.$queryRaw<
+      {
+        pending: bigint;
+        errors: bigint;
+      }[]
+    >`
       SELECT 
         SUM(CASE WHEN process_status = 'pending' THEN 1 ELSE 0 END) as pending,
         SUM(CASE WHEN process_status = 'error' THEN 1 ELSE 0 END) as errors
       FROM gps_raw_buffer
     `;
-    
+
     // Za zadnji sat - gledaj samo buffer
-    const lastHourStats = await this.prisma.$queryRaw<{ 
-      total: bigint;
-    }[]>`
+    const lastHourStats = await this.prisma.$queryRaw<
+      {
+        total: bigint;
+      }[]
+    >`
       SELECT COUNT(*) as total
       FROM gps_raw_buffer
       WHERE received_at >= ${last1h}
     `;
-    
+
     // Processed u zadnjem satu iz stats tabele
-    const lastHourProcessed = await this.prisma.$queryRaw<{ 
-      processed: bigint;
-    }[]>`
+    const lastHourProcessed = await this.prisma.$queryRaw<
+      {
+        processed: bigint;
+      }[]
+    >`
       SELECT COALESCE(SUM(processed_count), 0) as processed
       FROM gps_processing_stats
       WHERE hour_slot >= ${last1h}
     `;
-    
+
     // Koristi received_count kao total (koliko je stiglo sa legacy servera)
     const total24h = Number(processedStats24h[0]?.total_received || 0);
     const processed24h = Number(processedStats24h[0]?.total_processed || 0);
     const errors24h = Number(currentBufferStats[0]?.errors || 0);
-    
-    const totalLastHour = Number(lastHourStats[0]?.total || 0) + Number(lastHourProcessed[0]?.processed || 0);
+
+    const totalLastHour =
+      Number(lastHourStats[0]?.total || 0) +
+      Number(lastHourProcessed[0]?.processed || 0);
     const processedLastHour = Number(lastHourProcessed[0]?.processed || 0);
-    
+
     return {
       last24Hours: {
         total: total24h,
         processed: processed24h,
         errors: errors24h,
-        successRate: total24h > 0 
-          ? (processed24h / total24h * 100).toFixed(2)
-          : '0'
+        successRate:
+          total24h > 0 ? ((processed24h / total24h) * 100).toFixed(2) : '0',
       },
       lastHour: {
         total: totalLastHour,
         processed: processedLastHour,
-        recordsPerMinute: (totalLastHour / 60).toFixed(2)
+        recordsPerMinute: (totalLastHour / 60).toFixed(2),
       },
       topErrors: [], // Za sada prazno, možemo dodati error tracking
-      timestamp: new Date()
+      timestamp: new Date(),
     };
   }
 
   @Get('timescale-status')
   @RequirePermissions('dispatcher:view_sync_dashboard')
   @ApiOperation({ summary: 'Status TimescaleDB sinhronizacije' })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Status TimescaleDB'
+  @ApiResponse({
+    status: 200,
+    description: 'Status TimescaleDB',
   })
   async getTimescaleStatus() {
     // Ovde bi trebalo dodati logiku za proveru TimescaleDB statusa
@@ -315,63 +359,70 @@ export class GpsSyncDashboardController {
       pendingTransfer: Number(pendingTransfer[0]?.count || 0),
       timescaleConnected: true, // Ovo bi trebalo proveriti stvarnu konekciju
       lastTransferTime: new Date(), // Ovo bi trebalo čitati iz log tabele
-      transferRate: "30 seconds", // Interval transfera
-      timestamp: new Date()
+      transferRate: '30 seconds', // Interval transfera
+      timestamp: new Date(),
     };
   }
 
   @Get('cron-status')
   @RequirePermissions('dispatcher:view_sync_dashboard')
   @ApiOperation({ summary: 'Status svih cron procesa' })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Status cron procesa'
+  @ApiResponse({
+    status: 200,
+    description: 'Status cron procesa',
   })
   async getCronStatus() {
     const now = new Date();
-    
+
     // Proveri poslednju obradu legacy processor-a
     // Gledamo poslednji zapis u buffer-u kao indikator rada legacy cron-a
-    const lastLegacyActivity = await this.prisma.$queryRaw<[{ last_received: Date | null }]>`
+    const lastLegacyActivity = await this.prisma.$queryRaw<
+      [{ last_received: Date | null }]
+    >`
       SELECT MAX(received_at) as last_received
       FROM gps_raw_buffer
     `;
-    
+
     // Proveri poslednje procesiranje (backend cron)
-    const lastProcessedActivity = await this.prisma.$queryRaw<[{ last_processed: Date | null }]>`
+    const lastProcessedActivity = await this.prisma.$queryRaw<
+      [{ last_processed: Date | null }]
+    >`
       SELECT MAX(processed_at) as last_processed
       FROM gps_raw_buffer
       WHERE process_status = 'processed'
     `;
-    
+
     // Računaj da li su cron-ovi aktivni
     const legacyLastRun = lastLegacyActivity[0]?.last_received;
     const processorLastRun = lastProcessedActivity[0]?.last_processed;
-    
+
     // Proveri backend cron status
-    const { GpsProcessorService } = require('../gps-processor/gps-processor.service');
+    const {
+      GpsProcessorService,
+    } = require('../gps-processor/gps-processor.service');
     const backendCronStatus = GpsProcessorService.getCronStatus();
-    
+
     // Cron se smatra aktivnim ako je radio u zadnjih X minuta
     const isActive = (lastRun: Date | null, intervalMinutes: number) => {
       if (!lastRun) return false;
-      const diffMinutes = (now.getTime() - new Date(lastRun).getTime()) / (1000 * 60);
+      const diffMinutes =
+        (now.getTime() - new Date(lastRun).getTime()) / (1000 * 60);
       return diffMinutes < intervalMinutes * 2; // Duplo vreme kao tolerancija
     };
-    
+
     // Generiši legacy procesore za teltonika60-76
     const legacyProcessors: any[] = [];
-    
+
     // SSH komande za dobijanje podataka sa legacy servera
     let activeScreenSessions: number[] = [];
     let activeCronJobs: number[] = [];
-    let activeConnections: Map<number, number> = new Map();
-    let rawLogSizes: Map<number, string> = new Map();
-    let lastCronRuns: Map<number, Date | null> = new Map();
-    
+    const activeConnections: Map<number, number> = new Map();
+    const rawLogSizes: Map<number, string> = new Map();
+    const lastCronRuns: Map<number, Date | null> = new Map();
+
     // Proveri da li su SSH komande omogućene (disabled u Docker kontejnerima)
     const sshEnabled = process.env.ENABLE_SSH_COMMANDS !== 'false';
-    
+
     if (!sshEnabled) {
       this.logger.warn('SSH commands are disabled in this environment');
       // Vrati prazne podatke za SSH-based info
@@ -388,10 +439,10 @@ export class GpsSyncDashboardController {
           instance: i,
           type: 'legacy',
           activeDevices: 0,
-          rawLogSize: 'N/A'
+          rawLogSize: 'N/A',
         });
       }
-      
+
       return {
         cronProcesses: [
           {
@@ -399,31 +450,39 @@ export class GpsSyncDashboardController {
             location: 'Backend NestJS',
             schedule: 'Svakih 30 sekundi',
             lastRun: processorLastRun,
-            isActive: backendCronStatus.processor && isActive(processorLastRun, 0.5),
+            isActive:
+              backendCronStatus.processor && isActive(processorLastRun, 0.5),
             isPaused: !backendCronStatus.processor,
             description: 'Prebacuje podatke iz buffer-a u TimescaleDB',
-            type: 'backend'
+            type: 'backend',
           },
           {
             name: 'Buffer Cleanup',
             location: 'Backend NestJS',
             schedule: 'Svakih 2 minuta',
             lastRun: GpsSyncDashboardController.cronLastRun.cleanup,
-            isActive: backendCronStatus.cleanup && isActive(GpsSyncDashboardController.cronLastRun.cleanup, 2),
+            isActive:
+              backendCronStatus.cleanup &&
+              isActive(GpsSyncDashboardController.cronLastRun.cleanup, 2),
             isPaused: !backendCronStatus.cleanup,
             description: 'Briše stare processed zapise iz buffer-a',
-            type: 'backend'
+            type: 'backend',
           },
           {
             name: 'Stats Cleanup',
             location: 'Backend NestJS',
             schedule: 'Jednom dnevno u 3:00',
             lastRun: GpsSyncDashboardController.cronLastRun.statsCleanup,
-            isActive: backendCronStatus.statsCleanup && isActive(GpsSyncDashboardController.cronLastRun.statsCleanup, 1440),
+            isActive:
+              backendCronStatus.statsCleanup &&
+              isActive(
+                GpsSyncDashboardController.cronLastRun.statsCleanup,
+                1440,
+              ),
             isPaused: !backendCronStatus.statsCleanup,
             description: 'Briše statistike starije od 10 dana',
-            type: 'backend'
-          }
+            type: 'backend',
+          },
         ],
         legacyProcessors,
         summary: {
@@ -432,52 +491,58 @@ export class GpsSyncDashboardController {
             isActive(processorLastRun, 0.5),
             isActive(GpsSyncDashboardController.cronLastRun.cleanup, 2),
             isActive(GpsSyncDashboardController.cronLastRun.statsCleanup, 1440),
-            ...legacyProcessors.map(p => p.isActive)
+            ...legacyProcessors.map((p) => p.isActive),
           ].filter(Boolean).length,
-          dataFlowStatus: isActive(processorLastRun, 0.5) ? 'operational' : 'degraded',
-          activeLegacyInstances: []
+          dataFlowStatus: isActive(processorLastRun, 0.5)
+            ? 'operational'
+            : 'degraded',
+          activeLegacyInstances: [],
         },
-        timestamp: new Date()
+        timestamp: new Date(),
       };
     }
-    
+
     // Koristi helper metodu za SSH komandu
     const sshBaseCommand = this.getSSHCommand();
     this.logger.debug(`🔑 SSH komanda: ${sshBaseCommand}`);
-    
+
     try {
       // 1. Proveri screen sesije
       const { stdout: screenOutput } = await exec(
         `${sshBaseCommand} "screen -ls 2>/dev/null | grep teltonika"`,
-        { timeout: 10000 }
+        { timeout: 10000 },
       );
-      
+
       if (screenOutput) {
         const screenMatches = screenOutput.match(/teltonika(\d+)/g);
         if (screenMatches) {
-          activeScreenSessions = screenMatches.map(m => parseInt(m.replace('teltonika', '')));
+          activeScreenSessions = screenMatches.map((m) =>
+            parseInt(m.replace('teltonika', '')),
+          );
         }
       }
-      
+
       // 2. Proveri cron jobove
       const { stdout: cronOutput } = await exec(
         `${sshBaseCommand} "crontab -l 2>/dev/null | grep smart-city-raw-processor.php"`,
-        { timeout: 10000 }
+        { timeout: 10000 },
       );
-      
+
       if (cronOutput) {
         const cronMatches = cronOutput.match(/teltonika(\d+)/g);
         if (cronMatches) {
-          activeCronJobs = cronMatches.map(m => parseInt(m.replace('teltonika', '')));
+          activeCronJobs = cronMatches.map((m) =>
+            parseInt(m.replace('teltonika', '')),
+          );
         }
       }
-      
+
       // 3. Proveri aktivne konekcije za svaki port
       for (let port = 60; port <= 76; port++) {
         try {
           const { stdout: connCount } = await exec(
             `${sshBaseCommand} "ss -tan 2>/dev/null | grep :120${port} | grep ESTAB | wc -l"`,
-            { timeout: 5000 }
+            { timeout: 5000 },
           );
           const count = parseInt(connCount.trim()) || 0;
           if (count > 0) {
@@ -487,14 +552,32 @@ export class GpsSyncDashboardController {
           // Ignoriši grešku za pojedinačni port
         }
       }
-      
+
       // 4. Proveri veličine raw log fajlova za Smart City instance
-      const folders = ['teltonika60', 'teltonika61', 'teltonika62', 'teltonika63', 'teltonika64', 'teltonika65', 'teltonika66', 'teltonika67', 'teltonika68', 'teltonika69', 'teltonika70', 'teltonika71', 'teltonika72', 'teltonika73', 'teltonika74', 'teltonika75', 'teltonika76'];
+      const folders = [
+        'teltonika60',
+        'teltonika61',
+        'teltonika62',
+        'teltonika63',
+        'teltonika64',
+        'teltonika65',
+        'teltonika66',
+        'teltonika67',
+        'teltonika68',
+        'teltonika69',
+        'teltonika70',
+        'teltonika71',
+        'teltonika72',
+        'teltonika73',
+        'teltonika74',
+        'teltonika75',
+        'teltonika76',
+      ];
       for (const folder of folders) {
         try {
           const { stdout: sizeOutput } = await exec(
             `${sshBaseCommand} "ls -lh /var/www/${folder}/smart-city-gps-raw-log.txt 2>/dev/null | awk '{print \\$5}'"`,
-            { timeout: 5000 }
+            { timeout: 5000 },
           );
           if (sizeOutput && sizeOutput.trim()) {
             const instance = parseInt(folder.replace('teltonika', ''));
@@ -504,19 +587,21 @@ export class GpsSyncDashboardController {
           // Ignoriši grešku za pojedinačni folder
         }
       }
-      
+
       // 5. Proveri poslednje izvršavanje cron job-a za svaki processor
       for (const folder of folders) {
         try {
           const instance = parseInt(folder.replace('teltonika', ''));
           const { stdout: lastRunOutput } = await exec(
             `${sshBaseCommand} "tail -1 /var/log/smart-city-raw-processor-${instance}.log 2>/dev/null"`,
-            { timeout: 5000 }
+            { timeout: 5000 },
           );
           if (lastRunOutput && lastRunOutput.trim()) {
             // Pokušaj da izvučemo vreme iz log linije
             // Format: [2025-09-04 19:10:01] Processing...
-            const timeMatch = lastRunOutput.match(/\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]/);
+            const timeMatch = lastRunOutput.match(
+              /\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]/,
+            );
             if (timeMatch) {
               const lastRunDate = new Date(timeMatch[1]);
               if (!isNaN(lastRunDate.getTime())) {
@@ -528,12 +613,16 @@ export class GpsSyncDashboardController {
           // Ignoriši grešku za pojedinačni log
         }
       }
-      
-      this.logger.debug(`✅ SSH komande uspešne: ${activeScreenSessions.length} screen sesija, ${activeCronJobs.length} cron jobova`);
+
+      this.logger.debug(
+        `✅ SSH komande uspešne: ${activeScreenSessions.length} screen sesija, ${activeCronJobs.length} cron jobova`,
+      );
     } catch (error) {
-      this.logger.warn(`Couldn't fetch legacy server data via SSH: ${error.message}`);
+      this.logger.warn(
+        `Couldn't fetch legacy server data via SSH: ${error.message}`,
+      );
     }
-    
+
     // Sve potencijalne instance (60-76)
     for (let i = 60; i <= 76; i++) {
       const isScreenActive = activeScreenSessions.includes(i);
@@ -541,7 +630,7 @@ export class GpsSyncDashboardController {
       const connectionCount = activeConnections.get(i) || 0;
       const rawLogSize = rawLogSizes.get(i) || null;
       const cronLastRun = lastCronRuns.get(i) || null;
-      
+
       legacyProcessors.push({
         name: `Teltonika${i} GPS Processor`,
         location: `Legacy Server (79.101.48.11)`,
@@ -554,10 +643,10 @@ export class GpsSyncDashboardController {
         instance: i,
         type: 'legacy',
         activeDevices: connectionCount, // Broj aktivnih GPS uređaja
-        rawLogSize: rawLogSize // Veličina raw log fajla
+        rawLogSize: rawLogSize, // Veličina raw log fajla
       });
     }
-    
+
     return {
       cronProcesses: [
         {
@@ -565,31 +654,36 @@ export class GpsSyncDashboardController {
           location: 'Backend NestJS',
           schedule: 'Svakih 30 sekundi',
           lastRun: processorLastRun,
-          isActive: backendCronStatus.processor && isActive(processorLastRun, 0.5),
+          isActive:
+            backendCronStatus.processor && isActive(processorLastRun, 0.5),
           isPaused: !backendCronStatus.processor,
           description: 'Prebacuje podatke iz buffer-a u TimescaleDB',
-          type: 'backend'
+          type: 'backend',
         },
         {
           name: 'Buffer Cleanup',
           location: 'Backend NestJS',
           schedule: 'Svakih 2 minuta',
           lastRun: GpsSyncDashboardController.cronLastRun.cleanup,
-          isActive: backendCronStatus.cleanup && isActive(GpsSyncDashboardController.cronLastRun.cleanup, 2),
+          isActive:
+            backendCronStatus.cleanup &&
+            isActive(GpsSyncDashboardController.cronLastRun.cleanup, 2),
           isPaused: !backendCronStatus.cleanup,
           description: 'Briše stare processed zapise iz buffer-a',
-          type: 'backend'
+          type: 'backend',
         },
         {
           name: 'Stats Cleanup',
           location: 'Backend NestJS',
           schedule: 'Jednom dnevno u 3:00',
           lastRun: GpsSyncDashboardController.cronLastRun.statsCleanup,
-          isActive: backendCronStatus.statsCleanup && isActive(GpsSyncDashboardController.cronLastRun.statsCleanup, 1440), // 24 sata
+          isActive:
+            backendCronStatus.statsCleanup &&
+            isActive(GpsSyncDashboardController.cronLastRun.statsCleanup, 1440), // 24 sata
           isPaused: !backendCronStatus.statsCleanup,
           description: 'Briše statistike starije od 10 dana',
-          type: 'backend'
-        }
+          type: 'backend',
+        },
       ],
       legacyProcessors,
       summary: {
@@ -598,70 +692,78 @@ export class GpsSyncDashboardController {
           isActive(processorLastRun, 0.5),
           isActive(GpsSyncDashboardController.cronLastRun.cleanup, 2),
           isActive(GpsSyncDashboardController.cronLastRun.statsCleanup, 1440),
-          ...legacyProcessors.map(p => p.isActive)
+          ...legacyProcessors.map((p) => p.isActive),
         ].filter(Boolean).length,
-        dataFlowStatus: legacyProcessors.some(p => p.isActive) && isActive(processorLastRun, 0.5) ? 'operational' : 'degraded',
-        activeLegacyInstances: activeScreenSessions
+        dataFlowStatus:
+          legacyProcessors.some((p) => p.isActive) &&
+          isActive(processorLastRun, 0.5)
+            ? 'operational'
+            : 'degraded',
+        activeLegacyInstances: activeScreenSessions,
       },
-      timestamp: new Date()
+      timestamp: new Date(),
     };
   }
 
   @Get('batch-history')
   @RequirePermissions('dispatcher:view_sync_dashboard')
   @ApiOperation({ summary: 'Istorija batch procesiranja' })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Batch history'
+  @ApiResponse({
+    status: 200,
+    description: 'Batch history',
   })
   async getBatchHistory() {
     try {
       // Čitaj iz nove gps_batch_history tabele sa worker logovima
       const batches = await this.prisma.gpsBatchHistory.findMany({
         where: {
-          status: { in: ['completed', 'failed'] }
+          status: { in: ['completed', 'failed'] },
         },
         orderBy: { startedAt: 'desc' },
         take: 3,
         include: {
           workerLogs: {
-            orderBy: { workerId: 'asc' }
-          }
-        }
+            orderBy: { workerId: 'asc' },
+          },
+        },
       });
 
       // Mapiraj podatke za frontend
       const batchHistory = batches.map((batch, index) => {
         // Koristi stvarne worker logove ako postoje
-        const workers = batch.workerLogs && batch.workerLogs.length > 0 
-          ? batch.workerLogs.map(log => ({
-              workerId: log.workerId,
-              processed: log.recordsProcessed,
-              failed: log.recordsFailed,
-              duration: log.durationMs || 0,
-              status: log.status,
-              recordsPerSecond: log.recordsPerSecond || 0,
-              startedAt: log.startedAt,
-              completedAt: log.completedAt,
-              recordsAssigned: log.recordsAssigned,
-              processingSteps: log.processingSteps,
-              errorMessage: log.errorMessage
-            }))
-          : // Fallback na stari način ako nema logova
-            (batch.workerDetails as any[] || []).map(w => ({
-              workerId: w.workerId,
-              processed: w.processed || 0,
-              failed: w.failed || 0,
-              duration: w.duration || 0,
-              status: w.status || 'unknown',
-              recordsPerSecond: w.duration > 0 ? Math.round(w.processed / (w.duration / 1000)) : 0,
-              startedAt: w.startedAt || null,
-              completedAt: w.completedAt || null,
-              recordsAssigned: w.processed || 0,
-              processingSteps: null,
-              errorMessage: null
-            }));
-        
+        const workers =
+          batch.workerLogs && batch.workerLogs.length > 0
+            ? batch.workerLogs.map((log) => ({
+                workerId: log.workerId,
+                processed: log.recordsProcessed,
+                failed: log.recordsFailed,
+                duration: log.durationMs || 0,
+                status: log.status,
+                recordsPerSecond: log.recordsPerSecond || 0,
+                startedAt: log.startedAt,
+                completedAt: log.completedAt,
+                recordsAssigned: log.recordsAssigned,
+                processingSteps: log.processingSteps,
+                errorMessage: log.errorMessage,
+              }))
+            : // Fallback na stari način ako nema logova
+              ((batch.workerDetails as any[]) || []).map((w) => ({
+                workerId: w.workerId,
+                processed: w.processed || 0,
+                failed: w.failed || 0,
+                duration: w.duration || 0,
+                status: w.status || 'unknown',
+                recordsPerSecond:
+                  w.duration > 0
+                    ? Math.round(w.processed / (w.duration / 1000))
+                    : 0,
+                startedAt: w.startedAt || null,
+                completedAt: w.completedAt || null,
+                recordsAssigned: w.processed || 0,
+                processingSteps: null,
+                errorMessage: null,
+              }));
+
         return {
           id: batch.id,
           batchNumber: batch.batchNumber,
@@ -676,19 +778,19 @@ export class GpsSyncDashboardController {
           avgRecordsPerSecond: batch.avgRecordsPerSecond,
           workers: workers,
           status: batch.status,
-          errorMessage: batch.errorMessage
+          errorMessage: batch.errorMessage,
         };
       });
-      
+
       return {
         success: true,
-        batches: batchHistory
+        batches: batchHistory,
       };
     } catch (error) {
       this.logger.error('Error fetching batch history:', error);
       return {
         success: false,
-        batches: []
+        batches: [],
       };
     }
   }
@@ -696,115 +798,131 @@ export class GpsSyncDashboardController {
   @Post('cron-control')
   @RequirePermissions('dispatcher.manage_cron')
   @ApiOperation({ summary: 'Kontrola cron procesa (start/stop)' })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Cron proces kontrolisan'
+  @ApiResponse({
+    status: 200,
+    description: 'Cron proces kontrolisan',
   })
-  async controlCron(@Body() dto: { action: 'start' | 'stop', cronName: string, instance?: number }) {
+  async controlCron(
+    @Body()
+    dto: {
+      action: 'start' | 'stop';
+      cronName: string;
+      instance?: number;
+    },
+  ) {
     const logger = new Logger('CronControl');
-    
+
     try {
       // Za Backend cron-ove
       if (dto.cronName === 'Backend GPS Processor') {
-        const { GpsProcessorService } = require('../gps-processor/gps-processor.service');
+        const {
+          GpsProcessorService,
+        } = require('../gps-processor/gps-processor.service');
         GpsProcessorService.setCronEnabled('processor', dto.action === 'start');
-        
+
         if (dto.action === 'start') {
           // Ažuriraj i lastRun da bi se prikazao kao aktivan
           GpsSyncDashboardController.updateCronLastRun('processor');
         }
-        
+
         return {
           success: true,
-          message: `Backend GPS Processor ${dto.action === 'start' ? 'pokrenut' : 'zaustavljen'}`
+          message: `Backend GPS Processor ${dto.action === 'start' ? 'pokrenut' : 'zaustavljen'}`,
         };
       }
-      
+
       if (dto.cronName === 'Buffer Cleanup') {
-        const { GpsProcessorService } = require('../gps-processor/gps-processor.service');
+        const {
+          GpsProcessorService,
+        } = require('../gps-processor/gps-processor.service');
         GpsProcessorService.setCronEnabled('cleanup', dto.action === 'start');
-        
+
         if (dto.action === 'start') {
           GpsSyncDashboardController.updateCronLastRun('cleanup');
         }
-        
+
         return {
           success: true,
-          message: `Buffer Cleanup ${dto.action === 'start' ? 'pokrenut' : 'zaustavljen'}`
+          message: `Buffer Cleanup ${dto.action === 'start' ? 'pokrenut' : 'zaustavljen'}`,
         };
       }
-      
+
       if (dto.cronName === 'Stats Cleanup') {
-        const { GpsProcessorService } = require('../gps-processor/gps-processor.service');
-        GpsProcessorService.setCronEnabled('statsCleanup', dto.action === 'start');
-        
+        const {
+          GpsProcessorService,
+        } = require('../gps-processor/gps-processor.service');
+        GpsProcessorService.setCronEnabled(
+          'statsCleanup',
+          dto.action === 'start',
+        );
+
         if (dto.action === 'start') {
           GpsSyncDashboardController.updateCronLastRun('statsCleanup');
         }
-        
+
         return {
           success: true,
-          message: `Stats Cleanup ${dto.action === 'start' ? 'pokrenut' : 'zaustavljen'}`
+          message: `Stats Cleanup ${dto.action === 'start' ? 'pokrenut' : 'zaustavljen'}`,
         };
       }
-      
+
       // Za Legacy GPS procesore
       if (dto.cronName.includes('Teltonika')) {
         const instanceNum = dto.instance || 60;
-        
+
         if (dto.action === 'stop') {
           // Stop teltonika screen session
           const { stdout, stderr } = await exec(
             `${this.getSSHCommand()} "screen -XS teltonika${instanceNum}.bgnaplata quit"`,
-            { timeout: 10000 }
+            { timeout: 10000 },
           );
-          
+
           logger.log(`Stopiran Teltonika${instanceNum}: ${stdout}`);
-          
+
           return {
             success: true,
             message: `Teltonika${instanceNum} stopiran`,
-            details: stdout
+            details: stdout,
           };
         } else {
           // Start teltonika screen session
           const { stdout, stderr } = await exec(
             `${this.getSSHCommand()} "screen -m -d -S teltonika${instanceNum}.bgnaplata /var/www/teltonika${instanceNum}/start_teltonika.sh"`,
-            { timeout: 10000 }
+            { timeout: 10000 },
           );
-          
+
           logger.log(`Pokrenut Teltonika${instanceNum}: ${stdout}`);
-          
+
           return {
             success: true,
             message: `Teltonika${instanceNum} pokrenut`,
-            details: stdout
+            details: stdout,
           };
         }
       }
-      
+
       // Za Backend GPS Processor
       if (dto.cronName === 'Backend GPS Processor') {
         // Ovo kontroliše NestJS cron - potrebna je drugačija logika
         // Za sada samo vraćamo poruku
         return {
           success: false,
-          message: 'Backend cron procesi se ne mogu kontrolisati preko ovog interfejsa',
-          details: 'Koristite systemctl ili docker komande'
+          message:
+            'Backend cron procesi se ne mogu kontrolisati preko ovog interfejsa',
+          details: 'Koristite systemctl ili docker komande',
         };
       }
-      
+
       return {
         success: false,
-        message: `Nepoznat cron proces: ${dto.cronName}`
+        message: `Nepoznat cron proces: ${dto.cronName}`,
       };
-      
     } catch (error) {
       logger.error(`Greška pri kontroli cron procesa: ${error.message}`);
       return {
         success: false,
         message: 'Greška pri kontroli cron procesa',
-        error: error.message
+        error: error.message,
       };
     }
   }
@@ -812,132 +930,140 @@ export class GpsSyncDashboardController {
   @Post('cron-restart')
   @RequirePermissions('dispatcher.manage_cron')
   @ApiOperation({ summary: 'Restart cron procesa' })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Cron proces restartovan'
+  @ApiResponse({
+    status: 200,
+    description: 'Cron proces restartovan',
   })
-  async restartCron(@Body() dto: { cronName: string, instance?: number }) {
+  async restartCron(@Body() dto: { cronName: string; instance?: number }) {
     const logger = new Logger('CronRestart');
-    
+
     try {
       // Za Legacy GPS procesore
       if (dto.cronName.includes('Teltonika')) {
         const instanceNum = dto.instance || 60;
-        
+
         // Stop then start
         await exec(
           `${this.getSSHCommand()} "screen -XS teltonika${instanceNum}.bgnaplata quit"`,
-          { timeout: 10000 }
+          { timeout: 10000 },
         );
-        
+
         // Wait a bit
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+
         const { stdout, stderr } = await exec(
           `${this.getSSHCommand()} "screen -m -d -S teltonika${instanceNum}.bgnaplata /var/www/teltonika${instanceNum}/start_teltonika.sh"`,
-          { timeout: 10000 }
+          { timeout: 10000 },
         );
-        
+
         logger.log(`Restartovan Teltonika${instanceNum}`);
-        
+
         return {
           success: true,
           message: `Teltonika${instanceNum} restartovan`,
-          details: stdout
+          details: stdout,
         };
       }
-      
+
       return {
         success: false,
-        message: `Nepoznat cron proces: ${dto.cronName}`
+        message: `Nepoznat cron proces: ${dto.cronName}`,
       };
-      
     } catch (error) {
       logger.error(`Greška pri restartovanju cron procesa: ${error.message}`);
       return {
         success: false,
         message: 'Greška pri restartovanju cron procesa',
-        error: error.message
+        error: error.message,
       };
     }
   }
 
   @Post('cron-process-control')
   @RequirePermissions('dispatcher.manage_cron')
-  @ApiOperation({ summary: 'Kontrola Smart City cron procesora (raw file processor)' })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Cron processor kontrolisan'
+  @ApiOperation({
+    summary: 'Kontrola Smart City cron procesora (raw file processor)',
   })
-  async controlCronProcess(@Body() dto: { action: 'start' | 'stop' | 'run', instance: number }) {
+  @ApiResponse({
+    status: 200,
+    description: 'Cron processor kontrolisan',
+  })
+  async controlCronProcess(
+    @Body() dto: { action: 'start' | 'stop' | 'run'; instance: number },
+  ) {
     const logger = new Logger('CronProcessControl');
-    
+
     try {
       // Samo za teltonika60-76 koji imaju Smart City setup
       if (dto.instance < 60 || dto.instance > 76) {
         return {
           success: false,
-          message: `Teltonika${dto.instance} nema Smart City processor`
+          message: `Teltonika${dto.instance} nema Smart City processor`,
         };
       }
-      
+
       if (dto.action === 'stop') {
         // Zaustavi cron za procesiranje
         const { stdout } = await exec(
           `${this.getSSHCommand()} "crontab -l | grep -v 'teltonika${dto.instance}/smart-city-raw-processor.php' | crontab -"`,
-          { timeout: 10000 }
+          { timeout: 10000 },
         );
-        
-        logger.log(`Zaustavljen Smart City processor za teltonika${dto.instance}`);
-        
+
+        logger.log(
+          `Zaustavljen Smart City processor za teltonika${dto.instance}`,
+        );
+
         return {
           success: true,
           message: `Smart City processor za teltonika${dto.instance} je zaustavljen`,
-          details: 'Cron job uklonjen'
+          details: 'Cron job uklonjen',
         };
-        
       } else if (dto.action === 'start') {
         // Pokreni cron za procesiranje
         const { stdout } = await exec(
           `${this.getSSHCommand()} "(crontab -l 2>/dev/null; echo '*/2 * * * * /usr/bin/php /var/www/teltonika${dto.instance}/smart-city-raw-processor.php >> /var/log/smart-city-raw-processor-${dto.instance}.log 2>&1') | crontab -"`,
-          { timeout: 10000 }
+          { timeout: 10000 },
         );
-        
-        logger.log(`Pokrenut Smart City processor cron za teltonika${dto.instance}`);
-        
+
+        logger.log(
+          `Pokrenut Smart City processor cron za teltonika${dto.instance}`,
+        );
+
         return {
           success: true,
           message: `Smart City processor za teltonika${dto.instance} je pokrenut`,
-          details: 'Cron job dodat (svakih 2 minuta)'
+          details: 'Cron job dodat (svakih 2 minuta)',
         };
-        
       } else if (dto.action === 'run') {
         // Ručno pokreni procesiranje odmah
         const { stdout, stderr } = await exec(
           `${this.getSSHCommand()} "php /var/www/teltonika${dto.instance}/smart-city-raw-processor.php"`,
-          { timeout: 30000 }
+          { timeout: 30000 },
         );
-        
-        logger.log(`Ručno pokrenut Smart City processor za teltonika${dto.instance}: ${stdout}`);
-        
+
+        logger.log(
+          `Ručno pokrenut Smart City processor za teltonika${dto.instance}: ${stdout}`,
+        );
+
         return {
           success: true,
           message: `Smart City processor za teltonika${dto.instance} je ručno pokrenut`,
-          details: stdout || 'Procesiranje završeno'
+          details: stdout || 'Procesiranje završeno',
         };
       }
-      
+
       return {
         success: false,
-        message: `Nepoznata akcija: ${dto.action}`
+        message: `Nepoznata akcija: ${dto.action}`,
       };
-      
     } catch (error) {
-      logger.error(`Greška pri kontroli Smart City processor-a: ${error.message}`);
+      logger.error(
+        `Greška pri kontroli Smart City processor-a: ${error.message}`,
+      );
       return {
         success: false,
         message: 'Greška pri kontroli Smart City processor-a',
-        error: error.message
+        error: error.message,
       };
     }
   }
@@ -945,32 +1071,35 @@ export class GpsSyncDashboardController {
   @Get('settings')
   @RequirePermissions('dispatcher.manage_gps')
   @ApiOperation({ summary: 'Dohvati GPS processor podešavanja' })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'GPS processor podešavanja'
+  @ApiResponse({
+    status: 200,
+    description: 'GPS processor podešavanja',
   })
   async getSettings() {
     try {
       const settings = await this.prisma.systemSettings.findMany({
-        where: { category: 'gps' }
+        where: { category: 'gps' },
       });
-      
+
       return {
         success: true,
         data: settings.reduce((acc, setting) => {
           acc[setting.key] = {
-            value: setting.type === 'number' ? parseInt(setting.value) : setting.value,
+            value:
+              setting.type === 'number'
+                ? parseInt(setting.value)
+                : setting.value,
             type: setting.type,
-            description: setting.description
+            description: setting.description,
           };
           return acc;
-        }, {} as any)
+        }, {} as any),
       };
     } catch (error) {
       return {
         success: false,
         message: 'Greška pri dohvatanju podešavanja',
-        error: error.message
+        error: error.message,
       };
     }
   }
@@ -978,43 +1107,43 @@ export class GpsSyncDashboardController {
   @Post('settings')
   @RequirePermissions('dispatcher.manage_gps')
   @ApiOperation({ summary: 'Ažuriraj GPS processor podešavanja' })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Podešavanja ažurirana'
+  @ApiResponse({
+    status: 200,
+    description: 'Podešavanja ažurirana',
   })
-  async updateSettings(@Body() dto: { key: string, value: string | number }) {
+  async updateSettings(@Body() dto: { key: string; value: string | number }) {
     try {
       const existing = await this.prisma.systemSettings.findUnique({
-        where: { key: dto.key }
+        where: { key: dto.key },
       });
-      
+
       if (!existing) {
         return {
           success: false,
-          message: `Podešavanje ${dto.key} ne postoji`
+          message: `Podešavanje ${dto.key} ne postoji`,
         };
       }
-      
+
       await this.prisma.systemSettings.update({
         where: { key: dto.key },
-        data: { 
+        data: {
           value: dto.value.toString(),
-          updatedAt: new Date()
-        }
+          updatedAt: new Date(),
+        },
       });
-      
+
       this.logger.log(`⚙️ Ažurirano podešavanje ${dto.key} = ${dto.value}`);
-      
+
       return {
         success: true,
-        message: 'Podešavanje uspešno ažurirano'
+        message: 'Podešavanje uspešno ažurirano',
       };
     } catch (error) {
       this.logger.error(`Greška pri ažuriranju podešavanja: ${error.message}`);
       return {
         success: false,
         message: 'Greška pri ažuriranju podešavanja',
-        error: error.message
+        error: error.message,
       };
     }
   }
@@ -1029,19 +1158,21 @@ export class GpsSyncDashboardController {
     try {
       // Dobavi PROCESSLIST iz MySQL-a
       // Prisma vraća kolone kao f0, f1, f2... umesto pravih imena
-      const processList = await this.prisma.$queryRaw<Array<{
-        f0: bigint;  // Id
-        f1: string;  // User
-        f2: string;  // Host  
-        f3: string | null;  // db
-        f4: string;  // Command
-        f5: number;  // Time
-        f6: string | null;  // State
-        f7: string | null;  // Info
-      }>>`SHOW PROCESSLIST`;
-      
+      const processList = await this.prisma.$queryRaw<
+        Array<{
+          f0: bigint; // Id
+          f1: string; // User
+          f2: string; // Host
+          f3: string | null; // db
+          f4: string; // Command
+          f5: number; // Time
+          f6: string | null; // State
+          f7: string | null; // Info
+        }>
+      >`SHOW PROCESSLIST`;
+
       // Mapiraj na prava imena polja
-      const mappedProcessList = processList.map(p => ({
+      const mappedProcessList = processList.map((p) => ({
         Id: Number(p.f0),
         User: p.f1,
         Host: p.f2,
@@ -1049,65 +1180,70 @@ export class GpsSyncDashboardController {
         Command: p.f4,
         Time: p.f5,
         State: p.f6,
-        Info: p.f7
+        Info: p.f7,
       }));
-      
+
       // Filtriraj samo naše konekcije (Host format je IP:port)
-      const ourConnections = mappedProcessList.filter(p => 
-        p.User === 'gsp-user' && p.Host?.startsWith('157.230.119.11')
+      const ourConnections = mappedProcessList.filter(
+        (p) => p.User === 'gsp-user' && p.Host?.startsWith('157.230.119.11'),
       );
-      
+
       // Analiziraj stanje konekcija
       const connectionStats = {
         total: ourConnections.length,
-        active: ourConnections.filter(c => c.Command !== 'Sleep').length,
-        sleeping: ourConnections.filter(c => c.Command === 'Sleep').length,
-        executing: ourConnections.filter(c => c.Command === 'Execute').length,
-        longRunning: ourConnections.filter(c => c.Time > 60).length,
+        active: ourConnections.filter((c) => c.Command !== 'Sleep').length,
+        sleeping: ourConnections.filter((c) => c.Command === 'Sleep').length,
+        executing: ourConnections.filter((c) => c.Command === 'Execute').length,
+        longRunning: ourConnections.filter((c) => c.Time > 60).length,
       };
-      
+
       // Grupiši po tipu komande
-      const byCommand = ourConnections.reduce((acc, conn) => {
-        acc[conn.Command] = (acc[conn.Command] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
-      
+      const byCommand = ourConnections.reduce(
+        (acc, conn) => {
+          acc[conn.Command] = (acc[conn.Command] || 0) + 1;
+          return acc;
+        },
+        {} as Record<string, number>,
+      );
+
       // Top 5 najdužih konekcija
       const longestConnections = ourConnections
         .sort((a, b) => b.Time - a.Time)
         .slice(0, 5)
-        .map(c => ({
+        .map((c) => ({
           id: c.Id,
           command: c.Command,
           time: c.Time,
           state: c.State,
-          query: c.Info ? c.Info.substring(0, 100) + '...' : null
+          query: c.Info ? c.Info.substring(0, 100) + '...' : null,
         }));
-      
+
       // Connection pool info iz environment-a
       const dbUrl = process.env.DATABASE_URL || '';
       const connectionLimit = dbUrl.match(/connection_limit=(\d+)/)?.[1] || '3';
       const poolTimeout = dbUrl.match(/pool_timeout=(\d+)/)?.[1] || '10';
-      
+
       return {
         pool: {
           maxConnections: parseInt(connectionLimit),
           currentConnections: connectionStats.total,
-          availableConnections: parseInt(connectionLimit) - connectionStats.total,
-          utilizationPercent: Math.round((connectionStats.total / parseInt(connectionLimit)) * 100),
-          poolTimeout: parseInt(poolTimeout)
+          availableConnections:
+            parseInt(connectionLimit) - connectionStats.total,
+          utilizationPercent: Math.round(
+            (connectionStats.total / parseInt(connectionLimit)) * 100,
+          ),
+          poolTimeout: parseInt(poolTimeout),
         },
         connections: connectionStats,
         byCommand,
         longestConnections,
-        timestamp: new Date()
+        timestamp: new Date(),
       };
-      
     } catch (error) {
       this.logger.error('Error getting connection status:', error);
       return {
         error: 'Failed to get connection status',
-        timestamp: new Date()
+        timestamp: new Date(),
       };
     }
   }
@@ -1115,48 +1251,49 @@ export class GpsSyncDashboardController {
   @Post('reset-statistics')
   @RequirePermissions('dispatcher.manage_gps')
   @ApiOperation({ summary: 'Reset GPS processing statistics' })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Statistike su resetovane',
     schema: {
       type: 'object',
       properties: {
         success: { type: 'boolean' },
         message: { type: 'string' },
-        deletedRows: { type: 'number' }
-      }
-    }
+        deletedRows: { type: 'number' },
+      },
+    },
   })
   async resetStatistics() {
     const logger = this.logger;
-    
+
     try {
       // Obriši sve statistike iz tabele gps_processing_stats
       const result = await this.prisma.$executeRaw`
         DELETE FROM gps_processing_stats
       `;
-      
+
       // Resetuj i buffer statistike na 0
       await this.prisma.$executeRaw`
         UPDATE gps_raw_buffer 
         SET process_status = 'processed'
         WHERE process_status IN ('pending', 'error')
       `;
-      
-      logger.log(`🔄 Resetovane statistike - obrisano ${result} redova iz gps_processing_stats`);
-      
+
+      logger.log(
+        `🔄 Resetovane statistike - obrisano ${result} redova iz gps_processing_stats`,
+      );
+
       return {
         success: true,
         message: 'Statistike su uspešno resetovane',
-        deletedRows: result
+        deletedRows: result,
       };
-      
     } catch (error) {
       logger.error(`Greška pri resetovanju statistika: ${error.message}`);
       return {
         success: false,
         message: 'Greška pri resetovanju statistika',
-        error: error.message
+        error: error.message,
       };
     }
   }

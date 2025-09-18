@@ -61,8 +61,8 @@ export class DashboardWidgetsService {
 
   async getAvailableWidgets(user: any) {
     const userPermissions = await this.getUserPermissions(user);
-    
-    return this.widgets.filter(widget =>
+
+    return this.widgets.filter((widget) =>
       this.hasPermission(userPermissions, widget.requiredPermission),
     );
   }
@@ -113,7 +113,7 @@ export class DashboardWidgetsService {
         FROM gps_raw_buffer 
         GROUP BY process_status
       `,
-      
+
       // Poslednji batch
       this.prisma.gpsBatchHistory.findFirst({
         orderBy: { startedAt: 'desc' },
@@ -126,22 +126,22 @@ export class DashboardWidgetsService {
           workerCount: true,
           totalDurationMs: true,
           avgRecordsPerSecond: true,
-          status: true
-        }
+          status: true,
+        },
       }),
-      
+
       // GPS settings
       this.prisma.systemSettings.findMany({
-        where: { 
+        where: {
           key: {
             in: [
               'gps.processor.batch_size',
               'gps.processor.worker_count',
-              'gps.processor.use_worker_pool'
-            ]
-          }
-        }
-      })
+              'gps.processor.use_worker_pool',
+            ],
+          },
+        },
+      }),
     ]);
 
     // Organizuj status counts
@@ -150,7 +150,7 @@ export class DashboardWidgetsService {
       pending: 0,
       processing: 0,
       processed: 0,
-      error: 0
+      error: 0,
     };
 
     statusCounts.forEach((status) => {
@@ -161,14 +161,15 @@ export class DashboardWidgetsService {
 
     // Parse settings
     const settingsMap = {};
-    settings.forEach(s => {
+    settings.forEach((s) => {
       settingsMap[s.key] = s.type === 'number' ? parseInt(s.value) : s.value;
     });
 
     // Proveri da li je sistem aktivan (poslednji batch u poslednjih 2 minuta)
-    const isActive = lastBatch && 
-      lastBatch.startedAt && 
-      (new Date().getTime() - new Date(lastBatch.startedAt).getTime()) < 120000;
+    const isActive =
+      lastBatch &&
+      lastBatch.startedAt &&
+      new Date().getTime() - new Date(lastBatch.startedAt).getTime() < 120000;
 
     return {
       buffer: {
@@ -176,26 +177,28 @@ export class DashboardWidgetsService {
         pendingRecords: bufferStatus.pending,
         processingRecords: bufferStatus.processing,
         processedRecords: bufferStatus.processed,
-        errorRecords: bufferStatus.error
+        errorRecords: bufferStatus.error,
       },
-      lastBatch: lastBatch ? {
-        number: lastBatch.batchNumber,
-        startedAt: lastBatch.startedAt,
-        completedAt: lastBatch.completedAt,
-        processed: lastBatch.actualProcessed,
-        duration: lastBatch.totalDurationMs,
-        recordsPerSecond: lastBatch.avgRecordsPerSecond,
-        status: lastBatch.status
-      } : null,
+      lastBatch: lastBatch
+        ? {
+            number: lastBatch.batchNumber,
+            startedAt: lastBatch.startedAt,
+            completedAt: lastBatch.completedAt,
+            processed: lastBatch.actualProcessed,
+            duration: lastBatch.totalDurationMs,
+            recordsPerSecond: lastBatch.avgRecordsPerSecond,
+            status: lastBatch.status,
+          }
+        : null,
       config: {
         batchSize: settingsMap['gps.processor.batch_size'] || 10000,
         workerCount: settingsMap['gps.processor.worker_count'] || 4,
-        useWorkerPool: settingsMap['gps.processor.use_worker_pool'] === 'true'
+        useWorkerPool: settingsMap['gps.processor.use_worker_pool'] === 'true',
       },
       systemStatus: {
         isActive,
-        lastSync: lastBatch?.completedAt || lastBatch?.startedAt || null
-      }
+        lastSync: lastBatch?.completedAt || lastBatch?.startedAt || null,
+      },
     };
   }
 
@@ -220,9 +223,9 @@ export class DashboardWidgetsService {
     });
 
     const permissions = new Set<string>();
-    
-    userWithRoles?.roles.forEach(userRole => {
-      userRole.role.permissions.forEach(rolePermission => {
+
+    userWithRoles?.roles.forEach((userRole) => {
+      userRole.role.permissions.forEach((rolePermission) => {
         const perm = rolePermission.permission;
         // Dodajemo permisiju u formatu sa tačkom
         permissions.add(perm.name);
@@ -232,9 +235,14 @@ export class DashboardWidgetsService {
     return Array.from(permissions);
   }
 
-  private hasPermission(userPermissions: string[], requiredPermission: string): boolean {
-    return userPermissions.includes(requiredPermission) || 
-           userPermissions.includes('*:*') ||
-           userPermissions.includes('dashboard:*');
+  private hasPermission(
+    userPermissions: string[],
+    requiredPermission: string,
+  ): boolean {
+    return (
+      userPermissions.includes(requiredPermission) ||
+      userPermissions.includes('*:*') ||
+      userPermissions.includes('dashboard:*')
+    );
   }
 }

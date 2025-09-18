@@ -1,7 +1,9 @@
 import { ApiProperty, PartialType } from '@nestjs/swagger';
 import { CreateLegacyDatabaseDto } from './create-legacy-database.dto';
 
-export class UpdateLegacyDatabaseDto extends PartialType(CreateLegacyDatabaseDto) {}
+export class UpdateLegacyDatabaseDto extends PartialType(
+  CreateLegacyDatabaseDto,
+) {}
 
 export class TestConnectionDto {
   @ApiProperty({ description: 'Host adresa baze podataka' })
@@ -19,9 +21,9 @@ export class TestConnectionDto {
   @ApiProperty({ description: 'Lozinka za pristup bazi' })
   password: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Tip baze podataka',
-    enum: ['mysql', 'postgresql', 'mongodb', 'oracle', 'mssql']
+    enum: ['mysql', 'postgresql', 'mongodb', 'oracle', 'mssql'],
   })
   type: string;
 }

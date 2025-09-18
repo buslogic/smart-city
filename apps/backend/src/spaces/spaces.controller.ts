@@ -67,11 +67,13 @@ export class SpacesController {
       },
     },
   })
-  @UseInterceptors(FileInterceptor('file', {
-    limits: {
-      fileSize: 50 * 1024 * 1024, // 50MB max
-    },
-  }))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: {
+        fileSize: 50 * 1024 * 1024, // 50MB max
+      },
+    }),
+  )
   @RequirePermissions('files:upload')
   async uploadFile(
     @UploadedFile() file: Express.Multer.File,
@@ -143,11 +145,13 @@ export class SpacesController {
       },
     },
   })
-  @UseInterceptors(FilesInterceptor('files', 10, {
-    limits: {
-      fileSize: 50 * 1024 * 1024, // 50MB po fajlu
-    },
-  }))
+  @UseInterceptors(
+    FilesInterceptor('files', 10, {
+      limits: {
+        fileSize: 50 * 1024 * 1024, // 50MB po fajlu
+      },
+    }),
+  )
   @RequirePermissions('files:upload')
   async uploadMultipleFiles(
     @UploadedFiles() files: Express.Multer.File[],
@@ -157,9 +161,9 @@ export class SpacesController {
       throw new BadRequestException('Fajlovi nisu prosleđeni');
     }
 
-    const uploadPromises = files.map(file => {
+    const uploadPromises = files.map((file) => {
       const fileName = this.spacesService.generateFileName(file.originalname);
-      
+
       return this.spacesService.uploadFile(file.buffer, {
         folder: uploadDto.folder || 'uploads',
         fileName,
@@ -203,7 +207,9 @@ export class SpacesController {
   }
 
   @Get('upload-url')
-  @ApiOperation({ summary: 'Generiše signed URL za direktan upload sa frontend-a' })
+  @ApiOperation({
+    summary: 'Generiše signed URL za direktan upload sa frontend-a',
+  })
   @RequirePermissions('files:upload')
   async getUploadUrl(
     @Query('key') key: string,
@@ -262,7 +268,7 @@ export class SpacesController {
 
     return {
       success: true,
-      files: files.map(file => ({
+      files: files.map((file) => ({
         key: file.Key,
         size: file.Size,
         lastModified: file.LastModified,

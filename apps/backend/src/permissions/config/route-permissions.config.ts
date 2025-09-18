@@ -7,7 +7,7 @@ export const routePermissionsConfig: RoutePermissionDto[] = [
     requiredPermissions: ['dashboard:view'],
     optionalPermissions: ['dashboard:update'],
   },
-  
+
   // Users Management
   {
     route: '/users',
@@ -17,21 +17,36 @@ export const routePermissionsConfig: RoutePermissionDto[] = [
   {
     route: '/users/roles-permissions',
     requiredPermissions: ['roles:view', 'permissions:view'],
-    optionalPermissions: ['roles:create', 'roles:update', 'roles:delete', 'permissions:create', 'permissions:update', 'permissions:delete'],
+    optionalPermissions: [
+      'roles:create',
+      'roles:update',
+      'roles:delete',
+      'permissions:create',
+      'permissions:update',
+      'permissions:delete',
+    ],
   },
-  
+
   // Vehicles
   {
     route: '/transport/vehicles',
     requiredPermissions: ['vehicles:read'],
-    optionalPermissions: ['vehicles:create', 'vehicles:update', 'vehicles:delete'],
+    optionalPermissions: [
+      'vehicles:create',
+      'vehicles:update',
+      'vehicles:delete',
+    ],
   },
   {
     route: '/transport/vehicles/sync',
     requiredPermissions: ['vehicles.sync:view'],
-    optionalPermissions: ['vehicles.sync:start', 'vehicles.sync:stop', 'vehicles.sync:configure'],
+    optionalPermissions: [
+      'vehicles.sync:start',
+      'vehicles.sync:stop',
+      'vehicles.sync:configure',
+    ],
   },
-  
+
   // GPS & Tracking
   {
     route: '/transport/gps/tracking',
@@ -48,7 +63,7 @@ export const routePermissionsConfig: RoutePermissionDto[] = [
     requiredPermissions: ['gps:sync'],
     optionalPermissions: [],
   },
-  
+
   // Safety & Reports
   {
     route: '/transport/safety/aggressive-driving',
@@ -58,16 +73,20 @@ export const routePermissionsConfig: RoutePermissionDto[] = [
   {
     route: '/transport/safety/monthly-report',
     requiredPermissions: ['vehicles:read', 'safety.reports:view'],
-    optionalPermissions: ['safety.reports:create', 'safety.reports:export', 'safety.reports:configure'],
+    optionalPermissions: [
+      'safety.reports:create',
+      'safety.reports:export',
+      'safety.reports:configure',
+    ],
   },
-  
+
   // Reports
   {
     route: '/reports',
     requiredPermissions: ['reports.read'],
     optionalPermissions: ['reports.create', 'reports.export'],
   },
-  
+
   // Settings
   {
     route: '/settings',
@@ -79,18 +98,22 @@ export const routePermissionsConfig: RoutePermissionDto[] = [
     requiredPermissions: ['system:configure'],
     optionalPermissions: [],
   },
-  
+
   // Profile
   {
     route: '/profile',
     requiredPermissions: [], // Everyone can view their profile
     optionalPermissions: ['profile.edit'],
   },
-  
+
   // Legacy Databases
   {
     route: '/legacy-databases',
     requiredPermissions: ['legacy_databases:read'],
-    optionalPermissions: ['legacy_databases:create', 'legacy_databases:update', 'legacy_databases:delete'],
+    optionalPermissions: [
+      'legacy_databases:create',
+      'legacy_databases:update',
+      'legacy_databases:delete',
+    ],
   },
 ];

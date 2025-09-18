@@ -12,11 +12,12 @@ function decryptPassword(encryptedPassword: string): string {
     if (parts.length !== 2) {
       return encryptedPassword;
     }
-    
+
     const algorithm = 'aes-256-cbc';
-    const keySource = process.env.DATABASE_ENCRYPTION_KEY || 'default-key-for-dev-only';
+    const keySource =
+      process.env.DATABASE_ENCRYPTION_KEY || 'default-key-for-dev-only';
     const key = crypto.scryptSync(keySource, 'salt', 32);
-    
+
     const iv = Buffer.from(parts[0], 'hex');
     const encryptedText = parts[1];
     const decipher = crypto.createDecipheriv(algorithm, key, iv);
@@ -32,7 +33,7 @@ function decryptPassword(encryptedPassword: string): string {
 async function importLegacyGPSData() {
   let mysqlConnection: mysql.Connection | null = null;
   let pgPool: Pool | null = null;
-  
+
   try {
     // 1. Dohvati kredencijale za legacy bazu
     console.log('📋 Dohvatam kredencijale za legacy bazu...');
@@ -48,7 +49,7 @@ async function importLegacyGPSData() {
     }
 
     const password = decryptPassword(legacyDb.password);
-    
+
     // 2. Konektuj se na legacy MySQL bazu
     console.log('🔗 Povezujem se na legacy GPS bazu...');
     mysqlConnection = await mysql.createConnection({
@@ -64,8 +65,10 @@ async function importLegacyGPSData() {
 
     // 3. Preuzmi podatke iz P93597gps tabele (poslednih 30 minuta)
     const vehicleGarageNo = 'P93597';
-    console.log(`\n📊 Preuzimam podatke za vozilo ${vehicleGarageNo} (poslednih 30 minuta)...`);
-    
+    console.log(
+      `\n📊 Preuzimam podatke za vozilo ${vehicleGarageNo} (poslednih 30 minuta)...`,
+    );
+
     const [rows] = await mysqlConnection.execute(`
       SELECT 
         '${vehicleGarageNo}' as garageNo,
@@ -89,8 +92,10 @@ async function importLegacyGPSData() {
     console.log(`✅ Pronađeno ${gpsData.length} GPS tačaka za import`);
 
     if (gpsData.length === 0) {
-      console.log('⚠️ Nema podataka u poslednjih 30 minuta, pokušavam poslednji dan...');
-      
+      console.log(
+        '⚠️ Nema podataka u poslednjih 30 minuta, pokušavam poslednji dan...',
+      );
+
       const [dayRows] = await mysqlConnection.execute(`
         SELECT 
           '${vehicleGarageNo}' as garageNo,
@@ -110,10 +115,10 @@ async function importLegacyGPSData() {
         ORDER BY captured DESC
         LIMIT 1000
       `);
-      
+
       const dayData = dayRows as any[];
       console.log(`✅ Pronađeno ${dayData.length} GPS tačaka za poslednji dan`);
-      
+
       if (dayData.length > 0) {
         gpsData.push(...dayData);
       }
@@ -130,7 +135,9 @@ async function importLegacyGPSData() {
     });
 
     const vehicleId = vehicle?.id || null;
-    console.log(`Vehicle ID za ${vehicleGarageNo}: ${vehicleId || 'nije pronađen'}`);
+    console.log(
+      `Vehicle ID za ${vehicleGarageNo}: ${vehicleId || 'nije pronađen'}`,
+    );
 
     // 5. Konektuj se na TimescaleDB
     console.log('\n🔗 Povezujem se na TimescaleDB...');
@@ -138,7 +145,7 @@ async function importLegacyGPSData() {
     if (!process.env.TIMESCALE_DATABASE_URL) {
       throw new Error('TIMESCALE_DATABASE_URL environment variable is not set');
     }
-    
+
     pgPool = new Pool({
       connectionString: process.env.TIMESCALE_DATABASE_URL,
       max: 5,
@@ -146,7 +153,7 @@ async function importLegacyGPSData() {
 
     // 6. Ubaci podatke u TimescaleDB
     console.log(`\n📥 Ubacujem ${gpsData.length} GPS tačaka u TimescaleDB...`);
-    
+
     let inserted = 0;
     let failed = 0;
 
@@ -179,11 +186,11 @@ async function importLegacyGPSData() {
           point.alt || 0,
           point.state || 0,
           point.inroute || 0,
-          'legacy_import'
+          'legacy_import',
         ]);
-        
+
         inserted++;
-        
+
         if (inserted % 100 === 0) {
           console.log(`  Ubačeno ${inserted}/${gpsData.length} tačaka...`);
         }
@@ -199,8 +206,9 @@ async function importLegacyGPSData() {
 
     // 7. Proveri podatke u TimescaleDB
     console.log('\n📊 Statistika u TimescaleDB:');
-    
-    const countResult = await pgPool.query(`
+
+    const countResult = await pgPool.query(
+      `
       SELECT 
         COUNT(*) as total_points,
         MIN(time) as oldest_point,
@@ -209,7 +217,9 @@ async function importLegacyGPSData() {
         MAX(speed) as max_speed
       FROM gps_data
       WHERE garage_no = $1
-    `, [vehicleGarageNo]);
+    `,
+      [vehicleGarageNo],
+    );
 
     const stats = countResult.rows[0];
     console.log(`   - Ukupno tačaka: ${stats.total_points}`);
@@ -219,7 +229,8 @@ async function importLegacyGPSData() {
     console.log(`   - Maksimalna brzina: ${stats.max_speed} km/h`);
 
     // 8. Test PostGIS funkcija - računaj ukupnu kilometražu
-    const distanceResult = await pgPool.query(`
+    const distanceResult = await pgPool.query(
+      `
       WITH ordered_points AS (
         SELECT 
           time,
@@ -240,13 +251,16 @@ async function importLegacyGPSData() {
         ) / 1000.0 as total_km
       FROM ordered_points
       WHERE prev_location IS NOT NULL
-    `, [vehicleGarageNo]);
+    `,
+      [vehicleGarageNo],
+    );
 
     const distance = distanceResult.rows[0];
     console.log(`\n🗺️ PostGIS kalkulacije:`);
     console.log(`   - Segmenata rute: ${distance.segments}`);
-    console.log(`   - Ukupna kilometraža (poslednji dan): ${parseFloat(distance.total_km).toFixed(2)} km`);
-
+    console.log(
+      `   - Ukupna kilometraža (poslednji dan): ${parseFloat(distance.total_km).toFixed(2)} km`,
+    );
   } catch (error) {
     console.error('❌ Greška:', error);
   } finally {

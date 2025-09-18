@@ -12,11 +12,12 @@ function decryptPassword(encryptedPassword: string): string {
       // Ako nije u očekivanom formatu, pretpostavi da je već plain text
       return encryptedPassword;
     }
-    
+
     const algorithm = 'aes-256-cbc';
-    const keySource = process.env.DATABASE_ENCRYPTION_KEY || 'default-key-for-dev-only';
+    const keySource =
+      process.env.DATABASE_ENCRYPTION_KEY || 'default-key-for-dev-only';
     const key = crypto.scryptSync(keySource, 'salt', 32);
-    
+
     const iv = Buffer.from(parts[0], 'hex');
     const encryptedText = parts[1];
     const decipher = crypto.createDecipheriv(algorithm, key, iv);
@@ -32,7 +33,7 @@ function decryptPassword(encryptedPassword: string): string {
 
 async function exploreGPSTables() {
   let connection: mysql.Connection | null = null;
-  
+
   try {
     // Dohvati kredencijale za GPS bazu
     const legacyDb = await prisma.legacyDatabase.findFirst({
@@ -47,11 +48,11 @@ async function exploreGPSTables() {
     }
 
     const password = decryptPassword(legacyDb.password);
-    
+
     console.log('Povezujem se na legacy GPS bazu...');
     console.log(`Host: ${legacyDb.host}:${legacyDb.port}`);
     console.log(`Database: ${legacyDb.database}`);
-    
+
     // Kreiraj konekciju
     connection = await mysql.createConnection({
       host: legacyDb.host,
@@ -66,21 +67,26 @@ async function exploreGPSTables() {
 
     // 1. Pronađi sve tabele koje se završavaju sa 'gps'
     console.log('📋 Tražim tabele sa GPS podacima...\n');
-    
-    const [tables] = await connection.execute(`
+
+    const [tables] = await connection.execute(
+      `
       SELECT TABLE_NAME, TABLE_ROWS, DATA_LENGTH, CREATE_TIME
       FROM information_schema.TABLES 
       WHERE TABLE_SCHEMA = ? 
       AND TABLE_NAME LIKE '%gps'
       ORDER BY TABLE_NAME
       LIMIT 10
-    `, [legacyDb.database]);
+    `,
+      [legacyDb.database],
+    );
 
     console.log(`Pronađeno ${(tables as any[]).length} GPS tabela:\n`);
-    
-    (tables as any[]).forEach(table => {
+
+    (tables as any[]).forEach((table) => {
       const sizeInMB = (table.DATA_LENGTH / 1024 / 1024).toFixed(2);
-      console.log(`  - ${table.TABLE_NAME}: ${table.TABLE_ROWS} redova, ${sizeInMB} MB`);
+      console.log(
+        `  - ${table.TABLE_NAME}: ${table.TABLE_ROWS} redova, ${sizeInMB} MB`,
+      );
     });
 
     // 2. Uzmi prvu tabelu kao primer i analiziraj strukturu
@@ -89,7 +95,8 @@ async function exploreGPSTables() {
       console.log(`\n📊 Analiziram strukturu tabele: ${exampleTable}\n`);
 
       // Dohvati strukturu kolona
-      const [columns] = await connection.execute(`
+      const [columns] = await connection.execute(
+        `
         SELECT 
           COLUMN_NAME,
           DATA_TYPE,
@@ -103,13 +110,19 @@ async function exploreGPSTables() {
         WHERE TABLE_SCHEMA = ?
         AND TABLE_NAME = ?
         ORDER BY ORDINAL_POSITION
-      `, [legacyDb.database, exampleTable]);
+      `,
+        [legacyDb.database, exampleTable],
+      );
 
       console.log('Struktura tabele:\n');
-      console.log('Kolona                | Tip            | Nullable | Default | Komentar');
-      console.log('----------------------|----------------|----------|---------|----------');
-      
-      (columns as any[]).forEach(col => {
+      console.log(
+        'Kolona                | Tip            | Nullable | Default | Komentar',
+      );
+      console.log(
+        '----------------------|----------------|----------|---------|----------',
+      );
+
+      (columns as any[]).forEach((col) => {
         let type = col.DATA_TYPE;
         if (col.CHARACTER_MAXIMUM_LENGTH) {
           type += `(${col.CHARACTER_MAXIMUM_LENGTH})`;
@@ -120,19 +133,21 @@ async function exploreGPSTables() {
           }
           type += ')';
         }
-        
+
         const nullable = col.IS_NULLABLE === 'YES' ? 'YES' : 'NO';
         const defaultVal = col.COLUMN_DEFAULT || '-';
         const comment = col.COLUMN_COMMENT || '-';
-        
+
         console.log(
-          `${col.COLUMN_NAME.padEnd(21)} | ${type.padEnd(14)} | ${nullable.padEnd(8)} | ${defaultVal.toString().padEnd(7).substring(0, 7)} | ${comment}`
+          `${col.COLUMN_NAME.padEnd(21)} | ${type.padEnd(14)} | ${nullable.padEnd(8)} | ${defaultVal.toString().padEnd(7).substring(0, 7)} | ${comment}`,
         );
       });
 
       // 3. Dohvati nekoliko primera podataka
-      console.log(`\n📋 Primeri podataka iz ${exampleTable} (poslednji unosi):\n`);
-      
+      console.log(
+        `\n📋 Primeri podataka iz ${exampleTable} (poslednji unosi):\n`,
+      );
+
       const [sampleData] = await connection.execute(`
         SELECT * FROM ${exampleTable}
         ORDER BY edited DESC
@@ -151,14 +166,14 @@ async function exploreGPSTables() {
 
       console.log(`\n🔍 Indeksi na tabeli ${exampleTable}:\n`);
       const uniqueIndexes = new Set();
-      (indexes as any[]).forEach(idx => {
+      (indexes as any[]).forEach((idx) => {
         uniqueIndexes.add(`${idx.Key_name} (${idx.Column_name})`);
       });
-      uniqueIndexes.forEach(idx => console.log(`  - ${idx}`));
+      uniqueIndexes.forEach((idx) => console.log(`  - ${idx}`));
 
       // 5. Proveri datum range podataka
       console.log(`\n📅 Datum opseg podataka:\n`);
-      
+
       const [dateRange] = await connection.execute(`
         SELECT 
           MIN(captured) as oldest_record,
@@ -177,8 +192,9 @@ async function exploreGPSTables() {
 
     // 6. Proveri current tabelu takođe
     console.log('\n📋 Analiza CURRENT tabele:\n');
-    
-    const [currentColumns] = await connection.execute(`
+
+    const [currentColumns] = await connection.execute(
+      `
       SELECT 
         COLUMN_NAME,
         DATA_TYPE,
@@ -187,13 +203,14 @@ async function exploreGPSTables() {
       WHERE TABLE_SCHEMA = ?
       AND TABLE_NAME = 'current'
       ORDER BY ORDINAL_POSITION
-    `, [legacyDb.database]);
+    `,
+      [legacyDb.database],
+    );
 
     console.log('Kolone u current tabeli:');
-    (currentColumns as any[]).forEach(col => {
+    (currentColumns as any[]).forEach((col) => {
       console.log(`  - ${col.COLUMN_NAME}: ${col.DATA_TYPE}`);
     });
-
   } catch (error) {
     console.error('❌ Greška:', error);
   } finally {

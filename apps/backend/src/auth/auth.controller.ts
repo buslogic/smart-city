@@ -7,14 +7,14 @@ import {
   Request,
   HttpCode,
   HttpStatus,
-  Get
+  Get,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiBody,
-  ApiBearerAuth
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -52,7 +52,7 @@ export class AuthController {
   ): Promise<LoginResponseDto> {
     const ipAddress = req.ip;
     const userAgent = req.get('user-agent');
-    
+
     // req.user je dostupan posle LocalAuthGuard validacije
     return this.authService.loginWithUser(req.user, ipAddress, userAgent);
   }
@@ -124,7 +124,10 @@ export class AuthController {
   })
   async requestPasswordReset(@Body('email') email: string) {
     await this.authService.requestPasswordReset(email);
-    return { message: 'Ukoliko postoji nalog sa ovom email adresom, poslat je link za resetovanje lozinke.' };
+    return {
+      message:
+        'Ukoliko postoji nalog sa ovom email adresom, poslat je link za resetovanje lozinke.',
+    };
   }
 
   @Public()
@@ -135,9 +138,9 @@ export class AuthController {
     schema: {
       properties: {
         token: { type: 'string' },
-        newPassword: { type: 'string' }
-      }
-    }
+        newPassword: { type: 'string' },
+      },
+    },
   })
   @ApiResponse({
     status: 200,
@@ -148,7 +151,10 @@ export class AuthController {
     @Body('newPassword') newPassword: string,
   ) {
     await this.authService.resetPassword(token, newPassword);
-    return { message: 'Lozinka je uspešno promenjena. Možete se prijaviti sa novom lozinkom.' };
+    return {
+      message:
+        'Lozinka je uspešno promenjena. Možete se prijaviti sa novom lozinkom.',
+    };
   }
 
   @UseGuards(JwtAuthGuard)
@@ -171,7 +177,7 @@ export class AuthController {
     await this.authService.changePassword(
       user.id,
       changePasswordDto.currentPassword,
-      changePasswordDto.newPassword
+      changePasswordDto.newPassword,
     );
     return { message: 'Lozinka je uspešno promenjena' };
   }

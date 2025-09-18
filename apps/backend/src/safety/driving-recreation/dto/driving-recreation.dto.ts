@@ -1,4 +1,12 @@
-import { IsArray, IsBoolean, IsDateString, IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsDateString,
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export enum RecreationStatus {
@@ -15,7 +23,10 @@ export enum RecreationStrategy {
 }
 
 export class StartRecreationDto {
-  @ApiProperty({ type: [Number], description: 'Array of vehicle IDs to process' })
+  @ApiProperty({
+    type: [Number],
+    description: 'Array of vehicle IDs to process',
+  })
   @IsArray()
   @IsNumber({}, { each: true })
   vehicleIds: number[];
@@ -28,17 +39,26 @@ export class StartRecreationDto {
   @IsDateString()
   endDate: string;
 
-  @ApiPropertyOptional({ description: 'Clear existing events before recreation', default: false })
+  @ApiPropertyOptional({
+    description: 'Clear existing events before recreation',
+    default: false,
+  })
   @IsOptional()
   @IsBoolean()
   clearExisting?: boolean;
 
-  @ApiPropertyOptional({ enum: RecreationStrategy, default: RecreationStrategy.DAILY })
+  @ApiPropertyOptional({
+    enum: RecreationStrategy,
+    default: RecreationStrategy.DAILY,
+  })
   @IsOptional()
   @IsEnum(RecreationStrategy)
   strategy?: RecreationStrategy;
 
-  @ApiPropertyOptional({ description: 'Notify user on completion', default: false })
+  @ApiPropertyOptional({
+    description: 'Notify user on completion',
+    default: false,
+  })
   @IsOptional()
   @IsBoolean()
   notifyOnComplete?: boolean;

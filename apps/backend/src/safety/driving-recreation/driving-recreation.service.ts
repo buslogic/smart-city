@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { VehicleMapperService } from '../../common/helpers/vehicle-mapper';
 import { Pool } from 'pg';
@@ -46,10 +51,10 @@ export class DrivingRecreationService {
       });
 
       // Get all vehicle IDs for batch query
-      const vehicleIds = vehicles.map(v => v.id);
-      
-      let vehicleStats = new Map();
-      
+      const vehicleIds = vehicles.map((v) => v.id);
+
+      const vehicleStats = new Map();
+
       try {
         // Batch query to get GPS and event counts for all vehicles at once
         const batchQuery = `
@@ -81,15 +86,15 @@ export class DrivingRecreationService {
           LEFT JOIN vehicle_gps g ON g.vehicle_id = v.id
           LEFT JOIN vehicle_events e ON e.vehicle_id = v.id
         `;
-        
+
         const statsResult = await this.pgPool.query(batchQuery, [
           vehicleIds,
           startDate,
           endDate,
         ]);
-        
+
         // Convert to map for easy lookup
-        statsResult.rows.forEach(row => {
+        statsResult.rows.forEach((row) => {
           vehicleStats.set(row.vehicle_id, {
             gpsPoints: parseInt(row.gps_count),
             existingEvents: parseInt(row.event_count),
@@ -98,14 +103,17 @@ export class DrivingRecreationService {
       } catch (error) {
         this.logger.error(`Error getting batch stats: ${error.message}`);
         // If batch query fails, set all to 0
-        vehicleIds.forEach(id => {
+        vehicleIds.forEach((id) => {
           vehicleStats.set(id, { gpsPoints: 0, existingEvents: 0 });
         });
       }
 
       // Map vehicles with their stats
-      const vehiclesWithStats = vehicles.map(vehicle => {
-        const stats = vehicleStats.get(vehicle.id) || { gpsPoints: 0, existingEvents: 0 };
+      const vehiclesWithStats = vehicles.map((vehicle) => {
+        const stats = vehicleStats.get(vehicle.id) || {
+          gpsPoints: 0,
+          existingEvents: 0,
+        };
         return {
           id: vehicle.id,
           garageNo: vehicle.garageNumber,
@@ -160,10 +168,16 @@ export class DrivingRecreationService {
       });
 
       // Start async processing
-      this.logger.log(`Starting async processing for recreation ${recreationLog.id}`);
+      this.logger.log(
+        `Starting async processing for recreation ${recreationLog.id}`,
+      );
       this.processRecreation(recreationLog.id, dto, vehicles).catch((error) => {
         this.logger.error(`Recreation ${recreationLog.id} failed:`, error);
-        this.updateRecreationStatus(recreationLog.id, RecreationStatus.FAILED, error.message);
+        this.updateRecreationStatus(
+          recreationLog.id,
+          RecreationStatus.FAILED,
+          error.message,
+        );
       });
 
       return {
@@ -184,7 +198,9 @@ export class DrivingRecreationService {
     dto: StartRecreationDto,
     vehicles: any[],
   ): Promise<void> {
-    this.logger.log(`processRecreation started for log ${logId} with ${vehicles.length} vehicles`);
+    this.logger.log(
+      `processRecreation started for log ${logId} with ${vehicles.length} vehicles`,
+    );
     try {
       // Update status to processing
       await this.prisma.drivingAnalysisLog.update({
@@ -203,7 +219,7 @@ export class DrivingRecreationService {
       // Process each vehicle
       for (let i = 0; i < vehicles.length; i++) {
         const vehicle = vehicles[i];
-        
+
         try {
           // Initialize vehicle progress
           vehicleProgress[vehicle.id] = {
@@ -237,8 +253,14 @@ export class DrivingRecreationService {
                 AND time >= $2::date
                 AND time < $3::date + interval '1 day'
             `;
-            await this.pgPool.query(deleteQuery, [vehicle.id, dto.startDate, dto.endDate]);
-            this.logger.log(`Cleared ${eventsBefore} existing events for vehicle ${vehicle.garageNumber}`);
+            await this.pgPool.query(deleteQuery, [
+              vehicle.id,
+              dto.startDate,
+              dto.endDate,
+            ]);
+            this.logger.log(
+              `Cleared ${eventsBefore} existing events for vehicle ${vehicle.garageNumber}`,
+            );
           }
 
           // Process based on strategy
@@ -305,7 +327,9 @@ export class DrivingRecreationService {
         },
       });
 
-      this.logger.log(`Recreation ${logId} completed: ${totalEventsDetected} total events detected`);
+      this.logger.log(
+        `Recreation ${logId} completed: ${totalEventsDetected} total events detected`,
+      );
     } catch (error) {
       throw error;
     }
@@ -333,14 +357,20 @@ export class DrivingRecreationService {
         const query = `
           SELECT * FROM detect_aggressive_driving_batch($1, $2, $3::date, $3::date + interval '1 day')
         `;
-        const result = await this.pgPool.query(query, [vehicleId, garageNo, dayStart]);
-        
+        const result = await this.pgPool.query(query, [
+          vehicleId,
+          garageNo,
+          dayStart,
+        ]);
+
         if (result.rows[0]) {
           const dayEvents = result.rows[0].total_events || 0;
           totalEvents += dayEvents;
         }
       } catch (error) {
-        this.logger.warn(`Error processing day ${dayStart} for vehicle ${garageNo}: ${error.message}`);
+        this.logger.warn(
+          `Error processing day ${dayStart} for vehicle ${garageNo}: ${error.message}`,
+        );
       }
 
       currentDate.setDate(currentDate.getDate() + 1);
@@ -362,14 +392,22 @@ export class DrivingRecreationService {
       const query = `
         SELECT * FROM detect_aggressive_driving_batch($1, $2, $3::date, $4::date + interval '1 day')
       `;
-      const result = await this.pgPool.query(query, [vehicleId, garageNo, startDate, endDate]);
-      
+      const result = await this.pgPool.query(query, [
+        vehicleId,
+        garageNo,
+        startDate,
+        endDate,
+      ]);
+
       if (result.rows[0]) {
         return result.rows[0].total_events || 0;
       }
       return 0;
     } catch (error) {
-      this.logger.error(`Error processing bulk for vehicle ${garageNo}:`, error);
+      this.logger.error(
+        `Error processing bulk for vehicle ${garageNo}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -399,7 +437,8 @@ export class DrivingRecreationService {
         eventsBefore: progress.eventsBefore,
         error: progress.error,
         processingTime: progress.completedAt
-          ? new Date(progress.completedAt).getTime() - new Date(progress.startedAt).getTime()
+          ? new Date(progress.completedAt).getTime() -
+            new Date(progress.startedAt).getTime()
           : undefined,
       }),
     );
@@ -441,7 +480,9 @@ export class DrivingRecreationService {
     }
 
     if (recreation.status !== RecreationStatus.PROCESSING) {
-      throw new BadRequestException('Samo aktivne rekreacije mogu biti zaustavljene');
+      throw new BadRequestException(
+        'Samo aktivne rekreacije mogu biti zaustavljene',
+      );
     }
 
     await this.prisma.drivingAnalysisLog.update({
@@ -507,13 +548,20 @@ export class DrivingRecreationService {
     vehicleIds: number[],
     startDate: string,
     endDate: string,
-  ): Promise<{ vehicleId: number; garageNo: string; existingEvents: number; estimatedNew: number }[]> {
+  ): Promise<
+    {
+      vehicleId: number;
+      garageNo: string;
+      existingEvents: number;
+      estimatedNew: number;
+    }[]
+  > {
     const results = await Promise.all(
       vehicleIds.map(async (vehicleId) => {
         try {
           // Get vehicle info
           const vehicle = await this.vehicleMapper.getVehicleById(vehicleId);
-          
+
           if (!vehicle) {
             return {
               vehicleId,
@@ -522,7 +570,7 @@ export class DrivingRecreationService {
               estimatedNew: 0,
             };
           }
-          
+
           // Get existing events count
           const eventsQuery = `
             SELECT COUNT(*) as count
@@ -531,7 +579,11 @@ export class DrivingRecreationService {
               AND time >= $2::date
               AND time < $3::date + interval '1 day'
           `;
-          const eventsResult = await this.pgPool.query(eventsQuery, [vehicleId, startDate, endDate]);
+          const eventsResult = await this.pgPool.query(eventsQuery, [
+            vehicleId,
+            startDate,
+            endDate,
+          ]);
           const existingEvents = parseInt(eventsResult.rows[0]?.count || 0);
 
           // Estimate new events based on GPS points
@@ -543,9 +595,13 @@ export class DrivingRecreationService {
               AND time < $3::date + interval '1 day'
               AND speed > 0
           `;
-          const gpsResult = await this.pgPool.query(gpsQuery, [vehicleId, startDate, endDate]);
+          const gpsResult = await this.pgPool.query(gpsQuery, [
+            vehicleId,
+            startDate,
+            endDate,
+          ]);
           const gpsPoints = parseInt(gpsResult.rows[0]?.count || 0);
-          
+
           // Rough estimate: ~0.5% of GPS points result in events
           const estimatedNew = Math.round(gpsPoints * 0.005);
 
@@ -556,7 +612,9 @@ export class DrivingRecreationService {
             estimatedNew,
           };
         } catch (error) {
-          this.logger.warn(`Error previewing events for vehicle ${vehicleId}: ${error.message}`);
+          this.logger.warn(
+            `Error previewing events for vehicle ${vehicleId}: ${error.message}`,
+          );
           return {
             vehicleId,
             garageNo: `ID:${vehicleId}`,
@@ -583,7 +641,8 @@ export class DrivingRecreationService {
       data: {
         status,
         errorMessage,
-        completedAt: status === RecreationStatus.FAILED ? new Date() : undefined,
+        completedAt:
+          status === RecreationStatus.FAILED ? new Date() : undefined,
       },
     });
   }
@@ -592,7 +651,10 @@ export class DrivingRecreationService {
    * Helper: Estimate completion time
    */
   private estimateCompletion(recreation: any): Date | undefined {
-    if (recreation.status !== RecreationStatus.PROCESSING || !recreation.startedAt) {
+    if (
+      recreation.status !== RecreationStatus.PROCESSING ||
+      !recreation.startedAt
+    ) {
       return undefined;
     }
 

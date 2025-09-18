@@ -16,25 +16,23 @@ async function testWorkerPool() {
 
   console.log('🚀 Test Worker Pool importa za vozilo:', garageNo);
   console.log('Environment:', process.env.NODE_ENV || 'development');
-  
+
   const prisma = new PrismaClient();
-  
-  const workerPoolService = new LegacySyncWorkerPoolService(
-    {
-      error: console.error,
-      log: console.log,
-      warn: console.warn,
-      debug: console.log
-    } as any
-  );
-  
+
+  const workerPoolService = new LegacySyncWorkerPoolService({
+    error: console.error,
+    log: console.log,
+    warn: console.warn,
+    debug: console.log,
+  } as any);
+
   // Dodeli prisma nakon kreiranja servisa
   (workerPoolService as any).prisma = prisma;
 
   try {
     // Pronađi vozilo
     const vehicle = await prisma.busVehicle.findFirst({
-      where: { garageNumber: garageNo }
+      where: { garageNumber: garageNo },
     });
 
     if (!vehicle) {
@@ -42,18 +40,19 @@ async function testWorkerPool() {
       process.exit(1);
     }
 
-    console.log(`✅ Pronađeno vozilo: ${vehicle.garageNumber} (ID: ${vehicle.id})`);
+    console.log(
+      `✅ Pronađeno vozilo: ${vehicle.garageNumber} (ID: ${vehicle.id})`,
+    );
 
     // Pokreni Worker Pool sync sa jednim vozilom
     const result = await workerPoolService.startWorkerPoolSync(
       [vehicle.id],
       new Date('2025-09-05'), // startDate
-      new Date(),  // endDate
-      'test-job-123'  // jobId
+      new Date(), // endDate
+      'test-job-123', // jobId
     );
-    
+
     console.log('📊 Rezultat importa:', result);
-    
   } catch (error) {
     console.error('❌ Greška pri testu:', error);
     process.exit(1);

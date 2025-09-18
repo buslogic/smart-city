@@ -17,19 +17,27 @@ import {
 } from '@nestjs/swagger';
 import { LegacyDatabasesService } from './legacy-databases.service';
 import { CreateLegacyDatabaseDto } from './dto/create-legacy-database.dto';
-import { UpdateLegacyDatabaseDto, TestConnectionDto } from './dto/update-legacy-database.dto';
+import {
+  UpdateLegacyDatabaseDto,
+  TestConnectionDto,
+} from './dto/update-legacy-database.dto';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 
 @ApiTags('Legacy Databases')
 @ApiBearerAuth()
 @Controller('legacy-databases')
 export class LegacyDatabasesController {
-  constructor(private readonly legacyDatabasesService: LegacyDatabasesService) {}
+  constructor(
+    private readonly legacyDatabasesService: LegacyDatabasesService,
+  ) {}
 
   @Post()
   @RequirePermissions('legacy_databases:create')
   @ApiOperation({ summary: 'Kreiranje nove legacy database konfiguracije' })
-  @ApiResponse({ status: 201, description: 'Legacy database je uspešno kreirana' })
+  @ApiResponse({
+    status: 201,
+    description: 'Legacy database je uspešno kreirana',
+  })
   @ApiResponse({ status: 403, description: 'Nemate dozvolu za kreiranje' })
   create(@Body() createLegacyDatabaseDto: CreateLegacyDatabaseDto) {
     return this.legacyDatabasesService.create(createLegacyDatabaseDto);
@@ -57,7 +65,10 @@ export class LegacyDatabasesController {
   @RequirePermissions('legacy_databases:update')
   @ApiOperation({ summary: 'Ažuriranje legacy database konfiguracije' })
   @ApiParam({ name: 'id', description: 'ID legacy database' })
-  @ApiResponse({ status: 200, description: 'Legacy database je uspešno ažurirana' })
+  @ApiResponse({
+    status: 200,
+    description: 'Legacy database je uspešno ažurirana',
+  })
   @ApiResponse({ status: 404, description: 'Legacy database nije pronađena' })
   @ApiResponse({ status: 403, description: 'Nemate dozvolu za ažuriranje' })
   update(
@@ -71,7 +82,10 @@ export class LegacyDatabasesController {
   @RequirePermissions('legacy_databases:delete')
   @ApiOperation({ summary: 'Brisanje legacy database konfiguracije' })
   @ApiParam({ name: 'id', description: 'ID legacy database' })
-  @ApiResponse({ status: 200, description: 'Legacy database je uspešno obrisana' })
+  @ApiResponse({
+    status: 200,
+    description: 'Legacy database je uspešno obrisana',
+  })
   @ApiResponse({ status: 404, description: 'Legacy database nije pronađena' })
   @ApiResponse({ status: 403, description: 'Nemate dozvolu za brisanje' })
   remove(@Param('id', ParseIntPipe) id: number) {
@@ -93,6 +107,8 @@ export class LegacyDatabasesController {
   @ApiOperation({ summary: 'Testiranje konekcije sa proizvoljnim parametrima' })
   @ApiResponse({ status: 200, description: 'Rezultat testiranja konekcije' })
   testCustomConnection(@Body() testConnectionDto: TestConnectionDto) {
-    return this.legacyDatabasesService.testDatabaseConnection(testConnectionDto);
+    return this.legacyDatabasesService.testDatabaseConnection(
+      testConnectionDto,
+    );
   }
 }

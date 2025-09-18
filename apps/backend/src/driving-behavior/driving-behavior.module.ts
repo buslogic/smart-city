@@ -7,6 +7,6 @@ import { PrismaModule } from '../prisma/prisma.module';
   imports: [PrismaModule],
   providers: [DrivingBehaviorService],
   controllers: [DrivingBehaviorController],
-  exports: [DrivingBehaviorService]
+  exports: [DrivingBehaviorService],
 })
 export class DrivingBehaviorModule {}

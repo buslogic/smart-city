@@ -26,8 +26,10 @@ async function testSpacesIntegration() {
   try {
     // Test 1: Upload test fajla
     console.log('1️⃣ Test upload fajla...');
-    const testContent = Buffer.from('Test sadržaj za Smart City aplikaciju - ' + new Date().toISOString());
-    
+    const testContent = Buffer.from(
+      'Test sadržaj za Smart City aplikaciju - ' + new Date().toISOString(),
+    );
+
     const uploadResult = await spacesService.uploadFile(testContent, {
       folder: 'test',
       fileName: `test-file-${Date.now()}.txt`,
@@ -35,8 +37,8 @@ async function testSpacesIntegration() {
       isPublic: true,
       metadata: {
         test: 'true',
-        app: 'smart-city'
-      }
+        app: 'smart-city',
+      },
     });
 
     console.log('✅ Upload uspešan:', uploadResult);
@@ -52,7 +54,10 @@ async function testSpacesIntegration() {
     console.log('\n3️⃣ Test download fajla...');
     const downloadedBuffer = await spacesService.downloadFile(uploadResult.key);
     const downloadedContent = downloadedBuffer.toString();
-    console.log('✅ Download uspešan, sadržaj:', downloadedContent.substring(0, 50) + '...');
+    console.log(
+      '✅ Download uspešan, sadržaj:',
+      downloadedContent.substring(0, 50) + '...',
+    );
 
     // Test 4: Generisanje signed URL-a
     console.log('\n4️⃣ Test generisanja signed URL-a...');
@@ -64,7 +69,7 @@ async function testSpacesIntegration() {
     console.log('\n5️⃣ Test listanja fajlova...');
     const files = await spacesService.listFiles('test/', 10);
     console.log(`✅ Pronađeno ${files.length} fajlova u test/ folderu`);
-    files.slice(0, 3).forEach(file => {
+    files.slice(0, 3).forEach((file) => {
       console.log(`   - ${file.Key} (${file.Size} bytes)`);
     });
 
@@ -75,22 +80,27 @@ async function testSpacesIntegration() {
 
     // Verifikacija brisanja
     const existsAfterDelete = await spacesService.fileExists(uploadResult.key);
-    console.log(`✅ Verifikacija: Fajl ${existsAfterDelete ? 'još uvek postoji' : 'je obrisan'}`);
+    console.log(
+      `✅ Verifikacija: Fajl ${existsAfterDelete ? 'još uvek postoji' : 'je obrisan'}`,
+    );
 
     console.log('\n🎉 Svi testovi su uspešno prošli!');
     console.log('DigitalOcean Spaces integracija radi kako treba.');
-
   } catch (error) {
     console.error('\n❌ Greška tokom testiranja:', error);
-    console.error('Proverite da li su kredencijali ispravno podešeni u .env fajlu');
+    console.error(
+      'Proverite da li su kredencijali ispravno podešeni u .env fajlu',
+    );
   }
 }
 
 // Pokreni test
-testSpacesIntegration().then(() => {
-  console.log('\n✨ Test završen');
-  process.exit(0);
-}).catch(error => {
-  console.error('Fatal error:', error);
-  process.exit(1);
-});
+testSpacesIntegration()
+  .then(() => {
+    console.log('\n✨ Test završen');
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error('Fatal error:', error);
+    process.exit(1);
+  });

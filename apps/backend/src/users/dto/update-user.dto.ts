@@ -1,4 +1,10 @@
-import { IsEmail, IsString, IsBoolean, IsOptional, IsArray } from 'class-validator';
+import {
+  IsEmail,
+  IsString,
+  IsBoolean,
+  IsOptional,
+  IsArray,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class UpdateUserDto {
@@ -25,7 +31,7 @@ export class UpdateUserDto {
   @ApiProperty({
     example: ['SUPER_ADMIN', 'CITY_MANAGER'],
     description: 'Array of role names to assign to user',
-    required: false
+    required: false,
   })
   @IsArray()
   @IsString({ each: true })

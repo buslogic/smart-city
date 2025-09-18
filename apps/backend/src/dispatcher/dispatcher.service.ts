@@ -48,7 +48,9 @@ export class DispatcherService {
   /**
    * Dohvata pozicije iz lokalne tabele (legacy_city_gps_current)
    */
-  private async getPositionsFromLocal(limit: number): Promise<VehiclePosition[]> {
+  private async getPositionsFromLocal(
+    limit: number,
+  ): Promise<VehiclePosition[]> {
     try {
       const positions = await this.prisma.legacyCityGpsCurrent.findMany({
         take: limit,
@@ -64,7 +66,7 @@ export class DispatcherService {
         },
       });
 
-      return positions.map(pos => ({
+      return positions.map((pos) => ({
         garageNo: pos.garageNo,
         lat: pos.lat.toNumber(),
         lng: pos.lng.toNumber(),
@@ -76,11 +78,13 @@ export class DispatcherService {
         peopleIn: pos.peopleCounterIn || undefined,
         peopleOut: pos.peopleCounterOut || undefined,
         batteryStatus: pos.batteryStatus || undefined,
-        vehicleInfo: pos.vehicle ? {
-          registrationNumber: pos.vehicle.registrationNumber || undefined,
-          totalCapacity: pos.vehicle.totalCapacity || undefined,
-          vehicleType: pos.vehicle.vehicleType || undefined,
-        } : undefined,
+        vehicleInfo: pos.vehicle
+          ? {
+              registrationNumber: pos.vehicle.registrationNumber || undefined,
+              totalCapacity: pos.vehicle.totalCapacity || undefined,
+              vehicleType: pos.vehicle.vehicleType || undefined,
+            }
+          : undefined,
       }));
     } catch (error) {
       this.logger.error('Greška pri čitanju lokalne GPS tabele:', error);
@@ -91,9 +95,11 @@ export class DispatcherService {
   /**
    * Dohvata pozicije direktno iz legacy GPS baze
    */
-  private async getPositionsFromLegacy(limit: number): Promise<VehiclePosition[]> {
+  private async getPositionsFromLegacy(
+    limit: number,
+  ): Promise<VehiclePosition[]> {
     let connection: mysql.Connection | null = null;
-    
+
     try {
       // Prvo dohvati listu naših vozila
       const ourVehicles = await this.prisma.busVehicle.findMany({
@@ -111,7 +117,7 @@ export class DispatcherService {
       }
 
       // Pripremi listu garage brojeva za query
-      const garageNumbers = ourVehicles.map(v => v.garageNumber);
+      const garageNumbers = ourVehicles.map((v) => v.garageNumber);
       const placeholders = garageNumbers.map(() => '?').join(',');
 
       // Dohvati kredencijale za GPS bazu
@@ -127,7 +133,9 @@ export class DispatcherService {
       }
 
       // Dekriptuj password
-      const password = this.legacyDatabasesService.decryptPassword(legacyDb.password);
+      const password = this.legacyDatabasesService.decryptPassword(
+        legacyDb.password,
+      );
 
       // Kreiraj konekciju
       connection = await mysql.createConnection({
@@ -139,7 +147,8 @@ export class DispatcherService {
       });
 
       // Dohvati podatke samo za naša vozila
-      const [rows] = await connection.execute(`
+      const [rows] = await connection.execute(
+        `
         SELECT 
           garageNo,
           lat,
@@ -156,10 +165,12 @@ export class DispatcherService {
         WHERE garageNo IN (${placeholders})
         ORDER BY captured DESC
         LIMIT ?
-      `, [...garageNumbers, limit]);
+      `,
+        [...garageNumbers, limit],
+      );
 
       // Mapiranje na naš format
-      const positions = (rows as any[]).map(row => ({
+      const positions = (rows as any[]).map((row) => ({
         garageNo: row.garageNo,
         lat: parseFloat(row.lat),
         lng: parseFloat(row.lng),
@@ -174,31 +185,43 @@ export class DispatcherService {
       }));
 
       // Mapiraj sa našim vozilima (već imamo podatke iz početka)
-      const vehicleMap = new Map(ourVehicles.map(v => [v.garageNumber, v]));
+      const vehicleMap = new Map(ourVehicles.map((v) => [v.garageNumber, v]));
 
-      return positions.map(pos => ({
+      return positions.map((pos) => ({
         ...pos,
-        vehicleInfo: vehicleMap.get(pos.garageNo) ? {
-          registrationNumber: vehicleMap.get(pos.garageNo)!.registrationNumber,
-          totalCapacity: vehicleMap.get(pos.garageNo)!.totalCapacity,
-          vehicleType: vehicleMap.get(pos.garageNo)!.vehicleType,
-        } : undefined,
+        vehicleInfo: vehicleMap.get(pos.garageNo)
+          ? {
+              registrationNumber: vehicleMap.get(pos.garageNo)!
+                .registrationNumber,
+              totalCapacity: vehicleMap.get(pos.garageNo)!.totalCapacity,
+              vehicleType: vehicleMap.get(pos.garageNo)!.vehicleType,
+            }
+          : undefined,
       }));
-
     } catch (error: any) {
       this.logger.error('Greška pri čitanju legacy GPS baze:', error);
-      
+
       // Bolje error handling za različite tipove grešaka
       if (error.code === 'ETIMEDOUT') {
-        throw new Error('Konekcija sa Gradskim serverom nije moguća. Server je trenutno nedostupan ili je VPN veza prekinuta. Molimo kontaktirajte sistem administratora.');
+        throw new Error(
+          'Konekcija sa Gradskim serverom nije moguća. Server je trenutno nedostupan ili je VPN veza prekinuta. Molimo kontaktirajte sistem administratora.',
+        );
       } else if (error.code === 'ECONNREFUSED') {
-        throw new Error('Gradski server je odbio konekciju. Proverite da li je server aktivan.');
+        throw new Error(
+          'Gradski server je odbio konekciju. Proverite da li je server aktivan.',
+        );
       } else if (error.code === 'ER_ACCESS_DENIED_ERROR') {
-        throw new Error('Pristup Gradskom serveru je odbijen. Proverite kredencijale.');
-      } else if (error.message?.includes('GPS legacy baza nije konfigurisana')) {
-        throw new Error('Legacy GPS baza nije konfigurisana u sistemu. Kontaktirajte administratora.');
+        throw new Error(
+          'Pristup Gradskom serveru je odbijen. Proverite kredencijale.',
+        );
+      } else if (
+        error.message?.includes('GPS legacy baza nije konfigurisana')
+      ) {
+        throw new Error(
+          'Legacy GPS baza nije konfigurisana u sistemu. Kontaktirajte administratora.',
+        );
       }
-      
+
       throw error;
     } finally {
       if (connection) {
@@ -214,7 +237,7 @@ export class DispatcherService {
     let connection: mysql.Connection | null = null;
     let synced = 0;
     let errors = 0;
-    
+
     try {
       // Dohvati kredencijale
       const legacyDb = await this.prisma.legacyDatabase.findFirst({
@@ -228,7 +251,9 @@ export class DispatcherService {
         throw new Error('GPS legacy baza nije konfigurisana');
       }
 
-      const password = this.legacyDatabasesService.decryptPassword(legacyDb.password);
+      const password = this.legacyDatabasesService.decryptPassword(
+        legacyDb.password,
+      );
 
       connection = await mysql.createConnection({
         host: legacyDb.host,
@@ -251,17 +276,20 @@ export class DispatcherService {
         return { synced: 0, errors: 0 };
       }
 
-      const garageNumbers = ourVehicles.map(v => v.garageNumber);
+      const garageNumbers = ourVehicles.map((v) => v.garageNumber);
       const placeholders = garageNumbers.map(() => '?').join(',');
 
       // Dohvati samo podatke za naša vozila iz current tabele
-      const [rows] = await connection.execute(`
+      const [rows] = await connection.execute(
+        `
         SELECT * FROM current
         WHERE garageNo IN (${placeholders})
-      `, garageNumbers);
+      `,
+        garageNumbers,
+      );
 
       // Mapiraj vozila po garage number za brži pristup
-      const vehicleMap = new Map(ourVehicles.map(v => [v.garageNumber, v]));
+      const vehicleMap = new Map(ourVehicles.map((v) => [v.garageNumber, v]));
 
       // Batch upsert u lokalnu tabelu
       for (const row of rows as any[]) {
@@ -270,12 +298,16 @@ export class DispatcherService {
           const vehicle = vehicleMap.get(row.garageNo);
 
           // Validacija datuma
-          const capturedDate = row.captured ? new Date(row.captured) : new Date();
+          const capturedDate = row.captured
+            ? new Date(row.captured)
+            : new Date();
           const editedDate = row.edited ? new Date(row.edited) : new Date();
-          
+
           // Proveri da li su datumi validni
           if (isNaN(capturedDate.getTime())) {
-            this.logger.warn(`Invalid captured date for vehicle ${row.garageNo}, using current date`);
+            this.logger.warn(
+              `Invalid captured date for vehicle ${row.garageNo}, using current date`,
+            );
             continue; // Preskoči ovaj red
           }
 
@@ -294,15 +326,15 @@ export class DispatcherService {
               inRoute: row.inroute,
               captured: capturedDate,
               edited: editedDate,
-              peopleCounterIn: 
-                (row.people_counter_1_in || 0) + 
-                (row.people_counter_2_in || 0) + 
-                (row.people_counter_3_in || 0) + 
+              peopleCounterIn:
+                (row.people_counter_1_in || 0) +
+                (row.people_counter_2_in || 0) +
+                (row.people_counter_3_in || 0) +
                 (row.people_counter_4_in || 0),
-              peopleCounterOut: 
-                (row.people_counter_1_out || 0) + 
-                (row.people_counter_2_out || 0) + 
-                (row.people_counter_3_out || 0) + 
+              peopleCounterOut:
+                (row.people_counter_1_out || 0) +
+                (row.people_counter_2_out || 0) +
+                (row.people_counter_3_out || 0) +
                 (row.people_counter_4_out || 0),
               iotVoltage: row.iot_voltage || null,
               iotIgnition: row.iot_ignition || null,
@@ -325,15 +357,15 @@ export class DispatcherService {
               inRoute: row.inroute,
               captured: capturedDate,
               edited: editedDate,
-              peopleCounterIn: 
-                (row.people_counter_1_in || 0) + 
-                (row.people_counter_2_in || 0) + 
-                (row.people_counter_3_in || 0) + 
+              peopleCounterIn:
+                (row.people_counter_1_in || 0) +
+                (row.people_counter_2_in || 0) +
+                (row.people_counter_3_in || 0) +
                 (row.people_counter_4_in || 0),
-              peopleCounterOut: 
-                (row.people_counter_1_out || 0) + 
-                (row.people_counter_2_out || 0) + 
-                (row.people_counter_3_out || 0) + 
+              peopleCounterOut:
+                (row.people_counter_1_out || 0) +
+                (row.people_counter_2_out || 0) +
+                (row.people_counter_3_out || 0) +
                 (row.people_counter_4_out || 0),
               iotVoltage: row.iot_voltage || null,
               iotIgnition: row.iot_ignition || null,
@@ -344,14 +376,18 @@ export class DispatcherService {
           });
           synced++;
         } catch (error) {
-          this.logger.error(`Greška pri sinhronizaciji vozila ${row.garageNo}:`, error);
+          this.logger.error(
+            `Greška pri sinhronizaciji vozila ${row.garageNo}:`,
+            error,
+          );
           errors++;
         }
       }
 
-      this.logger.log(`Sinhronizacija završena: ${synced} uspešno, ${errors} grešaka`);
+      this.logger.log(
+        `Sinhronizacija završena: ${synced} uspešno, ${errors} grešaka`,
+      );
       return { synced, errors };
-
     } catch (error) {
       this.logger.error('Greška pri sinhronizaciji GPS podataka:', error);
       throw error;

@@ -11,10 +11,10 @@ import { ApiKeysService } from './api-keys/api-keys.service';
 // Bootstrap aplikacije - inicijalizacija NestJS servera
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  
+
   // Global API prefix - MORA BITI PRE static files
   app.setGlobalPrefix('api');
-  
+
   // Serve static files for uploads (samo u development)
   // Ovo mora biti posle setGlobalPrefix da bi radilo na /uploads putanji
   if (process.env.NODE_ENV === 'development') {
@@ -22,13 +22,17 @@ async function bootstrap() {
     app.use('/uploads', express.static(uploadPath));
     console.log('Serving static files from:', uploadPath);
   }
-  
+
   // CORS
   app.enableCors({
-    origin: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3011', 'http://localhost:3012', 'http://localhost:3000'],
+    origin: process.env.CORS_ORIGINS?.split(',') || [
+      'http://localhost:3011',
+      'http://localhost:3012',
+      'http://localhost:3000',
+    ],
     credentials: true,
   });
-  
+
   // Validation
   app.useGlobalPipes(
     new ValidationPipe({
@@ -40,15 +44,15 @@ async function bootstrap() {
 
   // Class Serializer for @Exclude decorators
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
-  
+
   // Swagger sa API Key zaštitom
   const apiKeysService = app.get(ApiKeysService);
   const swaggerAuthMiddleware = new SwaggerAuthMiddleware(apiKeysService);
-  
+
   app.use('/api/docs', (req, res, next) => {
     swaggerAuthMiddleware.use(req, res, next);
   });
-  
+
   const config = new DocumentBuilder()
     .setTitle('Smart City API')
     .setDescription('API for Smart City Platform - Zaštićeno API ključem')
@@ -59,14 +63,15 @@ async function bootstrap() {
         type: 'apiKey',
         name: 'X-API-Key',
         in: 'header',
-        description: 'API ključ za pristup dokumentaciji (bilo koji aktivan ključ)',
+        description:
+          'API ključ za pristup dokumentaciji (bilo koji aktivan ključ)',
       },
       'ApiKeyAuth',
     )
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
-  
+
   const port = process.env.PORT || 3010;
   await app.listen(port);
   console.log(`Application is running on: http://localhost:${port}/api`);

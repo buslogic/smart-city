@@ -1,34 +1,58 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsInt, IsBoolean, IsOptional, Min, Max, IsIn } from 'class-validator';
+import {
+  IsString,
+  IsInt,
+  IsBoolean,
+  IsOptional,
+  Min,
+  Max,
+  IsIn,
+} from 'class-validator';
 
 export class CreateLegacyDatabaseDto {
   @ApiProperty({ description: 'Naziv legacy baze podataka' })
   @IsString()
   name: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Tip baze podataka',
-    enum: ['mysql', 'postgresql', 'mongodb', 'oracle', 'mssql']
+    enum: ['mysql', 'postgresql', 'mongodb', 'oracle', 'mssql'],
   })
   @IsString()
   @IsIn(['mysql', 'postgresql', 'mongodb', 'oracle', 'mssql'])
   type: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Podvrsta legacy baze',
-    enum: ['main_ticketing_database', 'gps_ticketing_database', 'global_ticketing_database', 'city_ticketing_database', 'city_gps_ticketing_database'],
-    required: false 
+    enum: [
+      'main_ticketing_database',
+      'gps_ticketing_database',
+      'global_ticketing_database',
+      'city_ticketing_database',
+      'city_gps_ticketing_database',
+    ],
+    required: false,
   })
   @IsOptional()
   @IsString()
-  @IsIn(['main_ticketing_database', 'gps_ticketing_database', 'global_ticketing_database', 'city_ticketing_database', 'city_gps_ticketing_database'])
+  @IsIn([
+    'main_ticketing_database',
+    'gps_ticketing_database',
+    'global_ticketing_database',
+    'city_ticketing_database',
+    'city_gps_ticketing_database',
+  ])
   subtype?: string;
 
   @ApiProperty({ description: 'Host adresa baze podataka' })
   @IsString()
   host: string;
 
-  @ApiProperty({ description: 'Port baze podataka', minimum: 1, maximum: 65535 })
+  @ApiProperty({
+    description: 'Port baze podataka',
+    minimum: 1,
+    maximum: 65535,
+  })
   @IsInt()
   @Min(1)
   @Max(65535)

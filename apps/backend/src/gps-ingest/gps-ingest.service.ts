@@ -3,7 +3,10 @@ import { Pool } from 'pg';
 import { GpsPointDto } from './dto/gps-batch.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { ApiKeysService } from '../api-keys/api-keys.service';
-import { createTimescalePool, testTimescaleConnection } from '../common/config/timescale.config';
+import {
+  createTimescalePool,
+  testTimescaleConnection,
+} from '../common/config/timescale.config';
 
 @Injectable()
 export class GpsIngestService {
@@ -22,9 +25,11 @@ export class GpsIngestService {
     });
 
     // Test connection - quiet initialization
-    testTimescaleConnection(this.timescalePool).then(success => {
+    testTimescaleConnection(this.timescalePool).then((success) => {
       if (!success) {
-        this.logger.error('❌ GpsIngestService nije mogao da se poveže na TimescaleDB');
+        this.logger.error(
+          '❌ GpsIngestService nije mogao da se poveže na TimescaleDB',
+        );
       }
     });
   }
@@ -61,25 +66,36 @@ export class GpsIngestService {
   /**
    * Validacija API ključa - koristi novi sigurni API Keys sistem
    */
-  async validateApiKey(apiKey: string, ipAddress?: string, userAgent?: string, endpoint?: string, method?: string): Promise<boolean> {
+  async validateApiKey(
+    apiKey: string,
+    ipAddress?: string,
+    userAgent?: string,
+    endpoint?: string,
+    method?: string,
+  ): Promise<boolean> {
     try {
       const validKey = await this.apiKeysService.validateApiKey(
-        apiKey, 
-        ipAddress, 
-        userAgent, 
-        endpoint, 
-        method
+        apiKey,
+        ipAddress,
+        userAgent,
+        endpoint,
+        method,
       );
 
       if (validKey) {
         // Dodatna provera da li ključ ima potrebne permisije za GPS ingest
-        const permissions = validKey.permissions ? JSON.parse(validKey.permissions as string) : [];
-        const hasGpsPermission = permissions.includes('gps:ingest') || 
-                                permissions.includes('*') || 
-                                validKey.type === 'INTEGRATION';
+        const permissions = validKey.permissions
+          ? JSON.parse(validKey.permissions as string)
+          : [];
+        const hasGpsPermission =
+          permissions.includes('gps:ingest') ||
+          permissions.includes('*') ||
+          validKey.type === 'INTEGRATION';
 
         if (!hasGpsPermission) {
-          this.logger.warn(`API ključ ${validKey.displayKey} nema dozvolu za GPS ingest`);
+          this.logger.warn(
+            `API ključ ${validKey.displayKey} nema dozvolu za GPS ingest`,
+          );
           return false;
         }
 
@@ -89,13 +105,18 @@ export class GpsIngestService {
       return false;
     } catch (error) {
       this.logger.error('Greška pri validaciji API ključa:', error);
-      
+
       // Fallback za legacy ključ tokom tranzicije
-      if (apiKey === 'test-api-key-2024' || apiKey === 'smartcity_legacy_gps_key_2024') {
-        this.logger.warn('Korišćen legacy API ključ - potrebna je migracija na novi sistem!');
+      if (
+        apiKey === 'test-api-key-2024' ||
+        apiKey === 'smartcity_legacy_gps_key_2024'
+      ) {
+        this.logger.warn(
+          'Korišćen legacy API ključ - potrebna je migracija na novi sistem!',
+        );
         return true;
       }
-      
+
       return false;
     }
   }
@@ -105,7 +126,7 @@ export class GpsIngestService {
    */
   async processBatch(
     gpsPoints: GpsPointDto[],
-    source: string
+    source: string,
   ): Promise<{ processed: number; failed: number }> {
     let processed = 0;
     let failed = 0;
@@ -127,7 +148,8 @@ export class GpsIngestService {
           }
 
           // Pripremi timestamp
-          const timestamp = point.captured || point.timestamp || new Date().toISOString();
+          const timestamp =
+            point.captured || point.timestamp || new Date().toISOString();
 
           // Dodaj u buffer array
           bufferData.push({
@@ -148,9 +170,11 @@ export class GpsIngestService {
             retryCount: 0,
             workerGroup: vehicleId ? vehicleId % 8 : 0, // Dodeli worker grupu na osnovu vehicle_id
           });
-
         } catch (error) {
-          this.logger.warn(`Greška pri pripremi podatka za ${point.garageNo}:`, error);
+          this.logger.warn(
+            `Greška pri pripremi podatka za ${point.garageNo}:`,
+            error,
+          );
           failed++;
         }
       }
@@ -161,9 +185,9 @@ export class GpsIngestService {
           data: bufferData,
           skipDuplicates: true,
         });
-        
+
         processed = result.count;
-        
+
         // Ažuriraj statistike za primljene podatke
         const hourSlot = new Date();
         hourSlot.setMinutes(0, 0, 0);
@@ -175,10 +199,11 @@ export class GpsIngestService {
             received_count = received_count + ${processed},
             updated_at = NOW()
         `;
-        
-        this.logger.log(`✅ Buffered ${processed} GPS points u MySQL buffer iz ${source}`);
-      }
 
+        this.logger.log(
+          `✅ Buffered ${processed} GPS points u MySQL buffer iz ${source}`,
+        );
+      }
     } catch (error) {
       this.logger.error('Greška pri upisu u GPS buffer:', error);
       throw error;
@@ -192,7 +217,7 @@ export class GpsIngestService {
    */
   async processDirectToTimescale(
     gpsPoints: GpsPointDto[],
-    source: string
+    source: string,
   ): Promise<{ processed: number; failed: number }> {
     let processed = 0;
     let failed = 0;
@@ -221,9 +246,11 @@ export class GpsIngestService {
 
           // Dodaj vrednosti za ovaj red
           const rowValues = [
-            new Date(this.convertBelgradeToUTC(
-              point.captured || point.timestamp || new Date().toISOString()
-            )), // time - konvertovano u UTC
+            new Date(
+              this.convertBelgradeToUTC(
+                point.captured || point.timestamp || new Date().toISOString(),
+              ),
+            ), // time - konvertovano u UTC
             vehicleId, // vehicle_id
             point.garageNo, // garage_no
             point.lat, // lat
@@ -251,9 +278,11 @@ export class GpsIngestService {
             placeholders.push(`$${paramCounter++}`);
           }
           valueStrings.push(`(${placeholders.join(', ')})`);
-
         } catch (error) {
-          this.logger.warn(`Greška pri pripremi podatka za ${point.garageNo}:`, error);
+          this.logger.warn(
+            `Greška pri pripremi podatka za ${point.garageNo}:`,
+            error,
+          );
           failed++;
         }
       }
@@ -287,8 +316,9 @@ export class GpsIngestService {
       // Završi transakciju
       await client.query('COMMIT');
 
-      this.logger.log(`Batch direktno u TimescaleDB: ${processed} uspešno, ${failed} neuspešno`);
-
+      this.logger.log(
+        `Batch direktno u TimescaleDB: ${processed} uspešno, ${failed} neuspešno`,
+      );
     } catch (error) {
       // Rollback u slučaju greške
       await client.query('ROLLBACK');

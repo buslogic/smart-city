@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
@@ -51,7 +56,6 @@ export class AuthService {
       return null;
     }
 
-
     if (!user.isActive) {
       throw new UnauthorizedException('Korisnički nalog je deaktiviran');
     }
@@ -62,9 +66,9 @@ export class AuthService {
     }
 
     // Formatiranje korisničkih podataka
-    const roles = user.roles.map(ur => ur.role.name);
-    const permissions = user.roles.flatMap(ur =>
-      ur.role.permissions.map(rp => rp.permission.name)
+    const roles = user.roles.map((ur) => ur.role.name);
+    const permissions = user.roles.flatMap((ur) =>
+      ur.role.permissions.map((rp) => rp.permission.name),
     );
 
     const userResult = {
@@ -77,12 +81,15 @@ export class AuthService {
       roles,
       permissions: [...new Set(permissions)],
     };
-    
+
     return userResult;
   }
 
-  async loginWithUser(user: any, ipAddress?: string, userAgent?: string): Promise<LoginResponseDto> {
-    
+  async loginWithUser(
+    user: any,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<LoginResponseDto> {
     // Kreiranje session-a
     const sessionId = uuidv4();
     const expiresAt = new Date();
@@ -135,9 +142,13 @@ export class AuthService {
     };
   }
 
-  async login(loginDto: LoginDto, ipAddress?: string, userAgent?: string): Promise<LoginResponseDto> {
+  async login(
+    loginDto: LoginDto,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<LoginResponseDto> {
     const user = await this.validateUser(loginDto.email, loginDto.password);
-    
+
     if (!user) {
       throw new UnauthorizedException('Neispravni podaci za prijavu');
     }
@@ -145,10 +156,12 @@ export class AuthService {
     return this.loginWithUser(user, ipAddress, userAgent);
   }
 
-  async refreshToken(refreshToken: string): Promise<Omit<LoginResponseDto, 'refreshToken'>> {
+  async refreshToken(
+    refreshToken: string,
+  ): Promise<Omit<LoginResponseDto, 'refreshToken'>> {
     try {
       const payload = this.jwtService.verify(refreshToken);
-      
+
       const user = await this.prisma.user.findUnique({
         where: { id: payload.sub },
         select: {
@@ -179,7 +192,10 @@ export class AuthService {
         throw new UnauthorizedException('Nevažeći refresh token');
       }
 
-      const isRefreshTokenValid = await bcrypt.compare(refreshToken, user.refreshToken);
+      const isRefreshTokenValid = await bcrypt.compare(
+        refreshToken,
+        user.refreshToken,
+      );
       if (!isRefreshTokenValid) {
         throw new UnauthorizedException('Nevažeći refresh token');
       }
@@ -205,9 +221,9 @@ export class AuthService {
       });
 
       // Formatiranje korisničkih podataka
-      const roles = user.roles.map(ur => ur.role.name);
-      const permissions = user.roles.flatMap(ur =>
-        ur.role.permissions.map(rp => rp.permission.name)
+      const roles = user.roles.map((ur) => ur.role.name);
+      const permissions = user.roles.flatMap((ur) =>
+        ur.role.permissions.map((rp) => rp.permission.name),
       );
 
       const userInfo = {
@@ -267,7 +283,9 @@ export class AuthService {
 
     // Ne otkrivamo da li email postoji u sistemu
     if (!user) {
-      this.logger.log(`Password reset requested for non-existent email: ${email}`);
+      this.logger.log(
+        `Password reset requested for non-existent email: ${email}`,
+      );
       return;
     }
 
@@ -298,17 +316,19 @@ export class AuthService {
       });
       this.logger.log(`Password reset email sent to ${user.email}`);
     } catch (error) {
-      this.logger.error(`Failed to send password reset email to ${user.email}:`, error);
-      throw new BadRequestException('Greška pri slanju emaila za resetovanje lozinke');
+      this.logger.error(
+        `Failed to send password reset email to ${user.email}:`,
+        error,
+      );
+      throw new BadRequestException(
+        'Greška pri slanju emaila za resetovanje lozinke',
+      );
     }
   }
 
   async resetPassword(token: string, newPassword: string): Promise<void> {
     // Hash-uj token
-    const tokenHash = crypto
-      .createHash('sha256')
-      .update(token)
-      .digest('hex');
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
     // Pronađi korisnika sa ovim tokenom
     const users = await this.prisma.user.findMany({
@@ -320,7 +340,9 @@ export class AuthService {
     });
 
     if (users.length === 0) {
-      throw new BadRequestException('Neispravan ili istekao token za resetovanje lozinke');
+      throw new BadRequestException(
+        'Neispravan ili istekao token za resetovanje lozinke',
+      );
     }
 
     const user = users[0];
@@ -330,7 +352,9 @@ export class AuthService {
     if (tokenParts && tokenParts.length === 3) {
       const expiresAt = new Date(tokenParts[2]);
       if (expiresAt < new Date()) {
-        throw new BadRequestException('Token za resetovanje lozinke je istekao');
+        throw new BadRequestException(
+          'Token za resetovanje lozinke je istekao',
+        );
       }
     }
 
@@ -354,7 +378,11 @@ export class AuthService {
     this.logger.log(`Password reset successful for user ${user.email}`);
   }
 
-  async changePassword(userId: number, currentPassword: string, newPassword: string): Promise<void> {
+  async changePassword(
+    userId: number,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
     // Pronađi korisnika
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -370,7 +398,10 @@ export class AuthService {
     }
 
     // Proveri trenutnu lozinku
-    const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    const isPasswordValid = await bcrypt.compare(
+      currentPassword,
+      user.password,
+    );
     if (!isPasswordValid) {
       throw new UnauthorizedException('Trenutna lozinka nije ispravna');
     }
@@ -378,7 +409,9 @@ export class AuthService {
     // Proveri da nova lozinka nije ista kao trenutna
     const isSamePassword = await bcrypt.compare(newPassword, user.password);
     if (isSamePassword) {
-      throw new BadRequestException('Nova lozinka mora biti različita od trenutne');
+      throw new BadRequestException(
+        'Nova lozinka mora biti različita od trenutne',
+      );
     }
 
     // Hash-uj novu lozinku

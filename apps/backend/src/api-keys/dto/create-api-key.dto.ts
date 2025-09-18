@@ -1,5 +1,14 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsOptional, IsEnum, IsArray, IsInt, Min, IsDateString } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsEnum,
+  IsArray,
+  IsInt,
+  Min,
+  IsDateString,
+} from 'class-validator';
 import { ApiKeyType } from '@prisma/client';
 
 export class CreateApiKeyDto {

@@ -1,7 +1,7 @@
-import { 
-  Controller, 
-  Post, 
-  Body, 
+import {
+  Controller,
+  Post,
+  Body,
   Headers,
   HttpCode,
   HttpStatus,
@@ -9,9 +9,15 @@ import {
   UnauthorizedException,
   Logger,
   Ip,
-  Req
+  Req,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiHeader, ApiBody } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiHeader,
+  ApiBody,
+} from '@nestjs/swagger';
 import { GpsIngestService } from './gps-ingest.service';
 import { GpsBatchDto } from './dto/gps-batch.dto';
 import { Public } from '../auth/decorators/public.decorator';
@@ -33,8 +39,8 @@ export class GpsIngestController {
     required: true,
   })
   @ApiBody({ type: GpsBatchDto })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Podaci uspešno primljeni i obrađeni',
     schema: {
       type: 'object',
@@ -62,13 +68,13 @@ export class GpsIngestController {
     const userAgent = req.headers['user-agent'];
     const endpoint = req.originalUrl || req.url;
     const method = req.method;
-    
+
     const isValidKey = await this.gpsIngestService.validateApiKey(
-      apiKey, 
-      ipAddress, 
-      userAgent, 
-      endpoint, 
-      method
+      apiKey,
+      ipAddress,
+      userAgent,
+      endpoint,
+      method,
     );
     if (!isValidKey) {
       throw new UnauthorizedException('Neispravan API ključ');
@@ -84,12 +90,14 @@ export class GpsIngestController {
     }
 
     if (gpsBatchDto.data.length > 10000) {
-      throw new BadRequestException('Batch ne može sadržati više od 10000 tačaka');
+      throw new BadRequestException(
+        'Batch ne može sadržati više od 10000 tačaka',
+      );
     }
 
     // Obradi batch
     const startTime = Date.now();
-    
+
     try {
       const result = await this.gpsIngestService.processBatch(
         gpsBatchDto.data,
@@ -97,7 +105,7 @@ export class GpsIngestController {
       );
 
       const processingTime = Date.now() - startTime;
-      
+
       this.logger.log(
         `Batch obrađen: ${result.processed} uspešno, ${result.failed} neuspešno, vreme: ${processingTime}ms`,
       );
@@ -135,13 +143,13 @@ export class GpsIngestController {
     const userAgent = req.headers['user-agent'];
     const endpoint = req.originalUrl || req.url;
     const method = req.method;
-    
+
     const isValidKey = await this.gpsIngestService.validateApiKey(
-      apiKey, 
-      ipAddress, 
-      userAgent, 
-      endpoint, 
-      method
+      apiKey,
+      ipAddress,
+      userAgent,
+      endpoint,
+      method,
     );
     if (!isValidKey) {
       throw new UnauthorizedException('Neispravan API ključ');
@@ -155,7 +163,10 @@ export class GpsIngestController {
 
     return {
       success: result.processed === 1,
-      message: result.processed === 1 ? 'GPS tačka uspešno primljena' : 'Greška pri obradi',
+      message:
+        result.processed === 1
+          ? 'GPS tačka uspešno primljena'
+          : 'Greška pri obradi',
     };
   }
 
@@ -177,20 +188,22 @@ export class GpsIngestController {
     const userAgent = req.headers['user-agent'];
     const endpoint = req.originalUrl || req.url;
     const method = req.method;
-    
+
     const isValidKey = await this.gpsIngestService.validateApiKey(
-      apiKey, 
-      ipAddress, 
-      userAgent, 
-      endpoint, 
-      method
+      apiKey,
+      ipAddress,
+      userAgent,
+      endpoint,
+      method,
     );
-    
+
     return {
       success: true,
       authenticated: isValidKey,
       timestamp: new Date(),
-      message: isValidKey ? 'Konekcija i autentifikacija uspešna' : 'Konekcija uspešna, ali API ključ nije valjan',
+      message: isValidKey
+        ? 'Konekcija i autentifikacija uspešna'
+        : 'Konekcija uspešna, ali API ključ nije valjan',
     };
   }
 }

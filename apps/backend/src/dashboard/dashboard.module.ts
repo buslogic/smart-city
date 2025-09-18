@@ -7,10 +7,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { VehiclesModule } from '../vehicles/vehicles.module';
 
 @Module({
-  imports: [
-    PrismaModule,
-    VehiclesModule,
-  ],
+  imports: [PrismaModule, VehiclesModule],
   controllers: [DashboardController],
   providers: [
     DashboardService,

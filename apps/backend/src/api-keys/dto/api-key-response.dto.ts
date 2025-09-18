@@ -5,7 +5,9 @@ export class ApiKeyResponseDto {
   @ApiProperty({ description: 'ID API ključa' })
   id: number;
 
-  @ApiProperty({ description: 'Poslednje 4 karaktera ključa za identifikaciju' })
+  @ApiProperty({
+    description: 'Poslednje 4 karaktera ključa za identifikaciju',
+  })
   displayKey: string;
 
   @ApiProperty({ description: 'Naziv ključa' })
@@ -32,7 +34,10 @@ export class ApiKeyResponseDto {
   @ApiProperty({ description: 'Poslednje korišćenje', required: false })
   lastUsedAt?: Date;
 
-  @ApiProperty({ description: 'IP adresa poslednjeg korišćenja', required: false })
+  @ApiProperty({
+    description: 'IP adresa poslednjeg korišćenja',
+    required: false,
+  })
   lastUsedIp?: string;
 
   @ApiProperty({ description: 'Broj korišćenja' })
@@ -71,9 +76,9 @@ export class ApiKeyResponseDto {
 }
 
 export class CreateApiKeyResponseDto extends ApiKeyResponseDto {
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Ceo API ključ - prikazuje se samo jednom pri kreiranju!',
-    example: 'sk_prod_swagger_xY3mN9pQ2rS5tU8vW1aB2cD3'
+    example: 'sk_prod_swagger_xY3mN9pQ2rS5tU8vW1aB2cD3',
   })
   key: string;
 }
@@ -85,10 +90,16 @@ export class ApiKeyLogResponseDto {
   @ApiProperty({ description: 'ID API ključa' })
   apiKeyId: number;
 
-  @ApiProperty({ 
-    description: 'Akcija', 
+  @ApiProperty({
+    description: 'Akcija',
     example: 'access_granted',
-    enum: ['access_granted', 'access_denied', 'key_validated', 'key_created', 'key_revoked']
+    enum: [
+      'access_granted',
+      'access_denied',
+      'key_validated',
+      'key_created',
+      'key_revoked',
+    ],
   })
   action: string;
 

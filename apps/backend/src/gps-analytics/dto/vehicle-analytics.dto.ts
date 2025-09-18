@@ -102,13 +102,19 @@ export class VehicleAnalyticsDto {
   @ApiProperty({ type: [HourlyDataDto], description: 'Podaci po satima' })
   hourlyData: HourlyDataDto[];
 
-  @ApiProperty({ type: [SpeedDistributionDto], description: 'Distribucija brzine' })
+  @ApiProperty({
+    type: [SpeedDistributionDto],
+    description: 'Distribucija brzine',
+  })
   speedDistribution: SpeedDistributionDto[];
 
   @ApiProperty({ type: [DailyStatsDto], description: 'Dnevna statistika' })
   dailyStats: DailyStatsDto[];
 
-  @ApiProperty({ type: [DrivingEventStatsDto], description: 'Statistika agresivne vožnje' })
+  @ApiProperty({
+    type: [DrivingEventStatsDto],
+    description: 'Statistika agresivne vožnje',
+  })
   drivingEventStats: DrivingEventStatsDto[];
 
   @ApiProperty({ description: 'Safety Score (0-100)' })

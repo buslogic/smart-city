@@ -10,15 +10,36 @@ import {
   Delete,
   Param,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody, ApiQuery, ApiPropertyOptional, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiBody,
+  ApiQuery,
+  ApiPropertyOptional,
+  ApiParam,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 import { LegacySyncService } from './legacy-sync.service';
 import { LegacySyncWorkerPoolService } from './legacy-sync-worker-pool.service';
-import { SmartSlowSyncService, SlowSyncPreset, SlowSyncConfig, SlowSyncProgress } from './smart-slow-sync.service';
+import {
+  SmartSlowSyncService,
+  SlowSyncPreset,
+  SlowSyncConfig,
+  SlowSyncProgress,
+} from './smart-slow-sync.service';
 import { CopyConfigDto, CopyConfigResponseDto } from './dto/copy-config.dto';
-import { IsArray, IsDateString, IsNumber, IsEnum, IsOptional, IsBoolean } from 'class-validator';
+import {
+  IsArray,
+  IsDateString,
+  IsNumber,
+  IsEnum,
+  IsOptional,
+  IsBoolean,
+} from 'class-validator';
 
 class VehicleWithSyncStatusDto {
   id: number;
@@ -37,18 +58,19 @@ class StartSyncDto {
   @IsArray()
   @IsNumber({}, { each: true })
   vehicle_ids: number[];
-  
+
   @IsDateString()
   sync_from: string;
-  
+
   @IsDateString()
   sync_to: string;
-  
+
   @IsOptional()
   @IsBoolean()
-  @ApiPropertyOptional({ 
-    description: 'Odmah osveži continuous aggregates nakon sync-a (može opteretiti server)',
-    default: false 
+  @ApiPropertyOptional({
+    description:
+      'Odmah osveži continuous aggregates nakon sync-a (može opteretiti server)',
+    default: false,
   })
   refresh_aggregates?: boolean;
 }
@@ -129,7 +151,7 @@ export class LegacySyncController {
   constructor(
     private readonly legacySyncService: LegacySyncService,
     private readonly workerPoolService: LegacySyncWorkerPoolService,
-    private readonly slowSyncService: SmartSlowSyncService
+    private readonly slowSyncService: SmartSlowSyncService,
   ) {}
 
   @Get('vehicles')
@@ -158,18 +180,22 @@ export class LegacySyncController {
     status: 200,
     description: 'Sinhronizacija pokrenuta',
   })
-  async startSync(@Body() dto: StartSyncDto): Promise<{ message: string; job_id: string }> {
+  async startSync(
+    @Body() dto: StartSyncDto,
+  ): Promise<{ message: string; job_id: string }> {
     try {
-      this.logger.log(`Starting sync for vehicles: ${dto.vehicle_ids.join(', ')}`);
+      this.logger.log(
+        `Starting sync for vehicles: ${dto.vehicle_ids.join(', ')}`,
+      );
       this.logger.log(`Date range: ${dto.sync_from} to ${dto.sync_to}`);
-      
+
       const jobId = await this.legacySyncService.startLegacySync(
         dto.vehicle_ids,
         new Date(dto.sync_from),
         new Date(dto.sync_to),
-        dto.refresh_aggregates || false
+        dto.refresh_aggregates || false,
       );
-      
+
       return {
         message: `Sinhronizacija pokrenuta za ${dto.vehicle_ids.length} vozila`,
         job_id: jobId,
@@ -189,13 +215,15 @@ export class LegacySyncController {
     description: 'Status sinhronizacije po vozilu',
     type: [SyncProgressDto],
   })
-  async getSyncProgress(@Query('job_id') jobId?: string): Promise<SyncProgressDto[]> {
+  async getSyncProgress(
+    @Query('job_id') jobId?: string,
+  ): Promise<SyncProgressDto[]> {
     try {
       // Ako korisnik traži Worker Pool status, vrati Worker Pool podatke
       const workerStatuses = this.workerPoolService.getWorkerStatuses();
       if (workerStatuses.length > 0) {
         // Konvertuj Worker Pool statuse u SyncProgress format
-        return workerStatuses.map(worker => ({
+        return workerStatuses.map((worker) => ({
           vehicle_id: worker.vehicleId || 0,
           garage_number: worker.garageNumber || 'Unknown',
           status: this.mapWorkerStatusToSyncStatus(worker.status),
@@ -208,7 +236,7 @@ export class LegacySyncController {
           updated_at: new Date(),
         }));
       }
-      
+
       // Inače vrati legacy sync progress
       return await this.legacySyncService.getSyncProgress(jobId);
     } catch (error) {
@@ -216,18 +244,25 @@ export class LegacySyncController {
       throw error;
     }
   }
-  
-  private mapWorkerStatusToSyncStatus(workerStatus: string): 'pending' | 'running' | 'completed' | 'error' {
+
+  private mapWorkerStatusToSyncStatus(
+    workerStatus: string,
+  ): 'pending' | 'running' | 'completed' | 'error' {
     switch (workerStatus) {
-      case 'idle': return 'pending';
+      case 'idle':
+        return 'pending';
       case 'exporting':
-      case 'transferring': 
+      case 'transferring':
       case 'importing':
       case 'detecting':
-      case 'refreshing': return 'running';
-      case 'completed': return 'completed';
-      case 'failed': return 'error';
-      default: return 'pending';
+      case 'refreshing':
+        return 'running';
+      case 'completed':
+        return 'completed';
+      case 'failed':
+        return 'error';
+      default:
+        return 'pending';
     }
   }
 
@@ -239,7 +274,9 @@ export class LegacySyncController {
     status: 200,
     description: 'Sinhronizacija zaustavljena',
   })
-  async stopSync(@Body() dto: { job_id: string }): Promise<{ message: string }> {
+  async stopSync(
+    @Body() dto: { job_id: string },
+  ): Promise<{ message: string }> {
     try {
       await this.legacySyncService.stopSync(dto.job_id);
       return { message: 'Sinhronizacija zaustavljena' };
@@ -274,12 +311,14 @@ export class LegacySyncController {
     status: 200,
     description: 'Konfiguracija ažurirana',
   })
-  async toggleAggressiveDetection(@Body() dto: { enabled: boolean }): Promise<{ message: string; enabled: boolean }> {
+  async toggleAggressiveDetection(
+    @Body() dto: { enabled: boolean },
+  ): Promise<{ message: string; enabled: boolean }> {
     try {
       await this.workerPoolService.toggleAggressiveDetection(dto.enabled);
-      return { 
+      return {
         message: `Agresivna detekcija ${dto.enabled ? 'uključena' : 'isključena'}`,
-        enabled: dto.enabled
+        enabled: dto.enabled,
       };
     } catch (error) {
       this.logger.error('Error toggling aggressive detection', error);
@@ -294,8 +333,8 @@ export class LegacySyncController {
     status: 200,
     description: 'Status konekcije',
   })
-  async testLegacyConnection(): Promise<{ 
-    connected: boolean; 
+  async testLegacyConnection(): Promise<{
+    connected: boolean;
     server: string;
     database: string;
     message: string;
@@ -308,12 +347,11 @@ export class LegacySyncController {
       return {
         connected: false,
         server: 'unknown',
-        database: 'unknown', 
-        message: error.message || 'Connection failed'
+        database: 'unknown',
+        message: error.message || 'Connection failed',
       };
     }
   }
-
 
   @Post('worker-pool/toggle')
   @RequirePermissions('legacy.sync:configure')
@@ -323,9 +361,9 @@ export class LegacySyncController {
     status: 200,
     description: 'Worker Pool status promenjen',
   })
-  async toggleWorkerPool(@Body() dto: { enabled: boolean }): Promise<{ 
-    message: string; 
-    enabled: boolean 
+  async toggleWorkerPool(@Body() dto: { enabled: boolean }): Promise<{
+    message: string;
+    enabled: boolean;
   }> {
     try {
       // Ažuriraj SystemSettings
@@ -337,13 +375,13 @@ export class LegacySyncController {
           value: dto.enabled ? 'true' : 'false',
           type: 'boolean',
           category: 'legacy_sync',
-          description: 'Enable Worker Pool for parallel vehicle sync'
-        }
+          description: 'Enable Worker Pool for parallel vehicle sync',
+        },
       });
 
       return {
         message: `Worker Pool je ${dto.enabled ? 'uključen' : 'isključen'}`,
-        enabled: dto.enabled
+        enabled: dto.enabled,
       };
     } catch (error) {
       this.logger.error('Error toggling worker pool', error);
@@ -361,7 +399,9 @@ export class LegacySyncController {
     status: 200,
     description: 'Smart Slow Sync pokrenut',
   })
-  async startSlowSync(@Body() config?: SlowSyncConfigDto): Promise<SlowSyncProgress> {
+  async startSlowSync(
+    @Body() config?: SlowSyncConfigDto,
+  ): Promise<SlowSyncProgress> {
     try {
       this.logger.log('Starting Smart Slow Sync');
       return await this.slowSyncService.startSlowSync(config);
@@ -462,7 +502,9 @@ export class LegacySyncController {
     status: 200,
     description: 'Konfiguracija ažurirana',
   })
-  async updateSlowSyncConfig(@Body() config: SlowSyncConfigDto): Promise<SlowSyncConfig> {
+  async updateSlowSyncConfig(
+    @Body() config: SlowSyncConfigDto,
+  ): Promise<SlowSyncConfig> {
     try {
       this.logger.log('Updating Smart Slow Sync config', config);
       return await this.slowSyncService.updateConfig(config);
@@ -499,7 +541,9 @@ export class LegacySyncController {
   })
   async processSlowSyncBatch(): Promise<{ message: string }> {
     try {
-      this.logger.log('Manually triggering batch processing with forceProcess=true');
+      this.logger.log(
+        'Manually triggering batch processing with forceProcess=true',
+      );
       await this.slowSyncService.processBatch(true); // forceProcess=true za ručno pokretanje
       return { message: 'Batch je procesiran' };
     } catch (error) {
@@ -518,7 +562,7 @@ export class LegacySyncController {
   async getWorkerStatus() {
     const workers = this.workerPoolService.getWorkerStatuses();
     return {
-      workers: workers.map(worker => ({
+      workers: workers.map((worker) => ({
         workerId: worker.workerId,
         status: worker.status,
         vehicleId: worker.vehicleId,
@@ -529,8 +573,8 @@ export class LegacySyncController {
         currentStep: worker.currentStep,
         startedAt: worker.startTime, // Mapira startTime na startedAt
         completedAt: worker.status === 'completed' ? new Date() : undefined,
-        error: worker.status === 'failed' ? 'Unknown error' : undefined
-      }))
+        error: worker.status === 'failed' ? 'Unknown error' : undefined,
+      })),
     };
   }
 
@@ -561,29 +605,34 @@ export class LegacySyncController {
     status: 200,
     description: 'Broj GPS tačaka u TimescaleDB',
   })
-  async countVehiclePoints(@Param('vehicleId') vehicleId: string): Promise<any> {
+  async countVehiclePoints(
+    @Param('vehicleId') vehicleId: string,
+  ): Promise<any> {
     try {
       const id = parseInt(vehicleId);
       this.logger.log(`Counting GPS points for vehicle ${id} in TimescaleDB`);
-      
+
       // Konektuj se na TimescaleDB
       const { Client } = require('pg');
       const pgClient = new Client({
         connectionString: process.env.TIMESCALE_DATABASE_URL,
-        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+        ssl:
+          process.env.NODE_ENV === 'production'
+            ? { rejectUnauthorized: false }
+            : false,
       });
-      
+
       await pgClient.connect();
-      
+
       try {
         // Broji stvaran broj tačaka u TimescaleDB
         const countResult = await pgClient.query(
           'SELECT COUNT(*) as count FROM gps_data WHERE vehicle_id = $1',
-          [id]
+          [id],
         );
-        
+
         const count = parseInt(countResult.rows[0]?.count || '0');
-        
+
         // Ažuriraj u bazi
         await this.slowSyncService['prisma'].smartSlowSyncVehicle.update({
           where: { vehicleId: id },
@@ -592,9 +641,11 @@ export class LegacySyncController {
             lastPointsCheck: new Date(),
           },
         });
-        
-        this.logger.log(`Vehicle ${id} has ${count} unique GPS points in TimescaleDB`);
-        
+
+        this.logger.log(
+          `Vehicle ${id} has ${count} unique GPS points in TimescaleDB`,
+        );
+
         return {
           vehicleId: id,
           uniquePointsInDb: count,
@@ -604,7 +655,10 @@ export class LegacySyncController {
         await pgClient.end();
       }
     } catch (error) {
-      this.logger.error(`Error counting points for vehicle ${vehicleId}`, error);
+      this.logger.error(
+        `Error counting points for vehicle ${vehicleId}`,
+        error,
+      );
       throw error;
     }
   }
@@ -618,7 +672,9 @@ export class LegacySyncController {
   })
   async getSlowSyncVehicles(): Promise<any[]> {
     try {
-      const vehicles = await this.slowSyncService['prisma'].smartSlowSyncVehicle.findMany({
+      const vehicles = await this.slowSyncService[
+        'prisma'
+      ].smartSlowSyncVehicle.findMany({
         include: {
           vehicle: {
             select: {
@@ -635,9 +691,9 @@ export class LegacySyncController {
           { lastSyncAt: 'asc' },
         ],
       });
-      
+
       // Konvertuj BigInt u string za JSON serijalizaciju
-      return vehicles.map(v => ({
+      return vehicles.map((v) => ({
         ...v,
         totalPointsProcessed: v.totalPointsProcessed.toString(),
         uniquePointsInDb: v.uniquePointsInDb.toString(),
@@ -651,33 +707,33 @@ export class LegacySyncController {
   @Post('slow-sync/vehicles')
   @RequirePermissions('legacy.sync:configure')
   @ApiOperation({ summary: 'Dodaj vozila u Smart Slow Sync' })
-  @ApiBody({ 
-    schema: { 
-      properties: { 
-        vehicleIds: { 
-          type: 'array', 
+  @ApiBody({
+    schema: {
+      properties: {
+        vehicleIds: {
+          type: 'array',
           items: { type: 'number' },
-          description: 'Lista ID-jeva vozila'
+          description: 'Lista ID-jeva vozila',
         },
         priority: {
           type: 'number',
           default: 100,
-          description: 'Prioritet (viši broj = viši prioritet)'
-        }
-      } 
-    } 
+          description: 'Prioritet (viši broj = viši prioritet)',
+        },
+      },
+    },
   })
   @ApiResponse({
     status: 200,
     description: 'Vozila dodata u Smart Slow Sync',
   })
   async addSlowSyncVehicles(
-    @Body() dto: { vehicleIds: number[]; priority?: number }
+    @Body() dto: { vehicleIds: number[]; priority?: number },
   ): Promise<{ message: string; added: number }> {
     try {
       const priority = dto.priority || 100;
       let added = 0;
-      
+
       for (const vehicleId of dto.vehicleIds) {
         try {
           await this.slowSyncService['prisma'].smartSlowSyncVehicle.create({
@@ -695,10 +751,10 @@ export class LegacySyncController {
           }
         }
       }
-      
-      return { 
+
+      return {
         message: `Dodato ${added} vozila u Smart Slow Sync`,
-        added 
+        added,
       };
     } catch (error) {
       this.logger.error('Error adding slow sync vehicles', error);
@@ -709,13 +765,13 @@ export class LegacySyncController {
   @Patch('slow-sync/vehicles/:vehicleId')
   @RequirePermissions('legacy.sync:configure')
   @ApiOperation({ summary: 'Ažuriraj postavke vozila u Smart Slow Sync' })
-  @ApiBody({ 
-    schema: { 
-      properties: { 
+  @ApiBody({
+    schema: {
+      properties: {
         enabled: { type: 'boolean' },
-        priority: { type: 'number' }
-      } 
-    } 
+        priority: { type: 'number' },
+      },
+    },
   })
   @ApiResponse({
     status: 200,
@@ -723,14 +779,14 @@ export class LegacySyncController {
   })
   async updateSlowSyncVehicle(
     @Param('vehicleId') vehicleId: string,
-    @Body() dto: { enabled?: boolean; priority?: number }
+    @Body() dto: { enabled?: boolean; priority?: number },
   ): Promise<{ message: string }> {
     try {
       await this.slowSyncService['prisma'].smartSlowSyncVehicle.update({
         where: { vehicleId: parseInt(vehicleId) },
         data: dto,
       });
-      
+
       return { message: 'Postavke vozila ažurirane' };
     } catch (error) {
       this.logger.error('Error updating slow sync vehicle', error);
@@ -746,13 +802,13 @@ export class LegacySyncController {
     description: 'Vozilo uklonjeno iz Smart Slow Sync',
   })
   async removeSlowSyncVehicle(
-    @Param('vehicleId') vehicleId: string
+    @Param('vehicleId') vehicleId: string,
   ): Promise<{ message: string }> {
     try {
       await this.slowSyncService['prisma'].smartSlowSyncVehicle.delete({
         where: { vehicleId: parseInt(vehicleId) },
       });
-      
+
       return { message: 'Vozilo uklonjeno iz Smart Slow Sync' };
     } catch (error) {
       this.logger.error('Error removing slow sync vehicle', error);
@@ -771,10 +827,12 @@ export class LegacySyncController {
   })
   async getSlowSyncHistory(
     @Query('vehicleId') vehicleId?: string,
-    @Query('limit') limit?: string
+    @Query('limit') limit?: string,
   ): Promise<any[]> {
     try {
-      const history = await this.slowSyncService['prisma'].smartSlowSyncHistory.findMany({
+      const history = await this.slowSyncService[
+        'prisma'
+      ].smartSlowSyncHistory.findMany({
         where: vehicleId ? { vehicleId: parseInt(vehicleId) } : undefined,
         orderBy: { startedAt: 'desc' },
         take: limit ? parseInt(limit) : 50,
@@ -791,7 +849,7 @@ export class LegacySyncController {
           },
         },
       });
-      
+
       return history;
     } catch (error) {
       this.logger.error('Error fetching slow sync history', error);
@@ -809,13 +867,17 @@ export class LegacySyncController {
   async getAvailableVehiclesForSlowSync(): Promise<any[]> {
     try {
       // Prvo dobavi ID-jeve vozila koja su već u slow sync
-      const existingVehicles = await this.slowSyncService['prisma'].smartSlowSyncVehicle.findMany({
+      const existingVehicles = await this.slowSyncService[
+        'prisma'
+      ].smartSlowSyncVehicle.findMany({
         select: { vehicleId: true },
       });
-      const existingIds = existingVehicles.map(v => v.vehicleId);
-      
+      const existingIds = existingVehicles.map((v) => v.vehicleId);
+
       // Dobavi sva vozila koja nisu u slow sync
-      const availableVehicles = await this.slowSyncService['prisma'].busVehicle.findMany({
+      const availableVehicles = await this.slowSyncService[
+        'prisma'
+      ].busVehicle.findMany({
         where: {
           active: true,
           legacyId: { not: null },
@@ -829,7 +891,7 @@ export class LegacySyncController {
         },
         orderBy: { garageNumber: 'asc' },
       });
-      
+
       return availableVehicles;
     } catch (error) {
       this.logger.error('Error fetching available vehicles', error);
@@ -851,14 +913,14 @@ export class LegacySyncController {
     try {
       const progress = await this.slowSyncService.getProgress();
       const config = await this.slowSyncService.getConfig();
-      
+
       // Pristup privatnim properti-ima preko bracket notacije
       const isRunning = this.slowSyncService['isRunning'];
       const isPaused = this.slowSyncService['isPaused'];
-      
+
       // Proveri konzistentnost
       const isConsistent = !(isRunning && progress?.status === 'completed');
-      
+
       return {
         isRunning,
         isPaused,
@@ -866,8 +928,8 @@ export class LegacySyncController {
         config,
         timestamp: new Date(),
         isConsistent,
-        warning: !isConsistent 
-          ? 'Nekonzistentno stanje - isRunning=true ali status=completed' 
+        warning: !isConsistent
+          ? 'Nekonzistentno stanje - isRunning=true ali status=completed'
           : null,
         healthStatus: isConsistent ? 'healthy' : 'unhealthy',
       };
@@ -889,20 +951,23 @@ export class LegacySyncController {
   })
   async forceResetSmartSlowSync(): Promise<any> {
     this.logger.warn('Force reset Smart Slow Sync requested');
-    
+
     try {
       // Force reset sve - pristup privatnim properti-ima
       this.slowSyncService['isRunning'] = false;
       this.slowSyncService['isPaused'] = false;
-      
+
       // Resetuj progress
       await this.slowSyncService.resetProgress();
-      
+
       // Obriši isRunning iz baze
-      await this.slowSyncService['setSetting']('smart_slow_sync.is_running', false);
-      
+      await this.slowSyncService['setSetting'](
+        'smart_slow_sync.is_running',
+        false,
+      );
+
       this.logger.log('Smart Slow Sync je force resetovan');
-      
+
       return {
         success: true,
         message: 'Smart Slow Sync je uspešno force resetovan',
@@ -922,26 +987,30 @@ export class LegacySyncController {
   @ApiResponse({
     status: 200,
     description: 'COPY konfiguracija',
-    type: CopyConfigResponseDto
+    type: CopyConfigResponseDto,
   })
   async getCopyConfig(): Promise<CopyConfigResponseDto> {
     try {
       const config = await this.workerPoolService.getWorkerPoolConfig();
-      
+
       // Proceni brzinu na osnovu metode
-      const estimatedSpeed = config.insertMethod === 'copy' ? 8000 : 
-                            config.insertMethod === 'auto' ? 5000 : 
-                            2000;
-      
+      const estimatedSpeed =
+        config.insertMethod === 'copy'
+          ? 8000
+          : config.insertMethod === 'auto'
+            ? 5000
+            : 2000;
+
       // Preporuči metodu na osnovu trenutnih podešavanja
-      const recommendedMethod = (config.copyBatchSize || 10000) >= 10000 ? 'copy' : 'batch';
-      
+      const recommendedMethod =
+        (config.copyBatchSize || 10000) >= 10000 ? 'copy' : 'batch';
+
       return {
         insertMethod: config.insertMethod || 'batch',
         copyBatchSize: config.copyBatchSize || 10000,
         fallbackToBatch: config.fallbackToBatch !== false,
         estimatedSpeed,
-        recommendedMethod
+        recommendedMethod,
       };
     } catch (error) {
       this.logger.error('Error getting COPY config', error);
@@ -956,13 +1025,15 @@ export class LegacySyncController {
   @ApiResponse({
     status: 200,
     description: 'Konfiguracija ažurirana',
-    type: CopyConfigResponseDto
+    type: CopyConfigResponseDto,
   })
-  async updateCopyConfig(@Body() dto: CopyConfigDto): Promise<CopyConfigResponseDto> {
+  async updateCopyConfig(
+    @Body() dto: CopyConfigDto,
+  ): Promise<CopyConfigResponseDto> {
     try {
       // Sačuvaj u SystemSettings koristeći Prisma
       const prisma = (this.workerPoolService as any).prisma;
-      
+
       await prisma.systemSettings.upsert({
         where: { key: 'legacy_sync.insert_method' },
         update: { value: dto.insertMethod },
@@ -971,10 +1042,10 @@ export class LegacySyncController {
           value: dto.insertMethod,
           type: 'string',
           category: 'legacy_sync',
-          description: 'Metoda za insert podataka (batch/copy/auto)'
-        }
+          description: 'Metoda za insert podataka (batch/copy/auto)',
+        },
       });
-      
+
       if (dto.copyBatchSize !== undefined) {
         await prisma.systemSettings.upsert({
           where: { key: 'legacy_sync.copy_batch_size' },
@@ -984,11 +1055,11 @@ export class LegacySyncController {
             value: dto.copyBatchSize.toString(),
             type: 'number',
             category: 'legacy_sync',
-            description: 'Veličina batch-a za COPY metodu'
-          }
+            description: 'Veličina batch-a za COPY metodu',
+          },
         });
       }
-      
+
       if (dto.fallbackToBatch !== undefined) {
         await prisma.systemSettings.upsert({
           where: { key: 'legacy_sync.fallback_to_batch' },
@@ -998,16 +1069,16 @@ export class LegacySyncController {
             value: dto.fallbackToBatch.toString(),
             type: 'boolean',
             category: 'legacy_sync',
-            description: 'Fallback na batch ako COPY fail-uje'
-          }
+            description: 'Fallback na batch ako COPY fail-uje',
+          },
         });
       }
-      
+
       // Reload konfiguraciju u servisu
       await (this.workerPoolService as any).loadConfiguration();
-      
+
       this.logger.log('COPY konfiguracija ažurirana', dto);
-      
+
       // Vrati ažuriranu konfiguraciju
       return this.getCopyConfig();
     } catch (error) {

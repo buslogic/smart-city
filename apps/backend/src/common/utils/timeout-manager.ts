@@ -13,16 +13,16 @@ export class TimeoutError extends Error {
 
 export class TimeoutManager {
   private readonly logger = new Logger(TimeoutManager.name);
-  
+
   // Predefinisani timeout-i za različite operacije
   public readonly timeouts = {
-    SSH_COUNT: 30000,      // 30 sekundi za COUNT query
-    SSH_EXPORT: 300000,    // 5 minuta za mysqldump
-    SCP_TRANSFER: 180000,  // 3 minuta za file transfer
-    DB_IMPORT: 240000,     // 4 minuta za database import
-    CLEANUP: 15000,        // 15 sekundi za cleanup
-    WORKER_TOTAL: 600000,  // 10 minuta ukupno po worker-u
-    SSH_CONNECT: 10000,    // 10 sekundi za SSH konekciju
+    SSH_COUNT: 30000, // 30 sekundi za COUNT query
+    SSH_EXPORT: 300000, // 5 minuta za mysqldump
+    SCP_TRANSFER: 180000, // 3 minuta za file transfer
+    DB_IMPORT: 240000, // 4 minuta za database import
+    CLEANUP: 15000, // 15 sekundi za cleanup
+    WORKER_TOTAL: 600000, // 10 minuta ukupno po worker-u
+    SSH_CONNECT: 10000, // 10 sekundi za SSH konekciju
     AGGRESSIVE_DETECT: 60000, // 1 minut za aggressive driving detekciju
   };
 
@@ -35,12 +35,12 @@ export class TimeoutManager {
    * @throws TimeoutError ako operacija prekorači timeout
    */
   async execWithTimeout<T>(
-    operation: Promise<T>, 
-    timeoutMs: number, 
-    operationName: string
+    operation: Promise<T>,
+    timeoutMs: number,
+    operationName: string,
   ): Promise<T> {
     let timeoutHandle: NodeJS.Timeout;
-    
+
     const timeoutPromise = new Promise<never>((_, reject) => {
       timeoutHandle = setTimeout(() => {
         const errorMsg = `${operationName} timeout after ${timeoutMs}ms`;
@@ -53,15 +53,19 @@ export class TimeoutManager {
       // Race između operacije i timeout-a
       const result = await Promise.race([operation, timeoutPromise]);
       clearTimeout(timeoutHandle!);
-      this.logger.debug(`${operationName} completed successfully within ${timeoutMs}ms`);
+      this.logger.debug(
+        `${operationName} completed successfully within ${timeoutMs}ms`,
+      );
       return result;
     } catch (error) {
       clearTimeout(timeoutHandle!);
-      
+
       if (error instanceof TimeoutError) {
-        this.logger.error(`⏱️ TIMEOUT: ${operationName} nije završen u ${timeoutMs}ms`);
+        this.logger.error(
+          `⏱️ TIMEOUT: ${operationName} nije završen u ${timeoutMs}ms`,
+        );
       }
-      
+
       throw error;
     }
   }
@@ -74,25 +78,24 @@ export class TimeoutManager {
    * @returns stdout i stderr iz komande
    */
   async execCommand(
-    command: string, 
+    command: string,
     timeoutMs: number,
-    operationName: string
+    operationName: string,
   ): Promise<{ stdout: string; stderr: string }> {
     this.logger.debug(`Executing ${operationName} with ${timeoutMs}ms timeout`);
-    
+
     // Skrati komandu za log (sakrij sensitive podatke)
-    const logCommand = command.length > 100 
-      ? command.substring(0, 100) + '...' 
-      : command;
+    const logCommand =
+      command.length > 100 ? command.substring(0, 100) + '...' : command;
     this.logger.debug(`Command: ${logCommand}`);
-    
+
     return this.execWithTimeout(
       execAsync(command, {
         maxBuffer: 10 * 1024 * 1024, // 10MB buffer za velike output-e
-        encoding: 'utf8'
+        encoding: 'utf8',
       }),
       timeoutMs,
-      operationName
+      operationName,
     );
   }
 
@@ -109,7 +112,7 @@ export class TimeoutManager {
     sshKeyPath: string,
     host: string,
     timeoutMs: number,
-    operationName: string
+    operationName: string,
   ): Promise<{ stdout: string; stderr: string }> {
     // Dodaj SSH opcije za connection timeout i server alive
     const fullCommand = `ssh -i ${sshKeyPath} \
@@ -118,7 +121,7 @@ export class TimeoutManager {
       -o ServerAliveCountMax=3 \
       -o StrictHostKeyChecking=no \
       root@${host} "${sshCommand}"`;
-    
+
     return this.execCommand(fullCommand, timeoutMs, operationName);
   }
 
@@ -135,7 +138,7 @@ export class TimeoutManager {
     destination: string,
     sshKeyPath: string,
     timeoutMs: number,
-    operationName: string
+    operationName: string,
   ): Promise<void> {
     const scpCommand = `scp -i ${sshKeyPath} \
       -o ConnectTimeout=10 \
@@ -143,7 +146,7 @@ export class TimeoutManager {
       -o ServerAliveCountMax=3 \
       -o StrictHostKeyChecking=no \
       ${source} ${destination}`;
-    
+
     await this.execCommand(scpCommand, timeoutMs, operationName);
     this.logger.log(`✅ SCP transfer completed: ${operationName}`);
   }
@@ -155,19 +158,19 @@ export class TimeoutManager {
   async execWithWorkerTimeout<T>(
     workerOperation: Promise<T>,
     vehicleId: number,
-    workerId: number
+    workerId: number,
   ): Promise<T> {
     try {
       return await this.execWithTimeout(
         workerOperation,
         this.timeouts.WORKER_TOTAL,
-        `Worker ${workerId} for vehicle ${vehicleId}`
+        `Worker ${workerId} for vehicle ${vehicleId}`,
       );
     } catch (error) {
       if (error instanceof TimeoutError) {
         this.logger.error(
           `🔴 Worker ${workerId} timeout za vozilo ${vehicleId}! ` +
-          `Worker će biti označen kao failed.`
+            `Worker će biti označen kao failed.`,
         );
       }
       throw error;

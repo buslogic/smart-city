@@ -1,5 +1,18 @@
-import { Controller, Get, Post, Query, UseGuards, BadRequestException } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiQuery, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Query,
+  UseGuards,
+  BadRequestException,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiQuery,
+  ApiBearerAuth,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Public } from '../auth/decorators/public.decorator';
 import { DispatcherService } from './dispatcher.service';
@@ -13,17 +26,18 @@ export class DispatcherController {
   @Get('current-positions')
   @Public()
   @ApiOperation({ summary: 'Dohvati trenutne pozicije vozila' })
-  @ApiQuery({ 
-    name: 'source', 
-    required: false, 
+  @ApiQuery({
+    name: 'source',
+    required: false,
     enum: ['local', 'legacy'],
-    description: 'Izvor podataka: local (lokalna baza) ili legacy (direktno sa GPS servera)' 
+    description:
+      'Izvor podataka: local (lokalna baza) ili legacy (direktno sa GPS servera)',
   })
-  @ApiQuery({ 
-    name: 'limit', 
-    required: false, 
-    type: Number, 
-    description: 'Broj rezultata (default: 100)' 
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Broj rezultata (default: 100)',
   })
   @ApiResponse({ status: 200, description: 'Lista trenutnih pozicija vozila' })
   @ApiResponse({ status: 400, description: 'Neispravni parametri' })
@@ -35,9 +49,11 @@ export class DispatcherController {
     // Validacija source parametra
     const validSources = ['local', 'legacy'];
     const dataSource = source || 'local';
-    
+
     if (!validSources.includes(dataSource)) {
-      throw new BadRequestException(`Neispravan source. Dozvoljene vrednosti: ${validSources.join(', ')}`);
+      throw new BadRequestException(
+        `Neispravan source. Dozvoljene vrednosti: ${validSources.join(', ')}`,
+      );
     }
 
     try {
@@ -60,14 +76,17 @@ export class DispatcherController {
         error: 'VehiclePositionError',
         statusCode: 400,
         source: dataSource,
-        details: error.code === 'ETIMEDOUT' ? 'CONNECTION_TIMEOUT' : 'GENERAL_ERROR'
+        details:
+          error.code === 'ETIMEDOUT' ? 'CONNECTION_TIMEOUT' : 'GENERAL_ERROR',
       });
     }
   }
 
   @Post('sync-gps-data')
   @Public()
-  @ApiOperation({ summary: 'Sinhronizuje GPS podatke iz legacy baze u lokalnu' })
+  @ApiOperation({
+    summary: 'Sinhronizuje GPS podatke iz legacy baze u lokalnu',
+  })
   @ApiResponse({ status: 200, description: 'Sinhronizacija uspešna' })
   @ApiResponse({ status: 500, description: 'Greška pri sinhronizaciji' })
   async syncGPSData() {

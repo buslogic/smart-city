@@ -1,9 +1,9 @@
 /**
  * Vehicle Mapper Helper - Backend verzija
- * 
+ *
  * Centralizovana logika za rad sa vehicle identifikatorima na backend-u.
  * VAŽNO: Uvek koristiti vehicle ID (iz bus_vehicles.id) kao primarni identifikator!
- * 
+ *
  * @author Smart City Team
  * @date 2025-09-01
  */
@@ -58,23 +58,23 @@ export class VehicleMapperService {
   async getVehicleById(id: number): Promise<VehicleCache | null> {
     const cacheKey = `id_${id}`;
     const cached = this.getFromCache(cacheKey);
-    
+
     if (cached) {
       return cached;
     }
 
     try {
       const vehicle = await this.prisma.busVehicle.findUnique({
-        where: { id }
+        where: { id },
       });
-      
+
       if (vehicle) {
         const cacheData: VehicleCache = {
           id: vehicle.id,
           garageNumber: vehicle.garageNumber,
           legacyId: vehicle.legacyId,
           registrationNumber: vehicle.registrationNumber,
-          lastUpdated: new Date()
+          lastUpdated: new Date(),
         };
         this.setCache(cacheKey, cacheData);
         this.setCache(`garage_${vehicle.garageNumber}`, cacheData);
@@ -83,42 +83,47 @@ export class VehicleMapperService {
     } catch (error) {
       console.error(`Greška pri dohvatanju vozila sa ID ${id}:`, error);
     }
-    
+
     return null;
   }
 
   /**
    * Dohvata vozilo po garažnom broju
    */
-  async getVehicleByGarageNumber(garageNumber: string): Promise<VehicleCache | null> {
+  async getVehicleByGarageNumber(
+    garageNumber: string,
+  ): Promise<VehicleCache | null> {
     const cacheKey = `garage_${garageNumber}`;
     const cached = this.getFromCache(cacheKey);
-    
+
     if (cached) {
       return cached;
     }
 
     try {
       const vehicle = await this.prisma.busVehicle.findUnique({
-        where: { garageNumber }
+        where: { garageNumber },
       });
-      
+
       if (vehicle) {
         const cacheData: VehicleCache = {
           id: vehicle.id,
           garageNumber: vehicle.garageNumber,
           legacyId: vehicle.legacyId,
           registrationNumber: vehicle.registrationNumber,
-          lastUpdated: new Date()
+          lastUpdated: new Date(),
         };
         this.setCache(cacheKey, cacheData);
         this.setCache(`id_${vehicle.id}`, cacheData);
         return cacheData;
       }
     } catch (error) {
-      console.error(`Greška pri dohvatanju vozila sa garažnim brojem ${garageNumber}:`, error);
+      console.error(
+        `Greška pri dohvatanju vozila sa garažnim brojem ${garageNumber}:`,
+        error,
+      );
     }
-    
+
     return null;
   }
 
@@ -157,34 +162,36 @@ export class VehicleMapperService {
    */
   async mapIdsToGarageNumbers(ids: number[]): Promise<Map<number, string>> {
     const result = new Map<number, string>();
-    
+
     const vehicles = await this.prisma.busVehicle.findMany({
       where: { id: { in: ids } },
-      select: { id: true, garageNumber: true }
+      select: { id: true, garageNumber: true },
     });
-    
+
     for (const vehicle of vehicles) {
       result.set(vehicle.id, vehicle.garageNumber);
     }
-    
+
     return result;
   }
 
   /**
    * Bulk mapiranje garažnih brojeva u ID-eve
    */
-  async mapGarageNumbersToIds(garageNumbers: string[]): Promise<Map<string, number>> {
+  async mapGarageNumbersToIds(
+    garageNumbers: string[],
+  ): Promise<Map<string, number>> {
     const result = new Map<string, number>();
-    
+
     const vehicles = await this.prisma.busVehicle.findMany({
       where: { garageNumber: { in: garageNumbers } },
-      select: { id: true, garageNumber: true }
+      select: { id: true, garageNumber: true },
     });
-    
+
     for (const vehicle of vehicles) {
       result.set(vehicle.garageNumber, vehicle.id);
     }
-    
+
     return result;
   }
 
@@ -207,21 +214,21 @@ export class VehicleMapperService {
           id: true,
           garageNumber: true,
           legacyId: true,
-          registrationNumber: true
-        }
+          registrationNumber: true,
+        },
       });
-      
-      const cacheData: VehicleCache[] = vehicles.map(v => ({
+
+      const cacheData: VehicleCache[] = vehicles.map((v) => ({
         id: v.id,
         garageNumber: v.garageNumber,
         legacyId: v.legacyId,
         registrationNumber: v.registrationNumber,
-        lastUpdated: new Date()
+        lastUpdated: new Date(),
       }));
-      
+
       this.allVehiclesCache = cacheData;
       this.allVehiclesCacheTime = new Date();
-      
+
       return cacheData;
     } catch (error) {
       console.error('Greška pri dohvatanju svih vozila:', error);
@@ -292,17 +299,19 @@ export class VehicleMapperService {
   /**
    * Dohvata vozilo za GPS operacije (vraća i ID i garage number)
    */
-  async getVehicleForGPS(identifier: string | number): Promise<{ id: number; garageNumber: string }> {
+  async getVehicleForGPS(
+    identifier: string | number,
+  ): Promise<{ id: number; garageNumber: string }> {
     const vehicleId = await this.resolveVehicleId(identifier);
     const vehicle = await this.getVehicleById(vehicleId);
-    
+
     if (!vehicle) {
       throw new Error(`Vozilo ${identifier} ne postoji`);
     }
-    
+
     return {
       id: vehicle.id,
-      garageNumber: vehicle.garageNumber
+      garageNumber: vehicle.garageNumber,
     };
   }
 
@@ -312,10 +321,18 @@ export class VehicleMapperService {
   debugCache(): void {
     console.log('[VehicleMapper] Cache status:');
     console.log(`- Pojedinačni cache: ${this.cache.size} vozila`);
-    console.log(`- Sva vozila cache: ${this.allVehiclesCache?.length || 0} vozila`);
-    console.log(`- Cache starost: ${this.allVehiclesCacheTime ? 
-      Math.round((Date.now() - this.allVehiclesCacheTime.getTime()) / 1000) + 's' : 
-      'N/A'}`);
+    console.log(
+      `- Sva vozila cache: ${this.allVehiclesCache?.length || 0} vozila`,
+    );
+    console.log(
+      `- Cache starost: ${
+        this.allVehiclesCacheTime
+          ? Math.round(
+              (Date.now() - this.allVehiclesCacheTime.getTime()) / 1000,
+            ) + 's'
+          : 'N/A'
+      }`,
+    );
   }
 }
 

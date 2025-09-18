@@ -10,7 +10,7 @@ async function fixMigrations() {
       WHERE migration_name = '20250906142837_add_dashboard_tables'
     `);
     console.log('Removed failed migration record');
-    
+
     console.log('Migration history cleaned');
   } catch (error) {
     console.error('Error fixing migrations:', error);

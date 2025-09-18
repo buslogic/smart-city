@@ -1,8 +1,18 @@
-import { Injectable, Logger, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateApiKeyDto } from './dto/create-api-key.dto';
 import { UpdateApiKeyDto, RevokeApiKeyDto } from './dto/update-api-key.dto';
-import { ApiKeyResponseDto, CreateApiKeyResponseDto, ApiKeyLogResponseDto } from './dto/api-key-response.dto';
+import {
+  ApiKeyResponseDto,
+  CreateApiKeyResponseDto,
+  ApiKeyLogResponseDto,
+} from './dto/api-key-response.dto';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { ApiKeyType, ApiKey, ApiKeyLog } from '@prisma/client';
@@ -16,7 +26,10 @@ export class ApiKeysService {
   /**
    * Generiše novi API ključ sa sigurnim formatom
    */
-  private generateApiKey(type: ApiKeyType, environment: string = 'prod'): string {
+  private generateApiKey(
+    type: ApiKeyType,
+    environment: string = 'prod',
+  ): string {
     const typeMap = {
       [ApiKeyType.SWAGGER_ACCESS]: 'swagger',
       [ApiKeyType.API_ACCESS]: 'api',
@@ -26,7 +39,7 @@ export class ApiKeysService {
 
     const typePrefix = typeMap[type] || 'api';
     const randomString = crypto.randomBytes(18).toString('base64url'); // 24 karaktera
-    
+
     return `sk_${environment}_${typePrefix}_${randomString}`;
   }
 
@@ -61,7 +74,10 @@ export class ApiKeysService {
   /**
    * Kreira novi API ključ
    */
-  async create(dto: CreateApiKeyDto, createdBy: number): Promise<CreateApiKeyResponseDto> {
+  async create(
+    dto: CreateApiKeyDto,
+    createdBy: number,
+  ): Promise<CreateApiKeyResponseDto> {
     // Generiši API ključ
     const apiKey = this.generateApiKey(dto.type);
     const keyHash = await this.hashApiKey(apiKey);
@@ -80,8 +96,12 @@ export class ApiKeysService {
           name: dto.name,
           description: dto.description,
           type: dto.type,
-          permissions: dto.permissions ? JSON.stringify(dto.permissions) : undefined,
-          allowedIps: dto.allowedIps ? JSON.stringify(dto.allowedIps) : undefined,
+          permissions: dto.permissions
+            ? JSON.stringify(dto.permissions)
+            : undefined,
+          allowedIps: dto.allowedIps
+            ? JSON.stringify(dto.allowedIps)
+            : undefined,
           rateLimit: dto.rateLimit,
           expiresAt,
           createdBy,
@@ -111,16 +131,18 @@ export class ApiKeysService {
         data: { key: '' }, // Uklanjamo plain text key
       });
 
-      this.logger.log(`API ključ kreiran: ${displayKey} (${dto.type}) za korisnika ${createdBy}`);
+      this.logger.log(
+        `API ključ kreiran: ${displayKey} (${dto.type}) za korisnika ${createdBy}`,
+      );
 
       // Vratimo response sa celim ključem SAMO JEDNOM
       return {
         ...this.mapToResponseDto(createdKey),
         key: apiKey, // Ovo je jedini put kada vraćamo ceo ključ!
       };
-
     } catch (error) {
-      if (error.code === 'P2002') { // Unique constraint error
+      if (error.code === 'P2002') {
+        // Unique constraint error
         throw new ConflictException('API ključ sa tim nazivom već postoji');
       }
       this.logger.error('Greška pri kreiranju API ključa:', error);
@@ -155,7 +177,7 @@ export class ApiKeysService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return keys.map(key => this.mapToResponseDto(key));
+    return keys.map((key) => this.mapToResponseDto(key));
   }
 
   /**
@@ -194,9 +216,13 @@ export class ApiKeysService {
   /**
    * Ažuriraj API ključ
    */
-  async update(id: number, dto: UpdateApiKeyDto, updatedBy: number): Promise<ApiKeyResponseDto> {
+  async update(
+    id: number,
+    dto: UpdateApiKeyDto,
+    updatedBy: number,
+  ): Promise<ApiKeyResponseDto> {
     const existingKey = await this.prisma.apiKey.findUnique({ where: { id } });
-    
+
     if (!existingKey) {
       throw new NotFoundException(`API ključ sa ID ${id} nije pronađen`);
     }
@@ -212,7 +238,9 @@ export class ApiKeysService {
       data: {
         name: dto.name,
         description: dto.description,
-        permissions: dto.permissions ? JSON.stringify(dto.permissions) : undefined,
+        permissions: dto.permissions
+          ? JSON.stringify(dto.permissions)
+          : undefined,
         allowedIps: dto.allowedIps ? JSON.stringify(dto.allowedIps) : undefined,
         rateLimit: dto.rateLimit,
         expiresAt,
@@ -244,7 +272,9 @@ export class ApiKeysService {
       responseCode: 200,
     });
 
-    this.logger.log(`API ključ ažuriran: ${existingKey.displayKey} od strane korisnika ${updatedBy}`);
+    this.logger.log(
+      `API ključ ažuriran: ${existingKey.displayKey} od strane korisnika ${updatedBy}`,
+    );
 
     return this.mapToResponseDto(updatedKey);
   }
@@ -252,9 +282,13 @@ export class ApiKeysService {
   /**
    * Revokuj API ključ
    */
-  async revoke(id: number, dto: RevokeApiKeyDto, revokedBy: number): Promise<ApiKeyResponseDto> {
+  async revoke(
+    id: number,
+    dto: RevokeApiKeyDto,
+    revokedBy: number,
+  ): Promise<ApiKeyResponseDto> {
     const existingKey = await this.prisma.apiKey.findUnique({ where: { id } });
-    
+
     if (!existingKey) {
       throw new NotFoundException(`API ključ sa ID ${id} nije pronađen`);
     }
@@ -298,7 +332,9 @@ export class ApiKeysService {
       errorMessage: dto.reason,
     });
 
-    this.logger.warn(`API ključ revokovan: ${existingKey.displayKey} od strane korisnika ${revokedBy}. Razlog: ${dto.reason}`);
+    this.logger.warn(
+      `API ključ revokovan: ${existingKey.displayKey} od strane korisnika ${revokedBy}. Razlog: ${dto.reason}`,
+    );
 
     return this.mapToResponseDto(revokedKey);
   }
@@ -306,7 +342,13 @@ export class ApiKeysService {
   /**
    * Validira API ključ za autentifikaciju
    */
-  async validateApiKey(rawKey: string, ipAddress?: string, userAgent?: string, endpoint?: string, method?: string): Promise<ApiKey | null> {
+  async validateApiKey(
+    rawKey: string,
+    ipAddress?: string,
+    userAgent?: string,
+    endpoint?: string,
+    method?: string,
+  ): Promise<ApiKey | null> {
     const startTime = Date.now();
 
     try {
@@ -315,10 +357,7 @@ export class ApiKeysService {
         where: {
           isActive: true,
           revokedAt: null,
-          OR: [
-            { expiresAt: null },
-            { expiresAt: { gt: new Date() } },
-          ],
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
         },
       });
 
@@ -375,7 +414,6 @@ export class ApiKeysService {
       });
 
       return null;
-
     } catch (error) {
       this.logger.error('Greška pri validaciji API ključa:', error);
       return null;
@@ -385,14 +423,17 @@ export class ApiKeysService {
   /**
    * Dobij audit log za API ključ
    */
-  async getAuditLog(id: number, limit: number = 100): Promise<ApiKeyLogResponseDto[]> {
+  async getAuditLog(
+    id: number,
+    limit: number = 100,
+  ): Promise<ApiKeyLogResponseDto[]> {
     const logs = await this.prisma.apiKeyLog.findMany({
       where: { apiKeyId: id },
       orderBy: { createdAt: 'desc' },
       take: limit,
     });
 
-    return logs.map(log => ({
+    return logs.map((log) => ({
       id: log.id,
       apiKeyId: log.apiKeyId,
       action: log.action,
@@ -411,9 +452,9 @@ export class ApiKeysService {
    * Logiraj aktivnost API ključa
    */
   private async logActivity(
-    apiKeyId: number | undefined, 
-    action: string, 
-    ipAddress?: string, 
+    apiKeyId: number | undefined,
+    action: string,
+    ipAddress?: string,
     details?: {
       userAgent?: string;
       endpoint?: string;
@@ -421,14 +462,14 @@ export class ApiKeysService {
       responseCode?: number;
       responseTime?: number;
       errorMessage?: string;
-    }
+    },
   ): Promise<void> {
     try {
       // Ako nema apiKeyId, preskoči logovanje
       if (!apiKeyId) {
         return;
       }
-      
+
       await this.prisma.apiKeyLog.create({
         data: {
           apiKeyId,

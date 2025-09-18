@@ -24,7 +24,9 @@ import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 @ApiBearerAuth()
 @Controller('legacy-table-mappings')
 export class LegacyTableMappingsController {
-  constructor(private readonly legacyTableMappingsService: LegacyTableMappingsService) {}
+  constructor(
+    private readonly legacyTableMappingsService: LegacyTableMappingsService,
+  ) {}
 
   @Post()
   @RequirePermissions('legacy_tables:create')

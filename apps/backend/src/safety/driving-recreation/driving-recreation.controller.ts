@@ -11,7 +11,12 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../auth/guards/permissions.guard';
 import { RequirePermissions } from '../../auth/decorators/permissions.decorator';
@@ -31,7 +36,9 @@ import {
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class DrivingRecreationController {
   // Deploy trigger: 16.09.2025 - Ensure driving-recreation module is deployed
-  constructor(private readonly drivingRecreationService: DrivingRecreationService) {}
+  constructor(
+    private readonly drivingRecreationService: DrivingRecreationService,
+  ) {}
 
   @Get('vehicles')
   @RequirePermissions('safety.data.recreation:view')
@@ -41,7 +48,10 @@ export class DrivingRecreationController {
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
   ): Promise<VehicleWithStatsDto[]> {
-    return this.drivingRecreationService.getVehiclesWithStats(startDate, endDate);
+    return this.drivingRecreationService.getVehiclesWithStats(
+      startDate,
+      endDate,
+    );
   }
 
   @Post('start')
@@ -85,7 +95,11 @@ export class DrivingRecreationController {
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
   ): Promise<{ data: RecreationHistoryDto[]; total: number }> {
-    return this.drivingRecreationService.getRecreationHistory(userId, page, limit);
+    return this.drivingRecreationService.getRecreationHistory(
+      userId,
+      page,
+      limit,
+    );
   }
 
   @Post('preview')
@@ -93,9 +107,14 @@ export class DrivingRecreationController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Preview events count for selected vehicles' })
   @ApiResponse({ status: 200 })
-  async previewEventsCount(
-    @Body() dto: PreviewDto,
-  ): Promise<{ vehicleId: number; garageNo: string; existingEvents: number; estimatedNew: number }[]> {
+  async previewEventsCount(@Body() dto: PreviewDto): Promise<
+    {
+      vehicleId: number;
+      garageNo: string;
+      existingEvents: number;
+      estimatedNew: number;
+    }[]
+  > {
     return this.drivingRecreationService.previewEventsCount(
       dto.vehicleIds,
       dto.startDate,

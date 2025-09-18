@@ -41,43 +41,45 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     // Učitavanje korisnika sa ulogama
     const user = await this.prisma.user.findUnique({
-      where: { 
+      where: {
         id: payload.sub,
         isActive: true,
       },
       include: {
         roles: {
           include: {
-            role: true
-          }
-        }
-      }
+            role: true,
+          },
+        },
+      },
     });
 
     if (!user) {
-      throw new UnauthorizedException('Korisnik nije pronađen ili nije aktivan');
+      throw new UnauthorizedException(
+        'Korisnik nije pronađen ili nije aktivan',
+      );
     }
 
     // Formatiranje podataka o korisniku
-    const roles = user.roles.map(ur => ur.role.name);
-    const roleIds = user.roles.map(ur => ur.roleId);
-    
+    const roles = user.roles.map((ur) => ur.role.name);
+    const roleIds = user.roles.map((ur) => ur.roleId);
+
     // Učitaj permisije za sve role korisnika
     const rolesWithPermissions = await this.prisma.role.findMany({
       where: {
-        id: { in: roleIds }
+        id: { in: roleIds },
       },
       include: {
         permissions: {
           include: {
-            permission: true
-          }
-        }
-      }
+            permission: true,
+          },
+        },
+      },
     });
-    
-    const permissions = rolesWithPermissions.flatMap(role =>
-      role.permissions.map(rp => rp.permission.name)
+
+    const permissions = rolesWithPermissions.flatMap((role) =>
+      role.permissions.map((rp) => rp.permission.name),
     );
 
     return {

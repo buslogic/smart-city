@@ -1,5 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsArray, IsInt, Min, IsDateString, IsBoolean } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsArray,
+  IsInt,
+  Min,
+  IsDateString,
+  IsBoolean,
+} from 'class-validator';
 
 export class UpdateApiKeyDto {
   @ApiProperty({

@@ -39,16 +39,25 @@ export class MailgunService {
       this.mailgunClient = mailgun.client({
         username: 'api',
         key: apiKey,
-        url: this.configService.get<string>('MAILGUN_EU_REGION') === 'true'
-          ? 'https://api.eu.mailgun.net'
-          : 'https://api.mailgun.net',
+        url:
+          this.configService.get<string>('MAILGUN_EU_REGION') === 'true'
+            ? 'https://api.eu.mailgun.net'
+            : 'https://api.mailgun.net',
       });
 
       this.domain = this.configService.get<string>('MAILGUN_DOMAIN', '');
-      this.fromEmail = this.configService.get<string>('MAILGUN_FROM_EMAIL', 'noreply@example.com');
-      this.fromName = this.configService.get<string>('MAILGUN_FROM_NAME', 'Smart City GSP');
+      this.fromEmail = this.configService.get<string>(
+        'MAILGUN_FROM_EMAIL',
+        'noreply@example.com',
+      );
+      this.fromName = this.configService.get<string>(
+        'MAILGUN_FROM_NAME',
+        'Smart City GSP',
+      );
     } else {
-      this.logger.warn('Mailgun API key not configured. Email sending is disabled.');
+      this.logger.warn(
+        'Mailgun API key not configured. Email sending is disabled.',
+      );
       this.mailgunClient = null;
       this.domain = '';
       this.fromEmail = 'noreply@example.com';
@@ -84,16 +93,22 @@ export class MailgunService {
       if (options.template) {
         messageData.template = options.template;
         if (options.variables) {
-          messageData['h:X-Mailgun-Variables'] = JSON.stringify(options.variables);
+          messageData['h:X-Mailgun-Variables'] = JSON.stringify(
+            options.variables,
+          );
         }
       }
 
       // Add optional fields
       if (options.cc) {
-        messageData.cc = Array.isArray(options.cc) ? options.cc.join(', ') : options.cc;
+        messageData.cc = Array.isArray(options.cc)
+          ? options.cc.join(', ')
+          : options.cc;
       }
       if (options.bcc) {
-        messageData.bcc = Array.isArray(options.bcc) ? options.bcc.join(', ') : options.bcc;
+        messageData.bcc = Array.isArray(options.bcc)
+          ? options.bcc.join(', ')
+          : options.bcc;
       }
       if (options.replyTo) {
         messageData['h:Reply-To'] = options.replyTo;
@@ -104,16 +119,21 @@ export class MailgunService {
 
       // Add attachments if any
       if (options.attachments && options.attachments.length > 0) {
-        messageData.attachment = options.attachments.map(att => ({
+        messageData.attachment = options.attachments.map((att) => ({
           filename: att.filename,
           data: att.data,
           contentType: att.contentType,
         }));
       }
 
-      const result = await this.mailgunClient.messages.create(this.domain, messageData);
+      const result = await this.mailgunClient.messages.create(
+        this.domain,
+        messageData,
+      );
 
-      this.logger.log(`Email sent successfully to ${options.to}. Message ID: ${result.id}`);
+      this.logger.log(
+        `Email sent successfully to ${options.to}. Message ID: ${result.id}`,
+      );
 
       return result;
     } catch (error) {
@@ -129,7 +149,7 @@ export class MailgunService {
     recipients: Array<{ email: string; variables?: Record<string, any> }>,
     subject: string,
     template: string,
-    globalVariables?: Record<string, any>
+    globalVariables?: Record<string, any>,
   ): Promise<any> {
     if (!this.mailgunClient) {
       this.logger.warn('Bulk email not sent - Mailgun is not configured');
@@ -140,7 +160,7 @@ export class MailgunService {
       const recipientVariables: Record<string, any> = {};
       const toList: string[] = [];
 
-      recipients.forEach(recipient => {
+      recipients.forEach((recipient) => {
         toList.push(recipient.email);
         if (recipient.variables) {
           recipientVariables[recipient.email] = recipient.variables;
@@ -159,13 +179,21 @@ export class MailgunService {
         messageData['h:X-Mailgun-Variables'] = JSON.stringify(globalVariables);
       }
 
-      const result = await this.mailgunClient.messages.create(this.domain, messageData);
+      const result = await this.mailgunClient.messages.create(
+        this.domain,
+        messageData,
+      );
 
-      this.logger.log(`Bulk email sent to ${recipients.length} recipients. Message ID: ${result.id}`);
+      this.logger.log(
+        `Bulk email sent to ${recipients.length} recipients. Message ID: ${result.id}`,
+      );
 
       return result;
     } catch (error) {
-      this.logger.error(`Failed to send bulk email: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to send bulk email: ${error.message}`,
+        error.stack,
+      );
       throw error;
     }
   }
@@ -203,7 +231,10 @@ export class MailgunService {
     }
 
     try {
-      const result = await this.mailgunClient.events.get(this.domain, options || {});
+      const result = await this.mailgunClient.events.get(
+        this.domain,
+        options || {},
+      );
       return result;
     } catch (error) {
       this.logger.error(`Failed to get events: ${error.message}`);

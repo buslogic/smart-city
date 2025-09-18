@@ -1,4 +1,8 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -21,7 +25,7 @@ export class RolesService {
 
   async findAll(page = 1, pageSize = 10) {
     const skip = (page - 1) * pageSize;
-    
+
     const [roles, total] = await Promise.all([
       this.prisma.role.findMany({
         skip,
@@ -71,7 +75,10 @@ export class RolesService {
     return role;
   }
 
-  async update(id: number, updateRoleDto: { name?: string; description?: string }) {
+  async update(
+    id: number,
+    updateRoleDto: { name?: string; description?: string },
+  ) {
     const existingRole = await this.prisma.role.findUnique({
       where: { id },
     });
@@ -137,7 +144,7 @@ export class RolesService {
       throw new NotFoundException(`Role with ID ${roleId} not found`);
     }
 
-    return role.permissions.map(rp => rp.permission);
+    return role.permissions.map((rp) => rp.permission);
   }
 
   async updateRolePermissions(roleId: number, permissionIds: number[]) {
@@ -157,7 +164,7 @@ export class RolesService {
     // Add new permissions
     if (permissionIds.length > 0) {
       await this.prisma.rolePermission.createMany({
-        data: permissionIds.map(permissionId => ({
+        data: permissionIds.map((permissionId) => ({
           roleId,
           permissionId,
         })),
@@ -178,7 +185,9 @@ export class RolesService {
     }
 
     if (!permission) {
-      throw new NotFoundException(`Permission with ID ${permissionId} not found`);
+      throw new NotFoundException(
+        `Permission with ID ${permissionId} not found`,
+      );
     }
 
     const existing = await this.prisma.rolePermission.findUnique({

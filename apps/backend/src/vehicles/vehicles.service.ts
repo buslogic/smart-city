@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
@@ -14,7 +18,9 @@ export class VehiclesService {
     });
 
     if (existingVehicle) {
-      throw new ConflictException(`Vozilo sa garažnim brojem ${createVehicleDto.garageNumber} već postoji`);
+      throw new ConflictException(
+        `Vozilo sa garažnim brojem ${createVehicleDto.garageNumber} već postoji`,
+      );
     }
 
     // Ako postoji legacyId, proveri da li je jedinstven
@@ -24,7 +30,9 @@ export class VehiclesService {
       });
 
       if (existingLegacy) {
-        throw new ConflictException(`Vozilo sa legacy ID ${createVehicleDto.legacyId} već postoji`);
+        throw new ConflictException(
+          `Vozilo sa legacy ID ${createVehicleDto.legacyId} već postoji`,
+        );
       }
     }
 
@@ -96,24 +104,34 @@ export class VehiclesService {
     const vehicle = await this.findOne(id);
 
     // Ako se menja garažni broj, proveri da li je jedinstven
-    if (updateVehicleDto.garageNumber && updateVehicleDto.garageNumber !== vehicle.garageNumber) {
+    if (
+      updateVehicleDto.garageNumber &&
+      updateVehicleDto.garageNumber !== vehicle.garageNumber
+    ) {
       const existingVehicle = await this.prisma.busVehicle.findUnique({
         where: { garageNumber: updateVehicleDto.garageNumber },
       });
 
       if (existingVehicle) {
-        throw new ConflictException(`Vozilo sa garažnim brojem ${updateVehicleDto.garageNumber} već postoji`);
+        throw new ConflictException(
+          `Vozilo sa garažnim brojem ${updateVehicleDto.garageNumber} već postoji`,
+        );
       }
     }
 
     // Ako se menja legacyId, proveri da li je jedinstven
-    if (updateVehicleDto.legacyId && updateVehicleDto.legacyId !== vehicle.legacyId) {
+    if (
+      updateVehicleDto.legacyId &&
+      updateVehicleDto.legacyId !== vehicle.legacyId
+    ) {
       const existingLegacy = await this.prisma.busVehicle.findUnique({
         where: { legacyId: updateVehicleDto.legacyId },
       });
 
       if (existingLegacy) {
-        throw new ConflictException(`Vozilo sa legacy ID ${updateVehicleDto.legacyId} već postoji`);
+        throw new ConflictException(
+          `Vozilo sa legacy ID ${updateVehicleDto.legacyId} već postoji`,
+        );
       }
     }
 
@@ -141,7 +159,9 @@ export class VehiclesService {
     });
 
     if (!vehicle) {
-      throw new NotFoundException(`Vozilo sa garažnim brojem ${garageNumber} nije pronađeno`);
+      throw new NotFoundException(
+        `Vozilo sa garažnim brojem ${garageNumber} nije pronađeno`,
+      );
     }
 
     return vehicle;
@@ -153,38 +173,41 @@ export class VehiclesService {
     });
 
     if (!vehicle) {
-      throw new NotFoundException(`Vozilo sa legacy ID ${legacyId} nije pronađeno`);
+      throw new NotFoundException(
+        `Vozilo sa legacy ID ${legacyId} nije pronađeno`,
+      );
     }
 
     return vehicle;
   }
 
   async getStatistics() {
-    const [total, active, inactive, byType, byFuelType, withWifi, withAC] = await Promise.all([
-      this.prisma.busVehicle.count(),
-      this.prisma.busVehicle.count({ where: { active: true } }),
-      this.prisma.busVehicle.count({ where: { active: false } }),
-      this.prisma.busVehicle.groupBy({
-        by: ['vehicleType'],
-        _count: true,
-      }),
-      this.prisma.busVehicle.groupBy({
-        by: ['fuelType'],
-        _count: true,
-      }),
-      this.prisma.busVehicle.count({ where: { wifi: true } }),
-      this.prisma.busVehicle.count({ where: { airCondition: true } }),
-    ]);
+    const [total, active, inactive, byType, byFuelType, withWifi, withAC] =
+      await Promise.all([
+        this.prisma.busVehicle.count(),
+        this.prisma.busVehicle.count({ where: { active: true } }),
+        this.prisma.busVehicle.count({ where: { active: false } }),
+        this.prisma.busVehicle.groupBy({
+          by: ['vehicleType'],
+          _count: true,
+        }),
+        this.prisma.busVehicle.groupBy({
+          by: ['fuelType'],
+          _count: true,
+        }),
+        this.prisma.busVehicle.count({ where: { wifi: true } }),
+        this.prisma.busVehicle.count({ where: { airCondition: true } }),
+      ]);
 
     return {
       total,
       active,
       inactive,
-      byType: byType.map(item => ({
+      byType: byType.map((item) => ({
         type: item.vehicleType,
         count: item._count,
       })),
-      byFuelType: byFuelType.map(item => ({
+      byFuelType: byFuelType.map((item) => ({
         fuelType: item.fuelType,
         count: item._count,
       })),
@@ -253,8 +276,8 @@ export class VehiclesService {
 
     // Mapiraj u format potreban legacy sistemu, filtriraj null vrednosti
     return vehicles
-      .filter(v => v.garageNumber !== null)
-      .map(v => ({
+      .filter((v) => v.garageNumber !== null)
+      .map((v) => ({
         id: v.id,
         garageNumber: v.garageNumber,
       }));

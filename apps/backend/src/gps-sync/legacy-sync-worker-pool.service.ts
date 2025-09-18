@@ -46,7 +46,15 @@ interface WorkerStatus {
   workerId: number;
   vehicleId?: number;
   garageNumber?: string;
-  status: 'idle' | 'exporting' | 'transferring' | 'importing' | 'detecting' | 'refreshing' | 'completed' | 'failed';
+  status:
+    | 'idle'
+    | 'exporting'
+    | 'transferring'
+    | 'importing'
+    | 'detecting'
+    | 'refreshing'
+    | 'completed'
+    | 'failed';
   progress: number;
   currentStep?: string;
   totalRecords?: number; // Ukupan broj GPS tačaka
@@ -59,7 +67,7 @@ export class LegacySyncWorkerPoolService {
   private readonly logger = new Logger(LegacySyncWorkerPoolService.name);
   private readonly timeoutManager = new TimeoutManager();
   private readonly retryManager = new RetryManager();
-  
+
   // Worker Pool konfiguracija
   private config: WorkerPoolConfig = {
     maxWorkers: 3,
@@ -67,45 +75,53 @@ export class LegacySyncWorkerPoolService {
     retryAttempts: 2,
     // NOVO za COPY support:
     insertMethod: 'batch', // default je batch za backward compatibility
-    copyBatchSize: 10000,  // veći batch za COPY metodu
+    copyBatchSize: 10000, // veći batch za COPY metodu
     fallbackToBatch: true, // automatski fallback ako COPY fail-uje
     resourceLimits: {
       maxMemoryMB: 512,
-      maxCpuPercent: 25
-    }
+      maxCpuPercent: 25,
+    },
   };
-  
+
   // Flag za agresivnu detekciju (učitava se iz baze)
   private aggressiveDetectionEnabled: boolean = false;
-  
+
   // Worker statusi
   private workers: Map<number, WorkerStatus> = new Map();
   private activeWorkers = 0;
-  
+
   // Legacy server konfiguracija
-  private readonly LEGACY_HOST = process.env.LEGACY_SERVER_HOST || '79.101.48.11';
-  private readonly SSH_KEY_PATH = process.env.LEGACY_SSH_KEY_PATH || '~/.ssh/hp-notebook-2025-buslogic';
+  private readonly LEGACY_HOST =
+    process.env.LEGACY_SERVER_HOST || '79.101.48.11';
+  private readonly SSH_KEY_PATH =
+    process.env.LEGACY_SSH_KEY_PATH || '~/.ssh/hp-notebook-2025-buslogic';
   private readonly LEGACY_DB = 'pib100065430gps';
-  
+
   constructor(private readonly prisma: PrismaService) {
     this.loadConfiguration();
-    this.logger.log('🚀 Worker Pool inicijalizovan sa timeout i retry podrškom');
+    this.logger.log(
+      '🚀 Worker Pool inicijalizovan sa timeout i retry podrškom',
+    );
   }
-  
+
   /**
    * Učitava konfiguraciju iz SystemSettings
    */
   private async loadConfiguration() {
     try {
       const settings = await this.prisma.systemSettings.findMany({
-        where: { category: 'legacy_sync' }
+        where: { category: 'legacy_sync' },
       });
-      
-      settings.forEach(setting => {
-        const value = setting.type === 'number' ? parseInt(setting.value) : 
-                       setting.type === 'boolean' ? setting.value === 'true' : setting.value;
-        
-        switch(setting.key) {
+
+      settings.forEach((setting) => {
+        const value =
+          setting.type === 'number'
+            ? parseInt(setting.value)
+            : setting.type === 'boolean'
+              ? setting.value === 'true'
+              : setting.value;
+
+        switch (setting.key) {
           case 'legacy_sync.worker_pool.max_workers':
             this.config.maxWorkers = parseInt(value as string, 10) || 3;
             break;
@@ -114,7 +130,9 @@ export class LegacySyncWorkerPoolService {
             break;
           case 'legacy_sync.aggressive_detection_enabled':
             this.aggressiveDetectionEnabled = value as boolean;
-            this.logger.log(`🎯 Agresivna detekcija: ${this.aggressiveDetectionEnabled ? 'UKLJUČENA' : 'ISKLJUČENA'}`)
+            this.logger.log(
+              `🎯 Agresivna detekcija: ${this.aggressiveDetectionEnabled ? 'UKLJUČENA' : 'ISKLJUČENA'}`,
+            );
             break;
           case 'legacy_sync.worker_pool.retry_attempts':
             this.config.retryAttempts = parseInt(value as string, 10) || 2;
@@ -131,18 +149,18 @@ export class LegacySyncWorkerPoolService {
             break;
         }
       });
-      
+
       this.logger.log(
         `✅ Worker Pool konfiguracija učitana:\n` +
-        `   - Max Workers: ${this.config.maxWorkers}\n` +
-        `   - Insert Method: ${this.config.insertMethod || 'batch'}\n` +
-        `   - Copy Batch Size: ${this.config.copyBatchSize || 10000}`
+          `   - Max Workers: ${this.config.maxWorkers}\n` +
+          `   - Insert Method: ${this.config.insertMethod || 'batch'}\n` +
+          `   - Copy Batch Size: ${this.config.copyBatchSize || 10000}`,
       );
     } catch (error) {
       this.logger.warn('Koriste se default Worker Pool podešavanja');
     }
   }
-  
+
   /**
    * GLAVNA METODA - Pokreće Worker Pool za sinhronizaciju
    */
@@ -153,17 +171,19 @@ export class LegacySyncWorkerPoolService {
     jobId: string,
     refreshAggregates: boolean = false, // Opciono osvežavanje continuous aggregates
     keepCompletedStatuses: boolean = false, // Za Smart Slow Sync - zadrži completed vozila iz prethodnog batch-a
-    maxWorkers?: number // Opciono - override broj workera (za Smart Slow Sync)
+    maxWorkers?: number, // Opciono - override broj workera (za Smart Slow Sync)
   ): Promise<Map<number, WorkerResult>> {
     // Učitaj najnoviju konfiguraciju iz baze pre svake sinhronizacije
     await this.loadConfiguration();
-    
+
     // Koristi prosleđeni maxWorkers ili iz konfiguracije
     const effectiveMaxWorkers = maxWorkers ?? this.config.maxWorkers;
-    
+
     const startTime = Date.now();
-    this.logger.log(`🚀 Pokrećem Worker Pool sa max ${effectiveMaxWorkers} worker-a za ${vehicleIds.length} vozila`);
-    
+    this.logger.log(
+      `🚀 Pokrećem Worker Pool sa max ${effectiveMaxWorkers} worker-a za ${vehicleIds.length} vozila`,
+    );
+
     // Resetuj worker statuse
     if (keepCompletedStatuses) {
       // Za Smart Slow Sync - zadrži completed statuse iz prethodnog batch-a
@@ -182,17 +202,17 @@ export class LegacySyncWorkerPoolService {
       this.workers.clear();
     }
     this.activeWorkers = 0;
-    
+
     // Dobavi informacije o vozilima
     const vehicles = await this.getVehicleInfo(vehicleIds);
-    
+
     // Podeli vozila na chunk-ove prema broju worker-a
     const workerCount = Math.min(effectiveMaxWorkers, vehicles.length);
     const vehicleChunks = this.splitIntoChunks(vehicles, workerCount);
-    
+
     // Kreiraj promise za svaki worker
     const workerPromises: Promise<WorkerResult[]>[] = [];
-    
+
     // Prvo kreiraj worker status za SVAKO vozilo
     for (const vehicle of vehicles) {
       this.workers.set(vehicle.id, {
@@ -201,31 +221,31 @@ export class LegacySyncWorkerPoolService {
         garageNumber: vehicle.garage_number,
         status: 'idle',
         progress: 0,
-        startTime: new Date()
+        startTime: new Date(),
       });
     }
-    
+
     for (let i = 0; i < vehicleChunks.length; i++) {
       const workerId = i + 1;
       const vehicleChunk = vehicleChunks[i];
-      
+
       // Pokreni worker
       workerPromises.push(
-        this.runWorker(workerId, vehicleChunk, syncFrom, syncTo, jobId)
+        this.runWorker(workerId, vehicleChunk, syncFrom, syncTo, jobId),
       );
     }
-    
+
     // Čekaj da svi worker-i završe
     const workerResults = await Promise.allSettled(workerPromises);
-    
+
     // Agregiraj rezultate
     const allResults = new Map<number, WorkerResult>();
     let totalProcessed = 0;
     let totalFailed = 0;
-    
+
     workerResults.forEach((result, index) => {
       if (result.status === 'fulfilled') {
-        result.value.forEach(vehicleResult => {
+        result.value.forEach((vehicleResult) => {
           allResults.set(vehicleResult.vehicleId, vehicleResult);
           if (vehicleResult.status === 'completed') {
             totalProcessed += vehicleResult.processedRecords;
@@ -238,100 +258,115 @@ export class LegacySyncWorkerPoolService {
         totalFailed += vehicleChunks[index].length;
       }
     });
-    
+
     const totalTime = Date.now() - startTime;
     this.logger.log(
       `✅ Worker Pool završen: ${totalProcessed} GPS tačaka procesirano, ` +
-      `${totalFailed} vozila failed za ${(totalTime / 1000).toFixed(1)}s`
+        `${totalFailed} vozila failed za ${(totalTime / 1000).toFixed(1)}s`,
     );
-    
+
     // Opciono: Osvježi continuous aggregates ako je zatraženo
     if (refreshAggregates && totalProcessed > 0) {
       try {
-        this.logger.log('🔄 Osvežavam continuous aggregates (opcija je uključena)...');
-        
+        this.logger.log(
+          '🔄 Osvežavam continuous aggregates (opcija je uključena)...',
+        );
+
         // Pronađi vremenski opseg za refresh
         const minDate = new Date(syncFrom);
         const maxDate = new Date(syncTo);
-        
+
         // Osvježi sve tri continuous aggregate tabele
         const aggregatesToRefresh = [
           'vehicle_hourly_stats',
-          'daily_vehicle_stats', 
-          'monthly_vehicle_raw_stats'
+          'daily_vehicle_stats',
+          'monthly_vehicle_raw_stats',
         ];
-        
+
         // Koristi direktnu PostgreSQL konekciju za TimescaleDB operacije
         const { Pool } = require('pg');
         const pgPool = new Pool({
           connectionString: process.env.TIMESCALE_DATABASE_URL,
-          ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+          ssl:
+            process.env.NODE_ENV === 'production'
+              ? { rejectUnauthorized: false }
+              : false,
         });
-        
+
         let successCount = 0;
         for (const aggregateName of aggregatesToRefresh) {
           try {
             // Ažuriraj status svih worker-a
-            this.workers.forEach(worker => {
+            this.workers.forEach((worker) => {
               worker.status = 'refreshing';
               worker.currentStep = `Osvežavam ${aggregateName}`;
-              worker.progress = 90 + (successCount * 3); // 90-99%
+              worker.progress = 90 + successCount * 3; // 90-99%
             });
-            
+
             // Direktno pozovi refresh_continuous_aggregate na TimescaleDB
             // Eksplicitno kastuj datume u timestamptz
             await pgPool.query(
               `CALL refresh_continuous_aggregate($1, $2::timestamptz, $3::timestamptz)`,
-              [aggregateName, minDate.toISOString(), maxDate.toISOString()]
+              [aggregateName, minDate.toISOString(), maxDate.toISOString()],
             );
-            
+
             this.logger.log(`  ✅ ${aggregateName} osvežen`);
             successCount++;
-            
+
             // Ažuriraj progress
-            this.workers.forEach(worker => {
-              worker.progress = 90 + (successCount * 3); // 93, 96, 99%
+            this.workers.forEach((worker) => {
+              worker.progress = 90 + successCount * 3; // 93, 96, 99%
             });
           } catch (error) {
-            this.logger.warn(`  ⚠️ Ne mogu osvežiti ${aggregateName}: ${error.message}`);
+            this.logger.warn(
+              `  ⚠️ Ne mogu osvežiti ${aggregateName}: ${error.message}`,
+            );
           }
         }
-        
+
         await pgPool.end();
-        
+
         // Označii završetak refresh-a
-        this.workers.forEach(worker => {
+        this.workers.forEach((worker) => {
           worker.status = 'completed';
           worker.progress = 100;
-          worker.currentStep = successCount > 0 
-            ? `Završeno: ${successCount} agregata osveženo` 
-            : 'Završeno (aggregates se osvežavaju automatski)';
+          worker.currentStep =
+            successCount > 0
+              ? `Završeno: ${successCount} agregata osveženo`
+              : 'Završeno (aggregates se osvežavaju automatski)';
         });
-        
+
         if (successCount > 0) {
-          this.logger.log(`📊 Osveženo ${successCount}/${aggregatesToRefresh.length} agregata - izveštaji su ažurirani!`);
+          this.logger.log(
+            `📊 Osveženo ${successCount}/${aggregatesToRefresh.length} agregata - izveštaji su ažurirani!`,
+          );
         } else {
-          this.logger.warn('⚠️ Nije moguće osvežiti aggregate - izveštaji će biti ažurirani automatski za 1 sat');
+          this.logger.warn(
+            '⚠️ Nije moguće osvežiti aggregate - izveštaji će biti ažurirani automatski za 1 sat',
+          );
         }
       } catch (error) {
-        this.logger.error(`Greška pri osvežavanju continuous aggregates: ${error.message}`);
+        this.logger.error(
+          `Greška pri osvežavanju continuous aggregates: ${error.message}`,
+        );
         // Ne prekidaj proces zbog greške u refresh-u
       }
     } else if (!refreshAggregates && totalProcessed > 0) {
       // Aggregates će se automatski osvežiti za 1 sat
       // Označii završetak bez refresh-a
-      this.workers.forEach(worker => {
+      this.workers.forEach((worker) => {
         if (worker.status !== 'failed') {
           worker.status = 'completed';
           worker.progress = 100;
-          worker.currentStep = 'Završeno (aggregates se osvežavaju automatski za 1h)';
+          worker.currentStep =
+            'Završeno (aggregates se osvežavaju automatski za 1h)';
         }
       });
     }
-    
+
     return allResults;
   }
-  
+
   /**
    * Pokreće pojedinačni worker
    */
@@ -340,13 +375,13 @@ export class LegacySyncWorkerPoolService {
     vehicles: any[],
     syncFrom: Date,
     syncTo: Date,
-    jobId: string
+    jobId: string,
   ): Promise<WorkerResult[]> {
     const results: WorkerResult[] = [];
     this.activeWorkers++;
-    
+
     // this.logger.debug(`Worker ${workerId}: Počinje`);
-    
+
     for (const vehicle of vehicles) {
       // Sada koristimo vehicle.id kao ključ
       const workerStatus = this.workers.get(vehicle.id);
@@ -354,19 +389,21 @@ export class LegacySyncWorkerPoolService {
         workerStatus.workerId = workerId; // Ažuriraj koji worker obrađuje ovo vozilo
         workerStatus.status = 'exporting';
       }
-      
+
       // Pozovi syncVehicleWithWorker sa WORKER TIMEOUT wrapper-om
       let result: WorkerResult;
       try {
         result = await this.timeoutManager.execWithWorkerTimeout(
           this.syncVehicleWithWorker(workerId, vehicle, syncFrom, syncTo),
           vehicle.id,
-          workerId
+          workerId,
         );
       } catch (error) {
         if (error instanceof TimeoutError) {
           // Worker timeout - označi kao failed
-          this.logger.error(`⏱️ WORKER TIMEOUT za vozilo ${vehicle.garage_number} nakon 10 minuta!`);
+          this.logger.error(
+            `⏱️ WORKER TIMEOUT za vozilo ${vehicle.garage_number} nakon 10 minuta!`,
+          );
           result = {
             workerId,
             vehicleId: vehicle.id,
@@ -378,31 +415,32 @@ export class LegacySyncWorkerPoolService {
             endTime: new Date(),
             duration: this.config.workerTimeout,
             error: 'Worker timeout - operacija prekoračila 10 minuta',
-            logs: [`Worker timeout nakon ${this.config.workerTimeout}ms`]
+            logs: [`Worker timeout nakon ${this.config.workerTimeout}ms`],
           };
         } else {
           throw error; // Re-throw druge greške
         }
       }
-      
+
       results.push(result);
-      
+
       // Ažuriraj finalni status
       const finalWorkerStatus = this.workers.get(vehicle.id);
       if (finalWorkerStatus) {
-        finalWorkerStatus.status = result.status === 'completed' ? 'completed' : 'failed';
+        finalWorkerStatus.status =
+          result.status === 'completed' ? 'completed' : 'failed';
         finalWorkerStatus.progress = 100;
         finalWorkerStatus.totalRecords = result.totalRecords;
         finalWorkerStatus.processedRecords = result.processedRecords;
       }
     }
-    
+
     this.activeWorkers--;
     // this.logger.debug(`Worker ${workerId}: Završen`);
-    
+
     return results;
   }
-  
+
   /**
    * Sinhronizuje jedno vozilo (worker task)
    */
@@ -410,15 +448,19 @@ export class LegacySyncWorkerPoolService {
     workerId: number,
     vehicle: any,
     syncFrom: Date,
-    syncTo: Date
+    syncTo: Date,
   ): Promise<WorkerResult> {
     const startTime = new Date();
     const logs: string[] = [];
     const garageNo = vehicle.garage_number;
     const tableName = `${garageNo}gps`;
-    
+
     // Ažuriraj worker status - koristi vehicleId kao ključ
-    const updateWorkerStatus = (status: WorkerStatus['status'], step?: string, progress?: number) => {
+    const updateWorkerStatus = (
+      status: WorkerStatus['status'],
+      step?: string,
+      progress?: number,
+    ) => {
       const workerStatus = this.workers.get(vehicle.id);
       if (workerStatus) {
         workerStatus.status = status;
@@ -429,30 +471,38 @@ export class LegacySyncWorkerPoolService {
         workerStatus.garageNumber = vehicle.garage_number;
       }
     };
-    
+
     try {
-      logs.push(`[Worker ${workerId}] 🚗 Počinje sinhronizaciju za ${garageNo}`);
-      
+      logs.push(
+        `[Worker ${workerId}] 🚗 Počinje sinhronizaciju za ${garageNo}`,
+      );
+
       // Step 1: COUNT zapisa
       updateWorkerStatus('exporting', 'Brojanje zapisa', 10);
       const fromDate = syncFrom.toISOString().split('T')[0];
       const toDate = syncTo.toISOString().split('T')[0];
-      
+
       const countCmd = `ssh -i ${this.SSH_KEY_PATH} root@${this.LEGACY_HOST} "mysql -uroot ${this.LEGACY_DB} -e 'SELECT COUNT(*) as total FROM ${tableName} WHERE captured >= \\"${fromDate} 00:00:00\\" AND captured <= \\"${toDate} 23:59:59\\"'"`;
-      
-      const { stdout: countOutput } = await this.timeoutManager.execCommand(countCmd, this.timeoutManager.timeouts.SSH_COUNT, `COUNT za ${garageNo}`);
+
+      const { stdout: countOutput } = await this.timeoutManager.execCommand(
+        countCmd,
+        this.timeoutManager.timeouts.SSH_COUNT,
+        `COUNT za ${garageNo}`,
+      );
       const totalMatch = countOutput.match(/(\d+)/);
       const totalRecords = totalMatch ? parseInt(totalMatch[1]) : 0;
-      
-      logs.push(`[Worker ${workerId}] 📊 Pronađeno ${totalRecords.toLocaleString()} GPS tačaka`);
-      
+
+      logs.push(
+        `[Worker ${workerId}] 📊 Pronađeno ${totalRecords.toLocaleString()} GPS tačaka`,
+      );
+
       // Ažuriraj worker status sa brojem tačaka - koristi vehicle.id
       const workerStatus = this.workers.get(vehicle.id);
       if (workerStatus) {
         workerStatus.totalRecords = totalRecords;
         workerStatus.currentStep = `Pronađeno ${totalRecords.toLocaleString()} GPS tačaka`;
       }
-      
+
       if (totalRecords === 0) {
         logs.push(`[Worker ${workerId}] ⚠️ Nema podataka za period`);
         return {
@@ -465,16 +515,16 @@ export class LegacySyncWorkerPoolService {
           startTime,
           endTime: new Date(),
           duration: Date.now() - startTime.getTime(),
-          logs
+          logs,
         };
       }
-      
+
       // Step 2: EXPORT podataka
       updateWorkerStatus('exporting', 'Export podataka', 30);
       const exportFileName = `${garageNo}_worker${workerId}_${Date.now()}.sql.gz`;
       // Koristi /tmp direktorijum koji uvek postoji
       const localPath = path.join('/tmp', exportFileName);
-      
+
       const sshExportCmd = `ssh -i ${this.SSH_KEY_PATH} root@${this.LEGACY_HOST} "
         cd /tmp && 
         mysqldump -uroot ${this.LEGACY_DB} ${tableName} \\
@@ -482,21 +532,24 @@ export class LegacySyncWorkerPoolService {
           gzip > ${exportFileName} &&
         ls -lh ${exportFileName}
       "`;
-      
+
       // Export sa retry logikom (manje pokušaja jer traje dugo)
-      await this.retryManager.retryWithBackoff(async () => {
-        await this.timeoutManager.execCommand(
-          sshExportCmd,
-          this.timeoutManager.timeouts.SSH_EXPORT,
-          `EXPORT za ${garageNo}`
-        );
-      }, {
-        maxAttempts: 2, // Samo 2 pokušaja za export
-        operationName: `EXPORT za ${garageNo}`,
-        initialDelayMs: 5000 // 5 sekundi između pokušaja
-      });
+      await this.retryManager.retryWithBackoff(
+        async () => {
+          await this.timeoutManager.execCommand(
+            sshExportCmd,
+            this.timeoutManager.timeouts.SSH_EXPORT,
+            `EXPORT za ${garageNo}`,
+          );
+        },
+        {
+          maxAttempts: 2, // Samo 2 pokušaja za export
+          operationName: `EXPORT za ${garageNo}`,
+          initialDelayMs: 5000, // 5 sekundi između pokušaja
+        },
+      );
       logs.push(`[Worker ${workerId}] 💾 Export završen: ${exportFileName}`);
-      
+
       // Step 3: TRANSFER fajla
       updateWorkerStatus('transferring', 'Transfer fajla', 50);
       const scpCmd = `scp -i ${this.SSH_KEY_PATH} root@${this.LEGACY_HOST}:/tmp/${exportFileName} ${localPath}`;
@@ -505,31 +558,39 @@ export class LegacySyncWorkerPoolService {
         await this.timeoutManager.execCommand(
           scpCmd,
           this.timeoutManager.timeouts.SCP_TRANSFER,
-          `SCP TRANSFER za ${garageNo}`
+          `SCP TRANSFER za ${garageNo}`,
         );
       }, `SCP transfer za ${garageNo}`);
       logs.push(`[Worker ${workerId}] 📥 Transfer završen`);
-      
+
       // Step 4: IMPORT u TimescaleDB
       updateWorkerStatus('importing', 'Import u bazu', 70);
-      
+
       // Detektuj okruženje i koristi odgovarajuću metodu
       let importSuccess = false;
       let importedCount = 0;
-      
+
       // Koristi Node.js import za oba okruženja (development i production)
       // executeProductionImport automatski koristi prave kredencijale iz .env fajla
-      logs.push(`[Worker ${workerId}] 🔄 Izvršavam import direktno kroz Node.js...`);
-      
+      logs.push(
+        `[Worker ${workerId}] 🔄 Izvršavam import direktno kroz Node.js...`,
+      );
+
       try {
         // Ova metoda koristi TIMESCALE_DATABASE_URL iz .env fajla
-        const result = await this.executeProductionImport(localPath, garageNo, vehicle.id);
+        const result = await this.executeProductionImport(
+          localPath,
+          garageNo,
+          vehicle.id,
+        );
         importSuccess = result.success;
         importedCount = result.count;
-        
+
         if (importSuccess) {
-          logs.push(`[Worker ${workerId}] ✅ Import uspešan: ${importedCount} GPS tačaka`);
-          
+          logs.push(
+            `[Worker ${workerId}] ✅ Import uspešan: ${importedCount} GPS tačaka`,
+          );
+
           // Ažuriraj worker status sa obrađenim zapisima - koristi vehicle.id
           const workerStatus = this.workers.get(vehicle.id);
           if (workerStatus) {
@@ -540,31 +601,56 @@ export class LegacySyncWorkerPoolService {
       } catch (error) {
         logs.push(`[Worker ${workerId}] ❌ Import greška: ${error.message}`);
       }
-      
+
       if (!importSuccess) {
         throw new Error('Import neuspešan');
       }
-      
+
       const processedRecords = importedCount;
-      
+
       // Step 5: DETECT AGGRESSIVE DRIVING (AKO JE UKLJUČENO)
-      if (importSuccess && importedCount > 0 && this.aggressiveDetectionEnabled) {
+      if (
+        importSuccess &&
+        importedCount > 0 &&
+        this.aggressiveDetectionEnabled
+      ) {
         updateWorkerStatus('detecting', 'Detekcija agresivne vožnje', 85);
-        logs.push(`[Worker ${workerId}] 🔍 Pokrećem detekciju agresivne vožnje...`);
-        
+        logs.push(
+          `[Worker ${workerId}] 🔍 Pokrećem detekciju agresivne vožnje...`,
+        );
+
         try {
-          const detectedEvents = await this.detectAggressiveDriving(vehicle.id, garageNo, syncFrom, syncTo);
-          updateWorkerStatus('detecting', `Detektovano ${detectedEvents} agresivnih događaja`, 88);
-          logs.push(`[Worker ${workerId}] ✅ Detekcija završena: ${detectedEvents} agresivnih događaja`);
+          const detectedEvents = await this.detectAggressiveDriving(
+            vehicle.id,
+            garageNo,
+            syncFrom,
+            syncTo,
+          );
+          updateWorkerStatus(
+            'detecting',
+            `Detektovano ${detectedEvents} agresivnih događaja`,
+            88,
+          );
+          logs.push(
+            `[Worker ${workerId}] ✅ Detekcija završena: ${detectedEvents} agresivnih događaja`,
+          );
         } catch (detectionError) {
-          logs.push(`[Worker ${workerId}] ⚠️ Detekcija greška: ${detectionError.message}`);
+          logs.push(
+            `[Worker ${workerId}] ⚠️ Detekcija greška: ${detectionError.message}`,
+          );
           // Ne prekidaj proces zbog greške u detekciji
         }
-      } else if (importSuccess && importedCount > 0 && !this.aggressiveDetectionEnabled) {
-        logs.push(`[Worker ${workerId}] ⏭️ Preskačem detekciju agresivne vožnje (isključena u konfiguraciji)`);
+      } else if (
+        importSuccess &&
+        importedCount > 0 &&
+        !this.aggressiveDetectionEnabled
+      ) {
+        logs.push(
+          `[Worker ${workerId}] ⏭️ Preskačem detekciju agresivne vožnje (isključena u konfiguraciji)`,
+        );
         updateWorkerStatus('detecting', 'Detekcija preskočena', 85);
       }
-      
+
       // Step 6: CLEANUP sa TIMEOUT (ali ne fail ako ne uspe)
       updateWorkerStatus('completed', 'Čišćenje', 90);
       try {
@@ -572,9 +658,9 @@ export class LegacySyncWorkerPoolService {
         await this.timeoutManager.execCommand(
           `rm -f ${localPath}`,
           this.timeoutManager.timeouts.CLEANUP,
-          'LOCAL CLEANUP'
+          'LOCAL CLEANUP',
         );
-        
+
         // Remote cleanup
         const remoteCleanupCmd = `rm -f /tmp/${exportFileName}`;
         await this.timeoutManager.execSSHCommand(
@@ -582,15 +668,17 @@ export class LegacySyncWorkerPoolService {
           this.SSH_KEY_PATH,
           this.LEGACY_HOST,
           this.timeoutManager.timeouts.CLEANUP,
-          'REMOTE CLEANUP'
+          'REMOTE CLEANUP',
         );
         logs.push(`[Worker ${workerId}] 🧹 Privremeni fajlovi obrisani`);
       } catch (cleanupError) {
-        logs.push(`[Worker ${workerId}] ⚠️ Cleanup greška: ${cleanupError.message}`);
+        logs.push(
+          `[Worker ${workerId}] ⚠️ Cleanup greška: ${cleanupError.message}`,
+        );
       }
-      
+
       updateWorkerStatus('completed', 'Završeno', 100);
-      
+
       return {
         workerId,
         vehicleId: vehicle.id,
@@ -601,14 +689,13 @@ export class LegacySyncWorkerPoolService {
         startTime,
         endTime: new Date(),
         duration: Date.now() - startTime.getTime(),
-        logs
+        logs,
       };
-      
     } catch (error) {
       // Detaljnije error handling
       let errorMessage = error.message;
       let errorType = 'UNKNOWN';
-      
+
       if (error instanceof TimeoutError) {
         errorType = 'TIMEOUT';
         errorMessage = `Timeout: ${error.message}`;
@@ -622,12 +709,14 @@ export class LegacySyncWorkerPoolService {
         errorMessage = `SSH error: ${error.message}`;
         this.logger.error(`🔐 SSH greška za ${garageNo}: ${error.message}`);
       } else {
-        this.logger.error(`❌ Nepoznata greška za ${garageNo}: ${error.message}`);
+        this.logger.error(
+          `❌ Nepoznata greška za ${garageNo}: ${error.message}`,
+        );
       }
-      
+
       logs.push(`[Worker ${workerId}] ❌ ${errorType} greška: ${errorMessage}`);
       updateWorkerStatus('failed', `${errorType} greška`, 0);
-      
+
       return {
         workerId,
         vehicleId: vehicle.id,
@@ -639,11 +728,11 @@ export class LegacySyncWorkerPoolService {
         endTime: new Date(),
         duration: Date.now() - startTime.getTime(),
         error: errorMessage,
-        logs
+        logs,
       };
     }
   }
-  
+
   /**
    * Dobavlja informacije o vozilima
    */
@@ -655,42 +744,42 @@ export class LegacySyncWorkerPoolService {
       WHERE id IN (${Prisma.join(vehicleIds)})
     `;
   }
-  
+
   /**
    * Deli niz na chunk-ove
    */
   private splitIntoChunks<T>(array: T[], chunkCount: number): T[][] {
     const chunks: T[][] = [];
     const chunkSize = Math.ceil(array.length / chunkCount);
-    
+
     for (let i = 0; i < array.length; i += chunkSize) {
       chunks.push(array.slice(i, i + chunkSize));
     }
-    
+
     return chunks;
   }
-  
+
   /**
    * Vraća trenutni status svih worker-a
    */
   getWorkerStatuses(): WorkerStatus[] {
     return Array.from(this.workers.values());
   }
-  
+
   /**
    * Vraća broj aktivnih worker-a
    */
   getActiveWorkerCount(): number {
     return this.activeWorkers;
   }
-  
+
   /**
    * Prekida sve aktivne worker-e
    */
   async stopAllWorkers(): Promise<void> {
     this.logger.warn('⛔ Zaustavljanje svih worker-a...');
     // Implementacija za graceful shutdown
-    this.workers.forEach(worker => {
+    this.workers.forEach((worker) => {
       worker.status = 'failed';
       worker.currentStep = 'Prekinuto od strane korisnika';
     });
@@ -703,47 +792,53 @@ export class LegacySyncWorkerPoolService {
   private async executeProductionImport(
     dumpFilePath: string,
     garageNo: string,
-    vehicleId: number
+    vehicleId: number,
   ): Promise<{ success: boolean; count: number }> {
     // Debug logovi isključeni - previše zagušuju konzolu
-    
+
     const { Pool } = require('pg');
     const fs = require('fs');
     const zlib = require('zlib');
     const readline = require('readline');
-    
+
     // Proveri da li fajl postoji
     if (!fs.existsSync(dumpFilePath)) {
       this.logger.error(`Dump file not found: ${dumpFilePath}`);
       return { success: false, count: 0 };
     }
-    
+
     const fileStats = fs.statSync(dumpFilePath);
     // this.logger.debug(`Dump file size: ${fileStats.size} bytes`);
-    
+
     // Kreiraj konekciju ka TimescaleDB
     const pool = new Pool({
       connectionString: process.env.TIMESCALE_DATABASE_URL,
-      ssl: { rejectUnauthorized: false }
+      ssl: { rejectUnauthorized: false },
     });
 
     let importedCount = 0;
-    
+
     // Dinamički batch size na osnovu insert metoda
     // COPY metod može da hendluje mnogo više redova bez PostgreSQL parameter limita
-    const INSERT_BATCH_SIZE = this.config.insertMethod === 'copy' 
-      ? (this.config.copyBatchSize || 10000)  // Za COPY: koristi konfigurisan batch size (default 10,000)
-      : 2500;  // Za batch INSERT: 2,500 redova × 11 parametara = 27,500 (ispod limita od 32,767)
-    
+    const INSERT_BATCH_SIZE =
+      this.config.insertMethod === 'copy'
+        ? this.config.copyBatchSize || 10000 // Za COPY: koristi konfigurisan batch size (default 10,000)
+        : 2500; // Za batch INSERT: 2,500 redova × 11 parametara = 27,500 (ispod limita od 32,767)
+
     // READ_BATCH_SIZE treba da bude jednak INSERT_BATCH_SIZE za COPY metodu
     // Za batch metodu, čitamo više redova odjednom za efikasniju obradu fajla
-    const READ_BATCH_SIZE = this.config.insertMethod === 'copy'
-      ? INSERT_BATCH_SIZE  // Za COPY: čitaj koliko možeš da insertaš
-      : 10000;  // Za batch: čitaj po 10,000 pa deli na manje batch-ove od 2,500
-    
-    this.logger.debug(`[BATCH SIZE] Config copyBatchSize: ${this.config.copyBatchSize}, insertMethod: ${this.config.insertMethod}`);
-    this.logger.debug(`[BATCH SIZE] Koristi se batch size: ${INSERT_BATCH_SIZE} za metod: ${this.config.insertMethod || 'batch'}`);
-    
+    const READ_BATCH_SIZE =
+      this.config.insertMethod === 'copy'
+        ? INSERT_BATCH_SIZE // Za COPY: čitaj koliko možeš da insertaš
+        : 10000; // Za batch: čitaj po 10,000 pa deli na manje batch-ove od 2,500
+
+    this.logger.debug(
+      `[BATCH SIZE] Config copyBatchSize: ${this.config.copyBatchSize}, insertMethod: ${this.config.insertMethod}`,
+    );
+    this.logger.debug(
+      `[BATCH SIZE] Koristi se batch size: ${INSERT_BATCH_SIZE} za metod: ${this.config.insertMethod || 'batch'}`,
+    );
+
     let batch: any[] = [];
     let lineCount = 0;
 
@@ -758,60 +853,64 @@ export class LegacySyncWorkerPoolService {
       const stream = fs.createReadStream(dumpFilePath).pipe(gunzip);
       const rl = readline.createInterface({
         input: stream,
-        crlfDelay: Infinity
+        crlfDelay: Infinity,
       });
 
       for await (const line of rl) {
         lineCount++;
-        
+
         if (!line.startsWith('INSERT INTO')) continue;
-        
+
         // Log prvih par INSERT linija za debug
         if (importedCount < 10) {
           this.logger.log(`Line ${lineCount}: ${line.substring(0, 200)}...`);
         }
-        
+
         // Parsuj INSERT statement
         const valuesMatch = line.match(/VALUES\s*(.+);?$/);
         if (!valuesMatch) {
           this.logger.warn(`Could not parse VALUES from line ${lineCount}`);
           continue;
         }
-        
+
         // Ekstraktuj values
         const valuesStr = valuesMatch[1];
-        
+
         // Regex za parsiranje pojedinačnih redova iz VALUES
         // Matches: ('2025-08-28 22:00:27','2025-08-29 00:00:01',44.81432830,20.52106660,96,0,103,0,0)
         const rowRegex = /\(([^)]+)\)/g;
         let rowMatch;
-        
+
         while ((rowMatch = rowRegex.exec(valuesStr)) !== null) {
           const rowContent = rowMatch[1];
-          
+
           // Parsuj kolone korišćenjem regex-a da pravilno handle-uje string vrednosti sa quotes
           // Pattern: bilo koji string u quotes ili broj
           const valueRegex = /'([^']*)'|([^,]+)/g;
           const cols: string[] = [];
           let valueMatch;
-          
+
           while ((valueMatch = valueRegex.exec(rowContent)) !== null) {
             // Ako je match u quotes (group 1), koristi ga, inače koristi group 2 (broj)
-            cols.push(valueMatch[1] !== undefined ? valueMatch[1] : valueMatch[2].trim());
+            cols.push(
+              valueMatch[1] !== undefined
+                ? valueMatch[1]
+                : valueMatch[2].trim(),
+            );
           }
-          
+
           // Debug log za prvih par redova
           // Debug logovi isključeni
           // if (batch.length < 5) {
           //   this.logger.debug(`Parsed row ${batch.length}: ${cols.length} columns`);
           // }
-          
+
           // Preskoci ako nema dovoljno kolona
           if (cols.length < 9) {
             // Skipping row with insufficient columns
             continue;
           }
-          
+
           batch.push({
             time: cols[1], // captured timestamp
             vehicle_id: vehicleId,
@@ -822,14 +921,17 @@ export class LegacySyncWorkerPoolService {
             course: parseFloat(cols[4]) || 0,
             alt: parseFloat(cols[6]) || 0,
             state: parseInt(cols[8]) || 0,
-            in_route: parseInt(cols[7]) > 0
+            in_route: parseInt(cols[7]) > 0,
           });
-          
+
           // Kada batch dostigne READ veličinu, podeli ga na manje INSERT batch-ove
           if (batch.length >= READ_BATCH_SIZE) {
             // Podeli veliki batch na manje delove za INSERT
             for (let i = 0; i < batch.length; i += INSERT_BATCH_SIZE) {
-              const insertBatch = batch.slice(i, Math.min(i + INSERT_BATCH_SIZE, batch.length));
+              const insertBatch = batch.slice(
+                i,
+                Math.min(i + INSERT_BATCH_SIZE, batch.length),
+              );
               await this.insertBatch(pool, insertBatch);
               importedCount += insertBatch.length;
             }
@@ -837,29 +939,31 @@ export class LegacySyncWorkerPoolService {
           }
         }
       }
-      
+
       // Umetni poslednji batch (takođe podeli ako je potrebno)
       if (batch.length > 0) {
         for (let i = 0; i < batch.length; i += INSERT_BATCH_SIZE) {
-          const insertBatch = batch.slice(i, Math.min(i + INSERT_BATCH_SIZE, batch.length));
+          const insertBatch = batch.slice(
+            i,
+            Math.min(i + INSERT_BATCH_SIZE, batch.length),
+          );
           await this.insertBatch(pool, insertBatch);
           importedCount += insertBatch.length;
         }
       }
-      
+
       // Finalni rezultat - samo ovo ostaje
       // this.logger.log(`Imported: ${importedCount} records`);
       return { success: true, count: importedCount };
-      
     } catch (error) {
       this.logger.error(`Production import error: ${error.message}`);
       this.logger.error(`Error stack: ${error.stack}`);
-      
+
       // Dodatno logovanje za debug
       if (!process.env.TIMESCALE_DATABASE_URL) {
         this.logger.error('TIMESCALE_DATABASE_URL nije postavljen!');
       }
-      
+
       return { success: false, count: importedCount };
     } finally {
       if (pool) {
@@ -878,11 +982,11 @@ export class LegacySyncWorkerPoolService {
   private async insertBatch(pool: any, batch: any[]): Promise<void> {
     // Odluči koju metodu koristiti
     const method = this.determineInsertMethod(batch.length);
-    
+
     this.logger.debug(
-      `[INSERT METHOD] Koristim ${method} metodu za ${batch.length} redova`
+      `[INSERT METHOD] Koristim ${method} metodu za ${batch.length} redova`,
     );
-    
+
     if (method === 'copy') {
       await this.insertWithCopy(pool, batch);
     } else {
@@ -897,12 +1001,12 @@ export class LegacySyncWorkerPoolService {
     if (!this.config.insertMethod || this.config.insertMethod === 'batch') {
       return 'batch';
     }
-    
+
     if (this.config.insertMethod === 'auto') {
       // Auto logika - COPY za velike batch-ove
       return batchSize >= 5000 ? 'copy' : 'batch';
     }
-    
+
     return this.config.insertMethod;
   }
 
@@ -912,10 +1016,10 @@ export class LegacySyncWorkerPoolService {
   private async insertWithCopy(pool: any, batch: any[]): Promise<void> {
     const startTime = Date.now();
     const client = await pool.connect();
-    
+
     try {
       await client.query('BEGIN');
-      
+
       // 1. Kreiraj jedinstvenu temp tabelu
       const tempTableName = `gps_data_temp_${Date.now()}`;
       await client.query(`
@@ -923,61 +1027,70 @@ export class LegacySyncWorkerPoolService {
           LIKE gps_data INCLUDING DEFAULTS
         ) ON COMMIT DROP
       `);
-      
+
       // 2. Pripremi COPY stream (bez location - trigger će je generisati)
-      const stream = client.query(copyFrom(`
+      const stream = client.query(
+        copyFrom(`
         COPY ${tempTableName} (
           time, vehicle_id, garage_no, lat, lng,
           speed, course, alt, state, in_route, data_source
         ) FROM STDIN WITH (FORMAT csv, DELIMITER E'\\t', NULL '\\N')
-      `));
-      
+      `),
+      );
+
       // 3. Stream podatke u CSV formatu
       let streamedRows = 0;
-      
+
       // Promisify stream za async/await
       const streamPromise = new Promise<void>((resolve, reject) => {
         stream.on('error', reject);
         stream.on('finish', resolve);
       });
-      
+
       for (const row of batch) {
         // Format: tab-separated, \N za NULL vrednosti
-        const csvLine = [
-          row.time || new Date().toISOString(),
-          row.vehicle_id,
-          row.garage_no,
-          row.lat || 0,
-          row.lng || 0,
-          row.speed !== null && row.speed !== undefined ? row.speed : '\\N',
-          row.course !== null && row.course !== undefined ? row.course : '\\N',
-          row.alt !== null && row.alt !== undefined ? row.alt : '\\N',
-          row.state || 0,
-          row.in_route || 0,
-          'historical_import'
-        ].join('\t') + '\n';
-        
+        const csvLine =
+          [
+            row.time || new Date().toISOString(),
+            row.vehicle_id,
+            row.garage_no,
+            row.lat || 0,
+            row.lng || 0,
+            row.speed !== null && row.speed !== undefined ? row.speed : '\\N',
+            row.course !== null && row.course !== undefined
+              ? row.course
+              : '\\N',
+            row.alt !== null && row.alt !== undefined ? row.alt : '\\N',
+            row.state || 0,
+            row.in_route || 0,
+            'historical_import',
+          ].join('\t') + '\n';
+
         const written = stream.write(csvLine);
         if (!written) {
           // Back pressure - čekaj da se buffer oslobodi
-          await new Promise(resolve => stream.once('drain', resolve));
+          await new Promise((resolve) => stream.once('drain', resolve));
         }
-        
+
         streamedRows++;
-        
+
         // Log progress za velike batch-ove
         if (streamedRows % 5000 === 0) {
-          this.logger.debug(`[COPY] Streamed ${streamedRows}/${batch.length} rows...`);
+          this.logger.debug(
+            `[COPY] Streamed ${streamedRows}/${batch.length} rows...`,
+          );
         }
       }
-      
+
       // Završi stream
       stream.end();
       await streamPromise;
-      
+
       const streamDuration = Date.now() - startTime;
-      this.logger.log(`[COPY] Stream završen: ${streamedRows} redova za ${streamDuration}ms`);
-      
+      this.logger.log(
+        `[COPY] Stream završen: ${streamedRows} redova za ${streamDuration}ms`,
+      );
+
       // 4. Prebaci iz temp tabele u glavnu sa ON CONFLICT
       const transferStart = Date.now();
       const result = await client.query(`
@@ -993,25 +1106,24 @@ export class LegacySyncWorkerPoolService {
           alt = EXCLUDED.alt
         RETURNING 1
       `);
-      
+
       const transferDuration = Date.now() - transferStart;
       const totalDuration = Date.now() - startTime;
-      
+
       await client.query('COMMIT');
-      
+
       // Performance logovi
       this.logger.log(
         `✅ [COPY METODA] ${batch.length} redova\n` +
-        `   - Stream: ${streamDuration}ms (${Math.round(batch.length / (streamDuration / 1000))} rows/s)\n` +
-        `   - Transfer: ${transferDuration}ms\n` +
-        `   - Ukupno: ${totalDuration}ms\n` +
-        `   - Inserted/Updated: ${result.rowCount} rows`
+          `   - Stream: ${streamDuration}ms (${Math.round(batch.length / (streamDuration / 1000))} rows/s)\n` +
+          `   - Transfer: ${transferDuration}ms\n` +
+          `   - Ukupno: ${totalDuration}ms\n` +
+          `   - Inserted/Updated: ${result.rowCount} rows`,
       );
-      
     } catch (error) {
       await client.query('ROLLBACK');
       this.logger.error(`[COPY ERROR]:`, error);
-      
+
       // Opciono: fallback na batch metodu
       if (this.config.fallbackToBatch) {
         this.logger.warn(`[COPY FALLBACK] Prelazim na batch metodu`);
@@ -1029,37 +1141,39 @@ export class LegacySyncWorkerPoolService {
    */
   private async insertWithBatch(pool: any, batch: any[]): Promise<void> {
     // this.logger.debug(`Inserting batch of ${batch.length} records`);
-    
+
     // 📊 PERFORMANCE LOG - Start TimescaleDB Insert
     const insertStartTime = Date.now();
-    
+
     const client = await pool.connect();
-    
+
     try {
       await client.query('BEGIN');
-      
+
       // Pripremi values za bulk insert
       // Imamo 11 parametara po redu, location se računa iz lng (param 5) i lat (param 4)
-      const values = batch.map((row, i) => {
-        const offset = i * 11; // 11 parametara po redu
-        // Parametri: time, vehicle_id, garage_no, lat, lng, speed, course, alt, state, in_route, data_source
-        return `(
-          $${offset+1}, 
-          $${offset+2}, 
-          $${offset+3}, 
-          $${offset+4}, 
-          $${offset+5}, 
-          ST_SetSRID(ST_MakePoint($${offset+5}, $${offset+4}), 4326),
-          $${offset+6}, 
-          $${offset+7}, 
-          $${offset+8}, 
-          $${offset+9}, 
-          $${offset+10}, 
-          $${offset+11}
+      const values = batch
+        .map((row, i) => {
+          const offset = i * 11; // 11 parametara po redu
+          // Parametri: time, vehicle_id, garage_no, lat, lng, speed, course, alt, state, in_route, data_source
+          return `(
+          $${offset + 1}, 
+          $${offset + 2}, 
+          $${offset + 3}, 
+          $${offset + 4}, 
+          $${offset + 5}, 
+          ST_SetSRID(ST_MakePoint($${offset + 5}, $${offset + 4}), 4326),
+          $${offset + 6}, 
+          $${offset + 7}, 
+          $${offset + 8}, 
+          $${offset + 9}, 
+          $${offset + 10}, 
+          $${offset + 11}
         )`;
-      }).join(',');
-      
-      const params = batch.flatMap(row => [
+        })
+        .join(',');
+
+      const params = batch.flatMap((row) => [
         row.time,
         row.vehicle_id,
         row.garage_no,
@@ -1070,9 +1184,9 @@ export class LegacySyncWorkerPoolService {
         row.alt,
         row.state,
         row.in_route,
-        'historical_import'
+        'historical_import',
       ]);
-      
+
       const query = `
         INSERT INTO gps_data (time, vehicle_id, garage_no, lat, lng, location, speed, course, alt, state, in_route, data_source)
         VALUES ${values}
@@ -1085,29 +1199,32 @@ export class LegacySyncWorkerPoolService {
           course = EXCLUDED.course,
           alt = EXCLUDED.alt
       `;
-      
+
       // Brojimo jedinstvene placeholder brojeve, ne sve $ znakove
       const maxPlaceholder = batch.length * 11; // Svaki red ima 11 parametara
       // Debug logovi isključeni - previše zagušuju konzolu
       // this.logger.debug(`Batch: ${batch.length} records, ${params.length} params`);
-      
+
       if (params.length !== maxPlaceholder) {
-        this.logger.error(`MISMATCH: Expected ${maxPlaceholder} params but have ${params.length}`);
+        this.logger.error(
+          `MISMATCH: Expected ${maxPlaceholder} params but have ${params.length}`,
+        );
       }
-      
+
       // Debug: proveri prvih par parametara
       if (batch.length > 0) {
         // Debug informacije o batch-u - isključeno
         // this.logger.debug(`First record: ${JSON.stringify(batch[0]).substring(0, 50)}...`);
       }
-      
+
       await client.query(query, params);
       await client.query('COMMIT');
-      
+
       // 📊 PERFORMANCE LOG - End TimescaleDB Insert
       const insertDuration = Date.now() - insertStartTime;
-      this.logger.log(`⏱️ [TIMESCALE INSERT] Batch od ${batch.length} redova - Trajanje: ${insertDuration}ms (${(insertDuration/1000).toFixed(2)}s)`);
-      
+      this.logger.log(
+        `⏱️ [TIMESCALE INSERT] Batch od ${batch.length} redova - Trajanje: ${insertDuration}ms (${(insertDuration / 1000).toFixed(2)}s)`,
+      );
     } catch (error) {
       await client.query('ROLLBACK');
       this.logger.error(`Insert batch failed: ${error.message}`);
@@ -1131,14 +1248,14 @@ export class LegacySyncWorkerPoolService {
   }> {
     // Reload configuration da imamo najnovije podatke
     await this.loadConfiguration();
-    
+
     return {
       maxWorkers: this.config.maxWorkers,
       workerTimeout: this.config.workerTimeout,
       aggressiveDetectionEnabled: this.aggressiveDetectionEnabled,
       insertMethod: this.config.insertMethod,
       copyBatchSize: this.config.copyBatchSize,
-      fallbackToBatch: this.config.fallbackToBatch
+      fallbackToBatch: this.config.fallbackToBatch,
     };
   }
 
@@ -1147,24 +1264,27 @@ export class LegacySyncWorkerPoolService {
    */
   async toggleAggressiveDetection(enabled: boolean): Promise<void> {
     this.aggressiveDetectionEnabled = enabled;
-    
+
     // Sačuvaj u bazu
     await this.prisma.systemSettings.upsert({
       where: { key: 'legacy_sync.aggressive_detection_enabled' },
-      update: { 
+      update: {
         value: enabled.toString(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       },
       create: {
         key: 'legacy_sync.aggressive_detection_enabled',
         value: enabled.toString(),
         type: 'boolean',
         category: 'legacy_sync',
-        description: 'Omogućava detekciju agresivne vožnje tokom sinhronizacije',
-      }
+        description:
+          'Omogućava detekciju agresivne vožnje tokom sinhronizacije',
+      },
     });
-    
-    this.logger.log(`🎯 Agresivna detekcija ${enabled ? 'UKLJUČENA' : 'ISKLJUČENA'} i sačuvana u bazu`);
+
+    this.logger.log(
+      `🎯 Agresivna detekcija ${enabled ? 'UKLJUČENA' : 'ISKLJUČENA'} i sačuvana u bazu`,
+    );
   }
 
   /**
@@ -1172,71 +1292,87 @@ export class LegacySyncWorkerPoolService {
    */
   private async detectAggressiveDriving(
     vehicleId: number,
-    garageNo: string, 
+    garageNo: string,
     syncFrom: Date,
-    syncTo: Date
+    syncTo: Date,
   ): Promise<number> {
     // 📊 PERFORMANCE LOG - Start Event Detection
     const detectionStartTime = Date.now();
-    this.logger.log(`🎯 [EVENT DETECTION START] Vozilo ${garageNo} - Period: ${syncFrom.toISOString().split('T')[0]} do ${syncTo.toISOString().split('T')[0]}`);
-    
+    this.logger.log(
+      `🎯 [EVENT DETECTION START] Vozilo ${garageNo} - Period: ${syncFrom.toISOString().split('T')[0]} do ${syncTo.toISOString().split('T')[0]}`,
+    );
+
     const { Pool } = require('pg');
     const pgPool = new Pool({
       connectionString: process.env.TIMESCALE_DATABASE_URL,
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+      ssl:
+        process.env.NODE_ENV === 'production'
+          ? { rejectUnauthorized: false }
+          : false,
     });
 
     try {
       // Pozivamo batch detekciju dan po dan (kao u fast import script-u)
       const startDate = new Date(syncFrom);
       const endDate = new Date(syncTo);
-      
-      let currentDate = new Date(startDate);
+
+      const currentDate = new Date(startDate);
       let totalDetectedEvents = 0;
-      
+
       while (currentDate <= endDate) {
         const dayStart = currentDate.toISOString().split('T')[0] + ' 00:00:00';
         const dayEnd = currentDate.toISOString().split('T')[0] + ' 23:59:59';
-        
+
         // 📊 PERFORMANCE LOG - Daily Detection
         const dayStartTime = Date.now();
-        
+
         try {
-          const result = await pgPool.query(`
+          const result = await pgPool.query(
+            `
             SELECT detect_aggressive_driving_batch(
               $1::INTEGER,
               $2::VARCHAR,
               $3::TIMESTAMPTZ,
               $4::TIMESTAMPTZ
             );
-          `, [vehicleId, garageNo, dayStart, dayEnd]);
-          
+          `,
+            [vehicleId, garageNo, dayStart, dayEnd],
+          );
+
           // Result je tabela sa kolona total_events
           if (result.rows && result.rows[0]) {
-            const dayEvents = parseInt(result.rows[0].detect_aggressive_driving_batch) || 0;
+            const dayEvents =
+              parseInt(result.rows[0].detect_aggressive_driving_batch) || 0;
             totalDetectedEvents += dayEvents;
-            
+
             // 📊 PERFORMANCE LOG - Daily Detection Complete
             const dayDuration = Date.now() - dayStartTime;
-            this.logger.log(`  📅 [DAILY DETECTION] ${currentDate.toISOString().split('T')[0]} - Događaja: ${dayEvents}, Trajanje: ${dayDuration}ms`);
+            this.logger.log(
+              `  📅 [DAILY DETECTION] ${currentDate.toISOString().split('T')[0]} - Događaja: ${dayEvents}, Trajanje: ${dayDuration}ms`,
+            );
           }
         } catch (dayError) {
           // Loguj grešku ali nastavi sa sledećim danom
-          this.logger.warn(`Greška u detekciji za ${currentDate.toISOString().split('T')[0]}: ${dayError.message}`);
+          this.logger.warn(
+            `Greška u detekciji za ${currentDate.toISOString().split('T')[0]}: ${dayError.message}`,
+          );
         }
-        
+
         // Pređi na sledeći dan
         currentDate.setDate(currentDate.getDate() + 1);
       }
-      
+
       // 📊 PERFORMANCE LOG - Total Event Detection Complete
       const totalDetectionDuration = Date.now() - detectionStartTime;
-      this.logger.log(`✅ [EVENT DETECTION COMPLETE] Vozilo ${garageNo} - Ukupno događaja: ${totalDetectedEvents}, Ukupno trajanje: ${totalDetectionDuration}ms (${(totalDetectionDuration/1000).toFixed(2)}s)`);
-      
-      this.logger.log(`🎯 Detektovano ${totalDetectedEvents} agresivnih događaja za vozilo ${garageNo}`);
-      
+      this.logger.log(
+        `✅ [EVENT DETECTION COMPLETE] Vozilo ${garageNo} - Ukupno događaja: ${totalDetectedEvents}, Ukupno trajanje: ${totalDetectionDuration}ms (${(totalDetectionDuration / 1000).toFixed(2)}s)`,
+      );
+
+      this.logger.log(
+        `🎯 Detektovano ${totalDetectedEvents} agresivnih događaja za vozilo ${garageNo}`,
+      );
+
       return totalDetectedEvents;
-      
     } finally {
       await pgPool.end();
     }
@@ -1247,16 +1383,18 @@ export class LegacySyncWorkerPoolService {
    * Koristi se za Smart Slow Sync
    */
   async syncVehiclesBatch(
-    vehicleIds: number[], 
+    vehicleIds: number[],
     syncDaysBack: number = 30,
-    maxWorkers: number = 2
+    maxWorkers: number = 2,
   ): Promise<{
     successCount: number;
     failedVehicles: number[];
     totalGpsPoints?: number;
   }> {
-    this.logger.log(`Starting batch sync for ${vehicleIds.length} vehicles with ${maxWorkers} workers`);
-    
+    this.logger.log(
+      `Starting batch sync for ${vehicleIds.length} vehicles with ${maxWorkers} workers`,
+    );
+
     let successCount = 0;
     const failedVehicles: number[] = [];
     let totalGpsPoints = 0;
@@ -1264,7 +1402,7 @@ export class LegacySyncWorkerPoolService {
     // Podeli vozila na batch-ove za worker-e
     const batchSize = Math.ceil(vehicleIds.length / maxWorkers);
     const batches: number[][] = [];
-    
+
     for (let i = 0; i < vehicleIds.length; i += batchSize) {
       batches.push(vehicleIds.slice(i, i + batchSize));
     }
@@ -1272,7 +1410,7 @@ export class LegacySyncWorkerPoolService {
     // Pokreni worker-e paralelno
     const promises = batches.map(async (batch, index) => {
       const workerId = `slow-sync-worker-${index + 1}`;
-      
+
       for (const vehicleId of batch) {
         try {
           const vehicle = await this.prisma.busVehicle.findUnique({
@@ -1281,11 +1419,13 @@ export class LegacySyncWorkerPoolService {
               id: true,
               garageNumber: true,
               legacyId: true,
-            }
+            },
           });
 
           if (!vehicle || !vehicle.garageNumber) {
-            this.logger.warn(`Vehicle ${vehicleId} not found or missing garage number`);
+            this.logger.warn(
+              `Vehicle ${vehicleId} not found or missing garage number`,
+            );
             failedVehicles.push(vehicleId);
             continue;
           }
@@ -1298,27 +1438,32 @@ export class LegacySyncWorkerPoolService {
           const vehicleData = {
             id: vehicle.id,
             garage_number: vehicle.garageNumber,
-            legacy_id: vehicle.legacyId
+            legacy_id: vehicle.legacyId,
           };
 
           const result = await this.syncVehicleWithWorker(
             index + 1, // workerId as number
             vehicleData,
             startDate,
-            endDate
+            endDate,
           );
 
           if (result.status === 'completed') {
             successCount++;
             totalGpsPoints += result.processedRecords || 0;
-            this.logger.log(`[${workerId}] Vehicle ${vehicle.garageNumber} synced successfully`);
+            this.logger.log(
+              `[${workerId}] Vehicle ${vehicle.garageNumber} synced successfully`,
+            );
           } else {
             failedVehicles.push(vehicleId);
-            this.logger.error(`[${workerId}] Vehicle ${vehicle.garageNumber} sync failed`);
+            this.logger.error(
+              `[${workerId}] Vehicle ${vehicle.garageNumber} sync failed`,
+            );
           }
-
         } catch (error) {
-          this.logger.error(`[${workerId}] Error syncing vehicle ${vehicleId}: ${error.message}`);
+          this.logger.error(
+            `[${workerId}] Error syncing vehicle ${vehicleId}: ${error.message}`,
+          );
           failedVehicles.push(vehicleId);
         }
       }
@@ -1326,12 +1471,14 @@ export class LegacySyncWorkerPoolService {
 
     await Promise.all(promises);
 
-    this.logger.log(`Batch sync completed: ${successCount} success, ${failedVehicles.length} failed`);
+    this.logger.log(
+      `Batch sync completed: ${successCount} success, ${failedVehicles.length} failed`,
+    );
 
     return {
       successCount,
       failedVehicles,
-      totalGpsPoints
+      totalGpsPoints,
     };
   }
 }

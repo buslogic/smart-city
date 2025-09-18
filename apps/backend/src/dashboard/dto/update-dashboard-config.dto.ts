@@ -1,4 +1,11 @@
-import { IsObject, IsOptional, IsString, IsNumber, IsArray, IsBoolean } from 'class-validator';
+import {
+  IsObject,
+  IsOptional,
+  IsString,
+  IsNumber,
+  IsArray,
+  IsBoolean,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class UpdateDashboardConfigDto {

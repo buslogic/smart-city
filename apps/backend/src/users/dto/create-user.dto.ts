@@ -1,4 +1,11 @@
-import { IsEmail, IsString, IsBoolean, IsOptional, MinLength, IsArray } from 'class-validator';
+import {
+  IsEmail,
+  IsString,
+  IsBoolean,
+  IsOptional,
+  MinLength,
+  IsArray,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateUserDto {
@@ -14,16 +21,15 @@ export class CreateUserDto {
   @IsString()
   lastName: string;
 
-
   @ApiProperty({ example: true, required: false, default: true })
   @IsBoolean()
   @IsOptional()
   isActive?: boolean = true;
 
-  @ApiProperty({ 
-    example: ['SUPER_ADMIN', 'CITY_MANAGER'], 
+  @ApiProperty({
+    example: ['SUPER_ADMIN', 'CITY_MANAGER'],
     description: 'Array of role names to assign to user',
-    required: false 
+    required: false,
   })
   @IsArray()
   @IsString({ each: true })
