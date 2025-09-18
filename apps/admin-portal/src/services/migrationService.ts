@@ -48,8 +48,6 @@ class MigrationService {
   }
 
   async startMigration(startDate?: string, endDate?: string, resume?: boolean, useParallel?: boolean): Promise<{ success: boolean; message: string }> {
-    console.log('MigrationService.startMigration called with:', { startDate, endDate, resume, useParallel });
-
     try {
       const response = await api.post(
         '/api/migration/start',
@@ -60,10 +58,8 @@ class MigrationService {
           useParallel: useParallel !== false // Default true
         }
       );
-      console.log('Migration service response:', response.data);
       return response.data;
     } catch (error) {
-      console.error('Migration service error:', error);
       throw error;
     }
   }

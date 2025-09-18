@@ -21,10 +21,8 @@ const MigrationPage: React.FC = () => {
 
   // Fetch status
   const fetchStatus = async () => {
-    console.log('fetchStatus called');
     try {
       const data = await migrationService.getStatus();
-      console.log('Status data received:', data);
       setStatus(data);
 
       // Fetch logs ako je migracija u toku
@@ -36,7 +34,9 @@ const MigrationPage: React.FC = () => {
       // Fetch range progress ako je migracija u toku i imamo currentDate
       if (data.status === 'running' && data.currentDate && useParallel) {
         try {
-          const progressData = await migrationService.getRangeProgress(data.currentDate);
+          // Konvertuj ISO string u YYYY-MM-DD format
+          const dateOnly = data.currentDate.split('T')[0];
+          const progressData = await migrationService.getRangeProgress(dateOnly);
           setRangeProgress(progressData.ranges || []);
         } catch (err) {
           console.error('Error fetching range progress:', err);
@@ -49,19 +49,12 @@ const MigrationPage: React.FC = () => {
 
   // Start migration - SIMPLE VERSION
   const handleStartSimple = async () => {
-    console.log('=== SIMPLE START CLICKED ===');
-    console.log('Date range exists?', !!dateRange);
-    console.log('Starting migration flag?', startingMigration);
-    console.log('Current status?', status?.status);
-
     if (!dateRange) {
-      console.log('NO DATE RANGE - showing warning');
       message.warning('Molimo odaberite datumski opseg za migraciju');
       return;
     }
 
     if (startingMigration) {
-      console.log('ALREADY STARTING - showing warning');
       message.warning('Migracija se već pokreće, molimo sačekajte...');
       return;
     }
@@ -69,36 +62,22 @@ const MigrationPage: React.FC = () => {
     const startDate = dateRange[0].format('YYYY-MM-DD');
     const endDate = dateRange[1].format('YYYY-MM-DD');
 
-    console.log('Start Date:', startDate);
-    console.log('End Date:', endDate);
-    console.log('Setting startingMigration to true');
-
     setStartingMigration(true);
     setLoading(true);
 
     try {
-      console.log('Calling migration service...');
-      console.log('API URL:', import.meta.env.VITE_API_URL || 'http://localhost:3010');
-      console.log('Use parallel mode:', useParallel);
       const result = await migrationService.startMigration(startDate, endDate, false, useParallel);
-      console.log('Migration result:', result);
 
       if (result.success) {
         message.success('Migracija je pokrenuta uspešno!');
-        console.log('Fetching status after successful start...');
         await fetchStatus();
       } else {
         message.error(result.message || 'Migracija nije uspela');
-        console.log('Migration failed:', result.message);
       }
     } catch (error: any) {
-      console.error('Migration error FULL:', error);
-      console.error('Error response:', error.response);
-      console.error('Error message:', error.message);
       const errorMsg = error.response?.data?.message || error.message || 'Greška pri pokretanju migracije';
       message.error(errorMsg);
     } finally {
-      console.log('Setting startingMigration to false');
       setLoading(false);
       setStartingMigration(false);
     }

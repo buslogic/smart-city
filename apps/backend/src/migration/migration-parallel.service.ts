@@ -246,21 +246,52 @@ export class MigrationParallelService {
    * Proverava napredak migracije po range-ovima
    */
   async checkRangeProgress(date: string) {
-    const result = await this.timescalePool.query(
-      `
-      SELECT * FROM check_range_progress($1::date)
-    `,
-      [date],
-    );
+    try {
+      // Brža alternativa - koristi migration_log umesto COUNT-a
+      const result = await this.timescalePool.query(
+        `
+        WITH ranges AS (
+          SELECT * FROM split_day_into_ranges($1::date, 4)
+        ),
+        completed AS (
+          SELECT
+            substring(message from '\\[(.*?)\\]') as range_name,
+            records_affected
+          FROM migration_log
+          WHERE migration_name = 'timezone_fix_2025'
+            AND action = 'RANGE_COMPLETED'
+            AND message LIKE '%' || $1 || '%'
+            AND created_at > NOW() - INTERVAL '24 hours'
+        )
+        SELECT
+          r.range_name,
+          r.start_time::text,
+          r.end_time::text,
+          COALESCE(c.records_affected, 0) as migrated_records,
+          CASE
+            WHEN c.records_affected IS NOT NULL THEN 100.0
+            ELSE 0.0
+          END as progress_percent
+        FROM ranges r
+        LEFT JOIN completed c ON r.range_name = c.range_name
+        ORDER BY r.range_id
+      `,
+        [date],
+      );
 
-    return result.rows.map((row) => ({
-      rangeName: row.range_name,
-      startTime: row.start_time,
-      endTime: row.end_time,
-      estimatedRecords: parseInt(row.estimated_records),
-      migratedRecords: parseInt(row.migrated_records),
-      progressPercent: parseFloat(row.progress_percent),
-    }));
+      return result.rows.map((row) => ({
+        rangeName: row.range_name,
+        startTime: row.start_time,
+        endTime: row.end_time,
+        estimatedRecords: 0, // Ne računamo estimated da izbegnemo timeout
+        migratedRecords: parseInt(row.migrated_records),
+        progressPercent: parseFloat(row.progress_percent),
+      }));
+    } catch (error) {
+      this.logger.error(`Error checking range progress for ${date}:`, error);
+      // Vrati prazan niz ako query timeout-uje
+      return [];
+    }
   }
 
   /**
