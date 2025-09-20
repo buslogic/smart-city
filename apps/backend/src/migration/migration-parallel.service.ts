@@ -166,16 +166,17 @@ export class MigrationParallelService {
     try {
       this.logger.log(`Starting migration for ${range.rangeName}`);
 
-      // Pozovi optimizovanu proceduru za range
+      // Pozovi SMART proceduru za range sa automatskom detekcijom cutoff vremena
       const result = await this.timescalePool.query(
         `
-        CALL migrate_time_range(
+        CALL migrate_time_range_smart(
           $1::timestamp,
           $2::timestamp,
           $3::text,
           NULL,
           NULL,
-          $4::integer
+          $4::integer,
+          '2025-09-11 10:00:00'::timestamp  -- Cutoff: pre ovoga -2h, posle bez izmene
         )
       `,
         [
