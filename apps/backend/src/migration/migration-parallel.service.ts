@@ -189,12 +189,12 @@ export class MigrationParallelService {
 
       const durationMs = Date.now() - startTime;
 
-      // Dobavi broj migriranih zapisa iz loga
+      // Dobavi broj migriranih zapisa iz loga (proveri oba migration name)
       const logResult = await this.timescalePool.query(
         `
         SELECT records_affected
         FROM migration_log
-        WHERE migration_name = 'timezone_fix_2025'
+        WHERE migration_name IN ('timezone_fix_2025', 'smart_timezone_fix_2025')
           AND action = 'RANGE_COMPLETED'
           AND message LIKE $1
         ORDER BY created_at DESC
@@ -259,7 +259,7 @@ export class MigrationParallelService {
             substring(message from '\\[(.*?)\\]') as range_name,
             records_affected
           FROM migration_log
-          WHERE migration_name = 'timezone_fix_2025'
+          WHERE migration_name IN ('timezone_fix_2025', 'smart_timezone_fix_2025')
             AND action = 'RANGE_COMPLETED'
             AND message LIKE '%' || $1 || '%'
             AND created_at > NOW() - INTERVAL '24 hours'
