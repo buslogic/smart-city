@@ -3,7 +3,7 @@ import { ConfigProvider } from 'antd';
 import srRS from 'antd/locale/sr_RS';
 import { AuthGuard } from './components/guards/AuthGuard';
 import { PermissionGuard } from './components/guards/PermissionGuard';
-import ModernMenuV1 from './components/layout/ModernMenuV1';
+import ModernMenu from './components/layout/ModernMenu';
 import { LoginPage } from './pages/LoginPage';
 import UserAdministration from './pages/users/UserAdministration';
 import RolesPermissions from './pages/users/RolesPermissions';
@@ -36,11 +36,11 @@ function App() {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           
           {/* Protected routes */}
-          <Route 
-            path="/" 
+          <Route
+            path="/"
             element={
               <AuthGuard>
-                <ModernMenuV1 />
+                <ModernMenu />
               </AuthGuard>
             }
           >
