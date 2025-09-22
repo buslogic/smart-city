@@ -9,6 +9,7 @@ import {
   Res,
   Get,
   Param,
+  Logger,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -17,30 +18,47 @@ import { extname, join } from 'path';
 import { existsSync, mkdirSync, unlinkSync } from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import type { Response } from 'express';
+import { SpacesService } from '../../spaces/spaces.service';
+import { ConfigService } from '@nestjs/config';
 
 @ApiTags('uploads')
 @Controller('uploads')
 @ApiBearerAuth()
 export class UploadsController {
-  constructor() {
-    // Kreiraj uploads folder ako ne postoji
-    const uploadPath = join(process.cwd(), 'uploads', 'avatars');
-    if (!existsSync(uploadPath)) {
-      mkdirSync(uploadPath, { recursive: true });
+  private readonly logger = new Logger(UploadsController.name);
+  private readonly isProduction: boolean;
+
+  constructor(
+    private spacesService: SpacesService,
+    private configService: ConfigService,
+  ) {
+    this.isProduction = this.configService.get('NODE_ENV') === 'production';
+
+    // Kreiraj uploads folder samo u development
+    if (!this.isProduction) {
+      const uploadPath = join(process.cwd(), 'uploads', 'avatars');
+      if (!existsSync(uploadPath)) {
+        mkdirSync(uploadPath, { recursive: true });
+        this.logger.log('Created local uploads directory');
+      }
+    } else {
+      this.logger.log('Using DigitalOcean Spaces for file storage');
     }
   }
 
   @Post('avatar')
-  @ApiOperation({ summary: 'Upload avatar slike (lokalno u development)' })
+  @ApiOperation({ summary: 'Upload avatar slike' })
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: diskStorage({
-        destination: join(process.cwd(), 'uploads', 'avatars'),
-        filename: (req, file, cb) => {
-          const uniqueName = `${uuidv4()}${extname(file.originalname)}`;
-          cb(null, uniqueName);
-        },
-      }),
+      storage: process.env.NODE_ENV === 'production'
+        ? undefined // Koristi memory storage za Spaces
+        : diskStorage({
+            destination: join(process.cwd(), 'uploads', 'avatars'),
+            filename: (req, file, cb) => {
+              const uniqueName = `${uuidv4()}${extname(file.originalname)}`;
+              cb(null, uniqueName);
+            },
+          }),
       fileFilter: (req, file, cb) => {
         const allowedTypes = /jpeg|jpg|png|gif|webp/;
         const extName = allowedTypes.test(
@@ -67,44 +85,124 @@ export class UploadsController {
       throw new BadRequestException('Fajl nije prosleđen');
     }
 
-    // Vrati relativnu putanju za pristup slici
-    const url = `/uploads/avatars/${file.filename}`;
+    try {
+      // Production - koristi DigitalOcean Spaces
+      if (this.isProduction) {
+        const fileName = this.spacesService.generateFileName(
+          file.originalname,
+          'avatar',
+        );
 
-    return {
-      success: true,
-      file: {
-        url,
-        filename: file.filename,
-        originalName: file.originalname,
-        size: file.size,
-      },
-    };
+        const uploadResult = await this.spacesService.uploadFile(
+          file.buffer,
+          {
+            folder: 'avatars',
+            fileName,
+            contentType: file.mimetype,
+            isPublic: true, // Avatar slike su javne
+          },
+        );
+
+        this.logger.log(`Avatar uploaded to Spaces: ${uploadResult.key}`);
+
+        return {
+          success: true,
+          file: {
+            url: uploadResult.url,
+            key: uploadResult.key,
+            filename: fileName,
+            originalName: file.originalname,
+            size: uploadResult.size,
+          },
+        };
+      }
+      // Development - koristi lokalni storage
+      else {
+        const url = `/uploads/avatars/${file.filename}`;
+
+        return {
+          success: true,
+          file: {
+            url,
+            filename: file.filename,
+            originalName: file.originalname,
+            size: file.size,
+          },
+        };
+      }
+    } catch (error) {
+      this.logger.error('Failed to upload avatar:', error);
+      throw new BadRequestException('Greška pri upload-u slike');
+    }
   }
 
   @Delete('avatar/:filename')
   @ApiOperation({ summary: 'Briši avatar sliku' })
   async deleteAvatar(@Param('filename') filename: string) {
-    const filePath = join(process.cwd(), 'uploads', 'avatars', filename);
+    try {
+      if (this.isProduction) {
+        // Za Spaces, filename može biti key ili samo filename
+        const key = filename.includes('/')
+          ? filename
+          : `avatars/${filename}`;
 
-    if (existsSync(filePath)) {
-      unlinkSync(filePath);
+        await this.spacesService.deleteFile(key);
+
+        this.logger.log(`Avatar deleted from Spaces: ${key}`);
+      } else {
+        // Lokalno brisanje
+        const filePath = join(process.cwd(), 'uploads', 'avatars', filename);
+
+        if (existsSync(filePath)) {
+          unlinkSync(filePath);
+        }
+      }
+
+      return {
+        success: true,
+        message: 'Avatar uspešno obrisan',
+      };
+    } catch (error) {
+      this.logger.error('Failed to delete avatar:', error);
+      throw new BadRequestException('Greška pri brisanju slike');
     }
-
-    return {
-      success: true,
-      message: 'Avatar uspešno obrisan',
-    };
   }
 
   @Get('avatars/:filename')
   @ApiOperation({ summary: 'Serviraj avatar sliku' })
   async getAvatar(@Param('filename') filename: string, @Res() res: Response) {
-    const filePath = join(process.cwd(), 'uploads', 'avatars', filename);
+    try {
+      if (this.isProduction) {
+        // Na produkciji, redirect na Spaces CDN URL
+        const key = filename.includes('/')
+          ? filename
+          : `avatars/${filename}`;
 
-    if (!existsSync(filePath)) {
+        // Generiši signed URL ako fajl nije javan
+        // ili jednostavno redirect na CDN
+        const cdnEndpoint = this.configService.get('DO_SPACES_CDN_ENDPOINT');
+        const bucket = this.configService.get('DO_SPACES_BUCKET');
+
+        if (cdnEndpoint) {
+          return res.redirect(`${cdnEndpoint}/${key}`);
+        } else {
+          // Fallback na signed URL
+          const signedUrl = await this.spacesService.getSignedUrl(key, 3600);
+          return res.redirect(signedUrl);
+        }
+      } else {
+        // Lokalno serviranje
+        const filePath = join(process.cwd(), 'uploads', 'avatars', filename);
+
+        if (!existsSync(filePath)) {
+          return res.status(404).json({ message: 'Slika nije pronađena' });
+        }
+
+        return res.sendFile(filePath);
+      }
+    } catch (error) {
+      this.logger.error('Failed to get avatar:', error);
       return res.status(404).json({ message: 'Slika nije pronađena' });
     }
-
-    return res.sendFile(filePath);
   }
 }
