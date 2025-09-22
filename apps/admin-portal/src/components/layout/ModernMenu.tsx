@@ -44,13 +44,20 @@ import '../../styles/menu-modern.css';
 
 const { Header, Sider, Content } = Layout;
 
-type MenuItem = Required<MenuProps>['items'][number] & {
+interface CustomMenuItem {
+  key: string;
+  icon?: React.ReactNode;
+  label: React.ReactNode;
+  children?: CustomMenuItem[];
   permissions?: string[];
   badge?: {
     count: number | string;
     color?: string;
   };
-};
+  type?: 'divider';
+}
+
+type MenuItem = CustomMenuItem;
 
 const ModernMenu: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
@@ -64,36 +71,53 @@ const ModernMenu: React.FC = () => {
   } = theme.useToken();
 
   // Funkcija za filtriranje stavki na osnovu permisija
-  const filterMenuItems = (items: MenuItem[]): MenuItem[] => {
+  const filterMenuItems = (items: CustomMenuItem[]): MenuProps['items'] => {
     return items
       .filter(item => {
         if (!item) return false;
-        const menuItem = item as MenuItem;
 
         // Ako nema permisije, prikaži
-        if (!menuItem.permissions) return true;
+        if (!item.permissions) return true;
 
         // Proveri da li korisnik ima bar jednu od potrebnih permisija
-        return menuItem.permissions.some(p => hasPermission(p));
+        return item.permissions.some(p => hasPermission(p));
       })
       .map(item => {
-        const menuItem = { ...item } as any;
+        const menuItem = { ...item };
 
         // Rekurzivno filtriraj podmeni
         if (menuItem.children && Array.isArray(menuItem.children)) {
           const filteredChildren = filterMenuItems(menuItem.children);
 
           // Ako nema dostupne pod-stavke, sakrij ceo meni
-          if (filteredChildren.length === 0) {
+          if (!filteredChildren || filteredChildren.length === 0) {
             return null;
           }
 
-          menuItem.children = filteredChildren;
+          return {
+            key: menuItem.key,
+            icon: menuItem.icon,
+            label: menuItem.badge ? (
+              <span className="flex items-center justify-between w-full">
+                <span>{menuItem.label}</span>
+                <Badge
+                  count={menuItem.badge.count}
+                  style={{
+                    backgroundColor: menuItem.badge.color || '#ff4d4f',
+                    marginLeft: 'auto'
+                  }}
+                />
+              </span>
+            ) : menuItem.label,
+            children: filteredChildren,
+          };
         }
 
-        // Dodaj badge ako postoji
-        if (menuItem.badge) {
-          menuItem.label = (
+        // Return plain menu item
+        return {
+          key: menuItem.key,
+          icon: menuItem.icon,
+          label: menuItem.badge ? (
             <span className="flex items-center justify-between w-full">
               <span>{menuItem.label}</span>
               <Badge
@@ -104,17 +128,15 @@ const ModernMenu: React.FC = () => {
                 }}
               />
             </span>
-          );
-        }
-
-        return menuItem;
+          ) : menuItem.label,
+        };
       })
-      .filter(Boolean) as MenuItem[];
+      .filter(Boolean);
   };
 
   // Definicija menija sa permisijama
-  const menuItems: MenuItem[] = useMemo(() => {
-    const items: MenuItem[] = [
+  const menuItems = useMemo(() => {
+    const items: CustomMenuItem[] = [
       {
         key: '/dashboard',
         icon: <DashboardOutlined />,
@@ -291,13 +313,13 @@ const ModernMenu: React.FC = () => {
     setOpenKeys(keys);
   }, [location.pathname]);
 
-  const handleMenuClick: MenuProps['onClick'] = ({ key }) => {
-    if (key.startsWith('/')) {
-      navigate(key);
+  const handleMenuClick: MenuProps['onClick'] = (info) => {
+    if (info.key.startsWith('/')) {
+      navigate(info.key);
     }
   };
 
-  const handleOpenChange: MenuProps['onOpenChange'] = (keys) => {
+  const handleOpenChange: MenuProps['onOpenChange'] = (keys: string[]) => {
     setOpenKeys(keys);
   };
 
@@ -407,13 +429,7 @@ const ModernMenu: React.FC = () => {
                 }}
               />
               <h1 className="text-xl font-semibold text-gray-800 ml-2">
-                {menuItems.find(item =>
-                  item?.key === location.pathname ||
-                  (item as any)?.children?.some((sub: any) =>
-                    sub.key === location.pathname ||
-                    sub?.children?.some((subsub: any) => subsub.key === location.pathname)
-                  )
-                )?.label || 'Smart City Admin'}
+                Smart City Admin
               </h1>
             </div>
 
