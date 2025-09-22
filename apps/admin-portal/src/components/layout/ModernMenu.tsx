@@ -345,6 +345,11 @@ const ModernMenu: React.FC = () => {
   return (
     <ConfigProvider
       theme={{
+        token: {
+          // Globalni font
+          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif",
+          fontSize: 14,
+        },
         components: {
           Layout: {
             siderBg: '#f8f9fa',
@@ -352,14 +357,46 @@ const ModernMenu: React.FC = () => {
             triggerColor: '#495057',
           },
           Menu: {
+            // Osnovne boje
             itemBg: '#f8f9fa',
-            subMenuItemBg: '#ffffff',
-            itemSelectedBg: '#e3f2fd',
+            subMenuItemBg: 'rgba(255, 255, 255, 0.95)',
             popupBg: '#ffffff',
-            itemHoverBg: '#e9ecef',
-            itemColor: '#495057',
-            itemSelectedColor: '#1890ff',
-            itemHoverColor: '#212529',
+
+            // Font i veličine - EKSPERIMENT
+            fontSize: 14, // Osnovni font size
+            itemHeight: 36, // Visina stavke
+            horizontalLineHeight: 42,
+            groupTitleFontSize: 12,
+
+            // Razmaci
+            itemMarginInline: 4,
+            itemMarginBlock: 2,
+            itemPaddingInline: 8, // Smanjen padding levo/desno
+
+            // Boje teksta
+            itemColor: 'rgb(55, 65, 81)', // text-gray-700
+            itemHoverColor: 'rgb(17, 24, 39)', // text-gray-900
+            itemSelectedColor: 'rgb(37, 99, 235)', // text-blue-600
+            itemActiveColor: 'rgb(37, 99, 235)',
+
+            // Pozadine za hover i selected
+            itemHoverBg: 'rgb(249, 250, 251)', // bg-gray-50
+            itemSelectedBg: 'rgb(219, 234, 254)', // bg-blue-100
+            itemActiveBg: 'rgb(219, 234, 254)',
+
+            // Ikone
+            iconSize: 16,
+            iconMarginInlineEnd: 10,
+            collapsedIconSize: 20,
+            collapsedWidth: 80,
+
+            // Border radius
+            itemBorderRadius: 8,
+            subMenuItemBorderRadius: 6,
+
+            // Dodatno
+            motionDurationMid: '0.3s',
+            motionEaseInOut: 'cubic-bezier(0.645, 0.045, 0.355, 1)',
           },
         },
       }}
