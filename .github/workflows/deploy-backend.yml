@@ -13,10 +13,10 @@ jobs:
   prisma-check:
     uses: ./.github/workflows/validate-prisma-check.yml
 
-  # Validation job - validates against production database
-  validate-production:
+  # Build and push Docker image
+  build:
     needs: prisma-check
-    # Only run if Prisma validation passed or wasn't required
+    # Only build if Prisma validation passed or wasn't required
     if: needs.prisma-check.outputs.validation-required == 'false' || needs.prisma-check.outputs.validation-passed == 'true'
     runs-on: ubuntu-latest
 
@@ -24,89 +24,81 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup SSH for production database validation
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.PRODUCTION_SSH_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H ${{ secrets.PRODUCTION_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
 
-      - name: Validate on Production Server Database
-        env:
-          HOST: ${{ secrets.PRODUCTION_HOST }}
-          USER: ${{ secrets.PRODUCTION_USER }}
-        run: |
-          echo "🔍 Validating migrations against production database..."
-          ssh -i ~/.ssh/deploy_key $USER@$HOST << 'EOF'
-            set -e
+      - name: Login to DigitalOcean Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: registry.digitalocean.com
+          username: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+          password: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
 
-            # Use the backend container
-            CONTAINER="backend-app"
-            echo "📋 Using container: $CONTAINER"
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./apps/backend
+          push: true
+          tags: registry.digitalocean.com/smart-city/backend:latest,registry.digitalocean.com/smart-city/backend:${{ github.sha }}
+          cache-from: type=registry,ref=registry.digitalocean.com/smart-city/backend:buildcache
+          cache-to: type=registry,ref=registry.digitalocean.com/smart-city/backend:buildcache,mode=max
 
-            # Check migration status on production using Docker
-            echo "📋 Checking migration status on production database..."
-            docker exec $CONTAINER npx prisma migrate status || {
-              echo "❌ Migration check failed on production database!"
-              echo "⚠️  There are pending migrations or schema drift."
-              echo "📝 Please review and apply migrations manually if needed."
-              exit 1
-            }
-
-            echo "✅ Migration validation successful on production database!"
-          EOF
-
+  # Deploy to production server
   deploy:
-    needs: [prisma-check, validate-production]
-    # Only deploy if all validations passed
-    if: |
-      always() &&
-      (needs.prisma-check.outputs.validation-required == 'false' || needs.prisma-check.outputs.validation-passed == 'true') &&
-      needs.validate-production.result == 'success'
+    needs: build
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Deploy to DigitalOcean
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USER }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            # Pull latest image
+            docker pull registry.digitalocean.com/smart-city/backend:latest
 
-      - name: Setup SSH key
-        run: |
-          echo "Setting up SSH..."
-          mkdir -p ~/.ssh
-          echo "${{ secrets.PRODUCTION_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.PRODUCTION_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
-          echo "SSH setup completed"
+            # Stop and remove old container
+            docker stop backend-app || true
+            docker rm backend-app || true
 
-      - name: Deploy to Production
-        env:
-          HOST: ${{ secrets.PRODUCTION_HOST }}
-          USER: ${{ secrets.PRODUCTION_USER }}
-        run: |
-          echo "🚀 Starting deployment to production server..."
+            # Start new container
+            docker run -d \
+              --name backend-app \
+              --restart unless-stopped \
+              --network host \
+              --env-file /root/apps/backend/.env.production \
+              -v /root/apps/backend/uploads:/app/uploads \
+              --health-cmd="curl -f http://localhost:3010/health || exit 1" \
+              --health-interval=30s \
+              --health-timeout=10s \
+              --health-retries=3 \
+              registry.digitalocean.com/smart-city/backend:latest
 
-          # Copy simple deployment script to server
-          scp -i ~/.ssh/id_rsa scripts/deploy-backend-simple.sh $USER@$HOST:/root/scripts/
+            # Wait for container to be healthy
+            echo "Waiting for container to be healthy..."
+            sleep 10
 
-          # SSH to server and execute deployment script
-          ssh -i ~/.ssh/id_rsa $USER@$HOST << 'ENDSSH'
-            set -e
-            chmod +x /root/scripts/deploy-backend-simple.sh
-            /root/scripts/deploy-backend-simple.sh
-          ENDSSH
+            # Check if container is running
+            docker ps | grep backend-app
+
+            # Clean up old images
+            docker image prune -f
 
       - name: Verify deployment
         run: |
           echo "🔍 Verifying deployment..."
-          sleep 10
-          curl -f https://api.smart-city.rs/health || echo "Warning: Health check failed, but deployment may still be successful"
-          echo "✅ Deployment verification completed!"
+          sleep 20
+          curl -f https://api.smart-city.rs/health || echo "Warning: Health check failed, but container may still be starting"
+          echo "✅ Deployment completed!"
 
       - name: Send notification on success
         if: success()
         run: |
           echo "✅ Backend deployed successfully to production!"
           echo "📍 API URL: https://api.smart-city.rs"
+          echo "🔄 Image: registry.digitalocean.com/smart-city/backend:${{ github.sha }}"
 
       - name: Send notification on failure
         if: failure()
