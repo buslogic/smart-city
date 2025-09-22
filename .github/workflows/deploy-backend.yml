@@ -9,51 +9,20 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Validation job - validates Prisma schema before deployment
-  validate:
-    runs-on: ubuntu-latest
+  # First check if Prisma validation is needed and run it
+  prisma-check:
+    uses: ./.github/workflows/validate-prisma-check.yml
 
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: smartcity_test
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=3
+  # Validation job - validates against production database
+  validate-production:
+    needs: prisma-check
+    # Only run if Prisma validation passed or wasn't required
+    if: needs.prisma-check.outputs.validation-required == 'false' || needs.prisma-check.outputs.validation-passed == 'true'
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: apps/backend/package-lock.json
-
-      - name: Install dependencies
-        working-directory: ./apps/backend
-        run: npm ci
-
-      - name: Setup test environment
-        working-directory: ./apps/backend
-        run: |
-          echo 'DATABASE_URL="mysql://root:root@localhost:3306/smartcity_test"' > .env
-
-      - name: Validate on empty database
-        working-directory: ./apps/backend
-        run: |
-          echo "🔍 Validating migrations on empty database..."
-          npx prisma generate
-          npx prisma migrate deploy
-          npx prisma migrate status
 
       - name: Setup SSH for production database validation
         run: |
@@ -70,7 +39,7 @@ jobs:
           echo "🔍 Validating migrations against production database..."
           ssh -i ~/.ssh/deploy_key $USER@$HOST << 'EOF'
             set -e
-            cd /root/smart-city/apps/backend
+            cd /root/apps/backend
 
             # Check migration status on production
             echo "📋 Checking migration status on production database..."
@@ -85,7 +54,12 @@ jobs:
           EOF
 
   deploy:
-    needs: validate
+    needs: [prisma-check, validate-production]
+    # Only deploy if all validations passed
+    if: |
+      always() &&
+      (needs.prisma-check.outputs.validation-required == 'false' || needs.prisma-check.outputs.validation-passed == 'true') &&
+      needs.validate-production.result == 'success'
     runs-on: ubuntu-latest
 
     steps:
@@ -111,7 +85,7 @@ jobs:
           # SSH to server and execute deployment
           ssh -i ~/.ssh/id_rsa $USER@$HOST << 'ENDSSH'
             set -e
-            cd /root/smart-city
+            cd /root/apps/backend
 
             # Pull latest changes
             echo "📥 Pulling latest changes..."
@@ -119,7 +93,6 @@ jobs:
 
             # Install dependencies
             echo "📦 Installing dependencies..."
-            cd apps/backend
             npm ci
 
             # Generate Prisma client

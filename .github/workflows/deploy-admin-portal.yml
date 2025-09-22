@@ -16,29 +16,34 @@ env:
   VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
 jobs:
+  # First check if Prisma validation is needed and run it (only for production deploy)
+  prisma-check:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/validate-prisma-check.yml
+
   preview:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
-        
+
       - name: Pull Vercel Environment Information
         run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
         working-directory: ./apps/admin-portal
-        
+
       - name: Build Project Artifacts
         run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
         working-directory: ./apps/admin-portal
-        
+
       - name: Deploy Project Artifacts to Vercel
         run: |
           vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }} > deployment-url.txt
           echo "PREVIEW_URL=$(cat deployment-url.txt)" >> $GITHUB_ENV
         working-directory: ./apps/admin-portal
-        
+
       - name: Comment PR with Preview URL
         uses: actions/github-script@v6
         with:
@@ -51,22 +56,42 @@ jobs:
             })
 
   production:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: prisma-check
+    # Only deploy if Prisma validation passed or wasn't required
+    if: |
+      always() &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      (needs.prisma-check.result == 'skipped' ||
+       needs.prisma-check.outputs.validation-required == 'false' ||
+       needs.prisma-check.outputs.validation-passed == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
-        
+
       - name: Pull Vercel Environment Information
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
         working-directory: ./apps/admin-portal
-        
+
       - name: Build Project Artifacts
         run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
         working-directory: ./apps/admin-portal
-        
+
       - name: Deploy Project Artifacts to Vercel
         run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
         working-directory: ./apps/admin-portal
+
+      - name: Send notification on success
+        if: success()
+        run: |
+          echo "✅ Admin Portal deployed successfully to Vercel!"
+          echo "📍 URL: https://admin.smart-city.rs"
+
+      - name: Send notification on failure
+        if: failure()
+        run: |
+          echo "❌ Admin Portal deployment failed!"
+          echo "Please check the logs for more information."
