@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Backend Deployment Script for Smart City
-# This script is called by GitHub Actions
+# Simple Backend Deployment Script for Smart City
+# Uses pre-built Docker image from DigitalOcean Registry
 
 set -e  # Exit on error
 
@@ -15,70 +15,38 @@ echo -e "${GREEN}🚀 Starting Smart City Backend Deployment${NC}"
 echo "========================================"
 
 # Configuration
-PROJECT_DIR="/root/smart-city"
-BACKEND_DIR="$PROJECT_DIR/apps/backend"
 CONTAINER_NAME="backend-app"
+IMAGE="registry.digitalocean.com/smart-city/backend:latest"
 HEALTH_CHECK_URL="https://api.smart-city.rs/health"
 MAX_WAIT_TIME=60
-REGISTRY="registry.digitalocean.com/smart-city"
 
-# Clone or update repository
-if [ ! -d "$PROJECT_DIR" ]; then
-    echo -e "${YELLOW}📥 Cloning repository...${NC}"
-    cd /root
-    git clone https://github.com/buslogic/smart-city.git
-else
-    echo -e "${YELLOW}📁 Navigating to project directory...${NC}"
-    cd $PROJECT_DIR
-
-    # Pull latest code
-    echo -e "${YELLOW}🔄 Pulling latest code from GitHub...${NC}"
-    git pull origin main
-fi
-
-# Navigate to backend directory
-cd $BACKEND_DIR
-
-# Install dependencies
-echo -e "${YELLOW}📦 Installing dependencies...${NC}"
-npm ci
-
-# Generate Prisma client
-echo -e "${YELLOW}🔧 Generating Prisma client...${NC}"
-npx prisma generate
-
-# Apply database migrations
-echo -e "${YELLOW}🗄️ Applying database migrations...${NC}"
-npx prisma migrate deploy
-
-# Build the application
-echo -e "${YELLOW}🏗️ Building application...${NC}"
-npm run build
-
-# Build new Docker image
-echo -e "${YELLOW}🐳 Building new Docker image...${NC}"
-docker build -t $REGISTRY/backend:latest .
+# Pull latest image
+echo -e "${YELLOW}🐳 Pulling latest Docker image...${NC}"
+docker pull $IMAGE
 
 # Stop old container
 echo -e "${YELLOW}🛑 Stopping old container...${NC}"
 docker stop $CONTAINER_NAME || true
 docker rm $CONTAINER_NAME || true
 
-# Start new container
+# Start new container with existing configuration
 echo -e "${YELLOW}🚀 Starting new container...${NC}"
 docker run -d \
   --name $CONTAINER_NAME \
   --restart unless-stopped \
-  -p 3010:3010 \
-  --env-file .env.production \
-  $REGISTRY/backend:latest
+  --network host \
+  --env-file /root/apps/backend/.env.production \
+  -v /root/apps/backend/uploads:/app/uploads \
+  $IMAGE
 
 # Wait for container to be healthy
 echo -e "${YELLOW}⏳ Waiting for backend to be healthy...${NC}"
 WAIT_TIME=0
 while [ $WAIT_TIME -lt $MAX_WAIT_TIME ]; do
     if docker ps | grep -q $CONTAINER_NAME; then
-        if curl -s -f $HEALTH_CHECK_URL > /dev/null 2>&1; then
+        # Check container health status
+        HEALTH=$(docker inspect --format='{{.State.Health.Status}}' $CONTAINER_NAME 2>/dev/null || echo "unknown")
+        if [ "$HEALTH" = "healthy" ]; then
             echo -e "${GREEN}✅ Backend is healthy!${NC}"
             break
         fi
@@ -89,7 +57,7 @@ while [ $WAIT_TIME -lt $MAX_WAIT_TIME ]; do
 done
 
 if [ $WAIT_TIME -ge $MAX_WAIT_TIME ]; then
-    echo -e "${RED}❌ Backend failed to start within $MAX_WAIT_TIME seconds${NC}"
+    echo -e "${RED}❌ Backend failed to become healthy within $MAX_WAIT_TIME seconds${NC}"
     echo -e "${RED}📋 Container logs:${NC}"
     docker logs $CONTAINER_NAME --tail 50
     exit 1
@@ -106,7 +74,6 @@ echo -e "${GREEN}✨ DEPLOYMENT SUCCESSFUL!${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo -e "📍 API URL: ${GREEN}https://api.smart-city.rs${NC}"
 echo -e "📦 Container: ${GREEN}$CONTAINER_NAME${NC}"
-echo -e "🔄 Git commit: ${GREEN}$(git rev-parse --short HEAD)${NC}"
 echo -e "📅 Deployed at: ${GREEN}$(date)${NC}"
 echo ""
 

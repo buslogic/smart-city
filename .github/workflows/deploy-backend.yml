@@ -85,35 +85,14 @@ jobs:
         run: |
           echo "🚀 Starting deployment to production server..."
 
-          # SSH to server and execute deployment
+          # Copy simple deployment script to server
+          scp -i ~/.ssh/id_rsa scripts/deploy-backend-simple.sh $USER@$HOST:/root/scripts/
+
+          # SSH to server and execute deployment script
           ssh -i ~/.ssh/id_rsa $USER@$HOST << 'ENDSSH'
             set -e
-
-            # Use the backend container
-            CONTAINER="backend-app"
-            echo "📋 Using container: $CONTAINER"
-
-            # Pull latest changes inside container
-            echo "📥 Pulling latest changes..."
-            docker exec $CONTAINER git pull origin main
-
-            # Install dependencies
-            echo "📦 Installing dependencies..."
-            docker exec $CONTAINER npm ci
-
-            # Generate Prisma client
-            echo "🔧 Generating Prisma client..."
-            docker exec $CONTAINER npx prisma generate
-
-            # Apply migrations
-            echo "🗄️ Applying database migrations..."
-            docker exec $CONTAINER npx prisma migrate deploy
-
-            # Restart container
-            echo "♻️ Restarting backend container..."
-            docker restart $CONTAINER
-
-            echo "✅ Deployment completed!"
+            chmod +x /root/scripts/deploy-backend-simple.sh
+            /root/scripts/deploy-backend-simple.sh
           ENDSSH
 
       - name: Verify deployment
