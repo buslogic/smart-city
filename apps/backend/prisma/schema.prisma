@@ -1,3 +1,6 @@
+// Prisma schema with automated validation via GitHub Actions
+// Validation runs on: push, pull requests, and before deployment
+
 generator client {
   provider = "prisma-client-js"
 }
