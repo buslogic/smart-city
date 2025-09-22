@@ -1,5 +1,5 @@
 -- Add maintenance.timescaledb:manage permission
-INSERT INTO permissions (name, resource, action, description, description_sr, category, created_at, updated_at)
+INSERT IGNORE INTO permissions (name, resource, action, description, description_sr, category, created_at, updated_at)
 VALUES (
   'maintenance.timescaledb:manage',
   'maintenance.timescaledb',

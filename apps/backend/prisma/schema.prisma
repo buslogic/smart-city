@@ -611,6 +611,7 @@ model ApiKey {
   @@index([type])
   @@index([expiresAt])
   @@index([createdBy])
+  @@index([revokedBy])
   @@map("api_keys")
 }
 
@@ -667,5 +668,7 @@ model EmailTemplate {
   @@index([slug])
   @@index([category])
   @@index([isActive])
+  @@index([createdBy])
+  @@index([updatedBy])
   @@map("email_templates")
 }

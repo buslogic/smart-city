@@ -1,0 +1,3 @@
+-- Add DEFAULT for updated_at column in api_keys table
+ALTER TABLE `api_keys`
+MODIFY COLUMN `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3);

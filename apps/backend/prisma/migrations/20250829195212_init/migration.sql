@@ -93,3 +93,17 @@ ALTER TABLE `role_permissions` ADD CONSTRAINT `role_permissions_roleId_fkey` FOR
 
 -- AddForeignKey
 ALTER TABLE `role_permissions` ADD CONSTRAINT `role_permissions_permissionId_fkey` FOREIGN KEY (`permissionId`) REFERENCES `permissions`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- Insert initial admin user (ID=1) for system operations
+-- Password je 'Test123!' hash-ovan sa bcrypt
+INSERT INTO `users` (`id`, `email`, `first_name`, `last_name`, `password`, `is_active`, `created_at`, `updated_at`)
+VALUES (
+    1,
+    'admin@smart-city.rs',
+    'System',
+    'Admin',
+    '$2b$10$Y3XOm9JxGKmVhPVGZp6DZeK5Ly8z2LXH5pE5QqYHVpQqKqH5Tn.LS',
+    true,
+    NOW(),
+    NOW()
+);
