@@ -43,6 +43,50 @@ interface FileUploadDto {
 export class SpacesController {
   constructor(private readonly spacesService: SpacesService) {}
 
+  @Post('upload-avatar')
+  @ApiOperation({ summary: 'Upload avatar slike (bez dodatnih permisija)' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB max
+      },
+    }),
+  )
+  @UseGuards(JwtAuthGuard) // Samo JWT auth, bez permisija
+  async uploadAvatar(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() uploadDto: FileUploadDto,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Fajl nije prosleđen');
+    }
+
+    // Validacija da je slika
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.mimetype)) {
+      throw new BadRequestException('Samo slike su dozvoljene za avatar');
+    }
+
+    const fileName = this.spacesService.generateFileName(file.originalname, 'avatar');
+
+    const result = await this.spacesService.uploadFile(file.buffer, {
+      folder: 'avatars',
+      fileName,
+      contentType: file.mimetype,
+      isPublic: true, // Avatari su uvek javni
+      metadata: {
+        originalName: file.originalname,
+        uploadedAt: new Date().toISOString(),
+      },
+    });
+
+    return {
+      success: true,
+      file: result,
+    };
+  }
+
   @Post('upload')
   @ApiOperation({ summary: 'Upload jednog fajla' })
   @ApiConsumes('multipart/form-data')

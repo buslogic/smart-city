@@ -159,7 +159,7 @@ const Profile: React.FC = () => {
         formData.append('isPublic', 'true');
         
         const uploadResponse = await axios.post(
-          `${import.meta.env.VITE_API_URL}/api/spaces/upload`,
+          `${import.meta.env.VITE_API_URL}/api/spaces/upload-avatar`,
           formData,
           {
             headers: {
