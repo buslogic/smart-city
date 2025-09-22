@@ -39,11 +39,14 @@ jobs:
           echo "🔍 Validating migrations against production database..."
           ssh -i ~/.ssh/deploy_key $USER@$HOST << 'EOF'
             set -e
-            cd /root/apps/backend
 
-            # Check migration status on production
+            # Use the backend container
+            CONTAINER="backend-app"
+            echo "📋 Using container: $CONTAINER"
+
+            # Check migration status on production using Docker
             echo "📋 Checking migration status on production database..."
-            npx prisma migrate status || {
+            docker exec $CONTAINER npx prisma migrate status || {
               echo "❌ Migration check failed on production database!"
               echo "⚠️  There are pending migrations or schema drift."
               echo "📝 Please review and apply migrations manually if needed."
@@ -85,27 +88,30 @@ jobs:
           # SSH to server and execute deployment
           ssh -i ~/.ssh/id_rsa $USER@$HOST << 'ENDSSH'
             set -e
-            cd /root/apps/backend
 
-            # Pull latest changes
+            # Use the backend container
+            CONTAINER="backend-app"
+            echo "📋 Using container: $CONTAINER"
+
+            # Pull latest changes inside container
             echo "📥 Pulling latest changes..."
-            git pull origin main
+            docker exec $CONTAINER git pull origin main
 
             # Install dependencies
             echo "📦 Installing dependencies..."
-            npm ci
+            docker exec $CONTAINER npm ci
 
             # Generate Prisma client
             echo "🔧 Generating Prisma client..."
-            npx prisma generate
+            docker exec $CONTAINER npx prisma generate
 
             # Apply migrations
             echo "🗄️ Applying database migrations..."
-            npx prisma migrate deploy
+            docker exec $CONTAINER npx prisma migrate deploy
 
-            # Restart backend service
-            echo "♻️ Restarting backend service..."
-            pm2 restart smart-city-backend || pm2 start npm --name smart-city-backend -- run start:prod
+            # Restart container
+            echo "♻️ Restarting backend container..."
+            docker restart $CONTAINER
 
             echo "✅ Deployment completed!"
           ENDSSH
