@@ -1,0 +1,108 @@
+name: Prisma Validation Check
+
+on:
+  workflow_call:
+    outputs:
+      validation-required:
+        description: 'Whether Prisma validation is required'
+        value: ${{ jobs.check.outputs.validation-required }}
+      validation-passed:
+        description: 'Whether Prisma validation passed'
+        value: ${{ jobs.validate.outputs.validation-passed }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      validation-required: ${{ steps.check-changes.outputs.prisma-changed }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for Prisma changes
+        id: check-changes
+        run: |
+          # Check if there are changes in Prisma files
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "")
+
+          if echo "$CHANGED_FILES" | grep -qE "(apps/backend/prisma/.*\.(prisma|sql)|apps/backend/package\.json)"; then
+            echo "🔍 Prisma changes detected - validation required"
+            echo "prisma-changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "✅ No Prisma changes - skipping validation"
+            echo "prisma-changed=false" >> $GITHUB_OUTPUT
+          fi
+
+  validate:
+    needs: check
+    if: needs.check.outputs.validation-required == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      validation-passed: ${{ steps.run-validation.outputs.passed }}
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: smartcity_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: apps/backend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./apps/backend
+        run: npm ci
+
+      - name: Setup test environment
+        working-directory: ./apps/backend
+        run: |
+          echo 'DATABASE_URL="mysql://root:root@localhost:3306/smartcity_test"' > .env
+
+      - name: Setup database
+        working-directory: ./apps/backend
+        run: |
+          npx prisma generate
+          npx prisma migrate deploy
+
+      - name: Run Prisma validation
+        id: run-validation
+        working-directory: ./apps/backend
+        run: |
+          set +e  # Don't exit on error
+          npx ts-node scripts/validate-prisma-schema.ts
+          RESULT=$?
+
+          if [ $RESULT -eq 0 ]; then
+            echo "✅ Validation passed"
+            echo "passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Validation failed"
+            echo "passed=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+      - name: Upload validation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prisma-validation-report
+          path: apps/backend/prisma-validation-*.json

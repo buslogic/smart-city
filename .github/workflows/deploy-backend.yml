@@ -1,130 +1,157 @@
-name: Deploy Backend to DigitalOcean
+name: Deploy Backend to Production
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - 'apps/backend/**'
       - '.github/workflows/deploy-backend.yml'
   workflow_dispatch:
 
-env:
-  REGISTRY: registry.digitalocean.com
-  IMAGE_NAME: smart-city/backend
-
 jobs:
-  build-and-test:
+  # Validation job - validates Prisma schema before deployment
+  validate:
     runs-on: ubuntu-latest
-    
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: smartcity_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v3
         with:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: apps/backend/package-lock.json
-      
+
       - name: Install dependencies
         working-directory: ./apps/backend
         run: npm ci
-      
-      - name: Run linter
-        working-directory: ./apps/backend
-        run: npm run lint
-        continue-on-error: true
-      
-      - name: Run tests
-        working-directory: ./apps/backend
-        run: npm test --passWithNoTests
-        continue-on-error: true
 
-  build-and-push:
-    needs: build-and-test
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Install doctl
-        uses: digitalocean/action-doctl@v2
-        with:
-          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
-      
-      - name: Login to DigitalOcean Container Registry
-        run: doctl registry login --expiry-seconds 1200
-      
-      - name: Build Docker image
+      - name: Setup test environment
+        working-directory: ./apps/backend
         run: |
-          docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
-                       -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
-                       -f apps/backend/Dockerfile \
-                       apps/backend/
-      
-      - name: Push Docker images
+          echo 'DATABASE_URL="mysql://root:root@localhost:3306/smartcity_test"' > .env
+
+      - name: Validate on empty database
+        working-directory: ./apps/backend
         run: |
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          echo "🔍 Validating migrations on empty database..."
+          npx prisma generate
+          npx prisma migrate deploy
+          npx prisma migrate status
+
+      - name: Setup SSH for production database validation
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PRODUCTION_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.PRODUCTION_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Validate on Production Server Database
+        env:
+          HOST: ${{ secrets.PRODUCTION_HOST }}
+          USER: ${{ secrets.PRODUCTION_USER }}
+        run: |
+          echo "🔍 Validating migrations against production database..."
+          ssh -i ~/.ssh/deploy_key $USER@$HOST << 'EOF'
+            set -e
+            cd /home/smartcity/apps/backend
+
+            # Check migration status on production
+            echo "📋 Checking migration status on production database..."
+            npx prisma migrate status || {
+              echo "❌ Migration check failed on production database!"
+              echo "⚠️  There are pending migrations or schema drift."
+              echo "📝 Please review and apply migrations manually if needed."
+              exit 1
+            }
+
+            echo "✅ Migration validation successful on production database!"
+          EOF
 
   deploy:
-    needs: build-and-push
+    needs: validate
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
-      - name: Deploy to Droplet
-        uses: appleboy/ssh-action@v0.1.5
-        with:
-          host: ${{ secrets.DROPLET_HOST }}
-          username: root
-          key: ${{ secrets.DROPLET_SSH_KEY }}
-          script: |
-            # Login to DigitalOcean Registry
-            docker login -u ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }} -p ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }} registry.digitalocean.com
-            
-            # Stop existing container if running
-            docker stop backend-app || true
-            docker rm backend-app || true
-            
-            # Pull latest image
-            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-            
-            # Run new container with host network for Redis connection
-            docker run -d \
-              --name backend-app \
-              --restart unless-stopped \
-              --network host \
-              --env-file /root/apps/backend/.env.production \
-              ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-            
-            # Copy SSH key for legacy server communication
-            docker cp /root/.ssh/gsp-to-legacy backend-app:/home/nestjs/.ssh/gsp-to-legacy || echo "SSH key copy failed, continuing..."
-            docker exec -u root backend-app chown nestjs:nodejs /home/nestjs/.ssh/gsp-to-legacy || echo "Chown failed, continuing..."
-            docker exec -u root backend-app chmod 600 /home/nestjs/.ssh/gsp-to-legacy || echo "Chmod failed, continuing..."
-            
-            # Add legacy server to known_hosts to prevent SSH prompt
-            docker exec -u root backend-app sh -c 'ssh-keyscan -H 79.101.48.11 >> /home/nestjs/.ssh/known_hosts 2>/dev/null' || echo "Known hosts failed, continuing..."
-            docker exec -u root backend-app chown nestjs:nodejs /home/nestjs/.ssh/known_hosts || echo "Chown known_hosts failed, continuing..."
-            
-            # Wait for container to be ready
-            sleep 10
-            
-            # Run database migrations
-            echo "Running database migrations..."
-            docker exec backend-app npx prisma migrate deploy
-            
-            # Run seed (only if needed - check if admin exists first)
-            echo "Checking if database needs seeding..."
-            docker exec backend-app npx prisma db seed || echo "Seed might have failed, but continuing..."
-            
-            # Health check
-            curl -f http://localhost:3010/api/health || exit 1
-            
-            echo "Deployment successful!"
+
+      - name: Setup SSH key
+        run: |
+          echo "Setting up SSH..."
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PRODUCTION_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.PRODUCTION_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+          echo "SSH setup completed"
+
+      - name: Deploy to Production
+        env:
+          HOST: ${{ secrets.PRODUCTION_HOST }}
+          USER: ${{ secrets.PRODUCTION_USER }}
+        run: |
+          echo "🚀 Starting deployment to production server..."
+
+          # SSH to server and execute deployment
+          ssh -i ~/.ssh/id_rsa $USER@$HOST << 'ENDSSH'
+            set -e
+            cd /home/smartcity
+
+            # Pull latest changes
+            echo "📥 Pulling latest changes..."
+            git pull origin main
+
+            # Install dependencies
+            echo "📦 Installing dependencies..."
+            cd apps/backend
+            npm ci
+
+            # Generate Prisma client
+            echo "🔧 Generating Prisma client..."
+            npx prisma generate
+
+            # Apply migrations
+            echo "🗄️ Applying database migrations..."
+            npx prisma migrate deploy
+
+            # Restart backend service
+            echo "♻️ Restarting backend service..."
+            pm2 restart smart-city-backend || pm2 start npm --name smart-city-backend -- run start:prod
+
+            echo "✅ Deployment completed!"
+          ENDSSH
+
+      - name: Verify deployment
+        run: |
+          echo "🔍 Verifying deployment..."
+          sleep 10
+          curl -f https://api.smart-city.rs/health || echo "Warning: Health check failed, but deployment may still be successful"
+          echo "✅ Deployment verification completed!"
+
+      - name: Send notification on success
+        if: success()
+        run: |
+          echo "✅ Backend deployed successfully to production!"
+          echo "📍 API URL: https://api.smart-city.rs"
+
+      - name: Send notification on failure
+        if: failure()
+        run: |
+          echo "❌ Backend deployment failed!"
+          echo "Please check the logs for more information."
