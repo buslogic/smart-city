@@ -377,12 +377,10 @@ const ModernMenu: React.FC = () => {
             itemColor: 'rgb(55, 65, 81)', // text-gray-700
             itemHoverColor: 'rgb(17, 24, 39)', // text-gray-900
             itemSelectedColor: 'rgb(37, 99, 235)', // text-blue-600
-            itemActiveColor: 'rgb(37, 99, 235)',
 
             // Pozadine za hover i selected
             itemHoverBg: 'rgb(249, 250, 251)', // bg-gray-50
             itemSelectedBg: 'rgb(219, 234, 254)', // bg-blue-100
-            itemActiveBg: 'rgb(219, 234, 254)',
 
             // Ikone
             iconSize: 16,
