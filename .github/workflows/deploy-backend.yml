@@ -70,7 +70,7 @@ jobs:
           echo "🔍 Validating migrations against production database..."
           ssh -i ~/.ssh/deploy_key $USER@$HOST << 'EOF'
             set -e
-            cd /home/smartcity/apps/backend
+            cd /root/smart-city/apps/backend
 
             # Check migration status on production
             echo "📋 Checking migration status on production database..."
@@ -111,7 +111,7 @@ jobs:
           # SSH to server and execute deployment
           ssh -i ~/.ssh/id_rsa $USER@$HOST << 'ENDSSH'
             set -e
-            cd /home/smartcity
+            cd /root/smart-city
 
             # Pull latest changes
             echo "📥 Pulling latest changes..."
