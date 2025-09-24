@@ -244,7 +244,6 @@ const ModernMenu: React.FC = () => {
                 icon: <WarningOutlined />,
                 label: 'Agresivna Vožnja',
                 permissions: ['safety.aggressive.driving:view'],
-                badge: { count: 7, color: '#faad14' },
               } as MenuItem,
               {
                 key: '/transport/safety/monthly-report',
