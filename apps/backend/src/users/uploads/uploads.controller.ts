@@ -136,6 +136,104 @@ export class UploadsController {
     }
   }
 
+  @Post('company-logo')
+  @ApiOperation({ summary: 'Upload company logo' })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: process.env.NODE_ENV === 'production'
+        ? undefined // Koristi memory storage za Spaces
+        : diskStorage({
+            destination: join(process.cwd(), 'uploads', 'company-logos'),
+            filename: (req, file, cb) => {
+              const uniqueName = `logo-${Date.now()}${extname(file.originalname)}`;
+              cb(null, uniqueName);
+            },
+          }),
+      fileFilter: (req, file, cb) => {
+        const allowedTypes = /jpeg|jpg|png|gif|svg/;
+        const extName = allowedTypes.test(
+          extname(file.originalname).toLowerCase(),
+        );
+        const mimeType = allowedTypes.test(file.mimetype);
+
+        if (extName && mimeType) {
+          cb(null, true);
+        } else {
+          cb(new BadRequestException('Samo slike su dozvoljene (JPEG, PNG, GIF, SVG)'), false);
+        }
+      },
+      limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB
+      },
+    }),
+  )
+  async uploadCompanyLogo(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: any,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Fajl nije prosleđen');
+    }
+
+    // Kreiraj folder za company logos u development
+    if (!this.isProduction) {
+      const uploadPath = join(process.cwd(), 'uploads', 'company-logos');
+      if (!existsSync(uploadPath)) {
+        mkdirSync(uploadPath, { recursive: true });
+      }
+    }
+
+    try {
+      // Production - koristi DigitalOcean Spaces
+      if (this.isProduction) {
+        const fileName = this.spacesService.generateFileName(
+          file.originalname,
+          'company-logo',
+        );
+
+        const uploadResult = await this.spacesService.uploadFile(
+          file.buffer,
+          {
+            folder: 'company-logos',
+            fileName,
+            contentType: file.mimetype,
+            isPublic: true, // Company logo je javan
+          },
+        );
+
+        this.logger.log(`Company logo uploaded to Spaces: ${uploadResult.key}`);
+
+        return {
+          success: true,
+          file: {
+            url: uploadResult.url,
+            key: uploadResult.key,
+            filename: fileName,
+            originalName: file.originalname,
+            size: uploadResult.size,
+          },
+        };
+      }
+      // Development - koristi lokalni storage
+      else {
+        const url = `/uploads/company-logos/${file.filename}`;
+
+        return {
+          success: true,
+          file: {
+            url,
+            filename: file.filename,
+            originalName: file.originalname,
+            size: file.size,
+          },
+        };
+      }
+    } catch (error) {
+      this.logger.error('Failed to upload company logo:', error);
+      throw new BadRequestException('Greška pri upload-u logotipa');
+    }
+  }
+
   @Delete('avatar/:filename')
   @ApiOperation({ summary: 'Briši avatar sliku' })
   async deleteAvatar(@Param('filename') filename: string) {

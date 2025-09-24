@@ -390,6 +390,7 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
                 children: allPermissions
                   .filter(p =>
                     p.resource === 'settings.general' ||
+                    p.resource === 'settings.company_info' ||
                     p.resource === 'settings.api' ||
                     p.resource === 'settings.system'
                   )
@@ -540,6 +541,17 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
       };
       if (maintenanceLabels[permission.action]) {
         return maintenanceLabels[permission.action];
+      }
+    }
+
+    // Specifični labeli za company info permisije
+    if (permission.resource === 'settings.company_info') {
+      const companyInfoLabels: Record<string, string> = {
+        'read': 'Pregled informacija o kompaniji',
+        'write': 'Izmena informacija o kompaniji',
+      };
+      if (companyInfoLabels[permission.action]) {
+        return companyInfoLabels[permission.action];
       }
     }
     

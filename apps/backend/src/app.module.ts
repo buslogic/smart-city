@@ -30,6 +30,7 @@ import { ApiKeysModule } from './api-keys/api-keys.module';
 import { MailModule } from './mail/mail.module';
 import { EmailTemplatesModule } from './email-templates/email-templates.module';
 import { MigrationModule } from './migration/migration.module';
+import { SettingsModule } from './settings/settings.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { MigrationModule } from './migration/migration.module';
     MailModule,
     EmailTemplatesModule,
     MigrationModule,
+    SettingsModule,
   ],
   controllers: [AppController],
   providers: [

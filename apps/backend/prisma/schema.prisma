@@ -1,6 +1,3 @@
-// Prisma schema with automated validation via GitHub Actions
-// Validation runs on: push, pull requests, and before deployment
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -22,17 +19,17 @@ model User {
   createdAt                DateTime                   @default(now()) @map("created_at")
   updatedAt                DateTime                   @updatedAt @map("updated_at")
   avatar                   String?                    @db.Text
+  createdApiKeys           ApiKey[]                   @relation("ApiKeyCreator")
+  revokedApiKeys           ApiKey[]                   @relation("ApiKeyRevoker")
   drivingAnalysisLogs      DrivingAnalysisLog[]
+  createdEmailTemplates    EmailTemplate[]            @relation("EmailTemplateCreator")
+  updatedEmailTemplates    EmailTemplate[]            @relation("EmailTemplateUpdater")
   gpsSyncLogs              GpsSyncLog[]
   safetyScoreConfigHistory SafetyScoreConfigHistory[]
   sessions                 Session[]
   dashboardConfig          UserDashboardConfig?
   roles                    UserRole[]
   vehicleSyncLogs          VehicleSyncLog[]
-  createdApiKeys           ApiKey[]                   @relation("ApiKeyCreator")
-  revokedApiKeys           ApiKey[]                   @relation("ApiKeyRevoker")
-  createdEmailTemplates    EmailTemplate[]            @relation("EmailTemplateCreator")
-  updatedEmailTemplates    EmailTemplate[]            @relation("EmailTemplateUpdater")
 
   @@index([email])
   @@map("users")
@@ -583,32 +580,30 @@ model DrivingAnalysisLog {
 }
 
 model ApiKey {
-  id           Int        @id @default(autoincrement())
-  key          String     @unique
-  keyHash      String     @unique @map("key_hash")
-  displayKey   String     @map("display_key") @db.VarChar(10)
+  id           Int         @id @default(autoincrement())
+  key          String      @unique
+  keyHash      String      @unique @map("key_hash")
+  displayKey   String      @map("display_key") @db.VarChar(10)
   name         String
-  description  String?    @db.Text
-  type         ApiKeyType @default(API_ACCESS)
-  permissions  Json? // Array od string-ova sa dozvolama
-  allowedIps   Json?      @map("allowed_ips") // Array IP adresa
-  rateLimit    Int?       @default(1000) @map("rate_limit") // Zahtevi po satu
-  expiresAt    DateTime?  @map("expires_at")
-  lastUsedAt   DateTime?  @map("last_used_at")
-  lastUsedIp   String?    @map("last_used_ip")
-  usageCount   Int        @default(0) @map("usage_count")
-  isActive     Boolean    @default(true) @map("is_active")
-  revokedAt    DateTime?  @map("revoked_at")
-  revokedBy    Int?       @map("revoked_by")
-  revokeReason String?    @map("revoke_reason")
-  createdBy    Int        @map("created_by")
-  createdAt    DateTime   @default(now()) @map("created_at")
-  updatedAt    DateTime   @updatedAt @map("updated_at")
-
-  // Relations
-  creator User        @relation("ApiKeyCreator", fields: [createdBy], references: [id])
-  revoker User?       @relation("ApiKeyRevoker", fields: [revokedBy], references: [id])
-  logs    ApiKeyLog[]
+  description  String?     @db.Text
+  type         ApiKeyType  @default(API_ACCESS)
+  permissions  Json?
+  allowedIps   Json?       @map("allowed_ips")
+  rateLimit    Int?        @default(1000) @map("rate_limit")
+  expiresAt    DateTime?   @map("expires_at")
+  lastUsedAt   DateTime?   @map("last_used_at")
+  lastUsedIp   String?     @map("last_used_ip")
+  usageCount   Int         @default(0) @map("usage_count")
+  isActive     Boolean     @default(true) @map("is_active")
+  revokedAt    DateTime?   @map("revoked_at")
+  revokedBy    Int?        @map("revoked_by")
+  revokeReason String?     @map("revoke_reason")
+  createdBy    Int         @map("created_by")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+  logs         ApiKeyLog[]
+  creator      User        @relation("ApiKeyCreator", fields: [createdBy], references: [id])
+  revoker      User?       @relation("ApiKeyRevoker", fields: [revokedBy], references: [id])
 
   @@index([isActive])
   @@index([type])
@@ -621,31 +616,22 @@ model ApiKey {
 model ApiKeyLog {
   id           Int      @id @default(autoincrement())
   apiKeyId     Int      @map("api_key_id")
-  action       String // access_granted, access_denied, key_validated, etc.
+  action       String
   ipAddress    String?  @map("ip_address")
   userAgent    String?  @map("user_agent") @db.Text
   endpoint     String?  @db.VarChar(500)
   method       String?  @db.VarChar(10)
   responseCode Int?     @map("response_code")
-  responseTime Int?     @map("response_time") // ms
+  responseTime Int?     @map("response_time")
   errorMessage String?  @map("error_message") @db.Text
   createdAt    DateTime @default(now()) @map("created_at")
-
-  // Relations
-  apiKey ApiKey @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  apiKey       ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
 
   @@index([apiKeyId])
   @@index([action])
   @@index([createdAt])
   @@index([ipAddress])
   @@map("api_key_logs")
-}
-
-enum ApiKeyType {
-  SWAGGER_ACCESS
-  API_ACCESS
-  ADMIN_ACCESS
-  INTEGRATION
 }
 
 model EmailTemplate {
@@ -664,9 +650,8 @@ model EmailTemplate {
   updatedBy  Int?      @map("updated_by")
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
-
-  creator User  @relation("EmailTemplateCreator", fields: [createdBy], references: [id])
-  updater User? @relation("EmailTemplateUpdater", fields: [updatedBy], references: [id])
+  creator    User      @relation("EmailTemplateCreator", fields: [createdBy], references: [id])
+  updater    User?     @relation("EmailTemplateUpdater", fields: [updatedBy], references: [id])
 
   @@index([slug])
   @@index([category])
@@ -674,4 +659,28 @@ model EmailTemplate {
   @@index([createdBy])
   @@index([updatedBy])
   @@map("email_templates")
+}
+
+model CompanyInfo {
+  id          Int      @id @default(autoincrement())
+  companyName String   @map("company_name")
+  taxId       String   @map("tax_id")
+  address     String
+  phone       String
+  email       String
+  bankAccount String   @map("bank_account")
+  bankName    String   @map("bank_name")
+  website     String?
+  logo        String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("company_info")
+}
+
+enum ApiKeyType {
+  SWAGGER_ACCESS
+  API_ACCESS
+  ADMIN_ACCESS
+  INTEGRATION
 }

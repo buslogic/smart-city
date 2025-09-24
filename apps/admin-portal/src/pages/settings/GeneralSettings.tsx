@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Tabs, Card, Typography } from 'antd';
-import { DatabaseOutlined, SettingOutlined, MailOutlined, CloudServerOutlined, TableOutlined } from '@ant-design/icons';
+import { DatabaseOutlined, SettingOutlined, MailOutlined, CloudServerOutlined, TableOutlined, BuildOutlined } from '@ant-design/icons';
 import { usePermissions } from '../../hooks/usePermissions';
+import CompanyInfo from './components/CompanyInfo';
 import LegacyDatabases from './components/LegacyDatabases';
 import LegacyTableMappings from './components/LegacyTableMappings';
 import EmailTemplates from './components/EmailTemplates';
@@ -9,10 +10,25 @@ import EmailTemplates from './components/EmailTemplates';
 const { Title } = Typography;
 
 const GeneralSettings: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('legacy-databases');
+  const [activeTab, setActiveTab] = useState('company-info');
   const { hasPermission } = usePermissions();
 
   const tabItems = [
+    {
+      key: 'company-info',
+      label: (
+        <span>
+          <BuildOutlined />
+          Informacije o Kompaniji
+        </span>
+      ),
+      children: (
+        <div className="p-4">
+          <CompanyInfo />
+        </div>
+      ),
+      permission: 'settings.company_info:read',
+    },
     {
       key: 'legacy-databases',
       label: (
