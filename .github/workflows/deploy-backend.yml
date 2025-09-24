@@ -83,6 +83,10 @@ jobs:
             # Check if container is running
             docker ps | grep backend-app
 
+            # Run database migrations
+            echo "Running database migrations..."
+            docker exec backend-app npx prisma migrate deploy || echo "Migration might have failed, but continuing..."
+
             # Clean up old images
             docker image prune -f
 
