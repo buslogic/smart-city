@@ -242,14 +242,14 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
             id: 'dispecerski-modul',
             name: 'Dispečerski Modul',
             type: 'submenu',
-            icon: <Navigation className="h-4 w-4" />,
+            icon: <Radio className="h-4 w-4" />,
             children: [
               {
                 id: 'mapa',
                 name: 'Mapa',
                 type: 'section',
                 children: allPermissions
-                  .filter(p => p.name === 'dispatcher:view_map' || p.resource === 'dispatcher_map')
+                  .filter(p => p.name === 'dispatcher:view_map')
                   .map(p => ({
                     id: `perm-${p.id}`,
                     name: getPermissionLabel(p),
@@ -259,11 +259,11 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
                   })),
               },
               {
-                id: 'analitika',
-                name: 'Analitika',
+                id: 'analitika-vozila',
+                name: 'Analitika vozila',
                 type: 'section',
                 children: allPermissions
-                  .filter(p => p.name === 'dispatcher:view_analytics' || p.resource === 'dispatcher_analytics')
+                  .filter(p => p.name === 'dispatcher:view_analytics' || p.name === 'dispatcher:view_map')
                   .map(p => ({
                     id: `perm-${p.id}`,
                     name: getPermissionLabel(p),
@@ -273,17 +273,11 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
                   })),
               },
               {
-                id: 'gps-sync-dispatcher',
+                id: 'gps-sync',
                 name: 'GPS Sync',
                 type: 'section',
                 children: allPermissions
-                  .filter(p => 
-                    p.name === 'dispatcher:manage' || 
-                    p.name === 'dispatcher:read' ||
-                    p.name === 'dispatcher:track_vehicles' ||
-                    p.name === 'dispatcher:send_commands' ||
-                    p.name === 'dispatcher:emergency_actions'
-                  )
+                  .filter(p => p.resource === 'dispatcher.sync')
                   .map(p => ({
                     id: `perm-${p.id}`,
                     name: getPermissionLabel(p),
@@ -522,6 +516,21 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
         return vehiclesSyncLabels[permission.action];
       }
     }
+
+    // Specifični labeli za dispatcher.sync permisije
+    if (permission.resource === 'dispatcher.sync') {
+      const dispatcherSyncLabels: Record<string, string> = {
+        'view': 'Pregled GPS sync statusa',
+        'start': 'Pokretanje GPS sync',
+        'stop': 'Zaustavljanje GPS sync',
+        'configure': 'Konfiguracija GPS sync parametara',
+        'cleanup': 'Čišćenje starih GPS sync podataka',
+        'dashboard': 'Pristup GPS sync dashboard widget-u',
+      };
+      if (dispatcherSyncLabels[permission.action]) {
+        return dispatcherSyncLabels[permission.action];
+      }
+    }
     
     // Specifični labeli za maintenance permisije
     if (permission.resource === 'maintenance.timescaledb') {
@@ -548,6 +557,28 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
       };
       if (dispatcherLabels[permission.action]) {
         return dispatcherLabels[permission.action];
+      }
+    }
+
+    // Specifični labeli za dispatcher_map permisije
+    if (permission.resource === 'dispatcher_map') {
+      const dispatcherMapLabels: Record<string, string> = {
+        'read': 'Pregled mape sa vozilima',
+        'view': 'Pregled mape sa vozilima',
+      };
+      if (dispatcherMapLabels[permission.action]) {
+        return dispatcherMapLabels[permission.action];
+      }
+    }
+
+    // Specifični labeli za dispatcher_analytics permisije
+    if (permission.resource === 'dispatcher_analytics') {
+      const dispatcherAnalyticsLabels: Record<string, string> = {
+        'read': 'Pregled analitike vozila',
+        'view': 'Pregled analitike vozila',
+      };
+      if (dispatcherAnalyticsLabels[permission.action]) {
+        return dispatcherAnalyticsLabels[permission.action];
       }
     }
     

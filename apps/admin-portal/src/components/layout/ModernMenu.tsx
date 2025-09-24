@@ -64,11 +64,16 @@ const ModernMenu: React.FC = () => {
   const [openKeys, setOpenKeys] = useState<string[]>([]);
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuthStore();
+  const { user, logout, refreshAccessToken } = useAuthStore();
   const { hasPermission } = usePermissions();
   const {
     token: { colorBgContainer, borderRadiusLG },
   } = theme.useToken();
+
+  // Refresh profila pri mount-u
+  useEffect(() => {
+    refreshAccessToken();
+  }, []);
 
   // Funkcija za filtriranje stavki na osnovu permisija
   const filterMenuItems = (items: CustomMenuItem[]): MenuProps['items'] => {
@@ -187,7 +192,7 @@ const ModernMenu: React.FC = () => {
                 key: '/transport/gps-buffer-status',
                 icon: <DatabaseOutlined />,
                 label: 'GPS Real-Time Sync',
-                permissions: ['dispatcher:sync_gps'],
+                permissions: ['dispatcher.sync:view'],
               },
               {
                 key: '/transport/legacy-sync',
@@ -224,7 +229,7 @@ const ModernMenu: React.FC = () => {
                 key: '/transport/dispatcher/gps-sync',
                 icon: <ThunderboltOutlined />,
                 label: 'GPS Sync',
-                permissions: ['dispatcher:sync_gps'],
+                permissions: ['dispatcher.sync:view'],
                 badge: { count: 'LIVE', color: '#ff4d4f' },
               } as MenuItem,
             ],
