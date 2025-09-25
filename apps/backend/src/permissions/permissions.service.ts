@@ -14,11 +14,21 @@ export class PermissionsService {
 
   async findAll() {
     const permissions = await this.prisma.permission.findMany({
-      orderBy: [{ resource: 'asc' }, { action: 'asc' }],
+      orderBy: [
+        { menuOrder: 'asc' }, // Sortiraj po menuOrder (NULL vrednosti će biti na kraju)
+        { resource: 'asc' },  // Fallback na resource
+        { action: 'asc' }     // Fallback na action
+      ],
     });
 
+    // Konvertuj BigInt u Number za JSON serijalizaciju
+    const processedPermissions = permissions.map(permission => ({
+      ...permission,
+      menuOrder: permission.menuOrder ? Number(permission.menuOrder) : null,
+    }));
+
     return {
-      data: permissions,
+      data: processedPermissions,
       total: permissions.length,
     };
   }
@@ -54,9 +64,15 @@ export class PermissionsService {
     }
 
     // Get all permissions from database
-    const allPermissions = await this.prisma.permission.findMany({
+    const rawPermissions = await this.prisma.permission.findMany({
       orderBy: [{ category: 'asc' }, { resource: 'asc' }, { action: 'asc' }],
     });
+
+    // Konvertuj BigInt u Number za JSON serijalizaciju
+    const allPermissions = rawPermissions.map(permission => ({
+      ...permission,
+      menuOrder: permission.menuOrder ? Number(permission.menuOrder) : null,
+    }));
 
     // Extract user permissions
     const userPermissions = new Set<string>();

@@ -68,6 +68,7 @@ model Permission {
   resource      String
   action        String
   description   String?
+  menuOrder     BigInt?          @map("menu_order")
   createdAt     DateTime         @default(now()) @map("created_at")
   updatedAt     DateTime         @updatedAt @map("updated_at")
   category      String?          @db.VarChar(50)
@@ -79,6 +80,7 @@ model Permission {
   @@unique([resource, action])
   @@index([category])
   @@index([uiRoute])
+  @@index([menuOrder])
   @@map("permissions")
 }
 

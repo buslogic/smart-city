@@ -72,7 +72,19 @@ export class RolesService {
       throw new NotFoundException(`Role with ID ${id} not found`);
     }
 
-    return role;
+    // Konvertuj BigInt u Number za JSON serijalizaciju
+    const processedRole = {
+      ...role,
+      permissions: role.permissions.map((rp) => ({
+        ...rp,
+        permission: {
+          ...rp.permission,
+          menuOrder: rp.permission.menuOrder ? Number(rp.permission.menuOrder) : null,
+        },
+      })),
+    };
+
+    return processedRole;
   }
 
   async update(
@@ -144,7 +156,13 @@ export class RolesService {
       throw new NotFoundException(`Role with ID ${roleId} not found`);
     }
 
-    return role.permissions.map((rp) => rp.permission);
+    // Konvertuj BigInt u Number za JSON serijalizaciju
+    const processedPermissions = role.permissions.map((rp) => ({
+      ...rp.permission,
+      menuOrder: rp.permission.menuOrder ? Number(rp.permission.menuOrder) : null,
+    }));
+
+    return processedPermissions;
   }
 
   async updateRolePermissions(roleId: number, permissionIds: number[]) {
@@ -203,7 +221,7 @@ export class RolesService {
       throw new ConflictException('Permission already assigned to this role');
     }
 
-    return this.prisma.rolePermission.create({
+    const result = await this.prisma.rolePermission.create({
       data: {
         roleId,
         permissionId,
@@ -212,6 +230,15 @@ export class RolesService {
         permission: true,
       },
     });
+
+    // Konvertuj BigInt u Number za JSON serijalizaciju
+    return {
+      ...result,
+      permission: {
+        ...result.permission,
+        menuOrder: result.permission.menuOrder ? Number(result.permission.menuOrder) : null,
+      },
+    };
   }
 
   async removePermissionFromRole(roleId: number, permissionId: number) {
