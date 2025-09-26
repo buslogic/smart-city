@@ -34,7 +34,10 @@ const UserAdministration: React.FC = () => {
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   
-  const { canCreateUsers, canUpdateUsers, canDeleteUsers } = usePermissions();
+  const { canCreateUsers, canUpdateUsers, canDeleteUsers, canAccess } = usePermissions();
+
+  // Provera permisije za prikaz tabele korisnika
+  const canViewUserTable = () => canAccess(['users.administration:view']);
 
   const fetchUsers = async (page = 1, pageSize = 10) => {
     try {
@@ -222,12 +225,23 @@ const UserAdministration: React.FC = () => {
     },
   ];
 
+  // Ako korisnik nema users.administration:view, prikaži poruku
+  if (!canViewUserTable()) {
+    return (
+      <div className="bg-white p-12 rounded-lg shadow text-center">
+        <UserOutlined className="text-6xl text-red-400 mx-auto mb-4" />
+        <p className="text-gray-700 font-semibold mb-2">Pristup odbijen</p>
+        <p className="text-gray-500">Nemate dozvolu za pregled tabele korisnika</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Administracija Korisnika</h1>
-        <Button 
-          type="primary" 
+        <Button
+          type="primary"
           icon={<PlusOutlined />}
           onClick={handleCreateUser}
           disabled={!canCreateUsers()}

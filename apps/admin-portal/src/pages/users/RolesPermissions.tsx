@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Tabs, Card, Typography } from 'antd';
 import { TeamOutlined, KeyOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
-import RolesManagement from './components/RolesManagementNew';
-import PermissionsManagement from './components/PermissionsManagementNew';
+import RolesManagement from './components/RolesManagement';
+import PermissionsManagement from './components/PermissionsManagement';
 
 const { Title } = Typography;
 

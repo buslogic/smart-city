@@ -55,13 +55,13 @@ function App() {
               } 
             />
             
-            <Route 
-              path="users/administration" 
+            <Route
+              path="users/administration"
               element={
-                <PermissionGuard permissions={['users:view']}>
+                <PermissionGuard permissions={['users.administration:view']}>
                   <UserAdministration />
                 </PermissionGuard>
-              } 
+              }
             />
             
             <Route 
@@ -83,13 +83,9 @@ function App() {
               element={<ChangePassword />}
             />
             
-            <Route 
-              path="settings/general" 
-              element={
-                <PermissionGuard permissions={['settings.general:view']}>
-                  <GeneralSettings />
-                </PermissionGuard>
-              } 
+            <Route
+              path="settings/general"
+              element={<GeneralSettings />}
             />
             
             <Route 
@@ -149,7 +145,7 @@ function App() {
             <Route 
               path="transport/dispatcher/gps-sync" 
               element={
-                <PermissionGuard permissions={['dispatcher:sync_gps']}>
+                <PermissionGuard permissions={['dispatcher.sync:view']}>
                   <GpsSync />
                 </PermissionGuard>
               } 
@@ -212,7 +208,7 @@ function App() {
             <Route
               path="migration"
               element={
-                <PermissionGuard permissions={['system.manage']}>
+                <PermissionGuard permissions={['system:view']}>
                   <MigrationPage />
                 </PermissionGuard>
               }

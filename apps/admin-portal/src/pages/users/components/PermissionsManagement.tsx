@@ -1,84 +1,74 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Select, 
-  Tag, 
-  Button, 
-  Space, 
-  message, 
-  Card,
-  Checkbox,
-  Divider,
-  Spin,
-  Alert,
-  Badge,
-} from 'antd';
-import {
-  SafetyOutlined,
-  SaveOutlined,
-  ReloadOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-} from '@ant-design/icons';
-import type { CheckboxChangeEvent } from 'antd/es/checkbox';
+import { Shield, Save, RotateCcw, ChevronDown, AlertTriangle } from 'lucide-react';
 import type { Role, Permission } from '../../../types/rbac.types';
 import { rbacService } from '../../../services/rbacService';
+import PermissionsTree from './PermissionsTree';
+import { usePermissions } from '../../../hooks/usePermissions';
 
 const PermissionsManagement: React.FC = () => {
+  const { canAccess } = usePermissions();
   const [roles, setRoles] = useState<Role[]>([]);
   const [selectedRole, setSelectedRole] = useState<number | null>(null);
   const [allPermissions, setAllPermissions] = useState<Permission[]>([]);
   const [rolePermissions, setRolePermissions] = useState<number[]>([]);
+  const [originalPermissions, setOriginalPermissions] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
 
-  // Grupisanje permisija po resursima
-  const groupedPermissions = allPermissions.reduce((acc, permission) => {
-    if (!acc[permission.resource]) {
-      acc[permission.resource] = [];
-    }
-    acc[permission.resource].push(permission);
-    return acc;
-  }, {} as Record<string, Permission[]>);
+  // Check permissions
+  const canView = canAccess(['permissions:view']);
+  const canUpdate = canAccess(['permissions:update']);
 
   const fetchRoles = async () => {
     try {
       const response = await rbacService.getRoles(1, 100);
-      setRoles(response.data);
+      if (response.data && response.data.length > 0) {
+        // Sortiraj role po ID u ascending redosledu
+        const sortedRoles = response.data.sort((a: Role, b: Role) => a.id - b.id);
+        setRoles(sortedRoles);
+      } else {
+        console.error('Nema rola u bazi');
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'fixed top-4 right-4 bg-yellow-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
+        errorDiv.textContent = 'Upozorenje: Nema rola u bazi podataka';
+        document.body.appendChild(errorDiv);
+        setTimeout(() => errorDiv.remove(), 5000);
+      }
     } catch (error) {
       console.error('Greška pri učitavanju rola:', error);
-      // Mock podaci
-      setRoles([
-        { id: 1, name: 'SUPER_ADMIN', description: 'Administratorska uloga', createdAt: '', updatedAt: '' },
-        { id: 2, name: 'CITY_MANAGER', description: 'Menadžer gradskih resursa', createdAt: '', updatedAt: '' },
-        { id: 3, name: 'DEPARTMENT_HEAD', description: 'Šef departmana', createdAt: '', updatedAt: '' },
-        { id: 4, name: 'OPERATOR', description: 'Operater sistema', createdAt: '', updatedAt: '' },
-        { id: 5, name: 'ANALYST', description: 'Analitičar', createdAt: '', updatedAt: '' },
-        { id: 6, name: 'CITIZEN', description: 'Građanin', createdAt: '', updatedAt: '' },
-      ]);
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
+      errorDiv.textContent = 'Greška pri učitavanju rola. Proverite konekciju sa serverom.';
+      document.body.appendChild(errorDiv);
+      setTimeout(() => errorDiv.remove(), 5000);
     }
   };
 
   const fetchPermissions = async () => {
     try {
       const response = await rbacService.getPermissions();
-      setAllPermissions(response.data);
+      if (response.data && response.data.length > 0) {
+        setAllPermissions(response.data);
+      } else {
+        // Ako API vraća praznu listu, prikaži grešku
+        console.error('API vraća praznu listu permisija');
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
+        errorDiv.textContent = 'Greška: Nema permisija u bazi. Kontaktirajte administratora.';
+        document.body.appendChild(errorDiv);
+        setTimeout(() => errorDiv.remove(), 5000);
+      }
     } catch (error) {
       console.error('Greška pri učitavanju permisija:', error);
-      // Mock podaci
-      setAllPermissions([
-        // Users permissions
-        { id: 1, name: 'users:create', resource: 'users', action: 'create', description: 'Kreiranje korisnika', createdAt: '', updatedAt: '' },
-        { id: 2, name: 'users:view', resource: 'users', action: 'view', description: 'Pregled korisnika', createdAt: '', updatedAt: '' },
-        { id: 3, name: 'users:update', resource: 'users', action: 'update', description: 'Ažuriranje korisnika', createdAt: '', updatedAt: '' },
-        { id: 4, name: 'users:delete', resource: 'users', action: 'delete', description: 'Brisanje korisnika', createdAt: '', updatedAt: '' },
-        
-        // Roles permissions
-        { id: 6, name: 'roles:create', resource: 'roles', action: 'create', description: 'Kreiranje uloga', createdAt: '', updatedAt: '' },
-        { id: 7, name: 'roles:view', resource: 'roles', action: 'view', description: 'Pregled uloga', createdAt: '', updatedAt: '' },
-        { id: 8, name: 'roles:update', resource: 'roles', action: 'update', description: 'Ažuriranje uloga', createdAt: '', updatedAt: '' },
-        { id: 9, name: 'roles:delete', resource: 'roles', action: 'delete', description: 'Brisanje uloga', createdAt: '', updatedAt: '' },
-      ]);
+      // Prikaži grešku korisniku
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
+      errorDiv.textContent = 'Greška pri učitavanju permisija iz baze podataka';
+      document.body.appendChild(errorDiv);
+      setTimeout(() => errorDiv.remove(), 5000);
     }
   };
 
@@ -88,20 +78,19 @@ const PermissionsManagement: React.FC = () => {
       const permissions = await rbacService.getRolePermissions(roleId);
       const permissionIds = permissions.map(p => p.id);
       setRolePermissions(permissionIds);
+      setOriginalPermissions(permissionIds);
       setHasChanges(false);
     } catch (error) {
       console.error('Greška pri učitavanju permisija role:', error);
-      // Mock podaci - različite permisije za različite role
-      const mockPermissions: Record<number, number[]> = {
-        1: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], // SUPER_ADMIN - sve
-        2: [2, 3, 7], // CITY_MANAGER
-        3: [2, 7], // DEPARTMENT_HEAD
-        4: [2], // OPERATOR
-        5: [2, 7], // ANALYST
-        6: [], // CITIZEN
-      };
-      setRolePermissions(mockPermissions[roleId] || []);
+      setRolePermissions([]);
+      setOriginalPermissions([]);
       setHasChanges(false);
+      
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
+      errorDiv.textContent = 'Greška pri učitavanju permisija za ovu rolu';
+      document.body.appendChild(errorDiv);
+      setTimeout(() => errorDiv.remove(), 5000);
     } finally {
       setLoading(false);
     }
@@ -118,199 +107,219 @@ const PermissionsManagement: React.FC = () => {
     }
   }, [selectedRole]);
 
+  useEffect(() => {
+    setHasChanges(JSON.stringify(rolePermissions) !== JSON.stringify(originalPermissions));
+  }, [rolePermissions, originalPermissions]);
+
   const handleRoleChange = (roleId: number) => {
     if (hasChanges) {
-      message.warning('Imate nesačuvane promene!');
+      if (!window.confirm('Imate nesačuvane promene. Da li želite da nastavite?')) {
+        return;
+      }
     }
     setSelectedRole(roleId);
+    setDropdownOpen(false);
+    setExpandedNodes(new Set()); // Reset expanded nodes when changing role
   };
 
-  const handlePermissionChange = (permissionId: number, checked: boolean) => {
-    if (checked) {
-      setRolePermissions([...rolePermissions, permissionId]);
-    } else {
-      setRolePermissions(rolePermissions.filter(id => id !== permissionId));
+  const handlePermissionToggle = (permissionId: number) => {
+    if (!canUpdate) {
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'fixed top-4 right-4 bg-yellow-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
+      errorDiv.textContent = 'Nemate dozvolu za izmenu permisija';
+      document.body.appendChild(errorDiv);
+      setTimeout(() => errorDiv.remove(), 2000);
+      return;
     }
-    setHasChanges(true);
-  };
-
-  const handleResourceToggle = (resource: string, checked: boolean) => {
-    const resourcePermissions = allPermissions
-      .filter(p => p.resource === resource)
-      .map(p => p.id);
     
-    if (checked) {
-      setRolePermissions([...new Set([...rolePermissions, ...resourcePermissions])]);
+    if (rolePermissions.includes(permissionId)) {
+      setRolePermissions(rolePermissions.filter(id => id !== permissionId));
     } else {
-      setRolePermissions(rolePermissions.filter(id => !resourcePermissions.includes(id)));
+      setRolePermissions([...rolePermissions, permissionId]);
     }
-    setHasChanges(true);
   };
 
   const handleSave = async () => {
     if (!selectedRole) return;
     
+    if (!canUpdate) {
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
+      errorDiv.textContent = 'Nemate dozvolu za ažuriranje permisija';
+      document.body.appendChild(errorDiv);
+      setTimeout(() => errorDiv.remove(), 3000);
+      return;
+    }
+    
     try {
       setSaving(true);
       await rbacService.updateRolePermissions(selectedRole, rolePermissions);
-      message.success('Permisije uspešno ažurirane');
+      setOriginalPermissions(rolePermissions);
       setHasChanges(false);
+      // Show success message
+      const successDiv = document.createElement('div');
+      successDiv.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
+      successDiv.textContent = 'Permisije uspešno ažurirane';
+      document.body.appendChild(successDiv);
+      setTimeout(() => successDiv.remove(), 3000);
     } catch (error) {
       console.error('Greška pri čuvanju permisija:', error);
-      // Za testiranje
-      message.success('Permisije uspešno ažurirane');
-      setHasChanges(false);
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
+      errorDiv.textContent = 'Greška pri čuvanju permisija. Pokušajte ponovo.';
+      document.body.appendChild(errorDiv);
+      setTimeout(() => errorDiv.remove(), 3000);
     } finally {
       setSaving(false);
     }
   };
 
   const handleReset = () => {
-    if (selectedRole) {
-      fetchRolePermissions(selectedRole);
-    }
+    setRolePermissions(originalPermissions);
   };
 
-  const getActionColor = (action: string) => {
-    const colors: Record<string, string> = {
-      'create': 'green',
-      'read': 'blue',
-      'update': 'orange',
-      'delete': 'red',
-      'manage': 'purple',
-    };
-    return colors[action] || 'default';
-  };
+  const selectedRoleData = roles.find(r => r.id === selectedRole);
 
-  const getResourceIcon = (resource: string) => {
-    const resourceLabels: Record<string, string> = {
-      'users': 'Korisnici',
-      'roles': 'Role',
-    };
-    return resourceLabels[resource] || resource;
-  };
+  // Ako korisnik nema permissions:view, prikaži poruku
+  if (!canView) {
+    return (
+      <div className="bg-white p-12 rounded-lg shadow text-center">
+        <Shield className="h-12 w-12 text-red-400 mx-auto mb-4" />
+        <p className="text-gray-700 font-semibold mb-2">Pristup odbijen</p>
+        <p className="text-gray-500">Nemate dozvolu za pregled permisija</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
-      <Card>
-        <div className="flex items-center justify-between mb-4">
+      {/* Role Selector */}
+      <div className="bg-white p-4 rounded-lg shadow">
+        <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <label className="font-medium">Odaberite rolu:</label>
-            <Select
-              style={{ width: 300 }}
-              placeholder="Izaberite rolu za upravljanje permisijama"
-              onChange={handleRoleChange}
-              value={selectedRole}
-              options={roles.map(role => ({
-                label: (
-                  <div className="flex items-center justify-between w-full">
-                    <span>{role.name}</span>
-                    <span className="text-gray-500 text-sm">{role.description}</span>
-                  </div>
-                ),
-                value: role.id,
-              }))}
-            />
+            <label className="text-sm font-medium text-gray-700">Odaberite rolu:</label>
+            <div className="relative">
+              <button
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                className="w-[36rem] px-4 py-2 text-left bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <div className="flex items-center justify-between">
+                  <span className={selectedRoleData ? 'text-gray-900' : 'text-gray-500'}>
+                    {selectedRoleData ? (
+                      <>
+                        <span className="font-medium">ID: {selectedRoleData.id}</span>
+                        <span className="mx-3">•</span>
+                        <span className="font-semibold">{selectedRoleData.name}</span>
+                        <span className="mx-3">-</span>
+                        <span className="text-gray-600">{selectedRoleData.description}</span>
+                      </>
+                    ) : 'Izaberite rolu...'}
+                  </span>
+                  <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
+                </div>
+              </button>
+              
+              {dropdownOpen && (
+                <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                  {roles.map(role => (
+                    <button
+                      key={role.id}
+                      onClick={() => handleRoleChange(role.id)}
+                      className="w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                    >
+                      <div className="flex items-center gap-4">
+                        <span className="font-medium text-blue-600 min-w-[3rem]">ID: {role.id}</span>
+                        <span className="font-semibold text-gray-900 min-w-[10rem]">{role.name}</span>
+                        <span className="text-sm text-gray-500 flex-1">{role.description}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
+          
           {selectedRole && (
-            <Space>
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={handleReset}
-                disabled={!hasChanges}
-              >
-                Resetuj
-              </Button>
-              <Button
-                type="primary"
-                icon={<SaveOutlined />}
-                onClick={handleSave}
-                loading={saving}
-                disabled={!hasChanges}
-              >
-                Sačuvaj promene
-              </Button>
-            </Space>
+            <div className="flex items-center space-x-2">
+              {canUpdate && (
+                <>
+                  <button
+                    onClick={handleReset}
+                    disabled={!hasChanges}
+                    className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    Resetuj
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    disabled={!hasChanges || saving}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    {saving ? 'Čuvanje...' : 'Sačuvaj promene'}
+                  </button>
+                </>
+              )}
+              {!canUpdate && hasChanges && (
+                <span className="text-sm text-gray-500 italic">Nemate dozvolu za ažuriranje permisija</span>
+              )}
+            </div>
           )}
         </div>
-
+        
         {selectedRole && hasChanges && (
-          <Alert
-            message="Imate nesačuvane promene"
-            description="Kliknite na 'Sačuvaj promene' da biste sačuvali izmene ili 'Resetuj' da biste poništili promene."
-            type="warning"
-            showIcon
-            className="mb-4"
-          />
-        )}
-      </Card>
-
-      {selectedRole ? (
-        <Spin spinning={loading}>
-          <div className="space-y-4">
-            {Object.entries(groupedPermissions).map(([resource, permissions]) => {
-              const resourcePermissionIds = permissions.map(p => p.id);
-              const checkedCount = resourcePermissionIds.filter(id => rolePermissions.includes(id)).length;
-              const isIndeterminate = checkedCount > 0 && checkedCount < permissions.length;
-              const isAllChecked = checkedCount === permissions.length;
-
-              return (
-                <Card key={resource} className="shadow-sm">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center space-x-2">
-                      <SafetyOutlined className="text-lg" />
-                      <h3 className="text-lg font-semibold">{getResourceIcon(resource)}</h3>
-                      <Badge count={`${checkedCount}/${permissions.length}`} showZero />
-                    </div>
-                    <Checkbox
-                      indeterminate={isIndeterminate}
-                      checked={isAllChecked}
-                      onChange={(e: CheckboxChangeEvent) => handleResourceToggle(resource, e.target.checked)}
-                    >
-                      Selektuj sve
-                    </Checkbox>
-                  </div>
-                  <Divider className="my-3" />
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {permissions.map(permission => (
-                      <div
-                        key={permission.id}
-                        className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50"
-                      >
-                        <div className="flex items-center space-x-2">
-                          <Checkbox
-                            checked={rolePermissions.includes(permission.id)}
-                            onChange={(e: CheckboxChangeEvent) => 
-                              handlePermissionChange(permission.id, e.target.checked)
-                            }
-                          />
-                          <div>
-                            <Tag color={getActionColor(permission.action)}>
-                              {permission.action.toUpperCase()}
-                            </Tag>
-                            <span className="text-sm text-gray-600 ml-2">
-                              {permission.description}
-                            </span>
-                          </div>
-                        </div>
-                        {rolePermissions.includes(permission.id) ? (
-                          <CheckCircleOutlined className="text-green-500" />
-                        ) : (
-                          <CloseCircleOutlined className="text-gray-300" />
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              );
-            })}
+          <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+            <div className="flex items-center">
+              <AlertTriangle className="h-5 w-5 text-yellow-600 mr-2" />
+              <p className="text-sm text-yellow-800">
+                Imate nesačuvane promene. Kliknite na "Sačuvaj promene" da biste sačuvali izmene ili "Resetuj" da biste poništili promene.
+              </p>
+            </div>
           </div>
-        </Spin>
+        )}
+      </div>
+
+      {/* Permissions Tree */}
+      {selectedRole ? (
+        loading ? (
+          <div className="bg-white p-12 rounded-lg shadow text-center">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <p className="mt-4 text-gray-500">Učitavanje permisija...</p>
+          </div>
+        ) : (
+          <PermissionsTree
+            allPermissions={allPermissions}
+            selectedPermissions={rolePermissions}
+            expandedNodes={expandedNodes}
+            onExpandedNodesChange={setExpandedNodes}
+            onPermissionToggle={handlePermissionToggle}
+            onBulkToggle={(permissionIds, selected) => {
+              if (!canUpdate) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'fixed top-4 right-4 bg-yellow-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
+                errorDiv.textContent = 'Nemate dozvolu za izmenu permisija';
+                document.body.appendChild(errorDiv);
+                setTimeout(() => errorDiv.remove(), 2000);
+                return;
+              }
+              
+              if (selected) {
+                const newPermissions = [...new Set([...rolePermissions, ...permissionIds])];
+                setRolePermissions(newPermissions);
+              } else {
+                const newPermissions = rolePermissions.filter(id => !permissionIds.includes(id));
+                setRolePermissions(newPermissions);
+              }
+            }}
+            readOnly={!canUpdate}
+          />
+        )
       ) : (
-        <Card className="text-center py-12">
-          <SafetyOutlined className="text-4xl text-gray-400 mb-4" />
+        <div className="bg-white p-12 rounded-lg shadow text-center">
+          <Shield className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <p className="text-gray-500">Izaberite rolu da biste upravljali njenim permisijama</p>
-        </Card>
+        </div>
       )}
     </div>
   );

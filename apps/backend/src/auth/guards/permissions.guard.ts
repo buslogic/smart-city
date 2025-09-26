@@ -48,9 +48,10 @@ export class PermissionsGuard implements CanActivate {
     );
 
     if (!hasPermission) {
-      console.error(
-        `PermissionsGuard: Korisnik ${user.email} nema permisiju. Potrebno: ${requiredPermissions.join(', ')}, Ima: ${user.permissions?.join(', ') || 'none'}`,
-      );
+      // Debug log zakomentarisan da ne zagušuje konzolu
+      // console.error(
+      //   `PermissionsGuard: Korisnik ${user.email} nema permisiju. Potrebno: ${requiredPermissions.join(', ')}, Ima: ${user.permissions?.join(', ') || 'none'}`,
+      // );
       throw new ForbiddenException(
         `Nemate dozvolu za pristup ovom resursu. Potrebne permisije: ${requiredPermissions.join(', ')}`,
       );

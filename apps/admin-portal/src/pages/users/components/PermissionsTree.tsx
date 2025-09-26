@@ -1,33 +1,17 @@
-// Last updated: 2025-09-10 08:35:00 - Visual improvements: smaller checkboxes, gradients, better indentation
+// PermissionsTreeMenuOrder.tsx - Nova implementacija koja koristi menuOrder za hijerarhiju
 import React, { useState } from 'react';
-import { 
-  ChevronDown, 
-  ChevronRight, 
-  Folder, 
-  FolderOpen, 
-  CheckSquare, 
+import {
+  ChevronDown,
+  ChevronRight,
+  Folder,
+  FolderOpen,
+  CheckSquare,
   Square,
   Users,
-  Shield,
   Settings,
   Database,
-  Key,
-  Lock,
-  UserCog,
-  FileText,
-  BarChart3,
-  Globe,
-  Server,
-  Bus,
-  Car,
-  Map,
-  Navigation,
-  RefreshCw,
-  AlertTriangle,
-  Sliders,
   LayoutDashboard,
-  Radio,
-  Gauge
+  Bus
 } from 'lucide-react';
 import type { Permission } from '../../../types/rbac.types';
 
@@ -48,11 +32,11 @@ interface PermissionsTreeProps {
   expandedNodes: Set<string>;
   onExpandedNodesChange: (nodes: Set<string>) => void;
   onPermissionToggle: (permissionId: number) => void;
-  onBulkToggle: (permissionIds: number[], selected: boolean) => void;
+  onBulkToggle?: (permissionIds: number[], checked: boolean) => void;
   readOnly?: boolean;
 }
 
-const PermissionsTree: React.FC<PermissionsTreeProps> = ({
+const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
   allPermissions,
   selectedPermissions,
   expandedNodes,
@@ -62,7 +46,7 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
   readOnly = false,
 }) => {
 
-  // Organizuj permisije prema hijerarhiji menija
+  // Organizuj permisije prema hijerarhiji menija koristeći menuOrder
   const buildPermissionTree = (): PermissionNode[] => {
     const getPermissionColor = (action: string) => {
       switch(action) {
@@ -78,697 +62,315 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
         case 'cleanup': return 'text-amber-600';
         case 'dashboard': return 'text-indigo-600';
         case 'export': return 'text-emerald-600';
-        case 'sync_gps': return 'text-cyan-600';
-        case 'view_map': return 'text-blue-600';
-        case 'view_analytics': return 'text-indigo-600';
-        case 'view_aggressive': return 'text-orange-600';
-        case 'view_report': return 'text-purple-600';
-        case 'revoke': return 'text-red-600';
-        case 'audit': return 'text-indigo-600';
         default: return 'text-gray-600';
       }
     };
 
-    const tree: PermissionNode[] = [
-      // Dashboard
-      {
-        id: 'dashboard',
-        name: 'Dashboard',
+    const getMenuIcon = (menuOrder: number | null): React.ReactNode => {
+      if (!menuOrder) return <Database className="h-5 w-5" />;
+
+      const firstLevel = Math.floor(menuOrder / 100000000000);
+      switch(firstLevel) {
+        case 1: return <LayoutDashboard className="h-5 w-5" />; // Dashboard
+        case 2: return <Users className="h-5 w-5" />;           // Korisnici
+        case 3: return <Bus className="h-5 w-5" />;             // Transport
+        case 4: return <Settings className="h-5 w-5" />;       // Podešavanje
+        default: return <Database className="h-5 w-5" />;
+      }
+    };
+
+    const getMenuColor = (menuOrder: number | null): { text: string, bg: string } => {
+      if (!menuOrder) return { text: 'text-gray-700', bg: 'bg-gray-50' };
+
+      const firstLevel = Math.floor(menuOrder / 100000000000);
+      switch(firstLevel) {
+        case 1: return { text: 'text-purple-700', bg: 'bg-purple-50' };
+        case 2: return { text: 'text-indigo-700', bg: 'bg-indigo-50' };
+        case 3: return { text: 'text-green-700', bg: 'bg-green-50' };
+        case 4: return { text: 'text-orange-700', bg: 'bg-orange-50' };
+        default: return { text: 'text-gray-700', bg: 'bg-gray-50' };
+      }
+    };
+
+    // Mapiranje menuOrder na nazive menija na osnovu stvarnih menuOrder vrednosti iz ModernMenu
+    const getMenuName = (menuOrder: number): string => {
+      // Glavni nivoi (100000000000, 200000000000, 300000000000, 400000000000)
+      if (menuOrder === 100000000000) return 'Dashboard';
+      if (menuOrder === 200000000000) return 'Korisnici';
+      if (menuOrder === 300000000000) return 'Autobuski Prevoznici';
+      if (menuOrder === 400000000000) return 'Podešavanje';
+
+      // Drugi nivo - Korisnici
+      if (menuOrder === 201000000000) return 'Administracija';
+      if (menuOrder === 202000000000) return 'Role i Permisije';
+
+      // Drugi nivo - Transport
+      if (menuOrder === 301000000000) return 'Vozila';
+      if (menuOrder === 302000000000) return 'Dispečerski Modul';
+      if (menuOrder === 303000000000) return 'Bezbednost i Analiza';
+      if (menuOrder === 304000000000) return 'Održavanje Sistema';
+
+      // Treći nivo - Vozila
+      if (menuOrder === 301010000000) return 'Lista Vozila';
+      if (menuOrder === 301020000000) return 'Sinhronizacija';
+      if (menuOrder === 301030000000) return 'GPS Real-Time Sync';
+      if (menuOrder === 301040000000) return 'Legacy Sync';
+      if (menuOrder === 301050000000) return 'GPS Migration';
+
+      // Treći nivo - Dispečerski Modul
+      if (menuOrder === 302010000000) return 'Mapa';
+      if (menuOrder === 302020000000) return 'Analitika vozila';
+      if (menuOrder === 302030000000) return 'GPS Sync';
+
+      // Treći nivo - Bezbednost i Analiza
+      if (menuOrder === 303010000000) return 'Agresivna vožnja';
+      if (menuOrder === 303020000000) return 'Mesečni izveštaj';
+      if (menuOrder === 303030000000) return 'Rekreacija podataka';
+
+      // Treći nivo - Održavanje Sistema
+      if (menuOrder === 304010000000) return 'TimescaleDB';
+
+      // Drugi nivo - Podešavanje
+      if (menuOrder === 401000000000) return 'Opšte informacije';
+      if (menuOrder === 402000000000) return 'API Ključevi';
+      if (menuOrder === 403000000000) return 'Email šabloni';
+
+      // Treći nivo - Settings pod-opcije
+      if (menuOrder >= 401010000000 && menuOrder < 401020000000) return 'Informacije o Kompaniji';
+      if (menuOrder >= 401020000000 && menuOrder < 401030000000) return 'Legacy Baze';
+      if (menuOrder >= 401030000000 && menuOrder < 401040000000) return 'Legacy Tabele';
+      if (menuOrder >= 401040000000 && menuOrder < 401050000000) return 'Email Šabloni';
+      if (menuOrder >= 401050000000 && menuOrder < 401060000000) return 'API Podešavanja';
+      if (menuOrder >= 401060000000 && menuOrder < 401070000000) return 'Sistemska Podešavanja';
+
+      // Fallback za permisije - koristi resource ili description
+      const permission = allPermissions.find(p => p.menuOrder === menuOrder);
+      if (permission) {
+        // Pokušaj da napraviš prijazan naziv na osnovu resource i action
+        const resource = permission.resource;
+        const action = permission.action;
+
+        // Specifični nazivi za poznate permisije
+        if (resource === 'vehicles' && action === 'read') return 'Lista Vozila';
+        if (resource === 'vehicles.sync' && action === 'view') return 'Sinhronizacija Vozila';
+        if (resource === 'gps.buffer.sync' && action === 'view') return 'GPS Real-Time Sync';
+        if (resource === 'gps.buffer.status' && action === 'view') return 'GPS Buffer Status';
+        if (resource === 'legacy.sync' && action === 'view') return 'Legacy Sync';
+        if (resource === 'system' && action === 'view') return 'GPS Migration';
+        if (resource === 'dispatcher' && action === 'view_map') return 'Mapa Vozila';
+        if (resource === 'dispatcher' && action === 'view_analytics') return 'Analitika Vozila';
+        if (resource === 'dispatcher.sync' && action === 'view') return 'GPS Sync Dashboard';
+        if (resource === 'safety.aggressive.driving' && action === 'view') return 'Agresivna Vožnja';
+        if (resource === 'safety.reports' && action === 'view') return 'Mesečni Izveštaj';
+        if (resource === 'safety' && action === 'data_recreation') return 'Rekreacija Podataka';
+        if (resource === 'system.timescaledb' && action === 'view') return 'TimescaleDB Management';
+
+        // Koristi description ako postoji, inače kombinaciju resource i action
+        if (permission.description) {
+          return permission.description;
+        }
+
+        return `${resource}:${action}`;
+      }
+
+      return 'Nepoznato';
+    };
+
+    const getPermissionLabel = (permission: Permission): string => {
+      // Prvo proverava da li permisija ima srpski opis (description_sr)
+      if (permission.descriptionSr) {
+        return permission.descriptionSr;
+      }
+
+      // Ako permisija ima menuOrder, koristi getMenuName logiku
+      if (permission.menuOrder) {
+        return getMenuName(permission.menuOrder);
+      }
+
+      // Inače koristi description ili name
+      return permission.description || permission.name;
+    };
+
+    // Podeli permisije na one sa menuOrder i bez
+    const menuPermissions = allPermissions.filter(p => p.menuOrder != null);
+    const otherPermissions = allPermissions.filter(p => p.menuOrder == null);
+
+    // Rekurzivna funkcija za kreiranje hijerarhije na bilo kom nivou
+    const buildHierarchy = (permissions: Permission[], levelDepth: number = 0): PermissionNode[] => {
+      const levelDivisor = Math.pow(10, 11 - (levelDepth * 2)); // 100000000000, 1000000000, 10000000, itd.
+      const nextLevelDivisor = Math.pow(10, 11 - ((levelDepth + 1) * 2));
+
+      // Grupiši permisije po trenutnom nivou
+      const groups = permissions.reduce((acc, permission) => {
+        const menuOrder = permission.menuOrder!;
+        const currentLevelValue = Math.floor(menuOrder / levelDivisor);
+        const nextLevelValue = Math.floor((menuOrder % levelDivisor) / nextLevelDivisor);
+
+        const groupKey = currentLevelValue.toString();
+        if (!acc[groupKey]) {
+          acc[groupKey] = {
+            mainPermissions: [],
+            subPermissions: []
+          };
+        }
+
+        if (nextLevelValue === 0) {
+          acc[groupKey].mainPermissions.push(permission);
+        } else {
+          acc[groupKey].subPermissions.push(permission);
+        }
+
+        return acc;
+      }, {} as Record<string, { mainPermissions: Permission[], subPermissions: Permission[] }>);
+
+      // Kreiraj nodove
+      return Object.entries(groups).map(([groupKey, group]) => {
+        const hasSubItems = group.subPermissions.length > 0;
+        const firstPermission = group.mainPermissions[0] || group.subPermissions[0];
+        const colors = getMenuColor(firstPermission.menuOrder!);
+
+        const node: PermissionNode = {
+          id: `level-${levelDepth}-${groupKey}`,
+          name: getMenuName(firstPermission.menuOrder!),
+          type: levelDepth === 0 ? 'menu' : 'submenu',
+          icon: levelDepth === 0 ? getMenuIcon(firstPermission.menuOrder!) : undefined,
+          color: colors.text,
+          bgColor: colors.bg,
+          children: []
+        };
+
+        // Ako nema pod-stavki i ima samo jednu glavnu permisiju
+        if (!hasSubItems && group.mainPermissions.length === 1) {
+          const permission = group.mainPermissions[0];
+
+          // Proverava da li je ovo meni opcija (resource sadrži '.administration', '.roles', itd.)
+          // ili je obična permisija (dashboard widgets, configurations)
+          const isMenuOption = permission.resource.includes('.administration') ||
+                             permission.resource.includes('.roles') ||
+                             permission.action === 'view' && (
+                               permission.resource.endsWith('.administration') ||
+                               permission.resource.endsWith('.management') ||
+                               permission.resource === 'roles' ||
+                               permission.resource === 'users' ||
+                               permission.resource === 'dashboard' ||
+                               permission.resource === 'transport' ||
+                               permission.resource === 'settings' ||
+                               permission.resource.startsWith('settings.') ||
+                               permission.resource === 'api_settings' ||
+                               permission.resource === 'system_settings' ||
+                               permission.resource === 'legacy_databases' ||
+                               permission.resource === 'legacy_tables' ||
+                               // Transport related menu options (treći nivo)
+                               permission.resource === 'vehicles' ||
+                               permission.resource.startsWith('vehicles.') ||
+                               permission.resource.startsWith('dispatcher') ||
+                               permission.resource.startsWith('safety.') ||
+                               permission.resource.startsWith('maintenance.') ||
+                               permission.resource.startsWith('gps.') ||
+                               permission.resource.startsWith('legacy.') ||
+                               permission.resource === 'system'
+                             );
+
+          // Ako je meni opcija, kreiraj kontejner čak i bez pod-stavki
+          if (isMenuOption) {
+            node.children = [{
+              id: `perm-${permission.id}`,
+              name: getPermissionLabel(permission),
+              type: 'permission' as const,
+              permission,
+              color: getPermissionColor(permission.action)
+            }];
+            return node;
+          }
+
+          // Inače vrati kao direktnu permisiju
+          return {
+            id: `perm-${permission.id}`,
+            name: getPermissionLabel(permission),
+            type: 'permission' as const,
+            permission,
+            color: getPermissionColor(permission.action)
+          };
+        }
+
+        // Ako nema pod-stavki ali ima više glavnih permisija, kreiraj kontejner
+        if (!hasSubItems && group.mainPermissions.length > 1) {
+          node.children = group.mainPermissions
+            .sort((a, b) => (a.menuOrder! - b.menuOrder!))
+            .map(permission => ({
+              id: `perm-${permission.id}`,
+              name: getPermissionLabel(permission),
+              type: 'permission' as const,
+              permission,
+              color: getPermissionColor(permission.action)
+            }));
+        }
+
+        // Ako ima pod-stavke, rekurzivno ih obradi
+        if (hasSubItems) {
+          const subNodes = buildHierarchy(group.subPermissions, levelDepth + 1);
+
+          // Proverava da li subNodes sadrže folder/grupe (menu/submenu tipove)
+          const hasSubFolders = subNodes.some(subNode =>
+            subNode.type === 'menu' || subNode.type === 'submenu'
+          );
+
+          // Ako ima sub-folder/grupe, ne dodavaj glavne view permisije
+          // Ako nema sub-folder/grupe (samo finalne permisije), dodaj glavne permisije
+          if (hasSubFolders) {
+            // Samo sub-folder/grupe, bez glavnih view permisija
+            node.children = subNodes;
+          } else {
+            // Dodaj glavne permisije pre finalnih permisija
+            const mainPermissionNodes = group.mainPermissions.map(permission => ({
+              id: `perm-${permission.id}`,
+              name: getPermissionLabel(permission),
+              type: 'permission' as const,
+              permission,
+              color: getPermissionColor(permission.action)
+            }));
+            node.children = [...mainPermissionNodes, ...subNodes];
+          }
+        }
+
+        return node;
+      }).sort((a, b) => {
+        // Sortiraju se po groupKey numerički (1, 2, 3, 4...)
+        const aGroupKey = parseInt(a.id.split('-')[2]); // level-0-1 -> 1
+        const bGroupKey = parseInt(b.id.split('-')[2]); // level-0-2 -> 2
+        return aGroupKey - bGroupKey;
+      });
+    };
+
+    let finalMenuTree = buildHierarchy(menuPermissions);
+
+    // Dodaj ostale permisije (bez menuOrder) na kraju
+    if (otherPermissions.length > 0) {
+      finalMenuTree.push({
+        id: 'other-permissions',
+        name: 'Ostale Permisije',
         type: 'menu',
-        icon: <LayoutDashboard className="h-5 w-5" />,
-        color: 'text-purple-700',
-        bgColor: 'bg-purple-50',
-        children: allPermissions
-          .filter(p => p.resource === 'dashboard' || p.resource?.startsWith('dashboard.widgets'))
+        icon: <Database className="h-5 w-5" />,
+        color: 'text-gray-700',
+        bgColor: 'bg-gray-50',
+        children: otherPermissions
+          .sort((a, b) => a.resource.localeCompare(b.resource) || a.action.localeCompare(b.action))
           .map(p => ({
             id: `perm-${p.id}`,
             name: getPermissionLabel(p),
             type: 'permission' as const,
             permission: p,
             color: getPermissionColor(p.action),
-          })),
-      },
-      
-      // Korisnici
-      {
-        id: 'korisnici',
-        name: 'Korisnici',
-        type: 'menu',
-        icon: <Users className="h-5 w-5" />,
-        color: 'text-indigo-700',
-        bgColor: 'bg-indigo-50',
-        children: [
-          {
-            id: 'administracija',
-            name: 'Administracija',
-            type: 'section',
-            icon: <UserCog className="h-4 w-4" />,
-            children: allPermissions
-              .filter(p => p.resource === 'users')
-              .map(p => ({
-                id: `perm-${p.id}`,
-                name: getPermissionLabel(p),
-                type: 'permission' as const,
-                permission: p,
-                color: getPermissionColor(p.action),
-              })),
-          },
-          {
-            id: 'role-i-permisije',
-            name: 'Role i Permisije',
-            type: 'section',
-            icon: <Shield className="h-4 w-4" />,
-            children: [
-              ...allPermissions
-                .filter(p => p.resource === 'roles')
-                .map(p => ({
-                  id: `perm-${p.id}`,
-                  name: getPermissionLabel(p),
-                  type: 'permission' as const,
-                  permission: p,
-                  color: getPermissionColor(p.action),
-                })),
-              ...allPermissions
-                .filter(p => p.resource === 'permissions')
-                .map(p => ({
-                  id: `perm-${p.id}`,
-                  name: getPermissionLabel(p),
-                  type: 'permission' as const,
-                  permission: p,
-                  color: getPermissionColor(p.action),
-                })),
-            ],
-          },
-        ],
-      },
-      
-      // Autobuski Prevoznici
-      {
-        id: 'autobuski-prevoznici',
-        name: 'Autobuski Prevoznici',
-        type: 'menu',
-        icon: <Bus className="h-5 w-5" />,
-        color: 'text-green-700',
-        bgColor: 'bg-green-50',
-        children: [
-          // Vozila submenu
-          {
-            id: 'vozila',
-            name: 'Vozila',
-            type: 'submenu',
-            icon: <Car className="h-4 w-4" />,
-            children: [
-              {
-                id: 'vozila-section',
-                name: 'Vozila',
-                type: 'section',
-                children: allPermissions
-                  .filter(p => p.resource === 'vehicles')
-                  .map(p => ({
-                    id: `perm-${p.id}`,
-                    name: getPermissionLabel(p),
-                    type: 'permission' as const,
-                    permission: p,
-                    color: getPermissionColor(p.action),
-                  })),
-              },
-              {
-                id: 'sinhronizacija',
-                name: 'Sinhronizacija',
-                type: 'section',
-                children: allPermissions
-                  .filter(p => p.resource === 'vehicles.sync')
-                  .map(p => ({
-                    id: `perm-${p.id}`,
-                    name: getPermissionLabel(p),
-                    type: 'permission' as const,
-                    permission: p,
-                    color: getPermissionColor(p.action),
-                  })),
-              },
-              {
-                id: 'gps-realtime-sync',
-                name: 'GPS Real-Time Sync',
-                type: 'section',
-                children: allPermissions
-                  .filter(p => p.resource === 'dispatcher.sync')
-                  .map(p => ({
-                    id: `perm-${p.id}`,
-                    name: getPermissionLabel(p),
-                    type: 'permission' as const,
-                    permission: p,
-                    color: getPermissionColor(p.action),
-                  })),
-              },
-              {
-                id: 'legacy-sync',
-                name: 'Legacy Sync',
-                type: 'section',
-                children: allPermissions
-                  .filter(p => p.resource === 'legacy.sync')
-                  .map(p => ({
-                    id: `perm-${p.id}`,
-                    name: getPermissionLabel(p),
-                    type: 'permission' as const,
-                    permission: p,
-                    color: getPermissionColor(p.action),
-                  })),
-              },
-            ],
-          },
-          
-          // Dispečerski Modul submenu
-          {
-            id: 'dispecerski-modul',
-            name: 'Dispečerski Modul',
-            type: 'submenu',
-            icon: <Radio className="h-4 w-4" />,
-            children: [
-              {
-                id: 'mapa',
-                name: 'Mapa',
-                type: 'section',
-                children: allPermissions
-                  .filter(p => p.name === 'dispatcher:view_map')
-                  .map(p => ({
-                    id: `perm-${p.id}`,
-                    name: getPermissionLabel(p),
-                    type: 'permission' as const,
-                    permission: p,
-                    color: getPermissionColor(p.action),
-                  })),
-              },
-              {
-                id: 'analitika-vozila',
-                name: 'Analitika vozila',
-                type: 'section',
-                children: allPermissions
-                  .filter(p => p.name === 'dispatcher:view_analytics' || p.name === 'dispatcher:view_map')
-                  .map(p => ({
-                    id: `perm-${p.id}`,
-                    name: getPermissionLabel(p),
-                    type: 'permission' as const,
-                    permission: p,
-                    color: getPermissionColor(p.action),
-                  })),
-              },
-              {
-                id: 'gps-sync',
-                name: 'GPS Sync',
-                type: 'section',
-                children: allPermissions
-                  .filter(p => p.resource === 'dispatcher.sync')
-                  .map(p => ({
-                    id: `perm-${p.id}`,
-                    name: getPermissionLabel(p),
-                    type: 'permission' as const,
-                    permission: p,
-                    color: getPermissionColor(p.action),
-                  })),
-              },
-            ],
-          },
-          
-          // Bezbednost submenu
-          {
-            id: 'bezbednost',
-            name: 'Bezbednost',
-            type: 'submenu',
-            icon: <AlertTriangle className="h-4 w-4" />,
-            children: [
-              {
-                id: 'agresivna-voznja',
-                name: 'Agresivna Vožnja',
-                type: 'section',
-                children: allPermissions
-                  .filter(p => p.resource === 'safety.aggressive.driving')
-                  .map(p => ({
-                    id: `perm-${p.id}`,
-                    name: getPermissionLabel(p),
-                    type: 'permission' as const,
-                    permission: p,
-                    color: getPermissionColor(p.action),
-                  })),
-              },
-              {
-                id: 'safety-reports',
-                name: 'Bezbednosni Izveštaji',
-                type: 'section',
-                children: allPermissions
-                  .filter(p => p.resource === 'safety.reports')
-                  .map(p => ({
-                    id: `perm-${p.id}`,
-                    name: getPermissionLabel(p),
-                    type: 'permission' as const,
-                    permission: p,
-                    color: getPermissionColor(p.action),
-                  })),
-              },
-              {
-                id: 'rekreacija-podataka',
-                name: 'Rekreacija podataka',
-                type: 'section',
-                children: allPermissions
-                  .filter(p => p.resource === 'safety.data.recreation')
-                  .map(p => ({
-                    id: `perm-${p.id}`,
-                    name: getPermissionLabel(p),
-                    type: 'permission' as const,
-                    permission: p,
-                    color: getPermissionColor(p.action),
-                  })),
-              },
-            ],
-          },
-          
-          // Alati za održavanje submenu
-          {
-            id: 'alati-za-odrzavanje',
-            name: 'Alati za održavanje',
-            type: 'submenu',
-            icon: <Settings className="h-4 w-4" />,
-            children: [
-              {
-                id: 'timescaledb',
-                name: 'TimescaleDB',
-                type: 'section',
-                children: allPermissions
-                  .filter(p => p.resource === 'maintenance.timescaledb')
-                  .map(p => ({
-                    id: `perm-${p.id}`,
-                    name: getPermissionLabel(p),
-                    type: 'permission' as const,
-                    permission: p,
-                    color: getPermissionColor(p.action),
-                  })),
-              },
-            ],
-          },
-        ],
-      },
-      
-      // Podešavanje
-      {
-        id: 'podesavanje',
-        name: 'Podešavanje',
-        type: 'menu',
-        icon: <Settings className="h-5 w-5" />,
-        color: 'text-gray-700',
-        bgColor: 'bg-gray-50',
-        children: [
-          // Opšta submenu
-          {
-            id: 'opsta',
-            name: 'Opšta',
-            type: 'submenu',
-            icon: <Sliders className="h-4 w-4" />,
-            children: [
-              {
-                id: 'general-settings-section',
-                name: 'Opšta Podešavanja',
-                type: 'section',
-                children: allPermissions
-                  .filter(p =>
-                    p.resource === 'settings.general' ||
-                    p.resource === 'settings.company_info' ||
-                    p.resource === 'settings.api' ||
-                    p.resource === 'settings.system'
-                  )
-                  .map(p => ({
-                    id: `perm-${p.id}`,
-                    name: getPermissionLabel(p),
-                    type: 'permission' as const,
-                    permission: p,
-                    color: getPermissionColor(p.action),
-                  })),
-              },
-              {
-                id: 'legacy-databases-section',
-                name: 'Legacy Baze',
-                type: 'section',
-                children: allPermissions
-                  .filter(p =>
-                    p.resource === 'settings.legacy.databases' ||
-                    p.resource === 'legacy_tables'
-                  )
-                  .map(p => ({
-                    id: `perm-${p.id}`,
-                    name: getPermissionLabel(p),
-                    type: 'permission' as const,
-                    permission: p,
-                    color: getPermissionColor(p.action),
-                  })),
-              },
-              {
-                id: 'email-templates-section',
-                name: 'Email Šabloni',
-                type: 'section',
-                children: allPermissions
-                  .filter(p => p.resource === 'settings.email_templates')
-                  .map(p => ({
-                    id: `perm-${p.id}`,
-                    name: getPermissionLabel(p),
-                    type: 'permission' as const,
-                    permission: p,
-                    color: getPermissionColor(p.action),
-                  })),
-              },
-            ],
-          },
+          }))
+      });
+    }
 
-          // System menu
-          {
-            id: 'system',
-            name: 'Sistem',
-            type: 'submenu',
-            icon: <Settings className="h-4 w-4" />,
-            children: [
-              {
-                id: 'system-operations',
-                name: 'Sistemske Operacije',
-                type: 'section',
-                children: allPermissions
-                  .filter(p => p.resource === 'system')
-                  .map(p => ({
-                    id: `perm-${p.id}`,
-                    name: getPermissionLabel(p),
-                    type: 'permission' as const,
-                    permission: p,
-                    color: getPermissionColor(p.action),
-                  })),
-              },
-            ],
-          },
-
-          {
-            id: 'api-keys',
-            name: 'API Keys',
-            type: 'section',
-            icon: <Key className="h-4 w-4" />,
-            children: allPermissions
-              .filter(p => p.resource === 'api_keys')
-              .map(p => ({
-                id: `perm-${p.id}`,
-                name: getPermissionLabel(p),
-                type: 'permission' as const,
-                permission: p,
-                color: getPermissionColor(p.action),
-              })),
-          },
-        ],
-      },
-    ];
-
-    // Filtriranje praznih sekcija
-    return tree.map(menu => ({
-      ...menu,
-      children: menu.children?.filter(item => {
-        if (item.type === 'section' || item.type === 'submenu') {
-          if (item.children && item.children.length > 0) {
-            return true;
-          }
-          return false;
-        }
-        return true;
-      }).map(item => {
-        if (item.type === 'submenu' && item.children) {
-          return {
-            ...item,
-            children: item.children.filter(section => 
-              section.children && section.children.length > 0
-            ),
-          };
-        }
-        return item;
-      }),
-    })).filter(menu => menu.children && menu.children.length > 0);
+    return finalMenuTree.filter(menu => menu.children && menu.children.length > 0);
   };
 
-  const getPermissionLabel = (permission: Permission): string => {
-    // Specifični labeli za vehicles.sync permisije
-    if (permission.resource === 'vehicles.sync') {
-      const vehiclesSyncLabels: Record<string, string> = {
-        'view': 'Pregled statusa sinhronizacije',
-        'start': 'Pokretanje sinhronizacije',
-        'stop': 'Zaustavljanje sinhronizacije',
-        'configure': 'Konfiguracija parametara',
-      };
-      if (vehiclesSyncLabels[permission.action]) {
-        return vehiclesSyncLabels[permission.action];
-      }
-    }
+  const tree = buildPermissionTree();
 
-    // Specifični labeli za dispatcher.sync permisije
-    if (permission.resource === 'dispatcher.sync') {
-      const dispatcherSyncLabels: Record<string, string> = {
-        'view': 'Pregled GPS sync statusa',
-        'start': 'Pokretanje GPS sync',
-        'stop': 'Zaustavljanje GPS sync',
-        'configure': 'Konfiguracija GPS sync parametara',
-        'cleanup': 'Čišćenje starih GPS sync podataka',
-        'dashboard': 'Pristup GPS sync dashboard widget-u',
-      };
-      if (dispatcherSyncLabels[permission.action]) {
-        return dispatcherSyncLabels[permission.action];
-      }
-    }
-    
-    // Specifični labeli za maintenance permisije
-    if (permission.resource === 'maintenance.timescaledb') {
-      const maintenanceLabels: Record<string, string> = {
-        'view': 'Pregled TimescaleDB alata',
-        'manage': 'Upravljanje TimescaleDB operacijama',
-      };
-      if (maintenanceLabels[permission.action]) {
-        return maintenanceLabels[permission.action];
-      }
-    }
-
-    // Specifični labeli za company info permisije
-    if (permission.resource === 'settings.company_info') {
-      const companyInfoLabels: Record<string, string> = {
-        'read': 'Pregled informacija o kompaniji',
-        'write': 'Izmena informacija o kompaniji',
-      };
-      if (companyInfoLabels[permission.action]) {
-        return companyInfoLabels[permission.action];
-      }
-    }
-    
-    // Specifični labeli za dispatcher permisije
-    if (permission.resource === 'dispatcher') {
-      const dispatcherLabels: Record<string, string> = {
-        'read': 'Pregled dispečerskog modula',
-        'manage': 'Upravljanje dispečerskim modulom',
-        'track_vehicles': 'Praćenje vozila',
-        'send_commands': 'Slanje komandi',
-        'view_map': 'Pregled mape',
-        'view_analytics': 'Pregled analitike',
-        'sync_gps': 'GPS sinhronizacija',
-        'emergency_actions': 'Hitne akcije',
-      };
-      if (dispatcherLabels[permission.action]) {
-        return dispatcherLabels[permission.action];
-      }
-    }
-
-    // Specifični labeli za dispatcher_map permisije
-    if (permission.resource === 'dispatcher_map') {
-      const dispatcherMapLabels: Record<string, string> = {
-        'read': 'Pregled mape sa vozilima',
-        'view': 'Pregled mape sa vozilima',
-      };
-      if (dispatcherMapLabels[permission.action]) {
-        return dispatcherMapLabels[permission.action];
-      }
-    }
-
-    // Specifični labeli za dispatcher_analytics permisije
-    if (permission.resource === 'dispatcher_analytics') {
-      const dispatcherAnalyticsLabels: Record<string, string> = {
-        'read': 'Pregled analitike vozila',
-        'view': 'Pregled analitike vozila',
-      };
-      if (dispatcherAnalyticsLabels[permission.action]) {
-        return dispatcherAnalyticsLabels[permission.action];
-      }
-    }
-    
-    // Specifični labeli za safety permisije
-    if (permission.resource === 'safety.aggressive.driving') {
-      const aggressiveDrivingLabels: Record<string, string> = {
-        'view': 'Pregled agresivne vožnje',
-        'configure': 'Konfiguracija parametara',
-        'export': 'Eksport podataka',
-      };
-      if (aggressiveDrivingLabels[permission.action]) {
-        return aggressiveDrivingLabels[permission.action];
-      }
-    }
-    
-    if (permission.resource === 'safety.reports') {
-      const reportsLabels: Record<string, string> = {
-        'view': 'Pregled izveštaja',
-        'create': 'Kreiranje izveštaja',
-        'export': 'Eksport PDF izveštaja',
-        'configure': 'Konfiguracija parametara',
-      };
-      if (reportsLabels[permission.action]) {
-        return reportsLabels[permission.action];
-      }
-    }
-    
-    // Specifični labeli za safety.data.recreation
-    if (permission.resource === 'safety.data.recreation') {
-      const recreationLabels: Record<string, string> = {
-        'view': 'Pregled statistika i istorije',
-        'start': 'Pokretanje rekreacije',
-        'stop': 'Zaustavljanje rekreacije',
-        'configure': 'Konfiguracija parametara',
-      };
-      if (recreationLabels[permission.action]) {
-        return recreationLabels[permission.action];
-      }
-    }
-    
-    // Specifični labeli za system permisije
-    if (permission.resource === 'system') {
-      const systemLabels: Record<string, string> = {
-        'manage': 'Upravljanje sistemskim operacijama (migracije, backup, itd.)',
-        'view': 'Pregled sistemskih informacija',
-        'configure': 'Konfiguracija sistema',
-      };
-      if (systemLabels[permission.action]) {
-        return systemLabels[permission.action];
-      }
-    }
-
-    // Specifični labeli za settings permisije
-    if (permission.resource === 'settings.general') {
-      const generalLabels: Record<string, string> = {
-        'view': 'Pregled opštih podešavanja',
-        'update': 'Ažuriranje opštih podešavanja',
-        'configure': 'Konfiguracija opštih podešavanja',
-      };
-      if (generalLabels[permission.action]) {
-        return generalLabels[permission.action];
-      }
-    }
-    
-    if (permission.resource === 'settings.api') {
-      const apiLabels: Record<string, string> = {
-        'view': 'Pregled API podešavanja',
-        'update': 'Ažuriranje API podešavanja',
-      };
-      if (apiLabels[permission.action]) {
-        return apiLabels[permission.action];
-      }
-    }
-    
-    if (permission.resource === 'settings.system') {
-      const systemLabels: Record<string, string> = {
-        'view': 'Pregled sistemskih podešavanja',
-        'update': 'Ažuriranje sistemskih podešavanja',
-      };
-      if (systemLabels[permission.action]) {
-        return systemLabels[permission.action];
-      }
-    }
-    
-    if (permission.resource === 'settings.legacy.databases') {
-      const legacyDbLabels: Record<string, string> = {
-        'view': 'Pregled legacy baza',
-        'create': 'Kreiranje legacy baza',
-        'update': 'Ažuriranje legacy baza',
-        'delete': 'Brisanje legacy baza',
-        'configure': 'Konfiguracija legacy baza',
-      };
-      if (legacyDbLabels[permission.action]) {
-        return legacyDbLabels[permission.action];
-      }
-    }
-
-    if (permission.resource === 'settings.email_templates') {
-      const emailTemplatesLabels: Record<string, string> = {
-        'view': 'Pregled email šablona',
-        'create': 'Kreiranje email šablona',
-        'update': 'Ažuriranje email šablona',
-        'delete': 'Brisanje email šablona',
-        'test': 'Testiranje email šablona',
-      };
-      if (emailTemplatesLabels[permission.action]) {
-        return emailTemplatesLabels[permission.action];
-      }
-    }
-    
-    // Specifični labeli za legacy_sync permisije
-    if (permission.resource === 'legacy_sync') {
-      const legacySyncLabels: Record<string, string> = {
-        'view': 'Pregled Legacy sinhronizacije',
-        'manage': 'Upravljanje Legacy sinhronizacijom',
-        'start': 'Pokretanje Legacy sinhronizacije',
-        'stop': 'Zaustavljanje Legacy sinhronizacije',
-      };
-      if (legacySyncLabels[permission.action]) {
-        return legacySyncLabels[permission.action];
-      }
-    }
-    
-    // Dashboard widgets
-    if (permission.resource && permission.resource.startsWith('dashboard.widgets')) {
-      if (permission.resource === 'dashboard.widgets.gps') {
-        return 'GPS Sync Widget';
-      }
-      if (permission.resource === 'dashboard.widgets.vehicles') {
-        return 'Statistike Vozila Widget';
-      }
-      if (permission.resource === 'dashboard.widgets.users') {
-        return 'Statistike Korisnika Widget';
-      }
-      if (permission.resource === 'dashboard.widgets.system') {
-        return 'Zdravlje Sistema Widget';
-      }
-    }
-    
-    // Specifični labeli za api_keys permisije
-    if (permission.resource === 'api_keys') {
-      const apiKeysLabels: Record<string, string> = {
-        'view': 'Pregled API ključeva',
-        'create': 'Kreiranje API ključeva',
-        'update': 'Izmena API ključeva',
-        'revoke': 'Opoziv API ključeva',
-        'audit': 'Pregled audit log-a API ključeva',
-      };
-      if (apiKeysLabels[permission.action]) {
-        return apiKeysLabels[permission.action];
-      }
-    }
-    
-    // Generički labeli
-    const labels: Record<string, string> = {
-      'create': 'Kreiranje',
-      'read': 'Pregled',
-      'view': 'Pregled',
-      'update': 'Ažuriranje',
-      'delete': 'Brisanje',
-      'manage': 'Upravljanje',
-      'sync': 'Sinhronizacija',
-      'export': 'Eksportovanje',
-      'configure': 'Konfiguracija',
-      'start': 'Pokretanje',
-      'stop': 'Zaustavljanje',
-      'cleanup': 'Čišćenje',
-      'dashboard': 'Dashboard Widget',
-    };
-    
-    if (labels[permission.action]) {
-      return labels[permission.action];
-    }
-    
-    return permission.description || permission.name;
-  };
-
-  const toggleNode = (nodeId: string) => {
+  const toggleExpanded = (nodeId: string) => {
     const newExpanded = new Set(expandedNodes);
     if (newExpanded.has(nodeId)) {
       newExpanded.delete(nodeId);
@@ -778,217 +380,137 @@ const PermissionsTree: React.FC<PermissionsTreeProps> = ({
     onExpandedNodesChange(newExpanded);
   };
 
-  const isNodeExpanded = (nodeId: string) => expandedNodes.has(nodeId);
-
-  const getNodePermissions = (node: PermissionNode): number[] => {
+  const getPermissionIds = (node: PermissionNode): number[] => {
     if (node.type === 'permission' && node.permission) {
       return [node.permission.id];
     }
     if (node.children) {
-      return node.children.flatMap(child => getNodePermissions(child));
+      return node.children.flatMap(getPermissionIds);
     }
     return [];
   };
 
-  const isNodeSelected = (node: PermissionNode): 'all' | 'some' | 'none' => {
-    const nodePermissions = getNodePermissions(node);
-    if (nodePermissions.length === 0) return 'none';
-    
-    const selectedCount = nodePermissions.filter(id => selectedPermissions.includes(id)).length;
-    
-    if (selectedCount === 0) return 'none';
-    if (selectedCount === nodePermissions.length) return 'all';
-    return 'some';
+  const handleBulkToggle = (node: PermissionNode, checked: boolean) => {
+    if (!onBulkToggle) return;
+    const permissionIds = getPermissionIds(node);
+    onBulkToggle(permissionIds, checked);
   };
 
-  const handleNodeToggle = (node: PermissionNode) => {
-    const nodePermissions = getNodePermissions(node);
-    const selectionState = isNodeSelected(node);
-    
-    if (selectionState === 'all') {
-      onBulkToggle(nodePermissions, false);
-    } else {
-      onBulkToggle(nodePermissions, true);
-    }
-  };
-
-  const renderNode = (node: PermissionNode, level: number = 0) => {
-    const isExpanded = isNodeExpanded(node.id);
-    const selectionState = isNodeSelected(node);
+  const renderNode = (node: PermissionNode, depth: number = 0): React.ReactNode => {
+    const isExpanded = expandedNodes.has(node.id);
     const hasChildren = node.children && node.children.length > 0;
-    
-    // Dinamički margini na osnovu nivoa i tipa parent node-a - koristimo piksele direktno
-    const getMarginLeft = () => {
-      if (node.type === 'menu') return 0;  // NIVO 1 - bez uvlačenja
-      if (node.type === 'submenu') return 40;  // Submenu uvlačenje
-      if (node.type === 'section') {
-        // NIVO 2 - Section (Administracija, Role i Permisije)
-        if (level === 1) return 40;  // Sekcija direktno pod menu (40px)
-        if (level === 2) return 60;  // Sekcija pod submenu (60px)
-        if (level === 3) return 80;  // Sekcija pod sekciju (80px)
-        return 40;
-      }
-      if (node.type === 'permission') {
-        // NIVO 3 - Permission (još više uvučene)
-        if (level === 1) return 80;   // Permisija direktno pod menu (retko)
-        if (level === 2) return 80;   // Permisija pod section koji je pod menu (80px)
-        if (level === 3) return 100;  // Permisija pod section koji je pod submenu (100px)
-        if (level === 4) return 120;  // Permisija pod section koji je pod section (120px)
-        return 80;
-      }
-      return 0;
-    };
-    
-    const marginLeft = getMarginLeft();
-    
-    return (
-      <div key={node.id} className="select-none">
-        <div 
-          style={{ marginLeft: `${marginLeft}px` }}
-          className={`
-            flex items-center px-3 py-2.5 rounded-lg transition-all duration-150
-            ${node.type === 'menu' ? `${node.bgColor} border-2 ${node.bgColor?.replace('bg-', 'border-').replace('50', '200')} mb-3 shadow-md hover:shadow-lg` : ''}
-            ${node.type === 'submenu' ? 'bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 mb-2 shadow-sm hover:from-blue-100 hover:to-indigo-100' : ''}
-            ${node.type === 'section' ? 'bg-gradient-to-r from-gray-50 to-white hover:from-gray-100 hover:to-gray-50 border-l-4 border-l-blue-500 mb-1.5' : ''}
-            ${node.type === 'permission' ? 'bg-white hover:bg-gradient-to-r hover:from-gray-50 hover:to-white border-l-2 border-l-gray-300 hover:border-l-blue-400' : ''}
-          `}
+
+    if (node.type === 'permission' && node.permission) {
+      const isSelected = selectedPermissions.includes(node.permission.id);
+      return (
+        <div
+          key={node.id}
+          className="flex items-center space-x-2 px-2 py-1.5 rounded-lg hover:bg-gray-50"
+          style={{
+            marginLeft: depth === 1 ? '2.5rem' : depth === 2 ? '3.5rem' : depth === 3 ? '4.5rem' : depth > 3 ? '5.5rem' : '0'
+          }}
         >
-          {/* Expand/Collapse dugme */}
-          {hasChildren && node.type !== 'permission' && (
+          <button
+            onClick={() => !readOnly && onPermissionToggle(node.permission!.id)}
+            disabled={readOnly}
+            className="flex items-center space-x-2 flex-grow text-left"
+          >
+            {isSelected ? (
+              <CheckSquare className="h-4 w-4 text-blue-600 flex-shrink-0" />
+            ) : (
+              <Square className="h-4 w-4 text-gray-400 flex-shrink-0" />
+            )}
+            <span className={`text-sm ${node.color || 'text-gray-700'} truncate`}>
+              {node.name}
+            </span>
+          </button>
+        </div>
+      );
+    }
+
+    const permissionIds = getPermissionIds(node);
+    const selectedCount = permissionIds.filter(id => selectedPermissions.includes(id)).length;
+    const isAllSelected = selectedCount === permissionIds.length && permissionIds.length > 0;
+    const isPartialSelected = selectedCount > 0 && selectedCount < permissionIds.length;
+
+    return (
+      <div key={node.id} style={{
+        marginLeft: depth === 1 ? '2rem' : depth === 2 ? '3rem' : depth === 3 ? '4rem' : depth > 3 ? '5rem' : '0'
+      }}>
+        <div
+          className={`flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer ${
+            node.type === 'menu' ? node.bgColor || 'bg-gray-50' : ''
+          }`}
+        >
+          {hasChildren && (
             <button
-              onClick={() => toggleNode(node.id)}
-              className={`mr-3 p-1 rounded transition-all duration-150 ${
-                node.type === 'menu' ? 'hover:bg-white/70' : 'hover:bg-gray-100'
-              }`}
+              onClick={() => toggleExpanded(node.id)}
+              className="flex-shrink-0"
             >
               {isExpanded ? (
-                <ChevronDown className={`h-4 w-4 transition-transform ${
-                  node.type === 'menu' ? 'text-gray-700' : 'text-gray-500'
-                }`} />
+                <ChevronDown className="h-4 w-4 text-gray-500" />
               ) : (
-                <ChevronRight className={`h-4 w-4 transition-transform ${
-                  node.type === 'menu' ? 'text-gray-700' : 'text-gray-500'
-                }`} />
+                <ChevronRight className="h-4 w-4 text-gray-500" />
               )}
             </button>
           )}
-          
-          {/* Elegantniji checkbox */}
+
+          {!hasChildren && <div className="w-4" />}
+
+          {node.icon && <div className="flex-shrink-0">{node.icon}</div>}
+
           <button
-            onClick={() => !readOnly && handleNodeToggle(node)}
-            className={`mr-2 flex-shrink-0 transition-all duration-150 ${
-              readOnly ? 'cursor-not-allowed opacity-60' : ''
-            }`}
+            onClick={() => {
+              if (!readOnly && onBulkToggle && permissionIds.length > 0) {
+                handleBulkToggle(node, !isAllSelected);
+              }
+              if (hasChildren) {
+                toggleExpanded(node.id);
+              }
+            }}
             disabled={readOnly}
+            className="flex items-center space-x-2 flex-grow text-left"
           >
-            <div style={{
-              position: 'relative',
-              width: '16px',
-              height: '16px',
-              borderRadius: '4px',
-              transition: 'all 200ms',
-              backgroundColor: selectionState === 'all' ? '#dcfce7' : 'white',
-              border: `2px solid ${
-                selectionState === 'all' ? '#86efac' :
-                selectionState === 'none' ? '#d1d5db' : 
-                '#6b7280'
-              }`
-            }}>
-              {selectionState === 'all' && (
-                <div style={{
-                  position: 'absolute',
-                  top: '50%',
-                  left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  width: '8px',
-                  height: '8px',
-                  backgroundColor: '#1f2937',
-                  borderRadius: '50%'
-                }}></div>
-              )}
-              {selectionState === 'some' && (
-                <div style={{
-                  position: 'absolute',
-                  top: '50%',
-                  left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  width: '8px',
-                  height: '8px',
-                  backgroundColor: '#1f2937',
-                  borderRadius: '50%'
-                }}></div>
-              )}
-            </div>
-          </button>
-          
-          {/* Ikona */}
-          {node.icon && (
-            <span className={`mr-3 flex-shrink-0 ${node.color || 'text-gray-500'}`}>
-              {node.icon}
-            </span>
-          )}
-          
-          {/* Naziv */}
-          <div className="flex-grow flex items-center gap-6">
-            <span className={`
-              ${node.type === 'menu' ? `font-bold text-base ${node.color}` : ''}
-              ${node.type === 'submenu' ? 'font-semibold text-sm text-gray-800' : ''}
-              ${node.type === 'section' ? 'font-medium text-sm text-blue-700' : ''}
-              ${node.type === 'permission' ? 'text-sm text-gray-600' : ''}
-            `}>
+            {permissionIds.length > 0 && (
+              <>
+                {isAllSelected ? (
+                  <CheckSquare className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                ) : isPartialSelected ? (
+                  <div className="h-4 w-4 border border-blue-600 bg-blue-100 flex-shrink-0 rounded-sm flex items-center justify-center">
+                    <div className="h-2 w-2 bg-blue-600 rounded-sm" />
+                  </div>
+                ) : (
+                  <Square className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                )}
+              </>
+            )}
+
+            <span className={`font-medium text-sm ${node.color || 'text-gray-700'} truncate`}>
               {node.name}
             </span>
-            
-            {/* Permission name badge sa bojom na osnovu akcije */}
-            {node.type === 'permission' && node.permission && (
-              <span className={`ml-auto mr-4 px-3 py-1 text-xs font-mono rounded-md
-                ${node.permission.action === 'create' ? 'bg-green-100 text-green-700 border border-green-200' : ''}
-                ${node.permission.action === 'view' || node.permission.action === 'read' ? 'bg-blue-100 text-blue-700 border border-blue-200' : ''}
-                ${node.permission.action === 'update' ? 'bg-amber-100 text-amber-700 border border-amber-200' : ''}
-                ${node.permission.action === 'delete' ? 'bg-red-100 text-red-700 border border-red-200' : ''}
-                ${node.permission.action === 'manage' || node.permission.action === 'configure' ? 'bg-purple-100 text-purple-700 border border-purple-200' : ''}
-                ${node.permission.action === 'start' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : ''}
-                ${node.permission.action === 'stop' ? 'bg-rose-100 text-rose-700 border border-rose-200' : ''}
-                ${node.permission.action === 'sync_gps' ? 'bg-cyan-100 text-cyan-700 border border-cyan-200' : ''}
-                ${!['create', 'view', 'read', 'update', 'delete', 'manage', 'configure', 'start', 'stop', 'sync_gps'].includes(node.permission.action) ? 'bg-gray-100 text-gray-600 border border-gray-200' : ''}
-              `}>
-                {node.permission.name}
+
+            {permissionIds.length > 0 && (
+              <span className="text-xs text-gray-500 ml-auto">
+                {selectedCount}/{permissionIds.length}
               </span>
             )}
-          </div>
-          
+          </button>
         </div>
-        
-        {/* Children */}
+
         {isExpanded && hasChildren && (
-          <div className={`
-            ${node.type === 'menu' ? 'ml-2 mt-2 pl-2 border-l-2 border-gray-200' : ''}
-            ${node.type === 'submenu' ? 'ml-2 mt-1 pl-2 border-l border-gray-200' : ''}
-            ${node.type === 'section' ? 'mt-1' : ''}
-          `}>
-            {node.children?.map(child => renderNode(child, level + 1))}
+          <div className="mt-1">
+            {node.children!.map(child => renderNode(child, depth + 1))}
           </div>
         )}
       </div>
     );
   };
 
-  const permissionTree = buildPermissionTree();
-
   return (
-    <div className="bg-white p-6 rounded-lg shadow">
-      <div className="space-y-2">
-        {permissionTree.map(node => renderNode(node))}
-      </div>
-      
-      {permissionTree.length === 0 && (
-        <div className="text-center py-8 text-gray-500">
-          <Lock className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-          <p>Nema dostupnih permisija za prikaz</p>
-        </div>
-      )}
+    <div className="space-y-1 max-h-96 overflow-y-auto">
+      {tree.map(node => renderNode(node))}
     </div>
   );
 };
 
-export default PermissionsTree;
+export default PermissionsTreeMenuOrder;

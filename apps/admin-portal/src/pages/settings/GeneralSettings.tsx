@@ -109,9 +109,13 @@ const GeneralSettings: React.FC = () => {
   ];
 
   // Filtriraj tabove na osnovu permisija
-  const visibleTabItems = tabItems.filter(tab => 
-    !tab.permission || hasPermission(tab.permission)
-  );
+  const visibleTabItems = tabItems.filter(tab => {
+    const hasAccess = !tab.permission || hasPermission(tab.permission);
+    console.log(`Tab "${tab.key}" - Permission: "${tab.permission}" - HasAccess: ${hasAccess}`);
+    return hasAccess;
+  });
+
+  console.log('Total visible tabs:', visibleTabItems.length, visibleTabItems.map(t => t.key));
 
   return (
     <div className="space-y-4">

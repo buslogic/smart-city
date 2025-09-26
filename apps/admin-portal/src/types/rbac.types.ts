@@ -16,6 +16,8 @@ export interface Permission {
   resource: string;
   action: string;
   description: string | null;
+  descriptionSr?: string | null;
+  menuOrder?: number | null;
   createdAt: string;
   updatedAt: string;
 }

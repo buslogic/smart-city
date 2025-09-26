@@ -52,7 +52,7 @@ export class UsersController {
   }
 
   @Get()
-  @RequirePermissions('users:view')
+  @RequirePermissions('users.administration:view')
   @ApiOperation({ summary: 'Get all users' })
   @ApiResponse({
     status: 200,
@@ -88,7 +88,7 @@ export class UsersController {
   }
 
   @Get(':id')
-  @RequirePermissions('users:view')
+  @RequirePermissions('users.administration:view')
   @ApiOperation({ summary: 'Get user by ID' })
   @ApiResponse({
     status: 200,

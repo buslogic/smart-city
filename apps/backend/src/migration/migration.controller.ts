@@ -24,7 +24,7 @@ export class MigrationController {
   ) {}
 
   @Get('status')
-  @RequirePermissions('system:manage')
+  @RequirePermissions('system:view')
   @ApiOperation({ summary: 'Proveri status timezone migracije' })
   @ApiResponse({
     status: 200,
@@ -144,7 +144,7 @@ export class MigrationController {
   }
 
   @Get('verify')
-  @RequirePermissions('system:manage')
+  @RequirePermissions('system:view')
   @ApiOperation({ summary: 'Verifikuj migriranu tabelu' })
   @ApiResponse({
     status: 200,
@@ -167,7 +167,7 @@ export class MigrationController {
   }
 
   @Get('logs')
-  @RequirePermissions('system:manage')
+  @RequirePermissions('system:view')
   @ApiOperation({ summary: 'Dohvati poslednje logove migracije' })
   @ApiResponse({
     status: 200,
@@ -191,7 +191,7 @@ export class MigrationController {
   }
 
   @Get('range-progress/:date')
-  @RequirePermissions('system:manage')
+  @RequirePermissions('system:view')
   @ApiOperation({
     summary:
       'Proveri napredak migracije po vremenskim intervalima za određeni dan',

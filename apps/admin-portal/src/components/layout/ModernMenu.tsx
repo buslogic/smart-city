@@ -46,6 +46,7 @@ const { Header, Sider, Content } = Layout;
 
 interface CustomMenuItem {
   key: string;
+  menuOrder: number;
   icon?: React.ReactNode;
   label: React.ReactNode;
   children?: CustomMenuItem[];
@@ -75,19 +76,22 @@ const ModernMenu: React.FC = () => {
     refreshAccessToken();
   }, []);
 
-  // Funkcija za filtriranje stavki na osnovu permisija
+  // Funkcija za sortiranje stavki po menuOrder
+  const sortMenuItems = (items: CustomMenuItem[]): CustomMenuItem[] => {
+    return items
+      .sort((a, b) => a.menuOrder - b.menuOrder)
+      .map(item => ({
+        ...item,
+        children: item.children ? sortMenuItems(item.children) : undefined
+      }));
+  };
+
+  // Funkcija za filtriranje stavki na osnovu permisija sa hijerarhijskom logikom
   const filterMenuItems = (items: CustomMenuItem[]): MenuProps['items'] => {
     return items
-      .filter(item => {
-        if (!item) return false;
-
-        // Ako nema permisije, prikaži
-        if (!item.permissions) return true;
-
-        // Proveri da li korisnik ima bar jednu od potrebnih permisija
-        return item.permissions.some(p => hasPermission(p));
-      })
       .map(item => {
+        if (!item) return null;
+
         const menuItem = { ...item };
 
         // Rekurzivno filtriraj podmeni
@@ -99,6 +103,7 @@ const ModernMenu: React.FC = () => {
             return null;
           }
 
+          // NOVA LOGIKA: Ako ima dostupne children, prikaži parent bez obzira na njegove permisije
           return {
             key: menuItem.key,
             icon: menuItem.icon,
@@ -118,7 +123,28 @@ const ModernMenu: React.FC = () => {
           };
         }
 
-        // Return plain menu item
+        // Za stavke bez children, proveri permisije normalno
+        if (!item.permissions) return {
+          key: menuItem.key,
+          icon: menuItem.icon,
+          label: menuItem.badge ? (
+            <span className="flex items-center justify-between w-full">
+              <span>{menuItem.label}</span>
+              <Badge
+                count={menuItem.badge.count}
+                style={{
+                  backgroundColor: menuItem.badge.color || '#ff4d4f',
+                  marginLeft: 'auto'
+                }}
+              />
+            </span>
+          ) : menuItem.label,
+        };
+
+        // Proveri da li korisnik ima bar jednu od potrebnih permisija
+        const hasRequiredPermissions = item.permissions.some(p => hasPermission(p));
+        if (!hasRequiredPermissions) return null;
+
         return {
           key: menuItem.key,
           icon: menuItem.icon,
@@ -144,23 +170,28 @@ const ModernMenu: React.FC = () => {
     const items: CustomMenuItem[] = [
       {
         key: '/dashboard',
+        menuOrder: 100000000000,
         icon: <DashboardOutlined />,
         label: 'Dashboard',
         permissions: ['dashboard:view'],
       },
       {
         key: 'users',
+        menuOrder: 200000000000,
         icon: <TeamOutlined />,
         label: 'Korisnici',
+        // permissions: ['users:view'], // ❌ Uklonjeno - hijerarhijska logika će automatski prikazati
         children: [
           {
             key: '/users/administration',
+            menuOrder: 201000000000,
             icon: <UsergroupAddOutlined />,
             label: 'Administracija',
-            permissions: ['users:view'],
+            permissions: ['users.administration:view'], // ✅ Specifična permisija umesto opšte
           },
           {
             key: '/users/roles-permissions',
+            menuOrder: 202000000000,
             icon: <SecurityScanOutlined />,
             label: 'Role i Permisije',
             permissions: ['roles:view'],
@@ -169,64 +200,78 @@ const ModernMenu: React.FC = () => {
       },
       {
         key: 'transport',
+        menuOrder: 300000000000,
         icon: <CarOutlined />,
         label: 'Autobuski Prevoznici',
+        // permissions: ['transport:view'], // ❌ Uklonjeno - hijerarhijska logika će automatski prikazati
         children: [
           {
             key: 'vehicles',
+            menuOrder: 301000000000,
             icon: <CarOutlined />,
             label: 'Vozila',
+            // permissions: ['vehicles:view'], // ❌ Uklonjeno - hijerarhijska logika će automatski prikazati
             children: [
               {
                 key: '/transport/vehicles',
+                menuOrder: 301010000000,
                 label: 'Lista Vozila',
                 permissions: ['vehicles:read'],
               },
               {
                 key: '/transport/vehicle-sync',
+                menuOrder: 301020000000,
                 icon: <SyncOutlined />,
                 label: 'Sinhronizacija',
                 permissions: ['vehicles.sync:view'],
               },
               {
                 key: '/transport/gps-buffer-status',
+                menuOrder: 301030000000,
                 icon: <DatabaseOutlined />,
                 label: 'GPS Real-Time Sync',
-                permissions: ['dispatcher.sync:view'],
+                permissions: ['gps.buffer.sync:view'],
               },
               {
                 key: '/transport/legacy-sync',
+                menuOrder: 301040000000,
                 icon: <SyncOutlined />,
                 label: 'Legacy Sync',
-                permissions: ['legacy_sync.view'],
+                permissions: ['legacy.sync:view'],
               },
               {
                 key: '/migration',
+                menuOrder: 301050000000,
                 icon: <AlertOutlined className="text-red-500" />,
                 label: <span className="text-red-500 font-semibold">🚨 GPS Migration</span>,
-                permissions: ['system.manage'],
+                permissions: ['system:view'],
               },
             ],
           },
           {
             key: 'dispatcher',
+            menuOrder: 302000000000,
             icon: <RadarChartOutlined />,
             label: 'Dispečerski Modul',
+            // permissions: ['dispatcher:view'], // ❌ Uklonjeno - hijerarhijska logika
             children: [
               {
                 key: '/transport/dispatcher/map-vehicles',
+                menuOrder: 302010000000,
                 icon: <EnvironmentOutlined />,
                 label: 'Mapa',
                 permissions: ['dispatcher:view_map'],
               },
               {
                 key: '/transport/dispatcher/analytics',
+                menuOrder: 302020000000,
                 icon: <BarChartOutlined />,
                 label: 'Analitika vozila',
                 permissions: ['dispatcher:view_analytics'],
               },
               {
                 key: '/transport/dispatcher/gps-sync',
+                menuOrder: 302030000000,
                 icon: <ThunderboltOutlined />,
                 label: 'GPS Sync',
                 permissions: ['dispatcher.sync:view'],
@@ -236,23 +281,28 @@ const ModernMenu: React.FC = () => {
           },
           {
             key: 'safety',
+            menuOrder: 303000000000,
             icon: <SafetyOutlined />,
             label: 'Bezbednost',
+            // permissions: ['safety:view'], // ❌ Uklonjeno - hijerarhijska logika
             children: [
               {
                 key: '/transport/safety/aggressive-driving',
+                menuOrder: 303010000000,
                 icon: <WarningOutlined />,
                 label: 'Agresivna Vožnja',
                 permissions: ['safety.aggressive.driving:view'],
               } as MenuItem,
               {
                 key: '/transport/safety/monthly-report',
+                menuOrder: 303020000000,
                 icon: <FileTextOutlined />,
                 label: 'Mesečni Izveštaj',
                 permissions: ['safety.reports:view'],
               },
               {
                 key: '/transport/safety/data-recreation',
+                menuOrder: 303030000000,
                 icon: <SyncOutlined />,
                 label: 'Rekreacija podataka',
                 permissions: ['safety.data.recreation:view'],
@@ -261,11 +311,14 @@ const ModernMenu: React.FC = () => {
           },
           {
             key: 'maintenance',
+            menuOrder: 304000000000,
             icon: <ToolOutlined />,
             label: 'Alati za održavanje',
+            // permissions: ['maintenance:view'], // ❌ Uklonjeno - hijerarhijska logika
             children: [
               {
                 key: '/transport/maintenance/timescaledb',
+                menuOrder: 304010000000,
                 icon: <DatabaseOutlined />,
                 label: 'TimescaleDB',
                 permissions: ['maintenance.timescaledb:view'],
@@ -276,17 +329,21 @@ const ModernMenu: React.FC = () => {
       },
       {
         key: 'settings',
+        menuOrder: 400000000000,
         icon: <SettingOutlined />,
         label: 'Podešavanje',
+        // permissions: ['settings:view'], // ❌ Uklonjeno - hijerarhijska logika će automatski prikazati
         children: [
           {
             key: '/settings/general',
+            menuOrder: 401000000000,
             icon: <SettingOutlined />,
             label: 'Opšta',
-            permissions: ['settings.general:view'],
+            // Bez permissions - hijerarhijska logika: prikaži ako GeneralSettings komponenta ima vidljive tabove
           },
           {
             key: '/settings/api-keys',
+            menuOrder: 402000000000,
             icon: <ApiOutlined />,
             label: 'API Keys',
             permissions: ['api_keys:view'],
@@ -295,7 +352,9 @@ const ModernMenu: React.FC = () => {
       },
     ];
 
-    return filterMenuItems(items);
+    // Prvo sortiraj, pa onda filtriraj
+    const sortedItems = sortMenuItems(items);
+    return filterMenuItems(sortedItems);
   }, [hasPermission]);
 
   // Pronađi aktivnu rutu i otvori parent menije
