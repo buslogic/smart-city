@@ -115,7 +115,8 @@ export const userService = {
   ): Promise<void> {
     return new Promise((resolve, reject) => {
       // Koristimo samo fetch za SSE - bez EventSource objekta
-      fetch('/api/users/sync-legacy-batch', {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3010';
+      fetch(`${API_URL}/api/users/sync-legacy-batch`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
