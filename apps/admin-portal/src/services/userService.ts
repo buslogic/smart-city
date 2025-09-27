@@ -69,4 +69,116 @@ export const userService = {
     const { data } = await api.post('/api/users/sync-legacy', { users });
     return data;
   },
+
+  async getAllRoles(): Promise<{
+    id: number;
+    name: string;
+    description: string;
+    isActive: boolean;
+  }[]> {
+    const { data } = await api.get('/api/users/roles');
+    return data;
+  },
+
+  async getSyncSettings(): Promise<{
+    defaultRoleId: number | null;
+    defaultRole: {
+      id: number;
+      name: string;
+      description: string;
+    } | null;
+    configured: boolean;
+  }> {
+    const { data } = await api.get('/api/users/sync-settings');
+    return data;
+  },
+
+  async updateSyncSettings(defaultRoleId: number): Promise<{
+    success: boolean;
+    defaultRoleId: number;
+    defaultRole: {
+      id: number;
+      name: string;
+      description: string;
+    };
+  }> {
+    const { data } = await api.post('/api/users/sync-settings', { defaultRoleId });
+    return data;
+  },
+
+  syncLegacyUsersBatch(
+    users: any[],
+    batchSize = 50,
+    onProgress?: (progress: any) => void,
+    onComplete?: (result: any) => void,
+    onError?: (error: string) => void
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const eventSource = new EventSource('/api/users/sync-legacy-batch', {
+        withCredentials: true,
+      });
+
+      // POST data preko fetch da pokrenemo batch
+      fetch('/api/users/sync-legacy-batch', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        },
+        body: JSON.stringify({ users, batchSize }),
+      }).then(response => {
+        if (!response.ok) {
+          throw new Error('Failed to start batch sync');
+        }
+
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+
+        const readStream = async () => {
+          try {
+            while (true) {
+              const { done, value } = await reader!.read();
+              if (done) break;
+
+              const chunk = decoder.decode(value);
+              const lines = chunk.split('\n');
+
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  const jsonStr = line.substring(6);
+                  if (jsonStr.trim()) {
+                    try {
+                      const data = JSON.parse(jsonStr);
+
+                      if (data.type === 'progress' && onProgress) {
+                        onProgress(data);
+                      } else if (data.type === 'completed' && onComplete) {
+                        onComplete(data);
+                        resolve();
+                        return;
+                      } else if (data.type === 'error') {
+                        if (onError) onError(data.error);
+                        reject(new Error(data.error));
+                        return;
+                      }
+                    } catch (e) {
+                      console.warn('Failed to parse SSE data:', jsonStr);
+                    }
+                  }
+                }
+              }
+            }
+          } catch (error) {
+            if (onError) onError(error.message);
+            reject(error);
+          }
+        };
+
+        readStream();
+      }).catch(error => {
+        if (onError) onError(error.message);
+        reject(error);
+      });
+    });
+  },
 };

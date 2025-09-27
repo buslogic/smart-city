@@ -651,6 +651,18 @@ export class UsersService {
       duplicates: [] as { email: string; firstName: string; lastName: string }[],
     };
 
+    // Prvo proveri da li je konfigurisan default role
+    const syncSettings = await this.getSyncSettings();
+    if (!syncSettings.configured || !syncSettings.defaultRole) {
+      throw new BadRequestException(
+        'Default rola za sinhronizaciju nije konfigurirana. ' +
+        'Molimo prvo definišite rolu u podešavanjima sinhronizacije.'
+      );
+    }
+
+    const defaultRole = syncSettings.defaultRole!;
+    this.logger.log(`Using default role for sync: ${defaultRole.name} (ID: ${defaultRole.id})`);
+
     // Get all existing emails and legacy IDs for quick lookup
     const existingUsers = await this.prisma.user.findMany({
       select: {
@@ -717,19 +729,15 @@ export class UsersService {
           },
         });
 
-        // Assign default role
-        const defaultRole = await this.prisma.role.findUnique({
-          where: { name: 'USER' },
+        // Assign configured default role
+        await this.prisma.userRole.create({
+          data: {
+            userId: newUser.id,
+            roleId: defaultRole.id,
+          },
         });
 
-        if (defaultRole) {
-          await this.prisma.userRole.create({
-            data: {
-              userId: newUser.id,
-              roleId: defaultRole.id,
-            },
-          });
-        }
+        this.logger.log(`Assigned role ${defaultRole.name} to user ${newUser.email}`)
 
         // Try to send welcome email
         try {
@@ -754,5 +762,185 @@ export class UsersService {
     }
 
     return results;
+  }
+
+  async syncLegacyUsersBatch(users: any[], batchSize = 50, onProgress?: (progress: any) => void) {
+    const totalUsers = users.length;
+    const totalBatches = Math.ceil(totalUsers / batchSize);
+    const overallResults = {
+      success: 0,
+      skipped: 0,
+      errors: 0,
+      duplicates: [] as { email: string; firstName: string; lastName: string }[],
+      totalBatches,
+      processedBatches: 0,
+      processedUsers: 0,
+      totalUsers,
+    };
+
+    this.logger.log(`Starting batch sync: ${totalUsers} users in ${totalBatches} batches of ${batchSize}`);
+
+    // Prvo proveri da li je konfigurisan default role
+    const syncSettings = await this.getSyncSettings();
+    if (!syncSettings.configured || !syncSettings.defaultRole) {
+      throw new BadRequestException(
+        'Default rola za sinhronizaciju nije konfigurirana. ' +
+        'Molimo prvo definišite rolu u podešavanjima sinhronizacije.'
+      );
+    }
+
+    for (let i = 0; i < totalUsers; i += batchSize) {
+      const batchNumber = Math.floor(i / batchSize) + 1;
+      const batch = users.slice(i, i + batchSize);
+      const batchStartTime = Date.now();
+
+      this.logger.log(`Processing batch ${batchNumber}/${totalBatches} (users ${i + 1}-${Math.min(i + batchSize, totalUsers)})`);
+
+      try {
+        // Pozovi postojeći syncLegacyUsers za ovaj batch
+        const batchResult = await this.syncLegacyUsers(batch);
+
+        // Akumuliraj rezultate
+        overallResults.success += batchResult.success;
+        overallResults.skipped += batchResult.skipped;
+        overallResults.errors += batchResult.errors;
+        overallResults.duplicates.push(...(batchResult.duplicates || []));
+        overallResults.processedBatches = batchNumber;
+        overallResults.processedUsers = Math.min(i + batchSize, totalUsers);
+
+        const batchDuration = Date.now() - batchStartTime;
+        this.logger.log(`Batch ${batchNumber}/${totalBatches} completed in ${batchDuration}ms - Success: ${batchResult.success}, Skipped: ${batchResult.skipped}, Errors: ${batchResult.errors}`);
+
+        // Pozovi progress callback ako postoji
+        if (onProgress) {
+          onProgress({
+            ...overallResults,
+            currentBatch: batchNumber,
+            batchResult,
+            batchDuration,
+            estimatedTimeRemaining: this.calculateEstimatedTime(batchNumber, totalBatches, batchDuration),
+          });
+        }
+
+        // Kratka pauza između batch-ova da se baza "odmori"
+        if (batchNumber < totalBatches) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+      } catch (error) {
+        this.logger.error(`Error in batch ${batchNumber}:`, error);
+        overallResults.errors += batch.length; // Označiti sve u batch-u kao greške
+
+        if (onProgress) {
+          onProgress({
+            ...overallResults,
+            currentBatch: batchNumber,
+            batchResult: { success: 0, skipped: 0, errors: batch.length },
+            error: error.message,
+          });
+        }
+      }
+    }
+
+    this.logger.log(`Batch sync completed - Total: ${overallResults.success} success, ${overallResults.skipped} skipped, ${overallResults.errors} errors`);
+    return overallResults;
+  }
+
+  private calculateEstimatedTime(currentBatch: number, totalBatches: number, avgBatchTime: number): number {
+    const remainingBatches = totalBatches - currentBatch;
+    return Math.round((remainingBatches * avgBatchTime) / 1000); // u sekundama
+  }
+
+  async getAllRoles() {
+    const roles = await this.prisma.role.findMany({
+      select: {
+        id: true,
+        name: true,
+        description: true,
+      },
+      where: {
+        // Dodajemo filter za aktivne role
+      },
+      orderBy: {
+        name: 'asc',
+      },
+    });
+    return roles.map(role => ({
+      ...role,
+      isActive: true, // Dodajemo hardcoded jer nemamo u tabeli
+    }));
+  }
+
+  async getSyncSettings() {
+    // Čitamo iz SystemSettings tabele ili koristimo default
+    try {
+      const setting = await this.prisma.systemSettings.findUnique({
+        where: { key: 'user_sync_default_role_id' },
+      });
+
+      let defaultRoleId: number | null = null;
+      if (setting?.value) {
+        defaultRoleId = parseInt(setting.value, 10);
+      }
+
+      // Ako imamo defaultRoleId, dohvati podatke o roli
+      let defaultRole: { id: number; name: string; description: string | null } | null = null;
+      if (defaultRoleId) {
+        defaultRole = await this.prisma.role.findUnique({
+          where: { id: defaultRoleId },
+          select: {
+            id: true,
+            name: true,
+            description: true,
+          },
+        });
+      }
+
+      return {
+        defaultRoleId,
+        defaultRole,
+        configured: !!defaultRole,
+      };
+    } catch (error) {
+      this.logger.error('Error getting sync settings:', error);
+      return {
+        defaultRoleId: null,
+        defaultRole: null,
+        configured: false,
+      };
+    }
+  }
+
+  async updateSyncSettings(defaultRoleId: number) {
+    // Proveri da li rola postoji
+    const role = await this.prisma.role.findUnique({
+      where: { id: defaultRoleId },
+    });
+
+    if (!role) {
+      throw new NotFoundException('Izabrana rola ne postoji');
+    }
+
+    // Ažuriraj ili kreiraj setting u SystemSettings
+    await this.prisma.systemSettings.upsert({
+      where: { key: 'user_sync_default_role_id' },
+      update: { value: defaultRoleId.toString() },
+      create: {
+        key: 'user_sync_default_role_id',
+        value: defaultRoleId.toString(),
+        description: 'Default rola koja se dodeljuje sinhronizovanim korisnicima iz legacy baze',
+        category: 'USER_SYNC',
+      },
+    });
+
+    return {
+      success: true,
+      defaultRoleId,
+      defaultRole: {
+        id: role.id,
+        name: role.name,
+        description: role.description,
+      },
+    };
   }
 }

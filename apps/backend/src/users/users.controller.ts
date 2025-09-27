@@ -14,7 +14,10 @@ import {
   ClassSerializerInterceptor,
   Req,
   Request,
+  Res,
+  Headers,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -121,6 +124,28 @@ export class UsersController {
     return this.usersService.fetchLegacyUsers();
   }
 
+  @Get('roles')
+  @RequirePermissions('users.administration:view')
+  @ApiOperation({ summary: 'Get all available roles for sync configuration' })
+  @ApiResponse({
+    status: 200,
+    description: 'Roles retrieved successfully',
+  })
+  getAllRoles() {
+    return this.usersService.getAllRoles();
+  }
+
+  @Get('sync-settings')
+  @RequirePermissions('users.administration:view')
+  @ApiOperation({ summary: 'Get sync role settings' })
+  @ApiResponse({
+    status: 200,
+    description: 'Sync settings retrieved successfully',
+  })
+  getSyncSettings() {
+    return this.usersService.getSyncSettings();
+  }
+
   @Get(':id')
   @RequirePermissions('users.administration:view')
   @ApiOperation({ summary: 'Get user by ID' })
@@ -200,6 +225,17 @@ export class UsersController {
     return this.getProfile(req);
   }
 
+  @Post('sync-settings')
+  @RequirePermissions('users:create')
+  @ApiOperation({ summary: 'Update sync role settings' })
+  @ApiResponse({
+    status: 200,
+    description: 'Sync settings updated successfully',
+  })
+  updateSyncSettings(@Body() settings: { defaultRoleId: number }) {
+    return this.usersService.updateSyncSettings(settings.defaultRoleId);
+  }
+
   @Post('sync-legacy')
   @RequirePermissions('users:create')
   @ApiOperation({ summary: 'Sync users from legacy database' })
@@ -209,5 +245,56 @@ export class UsersController {
   })
   syncLegacyUsers(@Body() body: { users: any[] }) {
     return this.usersService.syncLegacyUsers(body.users);
+  }
+
+  @Post('sync-legacy-batch')
+  @RequirePermissions('users:create')
+  @ApiOperation({ summary: 'Sync users from legacy database in batches with progress tracking via SSE' })
+  @ApiResponse({
+    status: 200,
+    description: 'Users synchronized successfully in batches with real-time progress',
+  })
+  async syncLegacyUsersBatch(
+    @Body() body: { users: any[]; batchSize?: number },
+    @Res() response: Response,
+  ) {
+    const { users, batchSize = 50 } = body;
+
+    // Setup Server-Sent Events
+    response.setHeader('Content-Type', 'text/event-stream');
+    response.setHeader('Cache-Control', 'no-cache');
+    response.setHeader('Connection', 'keep-alive');
+    response.setHeader('Access-Control-Allow-Origin', '*');
+    response.setHeader('Access-Control-Allow-Headers', 'Cache-Control');
+
+    try {
+      const result = await this.usersService.syncLegacyUsersBatch(
+        users,
+        batchSize,
+        (progress) => {
+          // Pošalji progress update preko SSE
+          response.write(`data: ${JSON.stringify({
+            type: 'progress',
+            ...progress
+          })}\n\n`);
+        }
+      );
+
+      // Pošalji finalni rezultat
+      response.write(`data: ${JSON.stringify({
+        type: 'completed',
+        ...result
+      })}\n\n`);
+
+      response.end();
+    } catch (error) {
+      // Pošalji grešku
+      response.write(`data: ${JSON.stringify({
+        type: 'error',
+        error: error.message
+      })}\n\n`);
+
+      response.end();
+    }
   }
 }

@@ -28,10 +28,13 @@ import {
   TeamOutlined,
   ReloadOutlined,
   InfoCircleOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import { userService } from '../../services/userService';
 import { userGroupsService, UserGroup } from '../../services/userGroups';
+import { RoleSyncSettingsModal } from './RoleSyncSettingsModal';
+import { BatchSyncProgressModal } from './BatchSyncProgressModal';
 
 const { Text, Title } = Typography;
 
@@ -68,6 +71,12 @@ export const UserSyncModal: React.FC<UserSyncModalProps> = ({ visible, onClose, 
   const [showOnlyUnsync, setShowOnlyUnsync] = useState(false);
   const [existingEmails, setExistingEmails] = useState<Set<string>>(new Set());
   const [existingLegacyIds, setExistingLegacyIds] = useState<Set<number>>(new Set());
+  const [settingsModalVisible, setSettingsModalVisible] = useState(false);
+  const [syncSettings, setSyncSettings] = useState<any>(null);
+  const [batchProgressVisible, setBatchProgressVisible] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<any>(null);
+  const [batchCompleted, setBatchCompleted] = useState(false);
+  const [batchError, setBatchError] = useState(false);
 
   // Pagination
   const [pagination, setPagination] = useState<TablePaginationConfig>({
@@ -98,10 +107,25 @@ export const UserSyncModal: React.FC<UserSyncModalProps> = ({ visible, onClose, 
     }
   }, [visible]);
 
+  // Load sync settings
+  const loadSyncSettings = async () => {
+    try {
+      const settings = await userService.getSyncSettings();
+      setSyncSettings(settings);
+      return settings;
+    } catch (error) {
+      console.error('Error loading sync settings:', error);
+      return null;
+    }
+  };
+
   // Load sync groups and legacy users
   const loadData = async () => {
     setLoading(true);
     try {
+      // Load sync settings first
+      await loadSyncSettings();
+
       // Load sync-enabled groups
       const groupsResponse = await userGroupsService.getAll({ includeInactive: false });
       const syncEnabledGroups = groupsResponse.filter(g => g.syncEnabled);
@@ -205,6 +229,17 @@ export const UserSyncModal: React.FC<UserSyncModalProps> = ({ visible, onClose, 
     return legacyUsers;
   };
 
+  // Handle settings
+  const handleSettings = () => {
+    setSettingsModalVisible(true);
+  };
+
+  const handleSettingsSuccess = async () => {
+    await loadSyncSettings();
+    setSettingsModalVisible(false);
+    message.success('Podešavanja uspešno ažurirana');
+  };
+
   // Handle sync
   const handleSync = async () => {
     if (selectedUsers.size === 0) {
@@ -212,11 +247,42 @@ export const UserSyncModal: React.FC<UserSyncModalProps> = ({ visible, onClose, 
       return;
     }
 
+    // Proveri da li je konfigurisan default role
+    if (!syncSettings || !syncSettings.configured) {
+      modal.warning({
+        title: 'Default rola nije konfigurirana',
+        content: (
+          <div>
+            <p>Molimo prvo definišite default rolu koja će biti dodeljena sinhronizovanim korisnicima.</p>
+            <p>Kliknite na dugme "Podešavanja" da konfigurirate default rolu.</p>
+          </div>
+        ),
+        okText: 'Razumem',
+        onOk: () => {
+          setSettingsModalVisible(true);
+        },
+      });
+      return;
+    }
+
+    // Pametno odlučiti da li koristiti batch ili obične sync
+    const usersToSync = legacyUsers.filter(u => selectedUsers.has(u.id));
+    const shouldUseBatch = usersToSync.length > 100; // Batch za više od 100 korisnika
+
     modal.confirm({
       title: 'Potvrdite sinhronizaciju',
       content: (
         <div>
           <p>Da li ste sigurni da želite da sinhronizujete {selectedUsers.size} korisnika?</p>
+          {shouldUseBatch && (
+            <Alert
+              message="Batch sinhronizacija"
+              description={`Zbog velikog broja korisnika (${usersToSync.length}), koristiće se batch sinhronizacija po 50 korisnika. Videćete progress u posebnom modalu.`}
+              type="info"
+              showIcon
+              className="mt-4 mb-4"
+            />
+          )}
           <Alert
             message="Napomena"
             description="Korisnici koji već postoje (isti email) će biti preskočeni."
@@ -227,68 +293,129 @@ export const UserSyncModal: React.FC<UserSyncModalProps> = ({ visible, onClose, 
         </div>
       ),
       onOk: async () => {
-        setSyncing(true);
-        try {
-          const usersToSync = legacyUsers.filter(u => selectedUsers.has(u.id));
-          const response = await userService.syncLegacyUsers(usersToSync);
-
-          // Show detailed results
-          let resultMessage = `Uspešno sinhronizovano: ${response.success} korisnika. `;
-
-          if (response.skipped > 0) {
-            resultMessage += `Preskočeno: ${response.skipped} (već postoje). `;
-          }
-
-          if (response.errors > 0) {
-            resultMessage += `Greške: ${response.errors}. `;
-          }
-
-          if (response.success > 0) {
-            message.success(resultMessage);
-          } else if (response.skipped > 0) {
-            message.warning(resultMessage);
-          } else {
-            message.error(resultMessage);
-          }
-
-          // Show duplicates if any
-          if (response.duplicates && response.duplicates.length > 0) {
-            modal.info({
-              title: 'Preskočeni korisnici',
-              content: (
-                <div>
-                  <p>Sledeći korisnici već postoje u sistemu:</p>
-                  <ul>
-                    {response.duplicates.slice(0, 10).map((dup: any, idx: number) => (
-                      <li key={idx}>
-                        {dup.firstName} {dup.lastName} - {dup.email}
-                      </li>
-                    ))}
-                    {response.duplicates.length > 10 && (
-                      <li>... i još {response.duplicates.length - 10} korisnika</li>
-                    )}
-                  </ul>
-                </div>
-              ),
-            });
-          }
-
-          // Reload data
-          await loadData();
-          setSelectedUsers(new Set());
-
-          // Call success callback to refresh main table if any users were synced
-          if (response.success > 0) {
-            onSuccess();
-          }
-
-        } catch (error: any) {
-          message.error(error.response?.data?.message || 'Greška pri sinhronizaciji');
-        } finally {
-          setSyncing(false);
+        if (shouldUseBatch) {
+          // Batch sinhronizacija
+          handleBatchSync(usersToSync);
+        } else {
+          // Obična sinhronizacija
+          handleRegularSync(usersToSync);
         }
       },
     });
+  };
+
+  // Batch sync handler
+  const handleBatchSync = async (usersToSync: any[]) => {
+    try {
+      // Resetuj state i prikaži progress modal
+      setBatchProgress(null);
+      setBatchCompleted(false);
+      setBatchError(false);
+      setBatchProgressVisible(true);
+      setSyncing(true);
+
+      // Pokreni batch sync sa real-time progress
+      await userService.syncLegacyUsersBatch(
+        usersToSync,
+        50,
+        // onProgress callback
+        (progress) => {
+          setBatchProgress(progress);
+        },
+        // onComplete callback
+        (result) => {
+          setBatchProgress(result);
+          setBatchCompleted(true);
+
+          // Show success message
+          message.success(`Batch sinhronizacija završena: ${result.success} uspešno, ${result.skipped} preskočeno, ${result.errors} grešaka`);
+
+          // Reload data
+          loadData();
+          setSelectedUsers(new Set());
+
+          if (result.success > 0) {
+            onSuccess();
+          }
+        },
+        // onError callback
+        (error) => {
+          setBatchError(true);
+          setBatchProgress(prev => prev ? { ...prev, error } : null);
+          message.error(error);
+        }
+      );
+
+    } catch (error: any) {
+      setBatchError(true);
+      setBatchProgress(prev => prev ? { ...prev, error: error.message } : null);
+      message.error(error.message || 'Greška pri batch sinhronizaciji');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  // Regular sync handler (za manje od 100 korisnika)
+  const handleRegularSync = async (usersToSync: any[]) => {
+    setSyncing(true);
+    try {
+      const response = await userService.syncLegacyUsers(usersToSync);
+
+      // Show detailed results
+      let resultMessage = `Uspešno sinhronizovano: ${response.success} korisnika. `;
+
+      if (response.skipped > 0) {
+        resultMessage += `Preskočeno: ${response.skipped} (već postoje). `;
+      }
+
+      if (response.errors > 0) {
+        resultMessage += `Greške: ${response.errors}. `;
+      }
+
+      if (response.success > 0) {
+        message.success(resultMessage);
+      } else if (response.skipped > 0) {
+        message.warning(resultMessage);
+      } else {
+        message.error(resultMessage);
+      }
+
+      // Show duplicates if any
+      if (response.duplicates && response.duplicates.length > 0) {
+        modal.info({
+          title: 'Preskočeni korisnici',
+          content: (
+            <div>
+              <p>Sledeći korisnici već postoje u sistemu:</p>
+              <ul>
+                {response.duplicates.slice(0, 10).map((dup: any, idx: number) => (
+                  <li key={idx}>
+                    {dup.firstName} {dup.lastName} - {dup.email}
+                  </li>
+                ))}
+                {response.duplicates.length > 10 && (
+                  <li>... i još {response.duplicates.length - 10} korisnika</li>
+                )}
+              </ul>
+            </div>
+          ),
+        });
+      }
+
+      // Reload data
+      await loadData();
+      setSelectedUsers(new Set());
+
+      // Call success callback to refresh main table if any users were synced
+      if (response.success > 0) {
+        onSuccess();
+      }
+
+    } catch (error: any) {
+      message.error(error.response?.data?.message || 'Greška pri sinhronizaciji');
+    } finally {
+      setSyncing(false);
+    }
   };
 
   // Table columns
@@ -416,6 +543,13 @@ export const UserSyncModal: React.FC<UserSyncModalProps> = ({ visible, onClose, 
           Zatvori
         </Button>,
         <Button
+          key="settings"
+          icon={<SettingOutlined />}
+          onClick={handleSettings}
+        >
+          Podešavanja
+        </Button>,
+        <Button
           key="reload"
           icon={<ReloadOutlined />}
           onClick={loadData}
@@ -457,6 +591,44 @@ export const UserSyncModal: React.FC<UserSyncModalProps> = ({ visible, onClose, 
               icon={<DatabaseOutlined />}
               className="mb-4"
             />
+          )}
+
+          {/* Sync settings status */}
+          {syncSettings && (
+            <Card className="mb-4">
+              <Title level={5}>
+                <SettingOutlined /> Status konfiguracije
+              </Title>
+              <div className="mb-3">
+                <Text strong>Default rola za sinhronizovane korisnike:</Text>
+              </div>
+              {syncSettings.configured ? (
+                <Tag
+                  color="green"
+                  icon={<CheckCircleOutlined />}
+                  className="mb-3"
+                >
+                  {syncSettings.defaultRole.name} - {syncSettings.defaultRole.description}
+                </Tag>
+              ) : (
+                <Tag
+                  color="red"
+                  icon={<CloseCircleOutlined />}
+                  className="mb-3"
+                >
+                  Nije konfigurirana
+                </Tag>
+              )}
+              {!syncSettings.configured && (
+                <Alert
+                  message="Konfiguracija potrebna"
+                  description="Molimo defišite default rolu pre pokretanja sinhronizacije."
+                  type="warning"
+                  showIcon
+                  className="mt-3"
+                />
+              )}
+            </Card>
           )}
 
           {/* Sync groups info */}
@@ -582,6 +754,22 @@ export const UserSyncModal: React.FC<UserSyncModalProps> = ({ visible, onClose, 
           />
         </>
       )}
+
+      {/* Role Sync Settings Modal */}
+      <RoleSyncSettingsModal
+        visible={settingsModalVisible}
+        onClose={() => setSettingsModalVisible(false)}
+        onSuccess={handleSettingsSuccess}
+      />
+
+      {/* Batch Sync Progress Modal */}
+      <BatchSyncProgressModal
+        visible={batchProgressVisible}
+        onClose={() => setBatchProgressVisible(false)}
+        progress={batchProgress}
+        isCompleted={batchCompleted}
+        isError={batchError}
+      />
     </Modal>
     </>
   );

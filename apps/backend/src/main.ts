@@ -23,6 +23,10 @@ async function bootstrap() {
     console.log('Serving static files from:', uploadPath);
   }
 
+  // Increase payload size limits for large user sync operations
+  app.use(express.json({ limit: '200mb' }));
+  app.use(express.urlencoded({ limit: '200mb', extended: true }));
+
   // CORS
   app.enableCors({
     origin: process.env.CORS_ORIGINS?.split(',') || [
