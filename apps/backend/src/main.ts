@@ -24,8 +24,8 @@ async function bootstrap() {
   }
 
   // Increase payload size limits for large user sync operations
-  app.use(express.json({ limit: '200mb' }));
-  app.use(express.urlencoded({ limit: '200mb', extended: true }));
+  app.use(express.json({ limit: '500mb' }));
+  app.use(express.urlencoded({ limit: '500mb', extended: true }));
 
   // CORS
   app.enableCors({
@@ -33,6 +33,8 @@ async function bootstrap() {
       'http://localhost:3011',
       'http://localhost:3012',
       'http://localhost:3000',
+      'https://gsp-admin.smart-city.rs',
+      'https://admin.smart-city.rs',
     ],
     credentials: true,
   });
