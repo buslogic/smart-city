@@ -341,14 +341,14 @@ export const UserSyncModal: React.FC<UserSyncModalProps> = ({ visible, onClose, 
         // onError callback
         (error) => {
           setBatchError(true);
-          setBatchProgress(prev => prev ? { ...prev, error } : null);
+          setBatchProgress((prev: any) => prev ? { ...prev, error } : null);
           message.error(error);
         }
       );
 
     } catch (error: any) {
       setBatchError(true);
-      setBatchProgress(prev => prev ? { ...prev, error: error.message } : null);
+      setBatchProgress((prev: any) => prev ? { ...prev, error: error.message } : null);
       message.error(error.message || 'Greška pri batch sinhronizaciji');
     } finally {
       setSyncing(false);

@@ -207,7 +207,7 @@ export const RoleSyncSettingsModal: React.FC<RoleSyncSettingsModalProps> = ({
                 showSearch
                 onChange={(value) => setSelectedRoleId(value)}
                 filterOption={(input, option) =>
-                  (option?.children as string)?.toLowerCase().includes(input.toLowerCase())
+                  String(option?.children || '')?.toLowerCase().includes(input.toLowerCase())
                 }
               >
                 {roles.map(role => (

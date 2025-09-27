@@ -168,14 +168,14 @@ export const userService = {
                 }
               }
             }
-          } catch (error) {
+          } catch (error: any) {
             if (onError) onError(error.message);
             reject(error);
           }
         };
 
         readStream();
-      }).catch(error => {
+      }).catch((error: any) => {
         if (onError) onError(error.message);
         reject(error);
       });
