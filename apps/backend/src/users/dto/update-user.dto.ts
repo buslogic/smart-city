@@ -4,6 +4,7 @@ import {
   IsBoolean,
   IsOptional,
   IsArray,
+  IsNumber,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -37,4 +38,13 @@ export class UpdateUserDto {
   @IsString({ each: true })
   @IsOptional()
   roles?: string[];
+
+  @ApiProperty({
+    example: 1,
+    description: 'User group ID',
+    required: false,
+  })
+  @IsNumber()
+  @IsOptional()
+  userGroupId?: number | null;
 }

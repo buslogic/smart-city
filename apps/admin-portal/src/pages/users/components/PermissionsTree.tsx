@@ -103,6 +103,7 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
       // Drugi nivo - Korisnici
       if (menuOrder === 201000000000) return 'Administracija';
       if (menuOrder === 202000000000) return 'Role i Permisije';
+      if (menuOrder === 203000000000) return 'Grupe Korisnika';
 
       // Drugi nivo - Transport
       if (menuOrder === 301000000000) return 'Vozila';
@@ -121,6 +122,7 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
       if (menuOrder === 302010000000) return 'Mapa';
       if (menuOrder === 302020000000) return 'Analitika vozila';
       if (menuOrder === 302030000000) return 'GPS Sync';
+      if (menuOrder === 302040000000) return 'Karton Vozača';
 
       // Treći nivo - Bezbednost i Analiza
       if (menuOrder === 303010000000) return 'Agresivna vožnja';
@@ -247,11 +249,14 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
           // ili je obična permisija (dashboard widgets, configurations)
           const isMenuOption = permission.resource.includes('.administration') ||
                              permission.resource.includes('.roles') ||
+                             permission.resource.includes('.groups') ||
+                             permission.resource.includes('.driver_card') ||
                              permission.action === 'view' && (
                                permission.resource.endsWith('.administration') ||
                                permission.resource.endsWith('.management') ||
                                permission.resource === 'roles' ||
                                permission.resource === 'users' ||
+                               permission.resource === 'users.groups' ||
                                permission.resource === 'dashboard' ||
                                permission.resource === 'transport' ||
                                permission.resource === 'settings' ||
@@ -264,6 +269,7 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
                                permission.resource === 'vehicles' ||
                                permission.resource.startsWith('vehicles.') ||
                                permission.resource.startsWith('dispatcher') ||
+                               permission.resource === 'dispatcher.driver_card' ||
                                permission.resource.startsWith('safety.') ||
                                permission.resource.startsWith('maintenance.') ||
                                permission.resource.startsWith('gps.') ||

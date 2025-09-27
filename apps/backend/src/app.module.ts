@@ -31,6 +31,7 @@ import { MailModule } from './mail/mail.module';
 import { EmailTemplatesModule } from './email-templates/email-templates.module';
 import { MigrationModule } from './migration/migration.module';
 import { SettingsModule } from './settings/settings.module';
+import { UserGroupsModule } from './user-groups/user-groups.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { SettingsModule } from './settings/settings.module';
     PrismaModule,
     AuthModule,
     UsersModule,
+    UserGroupsModule,
     RolesModule,
     PermissionsModule,
     LegacyDatabasesModule,
@@ -63,6 +65,7 @@ import { SettingsModule } from './settings/settings.module';
     EmailTemplatesModule,
     MigrationModule,
     SettingsModule,
+    UserGroupsModule,
   ],
   controllers: [AppController],
   providers: [

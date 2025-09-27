@@ -9,6 +9,15 @@ export interface User {
   updatedAt: string;
   roles?: string[]; // Sada je array stringova umesto objekata
   permissions?: string[]; // Dodato i permissions
+  userGroupId?: number | null;
+  userGroup?: {
+    id: number;
+    groupName: string;
+    driver: boolean;
+    userClass: number;
+    description: string | null;
+    isActive: boolean;
+  } | null;
 }
 
 export interface Role {

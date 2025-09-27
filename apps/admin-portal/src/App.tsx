@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { ConfigProvider } from 'antd';
+import { ConfigProvider, App as AntApp } from 'antd';
 import srRS from 'antd/locale/sr_RS';
 import { AuthGuard } from './components/guards/AuthGuard';
 import { PermissionGuard } from './components/guards/PermissionGuard';
@@ -7,6 +7,7 @@ import ModernMenu from './components/layout/ModernMenu';
 import { LoginPage } from './pages/LoginPage';
 import UserAdministration from './pages/users/UserAdministration';
 import RolesPermissions from './pages/users/RolesPermissions';
+import UserGroups from './pages/users/UserGroups';
 import GeneralSettings from './pages/settings/GeneralSettings';
 import ApiKeys from './pages/settings/ApiKeys';
 import Vehicles from './pages/transport/Vehicles';
@@ -15,6 +16,7 @@ import MapVehicles from './pages/transport/dispatcher/MapVehicles';
 import VehicleAnalytics from './pages/transport/dispatcher/VehicleAnalytics';
 import GpsSync from './pages/transport/dispatcher/GpsSync';
 import GpsSyncDashboard from './pages/transport/dispatcher/GpsSyncDashboard';
+import DriverCard from './pages/transport/dispatcher/DriverCard';
 import AggressiveDriving from './pages/transport/safety/AggressiveDriving';
 import MonthlyReport from './pages/transport/safety/MonthlyReport';
 import DataRecreation from './pages/transport/safety/DataRecreation';
@@ -29,8 +31,9 @@ import { ResetPasswordPage } from './pages/ResetPasswordPage';
 function App() {
   return (
     <ConfigProvider locale={srRS}>
-      <Router>
-        <Routes>
+      <AntApp>
+        <Router>
+          <Routes>
           {/* Public routes */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
@@ -64,13 +67,22 @@ function App() {
               }
             />
             
-            <Route 
-              path="users/roles-permissions" 
+            <Route
+              path="users/roles-permissions"
               element={
                 <PermissionGuard permissions={['roles:view']}>
                   <RolesPermissions />
                 </PermissionGuard>
-              } 
+              }
+            />
+
+            <Route
+              path="users/groups"
+              element={
+                <PermissionGuard permissions={['users.groups:view']}>
+                  <UserGroups />
+                </PermissionGuard>
+              }
             />
             
             <Route
@@ -142,16 +154,25 @@ function App() {
               } 
             />
             
-            <Route 
-              path="transport/dispatcher/gps-sync" 
+            <Route
+              path="transport/dispatcher/gps-sync"
               element={
                 <PermissionGuard permissions={['dispatcher.sync:view']}>
                   <GpsSync />
                 </PermissionGuard>
-              } 
+              }
             />
 
-            <Route 
+            <Route
+              path="transport/dispatcher/driver-card"
+              element={
+                <PermissionGuard permissions={['dispatcher.driver_card:view']}>
+                  <DriverCard />
+                </PermissionGuard>
+              }
+            />
+
+            <Route
               path="transport/dispatcher/gps-sync-dashboard" 
               element={
                 <PermissionGuard permissions={['dispatcher:view_sync_dashboard']}>
@@ -216,6 +237,7 @@ function App() {
           </Route>
         </Routes>
       </Router>
+      </AntApp>
     </ConfigProvider>
   );
 }

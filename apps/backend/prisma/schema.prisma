@@ -19,6 +19,9 @@ model User {
   createdAt                DateTime                   @default(now()) @map("created_at")
   updatedAt                DateTime                   @updatedAt @map("updated_at")
   avatar                   String?                    @db.Text
+  legacyId                 Int?                       @unique @map("legacy_id")
+  userGroupId              Int?                       @map("user_group_id")
+  userGroup                UserGroup?                 @relation("UserToUserGroup", fields: [userGroupId], references: [id])
   createdApiKeys           ApiKey[]                   @relation("ApiKeyCreator")
   revokedApiKeys           ApiKey[]                   @relation("ApiKeyRevoker")
   drivingAnalysisLogs      DrivingAnalysisLog[]
@@ -32,6 +35,8 @@ model User {
   vehicleSyncLogs          VehicleSyncLog[]
 
   @@index([email])
+  @@index([userGroupId])
+  @@index([legacyId])
   @@map("users")
 }
 
@@ -678,6 +683,27 @@ model CompanyInfo {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("company_info")
+}
+
+model UserGroup {
+  id          Int      @id @default(autoincrement())
+  groupName   String   @unique @map("group_name") @db.VarChar(100)
+  driver      Boolean  @default(false) @map("driver")
+  userClass   Int      @default(1) @map("user_class")
+  description String?  @db.Text
+  isActive    Boolean  @default(true) @map("is_active")
+  syncEnabled Boolean  @default(false) @map("sync_enabled")
+  legacyId    Int?     @unique @map("legacy_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  users       User[]   @relation("UserToUserGroup")
+
+  @@index([groupName])
+  @@index([driver])
+  @@index([userClass])
+  @@index([syncEnabled])
+  @@index([legacyId])
+  @@map("user_groups")
 }
 
 enum ApiKeyType {

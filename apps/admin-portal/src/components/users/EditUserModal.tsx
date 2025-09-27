@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Form, Input, Select, Button, message, Row, Col, Spin } from 'antd';
-import { UserOutlined, MailOutlined, LockOutlined } from '@ant-design/icons';
+import { UserOutlined, MailOutlined, LockOutlined, TeamOutlined } from '@ant-design/icons';
 import { userService } from '../../services/userService';
 import { rbacService } from '../../services/rbacService';
+import { userGroupsService, UserGroup } from '../../services/userGroups';
 import { usePermissions } from '../../hooks/usePermissions';
 import { User } from '../../types/user.types';
 import { Role } from '../../types/rbac.types';
@@ -22,6 +23,7 @@ interface EditUserForm {
   lastName: string;
   roles: string[];
   isActive: boolean;
+  userGroupId?: number | null;
 }
 
 export const EditUserModal: React.FC<EditUserModalProps> = ({
@@ -34,12 +36,15 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [loadingRoles, setLoadingRoles] = useState(false);
   const [availableRoles, setAvailableRoles] = useState<Role[]>([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
+  const [availableGroups, setAvailableGroups] = useState<UserGroup[]>([]);
   const { canUpdateUsers } = usePermissions();
 
   // Učitaj role kada se modal otvori
   useEffect(() => {
     if (visible) {
       fetchRoles();
+      fetchUserGroups();
       if (user) {
         form.setFieldsValue({
           email: user.email,
@@ -47,6 +52,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
           lastName: user.lastName,
           roles: user.roles || [],
           isActive: user.isActive,
+          userGroupId: user.userGroupId,
         });
       }
     }
@@ -62,6 +68,19 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
       message.error('Greška pri učitavanju rola');
     } finally {
       setLoadingRoles(false);
+    }
+  };
+
+  const fetchUserGroups = async () => {
+    try {
+      setLoadingGroups(true);
+      const groups = await userGroupsService.getAll({ includeInactive: false });
+      setAvailableGroups(groups);
+    } catch (error) {
+      console.error('Greška pri učitavanju grupa korisnika:', error);
+      message.error('Greška pri učitavanju grupa korisnika');
+    } finally {
+      setLoadingGroups(false);
     }
   };
 
@@ -82,6 +101,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
         lastName: values.lastName.trim(),
         isActive: values.isActive,
         roles: values.roles,
+        userGroupId: values.userGroupId === undefined ? user.userGroupId : values.userGroupId,
       };
 
       await userService.updateUser(user.id, userData);
@@ -188,6 +208,26 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
                     {role.description || 'Nema opisa'}
                   </div>
                 </div>
+              </Option>
+            ))}
+          </Select>
+        </Form.Item>
+
+        <Form.Item
+          name="userGroupId"
+          label="Grupa korisnika"
+        >
+          <Select
+            placeholder="Odaberite grupu korisnika"
+            allowClear
+            loading={loadingGroups}
+            notFoundContent={loadingGroups ? <Spin size="small" /> : 'Nema dostupnih grupa'}
+            suffixIcon={<TeamOutlined />}
+          >
+            {availableGroups.map(group => (
+              <Option key={group.id} value={group.id}>
+                {group.groupName}
+                {group.driver && ' (Vozač)'}
               </Option>
             ))}
           </Select>

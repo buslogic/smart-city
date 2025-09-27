@@ -5,6 +5,7 @@ import {
   IsOptional,
   MinLength,
   IsArray,
+  IsNumber,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -35,4 +36,13 @@ export class CreateUserDto {
   @IsString({ each: true })
   @IsOptional()
   roles?: string[];
+
+  @ApiProperty({
+    example: 1,
+    description: 'User group ID',
+    required: false,
+  })
+  @IsNumber()
+  @IsOptional()
+  userGroupId?: number;
 }

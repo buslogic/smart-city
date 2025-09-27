@@ -87,6 +87,40 @@ export class UsersController {
     };
   }
 
+  @Get('emails')
+  @RequirePermissions('users.administration:view')
+  @ApiOperation({ summary: 'Get all user emails' })
+  @ApiResponse({
+    status: 200,
+    description: 'Emails retrieved successfully',
+  })
+  async getAllEmails() {
+    const emails = await this.usersService.getAllEmails();
+    return { emails };
+  }
+
+  @Get('existing-sync')
+  @RequirePermissions('users.administration:view')
+  @ApiOperation({ summary: 'Get existing users for sync comparison' })
+  @ApiResponse({
+    status: 200,
+    description: 'Existing users data retrieved successfully',
+  })
+  async getExistingUsersForSync() {
+    return await this.usersService.getExistingUsersForSync();
+  }
+
+  @Get('legacy')
+  @RequirePermissions('users.administration:view')
+  @ApiOperation({ summary: 'Get users from legacy database' })
+  @ApiResponse({
+    status: 200,
+    description: 'Legacy users retrieved successfully',
+  })
+  fetchLegacyUsers() {
+    return this.usersService.fetchLegacyUsers();
+  }
+
   @Get(':id')
   @RequirePermissions('users.administration:view')
   @ApiOperation({ summary: 'Get user by ID' })
@@ -164,5 +198,16 @@ export class UsersController {
       avatar: null,
     });
     return this.getProfile(req);
+  }
+
+  @Post('sync-legacy')
+  @RequirePermissions('users:create')
+  @ApiOperation({ summary: 'Sync users from legacy database' })
+  @ApiResponse({
+    status: 200,
+    description: 'Users synchronized successfully',
+  })
+  syncLegacyUsers(@Body() body: { users: any[] }) {
+    return this.usersService.syncLegacyUsers(body.users);
   }
 }

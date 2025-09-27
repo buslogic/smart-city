@@ -38,6 +38,14 @@ export class UserResponseDto {
   @Expose()
   roles: string[];
 
+  @ApiProperty({ required: false })
+  @Expose()
+  userGroupId: number | null;
+
+  @ApiProperty({ required: false })
+  @Expose()
+  userGroup: any;
+
   @Exclude()
   password: string;
 
@@ -69,6 +77,14 @@ export class UserResponseDto {
       }
     } else {
       this.roles = [];
+    }
+
+    // Include userGroup information
+    if (partial.userGroup) {
+      this.userGroup = partial.userGroup;
+    }
+    if (partial.userGroupId !== undefined) {
+      this.userGroupId = partial.userGroupId;
     }
   }
 }

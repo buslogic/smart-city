@@ -35,4 +35,38 @@ export const userService = {
     const { data } = await api.patch(`/api/users/${id}/status`, { isActive });
     return data;
   },
+
+  async getAllEmails(): Promise<Set<string>> {
+    const { data } = await api.get('/api/users/emails');
+    return new Set(data.emails.map((e: string) => e.toLowerCase()));
+  },
+
+  async getExistingUsersForSync(): Promise<{ emails: Set<string>; legacyIds: Set<number> }> {
+    const { data } = await api.get('/api/users/existing-sync');
+    return {
+      emails: new Set(data.emails),
+      legacyIds: new Set(data.legacyIds)
+    };
+  },
+
+  async fetchLegacyUsers(): Promise<{
+    source: any;
+    totalRecords: number;
+    data: any[];
+    message?: string;
+    syncGroups?: any[];
+  }> {
+    const { data } = await api.get('/api/users/legacy');
+    return data;
+  },
+
+  async syncLegacyUsers(users: any[]): Promise<{
+    success: number;
+    skipped: number;
+    errors: number;
+    duplicates?: { email: string; firstName: string; lastName: string }[];
+  }> {
+    const { data } = await api.post('/api/users/sync-legacy', { users });
+    return data;
+  },
 };

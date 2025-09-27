@@ -196,6 +196,13 @@ const ModernMenu: React.FC = () => {
             label: 'Role i Permisije',
             permissions: ['roles:view'],
           },
+          {
+            key: '/users/groups',
+            menuOrder: 203000000000,
+            icon: <UsergroupAddOutlined />,
+            label: 'Grupe Korisnika',
+            permissions: ['users.groups:view'],
+          },
         ],
       },
       {
@@ -277,6 +284,13 @@ const ModernMenu: React.FC = () => {
                 permissions: ['dispatcher.sync:view'],
                 badge: { count: 'LIVE', color: '#ff4d4f' },
               } as MenuItem,
+              {
+                key: '/transport/dispatcher/driver-card',
+                menuOrder: 302040000000,
+                icon: <UserOutlined />,
+                label: 'Karton Vozača',
+                permissions: ['dispatcher.driver_card:view'],
+              },
             ],
           },
           {

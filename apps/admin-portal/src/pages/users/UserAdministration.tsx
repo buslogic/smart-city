@@ -8,6 +8,7 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   UserOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import type { User } from '../../types/user.types';
@@ -16,6 +17,7 @@ import { usePermissions } from '../../hooks/usePermissions';
 import { CreateUserModal } from '../../components/users/CreateUserModal';
 import { EditUserModal } from '../../components/users/EditUserModal';
 import { DeleteUserModal } from '../../components/users/DeleteUserModal';
+import { UserSyncModal } from '../../components/users/UserSyncModal';
 
 const { Search } = Input;
 
@@ -33,6 +35,7 @@ const UserAdministration: React.FC = () => {
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [syncModalVisible, setSyncModalVisible] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   
   const { canCreateUsers, canUpdateUsers, canDeleteUsers, canAccess } = usePermissions();
@@ -98,7 +101,12 @@ const UserAdministration: React.FC = () => {
     setCreateModalVisible(false);
     setEditModalVisible(false);
     setDeleteModalVisible(false);
+    setSyncModalVisible(false);
     setSelectedUser(null);
+  };
+
+  const handleOpenSyncModal = () => {
+    setSyncModalVisible(true);
   };
 
   const handleModalSuccess = () => {
@@ -147,6 +155,20 @@ const UserAdministration: React.FC = () => {
           <div className="text-gray-500 text-sm">{record.email}</div>
         </div>
       ),
+    },
+    {
+      title: 'Grupa korisnika',
+      key: 'userGroup',
+      render: (_, record) => {
+        if (record.userGroup) {
+          return (
+            <Tag color="green">
+              {record.userGroup.groupName}
+            </Tag>
+          );
+        }
+        return <span className="text-gray-400">-</span>;
+      },
     },
     {
       title: 'Uloge',
@@ -241,14 +263,22 @@ const UserAdministration: React.FC = () => {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Administracija Korisnika</h1>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={handleCreateUser}
-          disabled={!canCreateUsers()}
-        >
-          Novi korisnik
-        </Button>
+        <Space>
+          <Button
+            icon={<SyncOutlined />}
+            onClick={handleOpenSyncModal}
+          >
+            Sinhronizacija sa legacy bazom
+          </Button>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={handleCreateUser}
+            disabled={!canCreateUsers()}
+          >
+            Novi korisnik
+          </Button>
+        </Space>
       </div>
 
       <div className="flex justify-between items-center bg-white p-4 rounded-lg shadow-sm">
@@ -290,6 +320,12 @@ const UserAdministration: React.FC = () => {
       <DeleteUserModal
         visible={deleteModalVisible}
         user={selectedUser}
+        onClose={handleModalClose}
+        onSuccess={handleModalSuccess}
+      />
+
+      <UserSyncModal
+        visible={syncModalVisible}
         onClose={handleModalClose}
         onSuccess={handleModalSuccess}
       />

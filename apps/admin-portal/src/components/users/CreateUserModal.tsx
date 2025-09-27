@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Form, Input, Select, Button, message, Row, Col, Spin, Alert } from 'antd';
-import { UserOutlined, MailOutlined, LockOutlined } from '@ant-design/icons';
+import { UserOutlined, MailOutlined, LockOutlined, TeamOutlined } from '@ant-design/icons';
 import { userService } from '../../services/userService';
 import { rbacService } from '../../services/rbacService';
+import { userGroupsService, UserGroup } from '../../services/userGroups';
 import { usePermissions } from '../../hooks/usePermissions';
 import { Role } from '../../types/rbac.types';
 
@@ -20,6 +21,7 @@ interface CreateUserForm {
   lastName: string;
   roles: string[];
   isActive: boolean;
+  userGroupId?: number;
 }
 
 export const CreateUserModal: React.FC<CreateUserModalProps> = ({
@@ -31,12 +33,15 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [loadingRoles, setLoadingRoles] = useState(false);
   const [availableRoles, setAvailableRoles] = useState<Role[]>([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
+  const [availableGroups, setAvailableGroups] = useState<UserGroup[]>([]);
   const { canCreateUsers } = usePermissions();
 
   // Reset forme i učitaj role kada se modal otvori
   useEffect(() => {
     if (visible) {
       fetchRoles();
+      fetchUserGroups();
       form.resetFields();
       // Postavi samo default vrednosti
       form.setFieldsValue({
@@ -59,6 +64,19 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
     }
   };
 
+  const fetchUserGroups = async () => {
+    try {
+      setLoadingGroups(true);
+      const groups = await userGroupsService.getAll({ includeInactive: false });
+      setAvailableGroups(groups);
+    } catch (error) {
+      console.error('Greška pri učitavanju grupa korisnika:', error);
+      message.error('Greška pri učitavanju grupa korisnika');
+    } finally {
+      setLoadingGroups(false);
+    }
+  };
+
   const handleSubmit = async (values: CreateUserForm) => {
     if (!canCreateUsers()) {
       message.error('Nemate dozvolu za kreiranje korisnika');
@@ -77,6 +95,7 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
         lastName: values.lastName.trim(),
         isActive: values.isActive ?? true,
         roles: values.roles,
+        userGroupId: values.userGroupId,
       };
 
       await userService.createUser(userData);
@@ -195,6 +214,26 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
                     {role.description || 'Nema opisa'}
                   </div>
                 </div>
+              </Option>
+            ))}
+          </Select>
+        </Form.Item>
+
+        <Form.Item
+          name="userGroupId"
+          label="Grupa korisnika"
+        >
+          <Select
+            placeholder="Odaberite grupu korisnika"
+            allowClear
+            loading={loadingGroups}
+            notFoundContent={loadingGroups ? <Spin size="small" /> : 'Nema dostupnih grupa'}
+            suffixIcon={<TeamOutlined />}
+          >
+            {availableGroups.map(group => (
+              <Option key={group.id} value={group.id}>
+                {group.groupName}
+                {group.driver && ' (Vozač)'}
               </Option>
             ))}
           </Select>
