@@ -114,11 +114,7 @@ export const userService = {
     onError?: (error: string) => void
   ): Promise<void> {
     return new Promise((resolve, reject) => {
-      const eventSource = new EventSource('/api/users/sync-legacy-batch', {
-        withCredentials: true,
-      });
-
-      // POST data preko fetch da pokrenemo batch
+      // Koristimo samo fetch za SSE - bez EventSource objekta
       fetch('/api/users/sync-legacy-batch', {
         method: 'POST',
         headers: {
@@ -126,55 +122,67 @@ export const userService = {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
         },
         body: JSON.stringify({ users, batchSize }),
-      }).then(response => {
+      }).then(async response => {
         if (!response.ok) {
-          throw new Error('Failed to start batch sync');
+          throw new Error(`Failed to start batch sync: ${response.status}`);
+        }
+
+        // Proveri da li je response SSE
+        const contentType = response.headers.get('Content-Type');
+        if (!contentType?.includes('text/event-stream')) {
+          throw new Error(`Expected SSE stream, got: ${contentType}`);
         }
 
         const reader = response.body?.getReader();
+        if (!reader) {
+          throw new Error('No response body available');
+        }
+
         const decoder = new TextDecoder();
+        let buffer = '';
 
-        const readStream = async () => {
-          try {
-            while (true) {
-              const { done, value } = await reader!.read();
-              if (done) break;
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
 
-              const chunk = decoder.decode(value);
-              const lines = chunk.split('\n');
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
 
-              for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                  const jsonStr = line.substring(6);
-                  if (jsonStr.trim()) {
-                    try {
-                      const data = JSON.parse(jsonStr);
+            // Ostavi poslednju liniju u buffer-u ako nije kompletna
+            buffer = lines.pop() || '';
 
-                      if (data.type === 'progress' && onProgress) {
-                        onProgress(data);
-                      } else if (data.type === 'completed' && onComplete) {
-                        onComplete(data);
-                        resolve();
-                        return;
-                      } else if (data.type === 'error') {
-                        if (onError) onError(data.error);
-                        reject(new Error(data.error));
-                        return;
-                      }
-                    } catch (e) {
-                      console.warn('Failed to parse SSE data:', jsonStr);
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const jsonStr = line.substring(6);
+                if (jsonStr.trim()) {
+                  try {
+                    const data = JSON.parse(jsonStr);
+
+                    if (data.type === 'progress' && onProgress) {
+                      onProgress(data);
+                    } else if (data.type === 'completed' && onComplete) {
+                      onComplete(data);
+                      resolve();
+                      return;
+                    } else if (data.type === 'error') {
+                      if (onError) onError(data.error);
+                      reject(new Error(data.error));
+                      return;
                     }
+                  } catch (e) {
+                    console.warn('Failed to parse SSE data:', jsonStr);
                   }
                 }
               }
             }
-          } catch (error: any) {
-            if (onError) onError(error.message);
-            reject(error);
           }
-        };
-
-        readStream();
+        } catch (error: any) {
+          if (onError) onError(error.message);
+          reject(error);
+        } finally {
+          reader.releaseLock();
+        }
       }).catch((error: any) => {
         if (onError) onError(error.message);
         reject(error);
