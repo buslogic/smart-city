@@ -3,11 +3,12 @@ import { TokenManager } from '../utils/token';
 import type { User, UsersResponse } from '../types/user.types';
 
 export const userService = {
-  async getUsers(page = 1, pageSize = 10): Promise<UsersResponse> {
+  async getUsers(page = 1, pageSize = 10, search?: string): Promise<UsersResponse> {
     const { data } = await api.get('/api/users', {
       params: {
         page,
         pageSize,
+        ...(search && { search }),
       },
     });
     return data;

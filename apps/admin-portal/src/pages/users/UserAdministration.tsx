@@ -24,6 +24,7 @@ const { Search } = Input;
 const UserAdministration: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState<string>('');
   const [pagination, setPagination] = useState<TablePaginationConfig>({
     current: 1,
     pageSize: 10,
@@ -43,13 +44,13 @@ const UserAdministration: React.FC = () => {
   // Provera permisije za prikaz tabele korisnika
   const canViewUserTable = () => canAccess(['users.administration:view']);
 
-  const fetchUsers = async (page = 1, pageSize = 10) => {
+  const fetchUsers = async (page = 1, pageSize = 10, search?: string) => {
     try {
       setLoading(true);
-      const response = await userService.getUsers(page, pageSize);
-      
+      const response = await userService.getUsers(page, pageSize, search);
+
       // console.log('API Response:', response); // Debug log - zakomentarisano
-      
+
       // Direktno koristi response.data
       setUsers(response.data);
       setPagination({
@@ -110,15 +111,20 @@ const UserAdministration: React.FC = () => {
   };
 
   const handleModalSuccess = () => {
-    fetchUsers(pagination.current, pagination.pageSize);
+    fetchUsers(pagination.current, pagination.pageSize, searchTerm);
   };
 
   const handleTableChange = (newPagination: TablePaginationConfig) => {
-    fetchUsers(newPagination.current, newPagination.pageSize);
+    fetchUsers(newPagination.current, newPagination.pageSize, searchTerm);
   };
 
-  const handleSearch = () => {
-    // TODO: Implementirati pretragu
+  const handleSearch = (value: string) => {
+    setSearchTerm(value);
+    fetchUsers(1, pagination.pageSize, value);
+  };
+
+  const handleClearSearch = () => {
+    setSearchTerm('');
     fetchUsers(1, pagination.pageSize);
   };
 
@@ -126,7 +132,7 @@ const UserAdministration: React.FC = () => {
     try {
       await userService.toggleUserStatus(userId, !currentStatus);
       message.success(`Korisnik ${!currentStatus ? 'aktiviran' : 'deaktiviran'}`);
-      fetchUsers(pagination.current, pagination.pageSize);
+      fetchUsers(pagination.current, pagination.pageSize, searchTerm);
     } catch (error) {
       console.error('Greška pri promeni statusa:', error);
       // Za testiranje, samo promenimo lokalno
@@ -288,7 +294,14 @@ const UserAdministration: React.FC = () => {
           enterButton={<SearchOutlined />}
           size="large"
           style={{ maxWidth: 400 }}
+          value={searchTerm}
           onSearch={handleSearch}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            if (!e.target.value) {
+              handleClearSearch();
+            }
+          }}
         />
       </div>
 
