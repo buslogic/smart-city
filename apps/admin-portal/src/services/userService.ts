@@ -1,4 +1,5 @@
 import { api } from './api';
+import { TokenManager } from '../utils/token';
 import type { User, UsersResponse } from '../types/user.types';
 
 export const userService = {
@@ -120,7 +121,7 @@ export const userService = {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          'Authorization': `Bearer ${TokenManager.getAccessToken()}`,
         },
         body: JSON.stringify({ users, batchSize }),
       }).then(async response => {
