@@ -1,0 +1,7 @@
+spec:
+  template:
+    spec:
+      containers:
+      - name: backend
+        command: ["/bin/sh"]
+        args: ["-c", "rm -rf node_modules/.prisma node_modules/@prisma/client && DATABASE_URL=\"${DATABASE_URL:-mysql://TEST_FALLBACK_USER:password@TEST_FALLBACK_HOST:3306/TEST_FALLBACK_DB}\" npx prisma generate && exec node dist/src/main"]

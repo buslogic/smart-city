@@ -1,0 +1,11 @@
+spec:
+  template:
+    spec:
+      containers:
+      - name: backend
+        env:
+        - name: TIMESCALE_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              key: TIMESCALE_DATABASE_URL
+              name: litas-timescale-credentials

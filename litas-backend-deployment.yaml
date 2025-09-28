@@ -1,0 +1,181 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "3"
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"apps/v1","kind":"Deployment","metadata":{"annotations":{},"labels":{"app":"litas-backend","company":"litas"},"name":"litas-backend","namespace":"litas-smart-city"},"spec":{"replicas":2,"selector":{"matchLabels":{"app":"litas-backend"}},"template":{"metadata":{"labels":{"app":"litas-backend","company":"litas"}},"spec":{"containers":[{"env":[{"name":"DATABASE_URL","valueFrom":{"secretKeyRef":{"key":"DATABASE_URL","name":"litas-database-credentials"}}},{"name":"JWT_SECRET","valueFrom":{"secretKeyRef":{"key":"JWT_SECRET","name":"litas-jwt-credentials"}}},{"name":"JWT_REFRESH_SECRET","valueFrom":{"secretKeyRef":{"key":"JWT_REFRESH_SECRET","name":"litas-jwt-credentials"}}},{"name":"JWT_EXPIRATION","valueFrom":{"secretKeyRef":{"key":"JWT_EXPIRATION","name":"litas-jwt-credentials"}}},{"name":"JWT_REFRESH_EXPIRATION","valueFrom":{"secretKeyRef":{"key":"JWT_REFRESH_EXPIRATION","name":"litas-jwt-credentials"}}},{"name":"MAILGUN_API_KEY","valueFrom":{"secretKeyRef":{"key":"MAILGUN_API_KEY","name":"litas-shared-mailgun"}}},{"name":"MAILGUN_DOMAIN","valueFrom":{"secretKeyRef":{"key":"MAILGUN_DOMAIN","name":"litas-shared-mailgun"}}},{"name":"MAILGUN_FROM_EMAIL","valueFrom":{"secretKeyRef":{"key":"MAILGUN_FROM_EMAIL","name":"litas-shared-mailgun"}}},{"name":"MAILGUN_FROM_NAME","valueFrom":{"secretKeyRef":{"key":"MAILGUN_FROM_NAME","name":"litas-shared-mailgun"}}},{"name":"MAILGUN_EU_REGION","valueFrom":{"secretKeyRef":{"key":"MAILGUN_EU_REGION","name":"litas-shared-mailgun"}}},{"name":"DO_SPACES_ACCESS_KEY","valueFrom":{"secretKeyRef":{"key":"DO_SPACES_ACCESS_KEY","name":"litas-shared-spaces"}}},{"name":"DO_SPACES_SECRET_KEY","valueFrom":{"secretKeyRef":{"key":"DO_SPACES_SECRET_KEY","name":"litas-shared-spaces"}}},{"name":"DO_SPACES_BUCKET","valueFrom":{"secretKeyRef":{"key":"DO_SPACES_BUCKET","name":"litas-shared-spaces"}}},{"name":"DO_SPACES_REGION","valueFrom":{"secretKeyRef":{"key":"DO_SPACES_REGION","name":"litas-shared-spaces"}}},{"name":"DO_SPACES_CDN_ENDPOINT","valueFrom":{"secretKeyRef":{"key":"DO_SPACES_CDN_ENDPOINT","name":"litas-shared-spaces"}}},{"name":"PORT","value":"3010"},{"name":"NODE_ENV","value":"production"},{"name":"CORS_ORIGINS","value":"https://litas.smart-city.rs"}],"image":"registry.digitalocean.com/smart-city/backend:ec6e867661bc6dcba0611ef8e285ead4973b910e","livenessProbe":{"httpGet":{"path":"/health","port":3010},"initialDelaySeconds":30,"periodSeconds":10},"name":"backend","ports":[{"containerPort":3010,"name":"http"}],"readinessProbe":{"httpGet":{"path":"/health","port":3010},"initialDelaySeconds":5,"periodSeconds":5},"resources":{"limits":{"cpu":"500m","memory":"1Gi"},"requests":{"cpu":"250m","memory":"512Mi"}}}],"imagePullSecrets":[{"name":"smart-city"}],"serviceAccountName":"litas-backend-sa"}}}}
+  creationTimestamp: "2025-09-26T14:44:38Z"
+  generation: 3
+  labels:
+    app: litas-backend
+    company: litas
+  name: litas-backend
+  namespace: litas-smart-city
+  resourceVersion: "1096190"
+  uid: 1eb1391b-5588-4fd4-a816-1420bc66a76b
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 2
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: litas-backend
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: litas-backend
+        company: litas
+    spec:
+      containers:
+      - env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              key: DATABASE_URL
+              name: litas-database-credentials
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: JWT_SECRET
+              name: litas-jwt-credentials
+        - name: JWT_REFRESH_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: JWT_REFRESH_SECRET
+              name: litas-jwt-credentials
+        - name: JWT_EXPIRATION
+          valueFrom:
+            secretKeyRef:
+              key: JWT_EXPIRATION
+              name: litas-jwt-credentials
+        - name: JWT_REFRESH_EXPIRATION
+          valueFrom:
+            secretKeyRef:
+              key: JWT_REFRESH_EXPIRATION
+              name: litas-jwt-credentials
+        - name: MAILGUN_API_KEY
+          valueFrom:
+            secretKeyRef:
+              key: MAILGUN_API_KEY
+              name: litas-shared-mailgun
+        - name: MAILGUN_DOMAIN
+          valueFrom:
+            secretKeyRef:
+              key: MAILGUN_DOMAIN
+              name: litas-shared-mailgun
+        - name: MAILGUN_FROM_EMAIL
+          valueFrom:
+            secretKeyRef:
+              key: MAILGUN_FROM_EMAIL
+              name: litas-shared-mailgun
+        - name: MAILGUN_FROM_NAME
+          valueFrom:
+            secretKeyRef:
+              key: MAILGUN_FROM_NAME
+              name: litas-shared-mailgun
+        - name: MAILGUN_EU_REGION
+          valueFrom:
+            secretKeyRef:
+              key: MAILGUN_EU_REGION
+              name: litas-shared-mailgun
+        - name: DO_SPACES_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              key: DO_SPACES_ACCESS_KEY
+              name: litas-shared-spaces
+        - name: DO_SPACES_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              key: DO_SPACES_SECRET_KEY
+              name: litas-shared-spaces
+        - name: DO_SPACES_BUCKET
+          valueFrom:
+            secretKeyRef:
+              key: DO_SPACES_BUCKET
+              name: litas-shared-spaces
+        - name: DO_SPACES_REGION
+          valueFrom:
+            secretKeyRef:
+              key: DO_SPACES_REGION
+              name: litas-shared-spaces
+        - name: DO_SPACES_CDN_ENDPOINT
+          valueFrom:
+            secretKeyRef:
+              key: DO_SPACES_CDN_ENDPOINT
+              name: litas-shared-spaces
+        - name: PORT
+          value: "3010"
+        - name: NODE_ENV
+          value: production
+        - name: CORS_ORIGINS
+          value: https://litas.smart-city.rs
+        image: registry.digitalocean.com/smart-city/backend:ec6e867661bc6dcba0611ef8e285ead4973b910e
+        imagePullPolicy: Always
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: 3010
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+        name: backend
+        ports:
+        - containerPort: 3010
+          name: http
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: 3010
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources:
+          limits:
+            cpu: 500m
+            memory: 1Gi
+          requests:
+            cpu: 250m
+            memory: 512Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      imagePullSecrets:
+      - name: smart-city
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      serviceAccount: litas-backend-sa
+      serviceAccountName: litas-backend-sa
+      terminationGracePeriodSeconds: 30
+status:
+  conditions:
+  - lastTransitionTime: "2025-09-26T14:44:38Z"
+    lastUpdateTime: "2025-09-26T14:44:38Z"
+    message: Deployment does not have minimum availability.
+    reason: MinimumReplicasUnavailable
+    status: "False"
+    type: Available
+  - lastTransitionTime: "2025-09-26T14:56:26Z"
+    lastUpdateTime: "2025-09-26T14:56:26Z"
+    message: ReplicaSet "litas-backend-8bc57dfc5" has timed out progressing.
+    reason: ProgressDeadlineExceeded
+    status: "False"
+    type: Progressing
+  observedGeneration: 3
+  replicas: 3
+  unavailableReplicas: 3
+  updatedReplicas: 1
