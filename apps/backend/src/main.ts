@@ -19,6 +19,21 @@ async function bootstrap() {
   // Ovo mora biti posle setGlobalPrefix da bi radilo na /uploads putanji
   if (process.env.NODE_ENV === 'development') {
     const uploadPath = join(process.cwd(), 'uploads');
+
+    // CORS middleware za static files
+    app.use('/uploads', (req, res, next) => {
+      res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+      res.header('Access-Control-Allow-Credentials', 'true');
+      res.header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+      res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+
+      if (req.method === 'OPTIONS') {
+        res.sendStatus(204);
+      } else {
+        next();
+      }
+    });
+
     app.use('/uploads', express.static(uploadPath));
     console.log('Serving static files from:', uploadPath);
   }
