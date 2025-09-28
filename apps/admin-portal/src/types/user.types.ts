@@ -3,6 +3,7 @@ export interface User {
   email: string;
   firstName: string;
   lastName: string;
+  avatar?: string | null;
   isActive: boolean;
   lastLoginAt?: string | null;
   createdAt: string;

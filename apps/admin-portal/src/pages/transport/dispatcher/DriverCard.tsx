@@ -135,7 +135,7 @@ const DriverCard: React.FC = () => {
         key: year,
         width: 120,
         className: 'text-center',
-      });
+      } as any);
     });
 
     return columns;
