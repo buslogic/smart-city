@@ -45,4 +45,13 @@ export class CreateUserDto {
   @IsNumber()
   @IsOptional()
   userGroupId?: number;
+
+  @ApiProperty({
+    example: '/uploads/avatars/avatar.jpg',
+    description: 'Avatar URL or path',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  avatar?: string | null;
 }

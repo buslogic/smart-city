@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Form, Input, Select, Button, message, Row, Col, Spin, Alert } from 'antd';
+import { Modal, Form, Input, Select, Button, message, Row, Col, Spin, Alert, Divider } from 'antd';
 import { UserOutlined, MailOutlined, LockOutlined, TeamOutlined } from '@ant-design/icons';
 import { userService } from '../../services/userService';
 import { rbacService } from '../../services/rbacService';
 import { userGroupsService, UserGroup } from '../../services/userGroups';
 import { usePermissions } from '../../hooks/usePermissions';
 import { Role } from '../../types/rbac.types';
+import AvatarUpload from './AvatarUpload';
 
 const { Option } = Select;
 
@@ -22,6 +23,7 @@ interface CreateUserForm {
   roles: string[];
   isActive: boolean;
   userGroupId?: number;
+  avatar?: string | null;
 }
 
 export const CreateUserModal: React.FC<CreateUserModalProps> = ({
@@ -35,6 +37,7 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
   const [availableRoles, setAvailableRoles] = useState<Role[]>([]);
   const [loadingGroups, setLoadingGroups] = useState(false);
   const [availableGroups, setAvailableGroups] = useState<UserGroup[]>([]);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const { canCreateUsers } = usePermissions();
 
   // Reset forme i učitaj role kada se modal otvori
@@ -48,6 +51,7 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
         isActive: true,
         roles: [],
       });
+      setAvatarUrl(null);
     }
   }, [visible, form]);
 
@@ -96,12 +100,14 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
         isActive: values.isActive ?? true,
         roles: values.roles,
         userGroupId: values.userGroupId,
+        avatar: avatarUrl,
       };
 
       await userService.createUser(userData);
       
       message.success('Korisnik je uspešno kreiran');
       form.resetFields();
+      setAvatarUrl(null);
       onSuccess();
       onClose();
     } catch (error: any) {
@@ -115,7 +121,12 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
 
   const handleCancel = () => {
     form.resetFields();
+    setAvatarUrl(null);
     onClose();
+  };
+
+  const handleAvatarChange = (newAvatarUrl: string | null) => {
+    setAvatarUrl(newAvatarUrl);
   };
 
   return (
@@ -136,6 +147,20 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
           roles: [],
         }}
       >
+        {/* Avatar Upload Section */}
+        <div className="text-center mb-6">
+          <div className="mb-3">
+            <h4>Avatar korisnika</h4>
+            <p className="text-sm text-gray-500">Opciono - možete dodati sliku profila</p>
+          </div>
+          <AvatarUpload
+            avatarUrl={avatarUrl}
+            onAvatarChange={handleAvatarChange}
+            size={100}
+          />
+        </div>
+
+        <Divider>Osnovni podaci</Divider>
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item

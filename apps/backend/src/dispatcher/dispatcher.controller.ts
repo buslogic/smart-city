@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Query,
+  Param,
   UseGuards,
   BadRequestException,
 } from '@nestjs/common';
@@ -78,6 +79,49 @@ export class DispatcherController {
         source: dataSource,
         details:
           error.code === 'ETIMEDOUT' ? 'CONNECTION_TIMEOUT' : 'GENERAL_ERROR',
+      });
+    }
+  }
+
+  @Get('drivers')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Dohvati listu vozača' })
+  @ApiResponse({ status: 200, description: 'Lista vozača' })
+  @ApiResponse({ status: 401, description: 'Neautorizovan pristup' })
+  async getDrivers() {
+    try {
+      const drivers = await this.dispatcherService.getDrivers();
+      return {
+        success: true,
+        count: drivers.length,
+        data: drivers,
+      };
+    } catch (error: any) {
+      throw new BadRequestException({
+        message: error.message || 'Greška pri dohvatanju vozača',
+        error: 'DriverListError',
+        statusCode: 400,
+      });
+    }
+  }
+
+  @Get('driver-card/:driverId')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Dohvati podatke za karton vozača' })
+  @ApiResponse({ status: 200, description: 'Podaci za karton vozača' })
+  @ApiResponse({ status: 404, description: 'Vozač nije pronađen' })
+  async getDriverCard(@Param('driverId') driverId: string) {
+    try {
+      const driverCard = await this.dispatcherService.getDriverCard(parseInt(driverId));
+      return {
+        success: true,
+        data: driverCard,
+      };
+    } catch (error: any) {
+      throw new BadRequestException({
+        message: error.message || 'Greška pri dohvatanju kartona vozača',
+        error: 'DriverCardError',
+        statusCode: 400,
       });
     }
   }

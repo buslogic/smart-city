@@ -47,4 +47,13 @@ export class UpdateUserDto {
   @IsNumber()
   @IsOptional()
   userGroupId?: number | null;
+
+  @ApiProperty({
+    example: '/uploads/avatars/avatar.jpg',
+    description: 'Avatar URL or path',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  avatar?: string | null;
 }

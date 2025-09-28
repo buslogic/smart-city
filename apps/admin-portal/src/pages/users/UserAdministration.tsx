@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Space, Tag, Input, message, Tooltip } from 'antd';
+import { Table, Button, Space, Tag, Input, message, Tooltip, Avatar } from 'antd';
 import {
   SearchOutlined,
   PlusOutlined,
@@ -18,6 +18,7 @@ import { CreateUserModal } from '../../components/users/CreateUserModal';
 import { EditUserModal } from '../../components/users/EditUserModal';
 import { DeleteUserModal } from '../../components/users/DeleteUserModal';
 import { UserSyncModal } from '../../components/users/UserSyncModal';
+import { getAvatarUrl } from '../../utils/avatar';
 
 const { Search } = Input;
 
@@ -153,12 +154,19 @@ const UserAdministration: React.FC = () => {
       align: 'center',
     },
     {
-      title: 'Ime i prezime',
-      key: 'fullName',
+      title: 'Korisnik',
+      key: 'user',
       render: (_, record) => (
-        <div>
-          <div className="font-medium">{`${record.firstName} ${record.lastName}`}</div>
-          <div className="text-gray-500 text-sm">{record.email}</div>
+        <div className="flex items-center space-x-3">
+          <Avatar
+            size={40}
+            src={getAvatarUrl(record.avatar)}
+            icon={!getAvatarUrl(record.avatar) && <UserOutlined />}
+          />
+          <div>
+            <div className="font-medium">{`${record.firstName} ${record.lastName}`}</div>
+            <div className="text-gray-500 text-sm">{record.email}</div>
+          </div>
         </div>
       ),
     },

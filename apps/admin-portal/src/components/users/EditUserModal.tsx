@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Form, Input, Select, Button, message, Row, Col, Spin } from 'antd';
+import { Modal, Form, Input, Select, Button, message, Row, Col, Spin, Divider } from 'antd';
 import { UserOutlined, MailOutlined, LockOutlined, TeamOutlined } from '@ant-design/icons';
 import { userService } from '../../services/userService';
 import { rbacService } from '../../services/rbacService';
@@ -7,6 +7,7 @@ import { userGroupsService, UserGroup } from '../../services/userGroups';
 import { usePermissions } from '../../hooks/usePermissions';
 import { User } from '../../types/user.types';
 import { Role } from '../../types/rbac.types';
+import AvatarUpload from './AvatarUpload';
 
 const { Option } = Select;
 
@@ -24,6 +25,7 @@ interface EditUserForm {
   roles: string[];
   isActive: boolean;
   userGroupId?: number | null;
+  avatar?: string | null;
 }
 
 export const EditUserModal: React.FC<EditUserModalProps> = ({
@@ -38,6 +40,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
   const [availableRoles, setAvailableRoles] = useState<Role[]>([]);
   const [loadingGroups, setLoadingGroups] = useState(false);
   const [availableGroups, setAvailableGroups] = useState<UserGroup[]>([]);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const { canUpdateUsers } = usePermissions();
 
   // Učitaj role kada se modal otvori
@@ -54,6 +57,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
           isActive: user.isActive,
           userGroupId: user.userGroupId,
         });
+        setAvatarUrl(user.avatar || null);
       }
     }
   }, [visible, user, form]);
@@ -102,12 +106,14 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
         isActive: values.isActive,
         roles: values.roles,
         userGroupId: values.userGroupId === undefined ? user.userGroupId : values.userGroupId,
+        avatar: avatarUrl,
       };
 
       await userService.updateUser(user.id, userData);
       
       message.success('Korisnik je uspešno ažuriran');
       form.resetFields();
+      setAvatarUrl(null);
       onSuccess();
       onClose();
     } catch (error: any) {
@@ -121,7 +127,12 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
 
   const handleCancel = () => {
     form.resetFields();
+    setAvatarUrl(null);
     onClose();
+  };
+
+  const handleAvatarChange = (newAvatarUrl: string | null) => {
+    setAvatarUrl(newAvatarUrl);
   };
 
   return (
@@ -138,6 +149,21 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
         layout="vertical"
         onFinish={handleSubmit}
       >
+        {/* Avatar Upload Section */}
+        <div className="text-center mb-6">
+          <div className="mb-3">
+            <h4>Avatar korisnika</h4>
+            <p className="text-sm text-gray-500">Trenutni avatar korisnika - možete promeniti ili ukloniti</p>
+          </div>
+          <AvatarUpload
+            avatarUrl={avatarUrl}
+            onAvatarChange={handleAvatarChange}
+            size={100}
+            showRemoveButton={true}
+          />
+        </div>
+
+        <Divider>Osnovni podaci</Divider>
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item

@@ -231,6 +231,122 @@ export class DispatcherService {
   }
 
   /**
+   * Dohvata listu vozača (korisnici koji su u user_groups sa driver = true)
+   */
+  async getDrivers() {
+    try {
+      const drivers = await this.prisma.user.findMany({
+        where: {
+          userGroup: {
+            driver: true,
+            isActive: true,
+          },
+          isActive: true,
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          avatar: true,
+          userGroup: {
+            select: {
+              id: true,
+              groupName: true,
+            },
+          },
+        },
+        orderBy: [
+          { lastName: 'asc' },
+          { firstName: 'asc' },
+        ],
+      });
+
+      return drivers.map(driver => ({
+        id: driver.id,
+        firstName: driver.firstName,
+        lastName: driver.lastName,
+        fullName: `${driver.firstName} ${driver.lastName}`,
+        email: driver.email,
+        avatar: driver.avatar,
+        userGroup: driver.userGroup,
+      }));
+    } catch (error) {
+      this.logger.error('Greška pri dohvatanju vozača:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Dohvata podatke za karton vozača
+   */
+  async getDriverCard(driverId: number) {
+    try {
+      const driver = await this.prisma.user.findFirst({
+        where: {
+          id: driverId,
+          userGroup: {
+            driver: true,
+            isActive: true,
+          },
+          isActive: true,
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          avatar: true,
+          createdAt: true,
+          userGroup: {
+            select: {
+              id: true,
+              groupName: true,
+            },
+          },
+        },
+      });
+
+      if (!driver) {
+        throw new Error('Vozač nije pronađen ili nije aktivan');
+      }
+
+      // Za sada vraćamo osnovne podatke, ostala polja ćemo dodati kasnije
+      return {
+        driver: {
+          id: driver.id,
+          firstName: driver.firstName,
+          lastName: driver.lastName,
+          fullName: `${driver.firstName} ${driver.lastName}`,
+          email: driver.email,
+          avatar: driver.avatar,
+          userGroup: driver.userGroup,
+          employedSince: driver.createdAt,
+        },
+        // Prazna polja za sada - biće implementirana kasnije
+        contactInfo: {
+          address: '',
+          phone1: '',
+          phone2: '',
+          employeeNumber: '',
+        },
+        // Tabela za godine - prazna za sada
+        workHistory: {
+          years: ['2025', '2026', '2027', '2028', '2029', '2030'],
+          months: [
+            'JANUAR', 'FEBRUAR', 'MART', 'APRIL', 'MAJ', 'JUN',
+            'JUL', 'AVGUST', 'SEPTEMBAR', 'OKTOBAR', 'NOVEMBAR', 'DECEMBAR'
+          ],
+          data: {} // Biće popunjeno kasnije sa stvarnim podacima
+        }
+      };
+    } catch (error) {
+      this.logger.error('Greška pri dohvatanju kartona vozača:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Sinhronizuje podatke iz legacy baze u lokalnu tabelu
    */
   async syncGPSData(): Promise<{ synced: number; errors: number }> {
