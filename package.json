@@ -18,7 +18,9 @@
     "db:studio": "cd apps/backend && npx prisma studio"
   },
   "devDependencies": {
-    "concurrently": "^9.2.0"
+    "concurrently": "^9.2.0",
+    "gtfs-realtime-bindings": "^1.1.1",
+    "protobufjs": "^7.5.4"
   },
   "keywords": [
     "smart-city",
