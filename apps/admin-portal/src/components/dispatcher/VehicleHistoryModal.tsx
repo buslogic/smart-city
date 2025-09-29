@@ -5,6 +5,7 @@ import { MapContainer, TileLayer, Marker, Polyline, Popup } from 'react-leaflet'
 import L from 'leaflet';
 import dayjs, { Dayjs } from 'dayjs';
 import { api } from '../../services/api';
+import { VehicleMapper } from '../../utils/vehicle-mapper';
 import 'leaflet/dist/leaflet.css';
 
 const { RangePicker } = DatePicker;
@@ -91,12 +92,11 @@ const VehicleHistoryModal: React.FC<VehicleHistoryModalProps> = ({ visible, vehi
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const playbackIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Dohvati vehicle ID iz garažnog broja
+  // Dohvati vehicle ID iz garažnog broja koristeći VehicleMapper
   const getVehicleId = async (garageNo: string): Promise<number | null> => {
     try {
-      const response = await api.get(`/api/vehicles`);
-      const vehicleData = response.data.data.find((v: any) => v.garageNumber === garageNo);
-      return vehicleData?.id || null;
+      const vehicleId = await VehicleMapper.garageNumberToId(garageNo);
+      return vehicleId;
     } catch (error) {
       console.error('Greška pri dohvatanju vehicle ID:', error);
       return null;
@@ -110,9 +110,13 @@ const VehicleHistoryModal: React.FC<VehicleHistoryModalProps> = ({ visible, vehi
     }
 
     setLoading(true);
+    setGpsPoints([]); // Resetuj prethodne podatke
+    setStatistics(null);
+
     try {
       const vehicleId = await getVehicleId(vehicle.garageNo);
       if (!vehicleId) {
+        console.error(`Vozilo ${vehicle.garageNo} nije pronađeno u sistemu`);
         return;
       }
 
@@ -128,6 +132,11 @@ const VehicleHistoryModal: React.FC<VehicleHistoryModalProps> = ({ visible, vehi
         setGpsPoints(response.data.points);
         setStatistics(response.data.statistics);
         setCurrentIndex(0);
+
+        // Ako nema podataka, loguj poruku
+        if (response.data.points.length === 0) {
+          console.warn(`Nema GPS podataka za vozilo ${vehicle.garageNo} u periodu od ${start.format('DD.MM.YYYY HH:mm')} do ${end.format('DD.MM.YYYY HH:mm')}`);
+        }
       }
     } catch (error: any) {
       console.error('Greška pri učitavanju istorije:', error);
