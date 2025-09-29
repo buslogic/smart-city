@@ -192,6 +192,7 @@ const VehicleHistoryModal: React.FC<VehicleHistoryModalProps> = ({ visible, vehi
 
   const currentPoint = gpsPoints[currentIndex];
   const routeLine = gpsPoints.slice(0, currentIndex + 1).map((p) => [p.lat, p.lng] as [number, number]);
+  const fullRouteLine = gpsPoints.map((p) => [p.lat, p.lng] as [number, number]);
 
   return (
     <Modal
@@ -411,17 +412,21 @@ const VehicleHistoryModal: React.FC<VehicleHistoryModalProps> = ({ visible, vehi
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
 
-            {/* Polyline - pređena ruta (plava) */}
-            <Polyline positions={routeLine} color="#3b82f6" weight={4} opacity={0.7} />
+            {/* Cela ruta (svetlo siva) - prikazuje se odmah */}
+            <Polyline
+              positions={fullRouteLine}
+              color="#d1d5db"
+              weight={4}
+              opacity={0.6}
+            />
 
-            {/* Preostala ruta (siva) */}
-            {currentIndex < gpsPoints.length - 1 && (
+            {/* Pređena ruta (plava) - pokazuje napredak playback-a */}
+            {routeLine.length > 0 && (
               <Polyline
-                positions={gpsPoints.slice(currentIndex).map((p) => [p.lat, p.lng])}
-                color="#9ca3af"
-                weight={2}
-                opacity={0.4}
-                dashArray="5, 10"
+                positions={routeLine}
+                color="#3b82f6"
+                weight={5}
+                opacity={0.9}
               />
             )}
 
