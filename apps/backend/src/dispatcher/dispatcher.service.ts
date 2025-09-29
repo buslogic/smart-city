@@ -2,6 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { LegacyDatabasesService } from '../legacy-databases/legacy-databases.service';
 import * as mysql from 'mysql2/promise';
+import { Pool } from 'pg';
+import {
+  createTimescalePool,
+  testTimescaleConnection,
+} from '../common/config/timescale.config';
 
 export interface VehiclePosition {
   garageNo: string;
@@ -25,11 +30,24 @@ export interface VehiclePosition {
 @Injectable()
 export class DispatcherService {
   private readonly logger = new Logger(DispatcherService.name);
+  private pgPool: Pool;
 
   constructor(
     private prisma: PrismaService,
     private legacyDatabasesService: LegacyDatabasesService,
-  ) {}
+  ) {
+    // Inicijalizuj TimescaleDB pool
+    this.pgPool = createTimescalePool();
+
+    // Test connection
+    testTimescaleConnection(this.pgPool).then((success) => {
+      if (!success) {
+        this.logger.error(
+          '❌ DispatcherService nije mogao da se poveže na TimescaleDB',
+        );
+      }
+    });
+  }
 
   /**
    * Dohvata trenutne pozicije vozila iz lokalnog ili legacy izvora
@@ -512,5 +530,163 @@ export class DispatcherService {
         await connection.end();
       }
     }
+  }
+
+  /**
+   * Dohvata GPS istoriju vozila za zadati period
+   */
+  async getVehicleHistory(
+    vehicleId: number,
+    startDate: Date,
+    endDate: Date,
+  ) {
+    try {
+      this.logger.log(
+        `📍 Dohvatanje GPS istorije za vozilo ${vehicleId} od ${startDate.toISOString()} do ${endDate.toISOString()}`,
+      );
+
+      // Query za dohvatanje GPS tačaka
+      const gpsQuery = `
+        SELECT
+          time,
+          vehicle_id,
+          garage_no,
+          lat,
+          lng,
+          speed,
+          course,
+          line_number,
+          people_in,
+          people_out
+        FROM gps_data
+        WHERE vehicle_id = $1
+          AND time >= $2
+          AND time <= $3
+        ORDER BY time ASC
+      `;
+
+      const result = await this.pgPool.query(gpsQuery, [
+        vehicleId,
+        startDate,
+        endDate,
+      ]);
+
+      const points = result.rows;
+
+      if (points.length === 0) {
+        return {
+          points: [],
+          statistics: {
+            totalDistance: 0,
+            drivingTime: 0,
+            idleTime: 0,
+            averageSpeed: 0,
+            maxSpeed: 0,
+            totalPoints: 0,
+          },
+        };
+      }
+
+      // Kalkulacija statistika
+      let totalDistance = 0;
+      let drivingTime = 0;
+      let idleTime = 0;
+      let maxSpeed = 0;
+      let speedSum = 0;
+      let drivingPoints = 0;
+
+      for (let i = 0; i < points.length - 1; i++) {
+        const current = points[i];
+        const next = points[i + 1];
+
+        // Haversine formula za udaljenost
+        const distance = this.calculateDistance(
+          current.lat,
+          current.lng,
+          next.lat,
+          next.lng,
+        );
+
+        totalDistance += distance;
+
+        // Vreme između dve tačke (u minutama)
+        const timeDiff =
+          (new Date(next.time).getTime() - new Date(current.time).getTime()) /
+          1000 /
+          60;
+
+        if (current.speed > 0) {
+          drivingTime += timeDiff;
+          speedSum += current.speed;
+          drivingPoints++;
+          maxSpeed = Math.max(maxSpeed, current.speed);
+        } else {
+          idleTime += timeDiff;
+        }
+      }
+
+      const statistics = {
+        totalDistance: Math.round(totalDistance * 100) / 100, // km
+        drivingTime: Math.round(drivingTime), // minuti
+        idleTime: Math.round(idleTime), // minuti
+        averageSpeed:
+          drivingPoints > 0 ? Math.round(speedSum / drivingPoints) : 0,
+        maxSpeed: Math.round(maxSpeed),
+        totalPoints: points.length,
+      };
+
+      // Formatiraj tačke za frontend
+      const formattedPoints = points.map((p) => ({
+        time: p.time,
+        lat: parseFloat(p.lat),
+        lng: parseFloat(p.lng),
+        speed: p.speed,
+        course: p.course,
+        lineNumber: p.line_number,
+        peopleIn: p.people_in,
+        peopleOut: p.people_out,
+      }));
+
+      this.logger.log(
+        `✅ Pronađeno ${points.length} GPS tačaka, ukupna distanca: ${statistics.totalDistance} km`,
+      );
+
+      return {
+        points: formattedPoints,
+        statistics,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Greška pri dohvatanju GPS istorije za vozilo ${vehicleId}:`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Haversine formula za kalkulaciju udaljenosti između dve geografske tačke
+   */
+  private calculateDistance(
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number,
+  ): number {
+    const R = 6371; // Radijus Zemlje u km
+    const dLat = this.deg2rad(lat2 - lat1);
+    const dLon = this.deg2rad(lon2 - lon1);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(this.deg2rad(lat1)) *
+        Math.cos(this.deg2rad(lat2)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  private deg2rad(deg: number): number {
+    return deg * (Math.PI / 180);
   }
 }

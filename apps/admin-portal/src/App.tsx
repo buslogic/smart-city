@@ -12,7 +12,7 @@ import GeneralSettings from './pages/settings/GeneralSettings';
 import ApiKeys from './pages/settings/ApiKeys';
 import Vehicles from './pages/transport/Vehicles';
 import VehicleSync from './pages/transport/VehicleSync';
-import MapVehicles from './pages/transport/dispatcher/MapVehicles';
+import MapVehiclesModern from './pages/transport/dispatcher/MapVehiclesModern';
 import VehicleAnalytics from './pages/transport/dispatcher/VehicleAnalytics';
 import GpsSync from './pages/transport/dispatcher/GpsSync';
 import GpsSyncDashboard from './pages/transport/dispatcher/GpsSyncDashboard';
@@ -136,13 +136,13 @@ function App() {
               } 
             />
             
-            <Route 
-              path="transport/dispatcher/map-vehicles" 
+            <Route
+              path="transport/dispatcher/map-vehicles"
               element={
                 <PermissionGuard permissions={['dispatcher:view_map']}>
-                  <MapVehicles />
+                  <MapVehiclesModern />
                 </PermissionGuard>
-              } 
+              }
             />
             
             <Route 

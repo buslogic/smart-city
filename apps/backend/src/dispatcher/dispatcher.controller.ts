@@ -145,4 +145,51 @@ export class DispatcherController {
       throw new BadRequestException(error.message);
     }
   }
+
+  @Get('vehicle-history/:vehicleId')
+  @Public()
+  @ApiOperation({ summary: 'Dohvati GPS istoriju vozila za zadati period' })
+  @ApiQuery({
+    name: 'startDate',
+    required: true,
+    type: String,
+    description: 'Početni datum (ISO format)',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: true,
+    type: String,
+    description: 'Krajnji datum (ISO format)',
+  })
+  @ApiResponse({ status: 200, description: 'GPS istorija vozila' })
+  @ApiResponse({ status: 400, description: 'Neispravni parametri' })
+  async getVehicleHistory(
+    @Param('vehicleId') vehicleId: string,
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+  ) {
+    try {
+      const result = await this.dispatcherService.getVehicleHistory(
+        parseInt(vehicleId),
+        new Date(startDate),
+        new Date(endDate),
+      );
+
+      return {
+        success: true,
+        vehicleId: parseInt(vehicleId),
+        period: {
+          start: startDate,
+          end: endDate,
+        },
+        ...result,
+      };
+    } catch (error: any) {
+      throw new BadRequestException({
+        message: error.message || 'Greška pri dohvatanju istorije vozila',
+        error: 'VehicleHistoryError',
+        statusCode: 400,
+      });
+    }
+  }
 }
