@@ -524,18 +524,9 @@ export class DrivingBehaviorService {
           FULL OUTER JOIN hourly_start_correction hs ON m.vehicle_id = hs.vehicle_id
           FULL OUTER JOIN hourly_end_correction he ON
             COALESCE(m.vehicle_id, hs.vehicle_id) = he.vehicle_id
-        ),
-        garage_names AS (
-          SELECT DISTINCT ON (vehicle_id)
-            vehicle_id,
-            garage_no
-          FROM gps_data
-          WHERE vehicle_id = ANY($1::int[])
-          ORDER BY vehicle_id, time DESC
         )
-        SELECT 
+        SELECT
           COALESCE(e.vehicle_id, d.vehicle_id) as vehicle_id,
-          COALESCE(g.garage_no, 'V' || COALESCE(e.vehicle_id, d.vehicle_id)) as garage_no,
           COALESCE(severe_acc, 0) as severe_accelerations,
           COALESCE(moderate_acc, 0) as moderate_accelerations,
           COALESCE(severe_brake, 0) as severe_brakings,
@@ -553,7 +544,6 @@ export class DrivingBehaviorService {
           END as events_per_100km
         FROM event_stats e
         FULL OUTER JOIN distance_stats d ON e.vehicle_id = d.vehicle_id
-        LEFT JOIN garage_names g ON COALESCE(e.vehicle_id, d.vehicle_id) = g.vehicle_id
         ORDER BY vehicle_id
       `;
 
@@ -563,11 +553,20 @@ export class DrivingBehaviorService {
         endDate,
       ]);
 
+      // Dohvati garage numbers iz MySQL (BRŽE nego iz gps_data!)
+      const vehicles = await this.prisma.busVehicle.findMany({
+        where: { id: { in: vehicleIds } },
+        select: { id: true, garageNumber: true },
+      });
+      const garageMap = new Map<number, string>(
+        vehicles.map((v) => [v.id, v.garageNumber]),
+      );
+
       // Calculate safety scores in application (flexible!)
       return Promise.all(
         result.rows.map(async (row) => ({
           vehicleId: row.vehicle_id,
-          garageNo: row.garage_no,
+          garageNo: garageMap.get(row.vehicle_id) || `V${row.vehicle_id}`,
           totalEvents: row.total_events,
           severeAccelerations: row.severe_accelerations,
           moderateAccelerations: row.moderate_accelerations,
