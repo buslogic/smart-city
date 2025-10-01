@@ -85,12 +85,12 @@ class DrivingRecreationService {
     };
   }
 
-  async getVehiclesWithStats(startDate: string, endDate: string, loadStats: boolean = false): Promise<VehicleWithStats[]> {
+  async getVehiclesWithStats(startDate: string, endDate: string, loadStats: boolean = false, loadEventsOnly: boolean = false): Promise<VehicleWithStats[]> {
     try {
       const response = await axios.get(
         `${API_URL}/api/driving-recreation/vehicles`,
         {
-          params: { startDate, endDate, loadStats },
+          params: { startDate, endDate, loadStats, loadEventsOnly },
           headers: this.getHeaders(),
         }
       );

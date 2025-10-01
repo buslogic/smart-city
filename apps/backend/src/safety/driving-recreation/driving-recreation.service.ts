@@ -38,6 +38,7 @@ export class DrivingRecreationService {
     startDate: string,
     endDate: string,
     loadStats: boolean = false,
+    loadEventsOnly: boolean = false,
   ): Promise<VehicleWithStatsDto[]> {
     try {
       // Get all vehicles from MySQL
@@ -57,7 +58,7 @@ export class DrivingRecreationService {
       const vehicleStats = new Map();
 
       // Skip stats loading if not requested (performance optimization)
-      if (!loadStats) {
+      if (!loadStats && !loadEventsOnly) {
         // Return vehicles with 0 stats
         return vehicles.map((vehicle) => ({
           id: vehicle.id,
@@ -67,6 +68,55 @@ export class DrivingRecreationService {
           gpsPoints: 0,
           existingEvents: 0,
         }));
+      }
+
+      // Load ONLY events (faster than full stats)
+      if (loadEventsOnly && !loadStats) {
+        try {
+          const eventsQuery = `
+            SELECT
+              vehicle_id,
+              COUNT(*) as event_count
+            FROM driving_events
+            WHERE vehicle_id = ANY($1::int[])
+              AND time >= $2::date
+              AND time < $3::date + interval '1 day'
+            GROUP BY vehicle_id
+          `;
+
+          const eventsResult = await this.pgPool.query(eventsQuery, [
+            vehicleIds,
+            startDate,
+            endDate,
+          ]);
+
+          eventsResult.rows.forEach((row) => {
+            vehicleStats.set(row.vehicle_id, {
+              gpsPoints: 0,
+              existingEvents: parseInt(row.event_count),
+            });
+          });
+        } catch (error) {
+          this.logger.error(`Error getting events stats: ${error.message}`);
+          vehicleIds.forEach((id) => {
+            vehicleStats.set(id, { gpsPoints: 0, existingEvents: 0 });
+          });
+        }
+
+        return vehicles.map((vehicle) => {
+          const stats = vehicleStats.get(vehicle.id) || {
+            gpsPoints: 0,
+            existingEvents: 0,
+          };
+          return {
+            id: vehicle.id,
+            garageNo: vehicle.garageNumber,
+            registration: vehicle.registrationNumber || '',
+            status: vehicle.active ? 'active' : 'inactive',
+            gpsPoints: stats.gpsPoints,
+            existingEvents: stats.existingEvents,
+          };
+        });
       }
 
       try {

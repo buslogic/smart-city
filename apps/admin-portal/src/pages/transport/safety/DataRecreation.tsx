@@ -62,8 +62,10 @@ const DataRecreation: React.FC = () => {
   const [vehiclesLoading, setVehiclesLoading] = useState(false);
   const [vehicleData, setVehicleData] = useState<VehicleWithStats[]>([]);
   const [searchText, setSearchText] = useState('');
-  const [loadStats, setLoadStats] = useState(false); // Checkbox za statistiku
+  const [loadStats, setLoadStats] = useState(false); // Checkbox za GPS statistiku
+  const [loadEventsOnly, setLoadEventsOnly] = useState(false); // Checkbox za samo događaje
   const [pageSize, setPageSize] = useState(20); // Pagination page size
+  const [currentPage, setCurrentPage] = useState(1); // Current page number
 
   // State for progress modal
   const [progressModalVisible, setProgressModalVisible] = useState(false);
@@ -78,12 +80,12 @@ const DataRecreation: React.FC = () => {
   const [historyTotal, setHistoryTotal] = useState(0);
   const [historyPage, setHistoryPage] = useState(1);
 
-  // Load vehicles when date range or loadStats changes
+  // Load vehicles when date range or stats options change
   useEffect(() => {
     if (dateRange) {
       loadVehicles();
     }
-  }, [dateRange, loadStats]);
+  }, [dateRange, loadStats, loadEventsOnly]);
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -102,7 +104,8 @@ const DataRecreation: React.FC = () => {
       const vehicles = await drivingRecreationService.getVehiclesWithStats(
         dateRange[0].format('YYYY-MM-DD'),
         dateRange[1].format('YYYY-MM-DD'),
-        loadStats
+        loadStats,
+        loadEventsOnly
       );
       setVehicleData(vehicles);
     } catch (error) {
@@ -294,7 +297,27 @@ const DataRecreation: React.FC = () => {
       setSelectedRowKeys(filteredData.map(v => v.id));
     }
   };
-  
+
+  const handleSelectAllOnPage = () => {
+    const filteredData = getFilteredVehicles();
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const vehiclesOnPage = filteredData.slice(startIndex, endIndex);
+    const pageVehicleIds = vehiclesOnPage.map(v => v.id);
+
+    // Check if all vehicles on current page are selected
+    const allPageSelected = pageVehicleIds.every(id => selectedRowKeys.includes(id));
+
+    if (allPageSelected) {
+      // Deselect all from current page
+      setSelectedRowKeys(selectedRowKeys.filter(id => !pageVehicleIds.includes(id)));
+    } else {
+      // Select all from current page (merge with existing selection)
+      const newSelection = [...new Set([...selectedRowKeys, ...pageVehicleIds])];
+      setSelectedRowKeys(newSelection);
+    }
+  };
+
   // Filter vehicles based on search text
   const getFilteredVehicles = () => {
     if (!searchText) return vehicleData;
@@ -530,17 +553,35 @@ const DataRecreation: React.FC = () => {
                   />
                   <Checkbox
                     checked={loadStats}
-                    onChange={(e) => setLoadStats(e.target.checked)}
+                    onChange={(e) => {
+                      setLoadStats(e.target.checked);
+                      if (e.target.checked) {
+                        setLoadEventsOnly(false); // Isključi events-only ako se uključi full stats
+                      }
+                    }}
                   >
                     <Tooltip title="Učitavanje broja GPS tačaka može trajati duže za velike periode">
                       <Text>Prikaži GPS statistiku</Text>
+                    </Tooltip>
+                  </Checkbox>
+                  <Checkbox
+                    checked={loadEventsOnly}
+                    onChange={(e) => {
+                      setLoadEventsOnly(e.target.checked);
+                      if (e.target.checked) {
+                        setLoadStats(false); // Isključi full stats ako se uključi samo događaji
+                      }
+                    }}
+                  >
+                    <Tooltip title="Brže učitavanje - prikazuje samo broj postojećih događaja">
+                      <Text>Prikaži samo postojeće događaje</Text>
                     </Tooltip>
                   </Checkbox>
                 </Space>
                 {loadStats && dateRange && dateRange[1].diff(dateRange[0], 'day') + 1 > 7 && (
                   <Alert
                     message="Napomena"
-                    description="Učitavanje GPS statistike za period duži od 7 dana može trajati duže. Za brže učitavanje, isključite statistiku."
+                    description="Učitavanje GPS statistike za period duži od 7 dana može trajati duže. Za brže učitavanje, koristite opciju 'Prikaži samo postojeće događaje' ili isključite statistiku."
                     type="warning"
                     showIcon
                     closable
@@ -549,8 +590,11 @@ const DataRecreation: React.FC = () => {
                   />
                 )}
                 <Space>
+                  <Button onClick={handleSelectAllOnPage} disabled={!dateRange || getFilteredVehicles().length === 0}>
+                    Selektuj sa stranice
+                  </Button>
                   <Button onClick={handleSelectAll} disabled={!dateRange || getFilteredVehicles().length === 0}>
-                    {selectedRowKeys.length === getFilteredVehicles().length ? 'Poništi selekciju' : 'Selektuj sve'}
+                    {selectedRowKeys.length === getFilteredVehicles().length ? 'Poništi sve' : 'Selektuj sve'}
                   </Button>
                   <Text>
                     Selektovano: <strong>{selectedRowKeys.length}</strong> od {getFilteredVehicles().length} vozila
@@ -578,10 +622,15 @@ const DataRecreation: React.FC = () => {
                 dataSource={getFilteredVehicles()}
                 rowKey="id"
                 pagination={{
+                  current: currentPage,
                   pageSize: pageSize,
                   showSizeChanger: true,
                   pageSizeOptions: ['20', '50', '100', '200', '500'],
-                  onShowSizeChange: (current, size) => setPageSize(size),
+                  onChange: (page) => setCurrentPage(page),
+                  onShowSizeChange: (current, size) => {
+                    setPageSize(size);
+                    setCurrentPage(1); // Reset to first page when changing page size
+                  },
                   showTotal: (total, range) => `${range[0]}-${range[1]} od ${total} vozila`,
                 }}
                 size="middle"

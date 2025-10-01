@@ -48,12 +48,15 @@ export class DrivingRecreationController {
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
     @Query('loadStats') loadStats?: string,
+    @Query('loadEventsOnly') loadEventsOnly?: string,
   ): Promise<VehicleWithStatsDto[]> {
     const shouldLoadStats = loadStats === 'true';
+    const shouldLoadEventsOnly = loadEventsOnly === 'true';
     return this.drivingRecreationService.getVehiclesWithStats(
       startDate,
       endDate,
       shouldLoadStats,
+      shouldLoadEventsOnly,
     );
   }
 
