@@ -18,6 +18,7 @@ import {
   Divider,
   Tooltip,
   Switch,
+  Progress,
 } from 'antd';
 import {
   FilePdfOutlined,
@@ -288,6 +289,9 @@ interface VehicleReportData {
 }
 
 const MonthlyReport: React.FC = () => {
+  // Ant Design hooks
+  const [messageApi, contextHolder] = message.useMessage();
+
   // State
   const [selectedVehicles, setSelectedVehicles] = useState<number[]>([]);
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs]>([
@@ -296,6 +300,7 @@ const MonthlyReport: React.FC = () => {
   ]);
   const [reportData, setReportData] = useState<VehicleReportData[]>([]);
   const [loading, setLoading] = useState(false);
+  const [progressState, setProgressState] = useState<{ current: number; total: number } | null>(null);
   const [configModalVisible, setConfigModalVisible] = useState(false);
   const [configForm] = Form.useForm();
   const [savingConfig, setSavingConfig] = useState(false);
@@ -324,7 +329,7 @@ const MonthlyReport: React.FC = () => {
   // Generate report - OPTIMIZED WITH BATCH API
   const generateReport = async () => {
     if (selectedVehicles.length === 0) {
-      message.warning('Molimo odaberite bar jedno vozilo');
+      messageApi.warning('Molimo odaberite bar jedno vozilo');
       return;
     }
 
@@ -332,22 +337,44 @@ const MonthlyReport: React.FC = () => {
     const reportDataArray: VehicleReportData[] = [];
 
     try {
-      // OPTIMIZED: Fetch ALL statistics in ONE request!
+      // CHUNK-BASED: Split into smaller batches to avoid timeout
       const startDate = dateRange[0].format('YYYY-MM-DD');
       const endDate = dateRange[1].format('YYYY-MM-DD');
-      
-      console.log(`Fetching batch statistics for ${selectedVehicles.length} vehicles...`);
+
+      const CHUNK_SIZE = 50; // Process 50 vehicles at a time
+      const chunks: number[][] = [];
+
+      // Split vehicles into chunks
+      for (let i = 0; i < selectedVehicles.length; i += CHUNK_SIZE) {
+        chunks.push(selectedVehicles.slice(i, i + CHUNK_SIZE));
+      }
+
+      console.log(`Fetching batch statistics for ${selectedVehicles.length} vehicles in ${chunks.length} chunks of ${CHUNK_SIZE}...`);
       const startTime = performance.now();
-      
-      const allStats = await drivingBehaviorService.getBatchStatistics(
-        selectedVehicles,
-        startDate,
-        endDate
-      );
-      
+
+      // Fetch statistics for each chunk sequentially
+      const allStats: any[] = [];
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+
+        // Update progress
+        setProgressState({ current: i + 1, total: chunks.length });
+
+        console.log(`Processing chunk ${i + 1}/${chunks.length} (${chunk.length} vehicles)...`);
+
+        const chunkStats = await drivingBehaviorService.getBatchStatistics(
+          chunk,
+          startDate,
+          endDate
+        );
+
+        allStats.push(...chunkStats);
+        console.log(`Chunk ${i + 1}/${chunks.length} completed: ${chunkStats.length} vehicles`);
+      }
+
       const endTime = performance.now();
-      console.log(`Batch statistics fetched in ${((endTime - startTime) / 1000).toFixed(2)} seconds`);
-      console.log(`Backend returned statistics for ${allStats.length} vehicles:`, allStats.map(s => `${s.vehicleId}(${vehiclesData?.find(v => v.id === s.vehicleId)?.garageNumber})`).join(', '));
+      console.log(`All batch statistics fetched in ${((endTime - startTime) / 1000).toFixed(2)} seconds`);
+      console.log(`Backend returned statistics for ${allStats.length} vehicles total`);
 
       // Process batch results
       for (const stats of allStats) {
@@ -422,26 +449,27 @@ const MonthlyReport: React.FC = () => {
 
       console.log(`Frontend processed ${reportDataArray.length} vehicles for table:`, reportDataArray.map(r => `${r.vehicleId}(${r.garageNumber})`).join(', '));
       setReportData(reportDataArray);
-      message.success(`Izveštaj generisan za ${reportDataArray.length} vozila`);
+      messageApi.success(`Izveštaj generisan za ${reportDataArray.length} vozila`);
     } catch (error) {
-      message.error('Greška pri generisanju izveštaja');
+      messageApi.error('Greška pri generisanju izveštaja');
       console.error(error);
     } finally {
       setLoading(false);
+      setProgressState(null); // Reset progress
     }
   };
 
   // Export to PDF - supports both Executive and Detailed views
   const exportToPDF = async () => {
     if (reportData.length === 0) {
-      message.warning('Prvo generiši izveštaj');
+      messageApi.warning('Prvo generiši izveštaj');
       return;
     }
 
     if (isExecutiveView) {
       // Generate Executive Summary PDF with Unicode support
       exportExecutivePDF();
-      message.success('Izvršni PDF izveštaj je uspešno kreiran');
+      messageApi.success('Izvršni PDF izveštaj je uspešno kreiran');
     } else {
       // Generate Detailed Table PDF
       exportDetailedPDF();
@@ -720,9 +748,11 @@ const MonthlyReport: React.FC = () => {
     sum + (Number(v.severeAccelerations) || 0) + (Number(v.severeBrakings) || 0), 0);
 
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="mb-6">
+    <>
+      {contextHolder}
+      <div className="p-6">
+        {/* Header */}
+        <div className="mb-6">
         <h1 className="text-2xl font-bold mb-2">
           <FilePdfOutlined className="mr-2" />
           Mesečni izveštaj - Bezbednost vožnje
@@ -793,7 +823,7 @@ const MonthlyReport: React.FC = () => {
                     const config = await drivingBehaviorService.getSafetyScoreConfig();
                     configForm.setFieldsValue(config);
                   } catch (error) {
-                    message.error('Greška pri učitavanju konfiguracije');
+                    messageApi.error('Greška pri učitavanju konfiguracije');
                   }
                 }}
               >
@@ -830,6 +860,25 @@ const MonthlyReport: React.FC = () => {
             </div>
           </Col>
         </Row>
+
+        {/* Progress Bar */}
+        {progressState && (
+          <Row className="mt-4">
+            <Col span={24}>
+              <div className="text-sm text-gray-600 mb-2">
+                Procesiranje grupa vozila: {progressState.current} / {progressState.total}
+              </div>
+              <Progress
+                percent={Math.round((progressState.current / progressState.total) * 100)}
+                status="active"
+                strokeColor={{
+                  '0%': '#108ee9',
+                  '100%': '#87d068',
+                }}
+              />
+            </Col>
+          </Row>
+        )}
       </Card>
 
       {/* Summary Statistics */}
@@ -910,7 +959,9 @@ const MonthlyReport: React.FC = () => {
         >
         {loading ? (
           <div className="text-center py-8">
-            <Spin size="large" tip="Generisanje izveštaja..." />
+            <Spin size="large" tip="Generisanje izveštaja..." spinning={true}>
+              <div style={{ minHeight: '100px' }} />
+            </Spin>
           </div>
         ) : (
           <Table
@@ -1039,9 +1090,9 @@ const MonthlyReport: React.FC = () => {
                     penalty: values.moderateBrakePenalty,
                   },
                 });
-                
-                message.success('Konfiguracija je sačuvana! Novi safety score će biti primenjen na sledeći izveštaj.');
-                
+
+                messageApi.success('Konfiguracija je sačuvana! Novi safety score će biti primenjen na sledeći izveštaj.');
+
                 setSavingConfig(false);
                 setConfigModalVisible(false);
               } catch (error) {
@@ -1216,7 +1267,8 @@ const MonthlyReport: React.FC = () => {
           </div>
         </Form>
       </Modal>
-    </div>
+      </div>
+    </>
   );
 };
 
