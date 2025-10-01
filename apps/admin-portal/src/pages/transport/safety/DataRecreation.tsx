@@ -306,11 +306,11 @@ const DataRecreation: React.FC = () => {
     const pageVehicleIds = vehiclesOnPage.map(v => v.id);
 
     // Check if all vehicles on current page are selected
-    const allPageSelected = pageVehicleIds.every(id => selectedRowKeys.includes(id));
+    const allPageSelected = pageVehicleIds.every(id => selectedRowKeys.includes(id as React.Key));
 
     if (allPageSelected) {
       // Deselect all from current page
-      setSelectedRowKeys(selectedRowKeys.filter(id => !pageVehicleIds.includes(id)));
+      setSelectedRowKeys(selectedRowKeys.filter(id => !pageVehicleIds.includes(id as number)));
     } else {
       // Select all from current page (merge with existing selection)
       const newSelection = [...new Set([...selectedRowKeys, ...pageVehicleIds])];
