@@ -37,6 +37,7 @@ export class DrivingRecreationService {
   async getVehiclesWithStats(
     startDate: string,
     endDate: string,
+    loadStats: boolean = false,
   ): Promise<VehicleWithStatsDto[]> {
     try {
       // Get all vehicles from MySQL
@@ -54,6 +55,19 @@ export class DrivingRecreationService {
       const vehicleIds = vehicles.map((v) => v.id);
 
       const vehicleStats = new Map();
+
+      // Skip stats loading if not requested (performance optimization)
+      if (!loadStats) {
+        // Return vehicles with 0 stats
+        return vehicles.map((vehicle) => ({
+          id: vehicle.id,
+          garageNo: vehicle.garageNumber,
+          registration: vehicle.registrationNumber || '',
+          status: vehicle.active ? 'active' : 'inactive',
+          gpsPoints: 0,
+          existingEvents: 0,
+        }));
+      }
 
       try {
         // Batch query to get GPS and event counts for all vehicles at once
@@ -147,6 +161,25 @@ export class DrivingRecreationService {
 
       if (vehicles.length !== dto.vehicleIds.length) {
         throw new BadRequestException('Neka vozila ne postoje u sistemu');
+      }
+
+      // Validate strategy - BULK is disabled
+      if (dto.strategy === RecreationStrategy.BULK) {
+        throw new BadRequestException(
+          'Bulk strategija je onemogućena. Koristite "daily" strategiju za dan-po-dan procesiranje.',
+        );
+      }
+
+      // Validate date range - max 31 days
+      const startDate = new Date(dto.startDate);
+      const endDate = new Date(dto.endDate);
+      const daysDiff =
+        Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+      if (daysDiff > 31) {
+        throw new BadRequestException(
+          `Period ne sme biti duži od 31 dan. Odabrani period: ${daysDiff} dana. Molimo smanjite period ili pokrenite više manjih rekreacija.`,
+        );
       }
 
       // Create log entry

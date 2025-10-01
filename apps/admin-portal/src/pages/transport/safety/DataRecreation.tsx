@@ -62,26 +62,28 @@ const DataRecreation: React.FC = () => {
   const [vehiclesLoading, setVehiclesLoading] = useState(false);
   const [vehicleData, setVehicleData] = useState<VehicleWithStats[]>([]);
   const [searchText, setSearchText] = useState('');
-  
+  const [loadStats, setLoadStats] = useState(false); // Checkbox za statistiku
+  const [pageSize, setPageSize] = useState(20); // Pagination page size
+
   // State for progress modal
   const [progressModalVisible, setProgressModalVisible] = useState(false);
   const [currentRecreationId, setCurrentRecreationId] = useState<number | null>(null);
   const [recreationStatus, setRecreationStatus] = useState<RecreationStatus | null>(null);
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
   const [confirmModalVisible, setConfirmModalVisible] = useState(false);
-  
+
   // State for history
   const [historyData, setHistoryData] = useState<RecreationHistory[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyTotal, setHistoryTotal] = useState(0);
   const [historyPage, setHistoryPage] = useState(1);
 
-  // Load vehicles when date range changes
+  // Load vehicles when date range or loadStats changes
   useEffect(() => {
     if (dateRange) {
       loadVehicles();
     }
-  }, [dateRange]);
+  }, [dateRange, loadStats]);
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -94,12 +96,13 @@ const DataRecreation: React.FC = () => {
 
   const loadVehicles = async () => {
     if (!dateRange) return;
-    
+
     setVehiclesLoading(true);
     try {
       const vehicles = await drivingRecreationService.getVehiclesWithStats(
         dateRange[0].format('YYYY-MM-DD'),
-        dateRange[1].format('YYYY-MM-DD')
+        dateRange[1].format('YYYY-MM-DD'),
+        loadStats
       );
       setVehicleData(vehicles);
     } catch (error) {
@@ -491,9 +494,22 @@ const DataRecreation: React.FC = () => {
                   }))}
                 />
                 {dateRange && (
-                  <Text className="ml-3 text-gray-600">
-                    Period: {dateRange[1].diff(dateRange[0], 'day') + 1} dana
-                  </Text>
+                  <>
+                    <Text className="ml-3 text-gray-600">
+                      Period: {dateRange[1].diff(dateRange[0], 'day') + 1} dana
+                    </Text>
+                    {dateRange[1].diff(dateRange[0], 'day') + 1 > 31 && (
+                      <Alert
+                        message="Period je predugačak"
+                        description={`Odabrani period (${dateRange[1].diff(dateRange[0], 'day') + 1} dana) prelazi maksimalnih 31 dan. Molimo smanjite period ili pokrenite više manjih rekreacija.`}
+                        type="error"
+                        showIcon
+                        icon={<AlertTriangle className="h-4 w-4" />}
+                        className="mt-3"
+                        style={{ width: 600 }}
+                      />
+                    )}
+                  </>
                 )}
               </div>
             </Space>
@@ -503,14 +519,35 @@ const DataRecreation: React.FC = () => {
           <Card title="2. Selekcija vozila" className="mb-4">
             <div className="mb-4">
               <Space direction="vertical" style={{ width: '100%' }}>
-                <Input
-                  placeholder="Pretraži vozila po garažnom broju ili registraciji..."
-                  prefix={<Search className="h-4 w-4" />}
-                  value={searchText}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchText(e.target.value)}
-                  style={{ width: 300 }}
-                  allowClear
-                />
+                <Space size="middle">
+                  <Input
+                    placeholder="Pretraži vozila po garažnom broju ili registraciji..."
+                    prefix={<Search className="h-4 w-4" />}
+                    value={searchText}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchText(e.target.value)}
+                    style={{ width: 300 }}
+                    allowClear
+                  />
+                  <Checkbox
+                    checked={loadStats}
+                    onChange={(e) => setLoadStats(e.target.checked)}
+                  >
+                    <Tooltip title="Učitavanje broja GPS tačaka može trajati duže za velike periode">
+                      <Text>Prikaži GPS statistiku</Text>
+                    </Tooltip>
+                  </Checkbox>
+                </Space>
+                {loadStats && dateRange && dateRange[1].diff(dateRange[0], 'day') + 1 > 7 && (
+                  <Alert
+                    message="Napomena"
+                    description="Učitavanje GPS statistike za period duži od 7 dana može trajati duže. Za brže učitavanje, isključite statistiku."
+                    type="warning"
+                    showIcon
+                    closable
+                    className="mt-2"
+                    style={{ width: 600 }}
+                  />
+                )}
                 <Space>
                   <Button onClick={handleSelectAll} disabled={!dateRange || getFilteredVehicles().length === 0}>
                     {selectedRowKeys.length === getFilteredVehicles().length ? 'Poništi selekciju' : 'Selektuj sve'}
@@ -540,7 +577,13 @@ const DataRecreation: React.FC = () => {
                 columns={vehicleColumns}
                 dataSource={getFilteredVehicles()}
                 rowKey="id"
-                pagination={{ pageSize: 20 }}
+                pagination={{
+                  pageSize: pageSize,
+                  showSizeChanger: true,
+                  pageSizeOptions: ['20', '50', '100', '200', '500'],
+                  onShowSizeChange: (current, size) => setPageSize(size),
+                  showTotal: (total, range) => `${range[0]}-${range[1]} od ${total} vozila`,
+                }}
                 size="middle"
                 loading={vehiclesLoading}
               />
@@ -572,18 +615,20 @@ const DataRecreation: React.FC = () => {
 
               <div>
                 <Text className="block mb-2">Strategija procesiranja:</Text>
-                <Radio.Group value={strategy} onChange={(e) => setStrategy(e.target.value)}>
+                <Alert
+                  message="Obaveštenje"
+                  description="Bulk strategija je onemogućena. Svi podaci se procesiraju dan po dan radi optimizacije performansi."
+                  type="info"
+                  showIcon
+                  className="mb-3"
+                  style={{ width: 600 }}
+                />
+                <Radio.Group value={strategy} onChange={(e) => setStrategy(e.target.value)} disabled>
                   <Space direction="vertical">
-                    <Radio value="daily">
+                    <Radio value="daily" checked>
                       <Space>
                         <Clock className="h-4 w-4" />
-                        <Text>Dan po dan (preporučeno za velike periode)</Text>
-                      </Space>
-                    </Radio>
-                    <Radio value="bulk">
-                      <Space>
-                        <RefreshCcw className="h-4 w-4" />
-                        <Text>Ceo period odjednom (brže za kratke periode)</Text>
+                        <Text>Dan po dan (jedina dostupna opcija)</Text>
                       </Space>
                     </Radio>
                   </Space>
@@ -601,7 +646,11 @@ const DataRecreation: React.FC = () => {
                 icon={<RefreshCcw className="h-4 w-4" />}
                 onClick={handleStartRecreation}
                 loading={loading}
-                disabled={selectedRowKeys.length === 0 || !dateRange}
+                disabled={
+                  selectedRowKeys.length === 0 ||
+                  !dateRange ||
+                  (dateRange && dateRange[1].diff(dateRange[0], 'day') + 1 > 31)
+                }
               >
                 Pokreni rekreaciju ({selectedRowKeys.length} vozila)
               </Button>

@@ -47,10 +47,13 @@ export class DrivingRecreationController {
   async getVehiclesWithStats(
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
+    @Query('loadStats') loadStats?: string,
   ): Promise<VehicleWithStatsDto[]> {
+    const shouldLoadStats = loadStats === 'true';
     return this.drivingRecreationService.getVehiclesWithStats(
       startDate,
       endDate,
+      shouldLoadStats,
     );
   }
 
