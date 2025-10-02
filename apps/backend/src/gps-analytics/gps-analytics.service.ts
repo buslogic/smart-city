@@ -199,7 +199,7 @@ export class GpsAnalyticsService {
 
       // Podaci po satima
       const hourlyQuery = `
-        SELECT 
+        SELECT
           LPAD(EXTRACT(HOUR FROM time AT TIME ZONE 'Europe/Belgrade')::TEXT, 2, '0') as hour,
           COUNT(*) as points,
           COALESCE(AVG(speed) FILTER (WHERE speed > 0), 0)::NUMERIC(5,1) as avg_speed,
@@ -212,6 +212,7 @@ export class GpsAnalyticsService {
         FROM gps_data
         WHERE vehicle_id = $1
           AND time BETWEEN $2 AND $3
+          AND speed > 0
         GROUP BY EXTRACT(HOUR FROM time AT TIME ZONE 'Europe/Belgrade')
         ORDER BY hour
       `;
@@ -287,7 +288,7 @@ export class GpsAnalyticsService {
 
       if (daysDiff > 1) {
         const dailyQuery = `
-          SELECT 
+          SELECT
             DATE(time AT TIME ZONE 'Europe/Belgrade') as date,
             COUNT(*) FILTER (WHERE speed > 0) as moving_points,
             COALESCE(AVG(speed) FILTER (WHERE speed > 0), 0)::NUMERIC(5,1) as avg_speed,
@@ -300,6 +301,7 @@ export class GpsAnalyticsService {
           FROM gps_data
           WHERE vehicle_id = $1
             AND time BETWEEN $2 AND $3
+            AND speed > 0
           GROUP BY DATE(time AT TIME ZONE 'Europe/Belgrade')
           ORDER BY date
         `;
