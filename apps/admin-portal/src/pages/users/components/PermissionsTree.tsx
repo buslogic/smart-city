@@ -117,6 +117,7 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
       if (menuOrder === 301030000000) return 'GPS Real-Time Sync';
       if (menuOrder === 301040000000) return 'Legacy Sync';
       if (menuOrder === 301050000000) return 'GPS Migration';
+      if (menuOrder === 301060000000) return 'GPS LAG Transfer';
 
       // Treći nivo - Dispečerski Modul
       if (menuOrder === 302010000000) return 'Mapa';
@@ -159,6 +160,7 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
         if (resource === 'gps.buffer.status' && action === 'view') return 'GPS Buffer Status';
         if (resource === 'legacy.sync' && action === 'view') return 'Legacy Sync';
         if (resource === 'system' && action === 'view') return 'GPS Migration';
+        if (resource === 'vehicles.gps.lag' && action === 'view') return 'GPS LAG Transfer';
         if (resource === 'dispatcher' && action === 'view_map') return 'Mapa Vozila';
         if (resource === 'dispatcher' && action === 'view_analytics') return 'Analitika Vozila';
         if (resource === 'dispatcher.sync' && action === 'view') return 'GPS Sync Dashboard';

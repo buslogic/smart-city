@@ -32,6 +32,7 @@ import { EmailTemplatesModule } from './email-templates/email-templates.module';
 import { MigrationModule } from './migration/migration.module';
 import { SettingsModule } from './settings/settings.module';
 import { UserGroupsModule } from './user-groups/user-groups.module';
+import { GpsLagMonitoringModule } from './gps-lag-monitoring/gps-lag-monitoring.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { UserGroupsModule } from './user-groups/user-groups.module';
     GpsAnalyticsModule,
     GpsSyncModule,
     GpsProcessorModule,
+    GpsLagMonitoringModule,
     DrivingBehaviorModule,
     SpacesModule,
     UploadsModule,

@@ -253,6 +253,13 @@ const ModernMenu: React.FC = () => {
                 label: <span className="text-red-500 font-semibold">🚨 GPS Migration</span>,
                 permissions: ['system:view'],
               },
+              {
+                key: '/transport/vehicles/gps-lag-transfer',
+                menuOrder: 301060000000,
+                icon: <DatabaseOutlined />,
+                label: 'GPS LAG Transfer',
+                permissions: ['vehicles.gps.lag:view'],
+              },
             ],
           },
           {

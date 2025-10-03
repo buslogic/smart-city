@@ -12,6 +12,7 @@ import GeneralSettings from './pages/settings/GeneralSettings';
 import ApiKeys from './pages/settings/ApiKeys';
 import Vehicles from './pages/transport/Vehicles';
 import VehicleSync from './pages/transport/VehicleSync';
+import GpsLagTransfer from './pages/transport/vehicles/GpsLagTransfer';
 import MapVehiclesModern from './pages/transport/dispatcher/MapVehiclesModern';
 import VehicleAnalytics from './pages/transport/dispatcher/VehicleAnalytics';
 import GpsSync from './pages/transport/dispatcher/GpsSync';
@@ -109,16 +110,25 @@ function App() {
               } 
             />
             
-            <Route 
-              path="transport/vehicles" 
+            <Route
+              path="transport/vehicles"
               element={
                 <PermissionGuard permissions={['vehicles:read']}>
                   <Vehicles />
                 </PermissionGuard>
-              } 
+              }
             />
-            
-            <Route 
+
+            <Route
+              path="transport/vehicles/gps-lag-transfer"
+              element={
+                <PermissionGuard permissions={['vehicles.gps.lag:view']}>
+                  <GpsLagTransfer />
+                </PermissionGuard>
+              }
+            />
+
+            <Route
               path="transport/vehicle-sync" 
               element={
                 <PermissionGuard permissions={['vehicles.sync:view']}>
