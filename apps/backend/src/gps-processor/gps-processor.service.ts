@@ -731,8 +731,8 @@ export class GpsProcessorService {
   async cleanupFailedRecords(olderThanHours: number = 24) {
     try {
       const result = await this.prisma.$executeRaw`
-        DELETE FROM gps_raw_buffer 
-        WHERE process_status = 'failed' 
+        DELETE FROM gps_raw_buffer
+        WHERE process_status = 'failed'
         AND retry_count >= 3
         AND received_at < DATE_SUB(NOW(), INTERVAL ${olderThanHours} HOUR)
       `;
@@ -741,6 +741,67 @@ export class GpsProcessorService {
       return result;
     } catch (error) {
       this.logger.error('Greška pri čišćenju failed zapisa:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * 🔧 RECOVERY: Popravi worker_group za zapise koji imaju NULL
+   * Ovo je automatski recovery mehanizam za probleme pri unosu podataka
+   * Pokreće se svakih 1 minut
+   */
+  @Cron('*/1 * * * *') // Svaki 1 minut
+  async recoverMissingWorkerGroups() {
+    try {
+      // Prvo proveri da li postoje zapisi sa NULL worker_group
+      const nullCount: any[] = await this.prisma.$queryRaw`
+        SELECT COUNT(*) as count
+        FROM gps_raw_buffer
+        WHERE process_status = 'pending'
+          AND worker_group IS NULL
+          AND vehicle_id IS NOT NULL
+      `;
+
+      const count = Number(nullCount[0]?.count || 0);
+
+      if (count === 0) {
+        return; // Nema problema, izlazimo
+      }
+
+      this.logger.warn(
+        `🔧 RECOVERY: Detektovano ${count} pending zapisa sa worker_group=NULL. Popravljam...`,
+      );
+
+      // Popravi worker_group na osnovu vehicle_id % 8
+      const result = await this.prisma.$executeRaw`
+        UPDATE gps_raw_buffer
+        SET worker_group = vehicle_id % 8
+        WHERE process_status = 'pending'
+          AND worker_group IS NULL
+          AND vehicle_id IS NOT NULL
+      `;
+
+      this.logger.log(
+        `✅ RECOVERY: Popravljeno ${result} zapisa - worker_group postavljen na vehicle_id % 8`,
+      );
+
+      // Proveri distribuciju posle popravke
+      const distribution: any[] = await this.prisma.$queryRaw`
+        SELECT worker_group, COUNT(*) as count
+        FROM gps_raw_buffer
+        WHERE process_status = 'pending'
+        GROUP BY worker_group
+        ORDER BY worker_group
+      `;
+
+      const distInfo = distribution
+        .map((row) => `W${row.worker_group}:${row.count}`)
+        .join(', ');
+      this.logger.log(`📊 RECOVERY: Nova distribucija - ${distInfo}`);
+
+      return result;
+    } catch (error) {
+      this.logger.error('❌ RECOVERY greška pri popravljanju worker_group:', error);
       return 0;
     }
   }
