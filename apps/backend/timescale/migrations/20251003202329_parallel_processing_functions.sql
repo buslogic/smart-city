@@ -4,32 +4,9 @@
 -- PARALLEL PROCESSING FUNCTIONS
 -- =====================================================
 
--- VAŽNO: Dekompresuj tabelu pre kreiranja funkcija koje je koriste
--- Columnstore compression može praviti probleme sa nekim operacijama
-
--- 1. Ukloni compression policy
-SELECT remove_compression_policy('gps_data_lag_filtered', if_exists => true);
-
--- 2. Dekompresuj sve chunk-ove
-SELECT decompress_chunk(c.chunk_schema || '.' || c.chunk_name)
-FROM timescaledb_information.chunks c
-WHERE c.hypertable_name = 'gps_data_lag_filtered'
-  AND c.is_compressed = true;
-
--- 3. Resetuj compression settings (bez columnstore)
-ALTER TABLE gps_data_lag_filtered SET (
-    timescaledb.compress,
-    timescaledb.compress_orderby = 'time DESC',
-    timescaledb.compress_segmentby = 'vehicle_id',
-    timescaledb.compress_columnstore = false
-);
-
--- 4. Vrati compression policy
-SELECT add_compression_policy(
-    'gps_data_lag_filtered',
-    compress_after => INTERVAL '30 days',
-    if_not_exists => TRUE
-);
+-- VAŽNO: TimescaleDB sa novijom verzijom može imati columnstore compression
+-- koji ne podržava neke operacije. Trenutno NEMAMO compression na ovoj tabeli.
+-- Kompresija će biti dodata nakon što sve migracije prođu.
 
 -- =====================================================
 

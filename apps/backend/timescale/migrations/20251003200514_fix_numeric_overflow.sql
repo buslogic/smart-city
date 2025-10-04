@@ -23,19 +23,8 @@ WHERE c.hypertable_name = 'gps_data_lag_filtered'
 ALTER TABLE gps_data_lag_filtered
 ALTER COLUMN calculated_speed_kmh TYPE NUMERIC(10,2);
 
--- 4. Ponovo podesi compression (SA COLUMNSTORE za novije verzije)
-ALTER TABLE gps_data_lag_filtered SET (
-    timescaledb.compress,
-    timescaledb.compress_orderby = 'time DESC',
-    timescaledb.compress_segmentby = 'vehicle_id'
-);
-
--- 5. Vrati compression policy (30 dana)
-SELECT add_compression_policy(
-    'gps_data_lag_filtered',
-    compress_after => INTERVAL '30 days',
-    if_not_exists => TRUE
-);
+-- NAPOMENA: NE aktiviramo compression ponovo jer može praviti probleme
+-- Kompresija će biti dodata nakon što sve migracije prođu
 
 COMMENT ON COLUMN gps_data_lag_filtered.calculated_speed_kmh IS
 'Izračunata brzina između dve GPS tačke u km/h.
