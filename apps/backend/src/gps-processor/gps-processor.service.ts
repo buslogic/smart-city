@@ -1139,9 +1139,10 @@ export class GpsProcessorService {
       let paramIndex = 1;
 
       for (const point of batchPoints) {
-        // Track time range - VAŽNO: konvertuj Belgrade->UTC
-        const convertedTime = this.convertBelgradeToUTC(point.timestamp);
-        const pointTime = new Date(convertedTime);
+        // Track time range
+        // VAŽNO: point.timestamp je već Date objekat u UTC (iz buffer-a)
+        // NE pozivati convertBelgradeToUTC jer bi to uzrokovalo duplu konverziju!
+        const pointTime = new Date(point.timestamp);
         if (!minTime || pointTime < minTime) minTime = pointTime;
         if (!maxTime || pointTime > maxTime) maxTime = pointTime;
 
@@ -1156,7 +1157,7 @@ export class GpsProcessorService {
 
         // Dodaj vrednosti
         batchValues.push(
-          convertedTime, // time - konvertovano u UTC
+          pointTime.toISOString(), // time - već je UTC, samo pretvori u ISO string
           point.vehicle_id || point.vehicleId, // vehicle_id
           point.garage_no || point.garageNo, // garage_no
           parseFloat(point.lat), // lat
