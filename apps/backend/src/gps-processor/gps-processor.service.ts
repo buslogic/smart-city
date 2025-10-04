@@ -636,13 +636,10 @@ export class GpsProcessorService {
         const bufferData = {
           vehicleId: point.vehicleId,
           garageNo: point.garageNo || '',
+          // Unix timestamp je već UTC, ne treba convertBelgradeToUTC!
           timestamp: new Date(
-            this.convertBelgradeToUTC(
-              new Date(
-                (point.timestamp || Math.floor(Date.now() / 1000)) * 1000,
-              ),
-            ),
-          ), // Convert Unix timestamp to Date sa Belgrade->UTC konverzijom
+            (point.timestamp || Math.floor(Date.now() / 1000)) * 1000,
+          ),
           lat: parseFloat(point.lat),
           lng: parseFloat(point.lng),
           speed: parseInt(point.speed) || 0,
