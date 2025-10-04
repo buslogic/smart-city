@@ -911,8 +911,14 @@ export class LegacySyncWorkerPoolService {
             continue;
           }
 
+          // VAŽNO: cols[1] je timestamp u Belgrade vremenu (GMT+2)
+          // Moramo ga konvertovati u UTC pre upisa u TimescaleDB
+          const belgradeTimestamp = cols[1]; // Format: 'YYYY-MM-DD HH:mm:ss'
+          const belgradeTime = new Date(belgradeTimestamp + ' GMT+0200');
+          const utcTime = belgradeTime.toISOString();
+
           batch.push({
-            time: cols[1], // captured timestamp
+            time: utcTime, // captured timestamp - konvertovano u UTC
             vehicle_id: vehicleId,
             garage_no: garageNo,
             lat: parseFloat(cols[2]),
