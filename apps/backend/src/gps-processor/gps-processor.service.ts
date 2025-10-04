@@ -1127,8 +1127,17 @@ export class GpsProcessorService {
           in_route = EXCLUDED.in_route
       `;
 
-      await this.timescalePool.query(insertQuery, batchValues);
-      totalInserted += batchPoints.length;
+      try {
+        await this.timescalePool.query(insertQuery, batchValues);
+        totalInserted += batchPoints.length;
+      } catch (error) {
+        this.logger.error(
+          `❌ TimescaleDB INSERT greška (batch ${batchStart}-${batchStart + batchPoints.length}): ${error.message}`,
+        );
+        this.logger.error(`Error code: ${error.code}`);
+        this.logger.error(`Sample point: ${JSON.stringify(batchPoints[0])}`);
+        throw error; // Re-throw da worker catch-uje
+      }
     }
 
     return {
