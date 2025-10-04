@@ -809,6 +809,51 @@ export class LegacySyncController {
     }
   }
 
+  @Delete('slow-sync/vehicles/bulk')
+  @RequirePermissions('legacy.sync:configure')
+  @ApiOperation({ summary: 'Masovno ukloni vozila iz Smart Slow Sync' })
+  @ApiBody({
+    schema: {
+      properties: {
+        vehicleIds: {
+          type: 'array',
+          items: { type: 'number' },
+          description: 'Lista ID-jeva vozila za uklanjanje',
+        },
+      },
+      required: ['vehicleIds'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Vozila uklonjena iz Smart Slow Sync',
+  })
+  async removeBulkSlowSyncVehicles(
+    @Body() dto: { vehicleIds: number[] },
+  ): Promise<{ message: string; deletedCount: number }> {
+    try {
+      this.logger.log(`Bulk removing vehicles from slow sync: ${dto.vehicleIds.length} vehicles`);
+
+      const result = await this.slowSyncService['prisma'].smartSlowSyncVehicle.deleteMany({
+        where: {
+          vehicleId: {
+            in: dto.vehicleIds,
+          },
+        },
+      });
+
+      this.logger.log(`Successfully removed ${result.count} vehicles from slow sync`);
+
+      return {
+        message: `Uklonjeno ${result.count} vozila iz Smart Slow Sync`,
+        deletedCount: result.count,
+      };
+    } catch (error) {
+      this.logger.error('Error bulk removing slow sync vehicles', error);
+      throw error;
+    }
+  }
+
   @Delete('slow-sync/vehicles/:vehicleId')
   @RequirePermissions('legacy.sync:configure')
   @ApiOperation({ summary: 'Ukloni vozilo iz Smart Slow Sync' })

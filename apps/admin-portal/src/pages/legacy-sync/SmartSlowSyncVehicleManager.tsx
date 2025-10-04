@@ -83,6 +83,8 @@ const SmartSlowSyncVehicleManager: React.FC<Props> = ({ visible, onClose }) => {
   const [editingVehicle, setEditingVehicle] = useState<SlowSyncVehicle | null>(null);
   const [countingVehicle, setCountingVehicle] = useState<number | null>(null);
   const [searchText, setSearchText] = useState('');
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [removeModalVisible, setRemoveModalVisible] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -153,6 +155,34 @@ const SmartSlowSyncVehicleManager: React.FC<Props> = ({ visible, onClose }) => {
       await fetchVehicles();
     } catch (error: any) {
       message.error('Greška pri uklanjanju vozila');
+    }
+  };
+
+  const handleBulkRemove = async () => {
+    if (selectedRowKeys.length === 0) {
+      message.warning('Molimo selektujte vozila za uklanjanje');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const vehicleIds = selectedRowKeys.map(key => {
+        const vehicle = vehicles.find(v => v.id === key);
+        return vehicle?.vehicleId;
+      }).filter(id => id !== undefined) as number[];
+
+      const response = await api.delete('/api/legacy-sync/slow-sync/vehicles/bulk', {
+        data: { vehicleIds }
+      });
+
+      message.success(`Uklonjeno ${vehicleIds.length} vozila iz Smart Slow Sync`);
+      setRemoveModalVisible(false);
+      setSelectedRowKeys([]);
+      await fetchVehicles();
+    } catch (error: any) {
+      message.error(error.response?.data?.message || 'Greška pri uklanjanju vozila');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -346,15 +376,48 @@ const SmartSlowSyncVehicleManager: React.FC<Props> = ({ visible, onClose }) => {
   // Filtriranje vozila na osnovu pretrage
   const filteredVehicles = useMemo(() => {
     if (!searchText) return vehicles;
-    
+
     const searchLower = searchText.toLowerCase();
-    return vehicles.filter(v => 
+    return vehicles.filter(v =>
       v.vehicle.garageNumber.toLowerCase().includes(searchLower) ||
       (v.vehicle.registrationNumber && v.vehicle.registrationNumber.toLowerCase().includes(searchLower)) ||
       (v.vehicle.vehicleModel && v.vehicle.vehicleModel.toString().includes(searchText)) ||
       v.vehicle.id.toString().includes(searchText)
     );
   }, [vehicles, searchText]);
+
+  // Row selection konfiguracija
+  const rowSelection = {
+    selectedRowKeys,
+    onChange: (newSelectedRowKeys: React.Key[]) => {
+      setSelectedRowKeys(newSelectedRowKeys);
+    },
+    selections: [
+      Table.SELECTION_ALL,
+      Table.SELECTION_INVERT,
+      Table.SELECTION_NONE,
+      {
+        key: 'enabled',
+        text: 'Selektuj aktivna',
+        onSelect: () => {
+          const enabledKeys = filteredVehicles
+            .filter(v => v.enabled)
+            .map(v => v.id);
+          setSelectedRowKeys(enabledKeys);
+        },
+      },
+      {
+        key: 'disabled',
+        text: 'Selektuj neaktivna',
+        onSelect: () => {
+          const disabledKeys = filteredVehicles
+            .filter(v => !v.enabled)
+            .map(v => v.id);
+          setSelectedRowKeys(disabledKeys);
+        },
+      },
+    ],
+  };
 
   return (
     <>
@@ -371,6 +434,15 @@ const SmartSlowSyncVehicleManager: React.FC<Props> = ({ visible, onClose }) => {
         footer={[
           <Button key="close" onClick={onClose}>
             Zatvori
+          </Button>,
+          <Button
+            key="remove"
+            danger
+            icon={<DeleteOutlined />}
+            onClick={() => setRemoveModalVisible(true)}
+            disabled={selectedRowKeys.length === 0}
+          >
+            Ukloni selektovana ({selectedRowKeys.length})
           </Button>,
           <Button
             key="add"
@@ -431,19 +503,30 @@ const SmartSlowSyncVehicleManager: React.FC<Props> = ({ visible, onClose }) => {
         </Row>
 
         <div style={{ marginBottom: 16 }}>
-          <Input
-            placeholder="Pretraži vozila po garažnom broju, registraciji, modelu ili ID-u"
-            prefix={<SearchOutlined />}
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            allowClear
-            style={{ width: 400 }}
-          />
-          {searchText && (
-            <Text type="secondary" style={{ marginLeft: 16 }}>
-              Pronađeno: {filteredVehicles.length} od {vehicles.length} vozila
-            </Text>
-          )}
+          <Row justify="space-between" align="middle">
+            <Col>
+              <Input
+                placeholder="Pretraži vozila po garažnom broju, registraciji, modelu ili ID-u"
+                prefix={<SearchOutlined />}
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                allowClear
+                style={{ width: 400 }}
+              />
+              {searchText && (
+                <Text type="secondary" style={{ marginLeft: 16 }}>
+                  Pronađeno: {filteredVehicles.length} od {vehicles.length} vozila
+                </Text>
+              )}
+            </Col>
+            <Col>
+              {selectedRowKeys.length > 0 && (
+                <Tag color="blue" icon={<CheckCircleOutlined />}>
+                  Selektovano: {selectedRowKeys.length} vozila
+                </Tag>
+              )}
+            </Col>
+          </Row>
         </div>
 
         <Table
@@ -452,10 +535,13 @@ const SmartSlowSyncVehicleManager: React.FC<Props> = ({ visible, onClose }) => {
           rowKey="id"
           loading={loading}
           scroll={{ x: 1400 }}
+          rowSelection={rowSelection}
           pagination={{
-            pageSize: 10,
+            defaultPageSize: 20,
             showSizeChanger: true,
-            showTotal: (total) => `Ukupno ${total} vozila`,
+            pageSizeOptions: ['10', '20', '50', '100'],
+            showTotal: (total, range) => `${range[0]}-${range[1]} od ${total} vozila`,
+            showQuickJumper: true,
           }}
         />
       </Modal>
@@ -523,6 +609,51 @@ const SmartSlowSyncVehicleManager: React.FC<Props> = ({ visible, onClose }) => {
             }
           />
         </Space>
+      </Modal>
+
+      {/* Modal za potvrdu masovnog uklanjanja */}
+      <Modal
+        title={
+          <Space>
+            <DeleteOutlined style={{ color: '#ff4d4f' }} />
+            <span>Potvrda uklanjanja vozila</span>
+          </Space>
+        }
+        open={removeModalVisible}
+        onOk={handleBulkRemove}
+        onCancel={() => {
+          setRemoveModalVisible(false);
+        }}
+        confirmLoading={loading}
+        okText="Da, ukloni"
+        cancelText="Otkaži"
+        okButtonProps={{ danger: true }}
+      >
+        <p>
+          Da li ste sigurni da želite da uklonite{' '}
+          <Text strong>{selectedRowKeys.length}</Text> vozila iz Smart Slow Sync liste?
+        </p>
+        <p>
+          <Text type="warning">
+            Napomena: Ova akcija će samo ukloniti vozila iz liste za Smart Slow Sync.
+            Vozila će i dalje postojati u sistemu i moći će ponovo da se dodaju.
+          </Text>
+        </p>
+        {selectedRowKeys.length <= 10 && (
+          <div style={{ marginTop: 16 }}>
+            <Text type="secondary">Vozila koja će biti uklonjena:</Text>
+            <div style={{ marginTop: 8, maxHeight: 200, overflowY: 'auto' }}>
+              {selectedRowKeys.map(key => {
+                const vehicle = vehicles.find(v => v.id === key);
+                return vehicle ? (
+                  <Tag key={key} style={{ marginBottom: 4 }}>
+                    {vehicle.vehicle.garageNumber}
+                  </Tag>
+                ) : null;
+              })}
+            </div>
+          </div>
+        )}
       </Modal>
     </>
   );
