@@ -70,6 +70,7 @@ jobs:
               --network host \
               --env-file /root/apps/backend/.env.production \
               -v /root/apps/backend/uploads:/app/uploads \
+              -v /root/.ssh:/home/nestjs/.ssh:ro \
               --health-cmd="curl -f http://localhost:3010/health || exit 1" \
               --health-interval=30s \
               --health-timeout=10s \
