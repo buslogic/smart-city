@@ -39,6 +39,8 @@ import {
   IsEnum,
   IsOptional,
   IsBoolean,
+  IsString,
+  IsIn,
 } from 'class-validator';
 
 class VehicleWithSyncStatusDto {
@@ -139,6 +141,19 @@ class SlowSyncConfigDto {
   @IsBoolean()
   @IsOptional()
   syncAlreadySyncedVehicles?: boolean;
+
+  @IsString()
+  @IsOptional()
+  @IsIn(['full', 'dateRange'])
+  syncMode?: 'full' | 'dateRange';
+
+  @IsString()
+  @IsOptional()
+  syncFromDate?: string;
+
+  @IsString()
+  @IsOptional()
+  syncToDate?: string;
 }
 
 @ApiTags('Legacy GPS Sync')

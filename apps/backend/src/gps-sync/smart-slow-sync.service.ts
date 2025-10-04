@@ -27,6 +27,9 @@ export interface SlowSyncConfig {
   vacuumAfterBatches: number;
   forceProcess: boolean;
   syncAlreadySyncedVehicles: boolean;
+  syncMode?: 'full' | 'dateRange'; // NOVO - način sinhronizacije
+  syncFromDate?: string; // NOVO - početni datum (ISO format)
+  syncToDate?: string; // NOVO - krajnji datum (ISO format)
 }
 
 export interface SlowSyncProgress {
@@ -262,6 +265,7 @@ export class SmartSlowSyncService implements OnModuleInit {
       vacuumAfterBatches: 20,
       forceProcess: false,
       syncAlreadySyncedVehicles: false,
+      syncMode: 'full', // Default je full sync
     } as SlowSyncConfig;
   }
 
@@ -656,9 +660,22 @@ export class SmartSlowSyncService implements OnModuleInit {
       const startTime = Date.now();
 
       // Koristi Worker Pool servis za batch sinhronizaciju
-      const syncFrom = new Date();
-      syncFrom.setDate(syncFrom.getDate() - this.currentConfig.syncDaysBack);
-      const syncTo = new Date();
+      let syncFrom: Date;
+      let syncTo: Date;
+
+      // Proveri da li koristimo date range ili full sync
+      if (this.currentConfig.syncMode === 'dateRange' &&
+          this.currentConfig.syncFromDate &&
+          this.currentConfig.syncToDate) {
+        // Koristi specifične datume iz konfiguracije
+        syncFrom = new Date(this.currentConfig.syncFromDate);
+        syncTo = new Date(this.currentConfig.syncToDate);
+      } else {
+        // Full sync - koristi syncDaysBack
+        syncFrom = new Date();
+        syncFrom.setDate(syncFrom.getDate() - this.currentConfig.syncDaysBack);
+        syncTo = new Date();
+      }
 
       const workerResults = await this.workerPoolService.startWorkerPoolSync(
         batchVehicles,

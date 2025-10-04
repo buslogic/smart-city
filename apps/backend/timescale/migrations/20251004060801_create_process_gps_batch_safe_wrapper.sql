@@ -6,6 +6,9 @@
 -- Koristi se u process_vehicles_parallel() funkciji
 -- ==============================================================================
 
+-- Drop postojeću funkciju ako postoji (može imati drugačiji return type)
+DROP FUNCTION IF EXISTS process_gps_batch_safe(timestamptz, timestamptz, integer) CASCADE;
+
 CREATE OR REPLACE FUNCTION process_gps_batch_safe(
     p_start_time timestamptz,
     p_end_time timestamptz,
