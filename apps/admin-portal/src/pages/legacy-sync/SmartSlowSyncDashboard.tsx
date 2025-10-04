@@ -335,9 +335,9 @@ const SmartSlowSyncDashboard: React.FC = () => {
       const { aggressiveDetectionEnabled, ...slowSyncConfig } = tempConfig || {};
 
       // Dodaj date range ako je odabran
-      if (slowSyncConfig.syncMode === 'dateRange' && dateRange) {
-        slowSyncConfig.syncFromDate = dateRange[0]?.toISOString();
-        slowSyncConfig.syncToDate = dateRange[1]?.toISOString();
+      if (tempConfig && tempConfig.syncMode === 'dateRange' && dateRange) {
+        (slowSyncConfig as any).syncFromDate = dateRange[0]?.toISOString();
+        (slowSyncConfig as any).syncToDate = dateRange[1]?.toISOString();
       }
 
       await api.post('/api/legacy-sync/slow-sync/start', slowSyncConfig);
@@ -451,13 +451,13 @@ const SmartSlowSyncDashboard: React.FC = () => {
       const { aggressiveDetectionEnabled, ...slowSyncConfig } = tempConfig || {};
 
       // Dodaj date range ako je odabran
-      if (slowSyncConfig.syncMode === 'dateRange' && dateRange) {
-        slowSyncConfig.syncFromDate = dateRange[0]?.toISOString();
-        slowSyncConfig.syncToDate = dateRange[1]?.toISOString();
-      } else if (slowSyncConfig.syncMode === 'full') {
+      if (tempConfig && tempConfig.syncMode === 'dateRange' && dateRange) {
+        (slowSyncConfig as any).syncFromDate = dateRange[0]?.toISOString();
+        (slowSyncConfig as any).syncToDate = dateRange[1]?.toISOString();
+      } else if (tempConfig && tempConfig.syncMode === 'full') {
         // Ukloni date range za full sync
-        delete slowSyncConfig.syncFromDate;
-        delete slowSyncConfig.syncToDate;
+        delete (slowSyncConfig as any).syncFromDate;
+        delete (slowSyncConfig as any).syncToDate;
       }
 
       // Sačuvaj Smart Slow Sync konfiguraciju (bez aggressiveDetectionEnabled)
