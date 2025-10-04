@@ -327,9 +327,8 @@ model GpsRawBuffer {
   rawData       Json?     @map("raw_data")
   workerGroup   Int?      @map("worker_group") @db.TinyInt
 
-  @@index([processStatus], map: "idx_status_only")
+  @@index([workerGroup, processStatus, retryCount, receivedAt], map: "idx_worker_processing")
   @@index([processStatus, retryCount, receivedAt], map: "idx_worker_select")
-  @@index([workerGroup, processStatus, retryCount], map: "idx_worker_group")
   @@index([processedAt, processStatus], map: "idx_cleanup")
   @@index([receivedAt], map: "idx_received_at")
   @@index([vehicleId, timestamp], map: "idx_vehicle_timestamp")

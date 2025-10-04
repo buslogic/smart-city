@@ -1274,7 +1274,7 @@ export class GpsSyncDashboardController {
 
       // Resetuj i buffer statistike na 0
       await this.prisma.$executeRaw`
-        UPDATE gps_raw_buffer 
+        UPDATE gps_raw_buffer
         SET process_status = 'processed'
         WHERE process_status IN ('pending', 'error')
       `;
@@ -1294,6 +1294,150 @@ export class GpsSyncDashboardController {
         success: false,
         message: 'Greška pri resetovanju statistika',
         error: error.message,
+      };
+    }
+  }
+
+  @Get('stuck-records')
+  @RequirePermissions('dispatcher:view_sync_dashboard')
+  @ApiOperation({ summary: 'Dobavi informacije o stuck processing zapisima' })
+  @ApiResponse({
+    status: 200,
+    description: 'Stuck records info',
+  })
+  async getStuckRecords() {
+    try {
+      const stuckThresholdMinutes = 5;
+      const stuckThreshold = new Date();
+      stuckThreshold.setMinutes(
+        stuckThreshold.getMinutes() - stuckThresholdMinutes,
+      );
+
+      // Brojanje stuck zapisa po worker grupama
+      const stuckByGroup = await this.prisma.$queryRaw<
+        {
+          worker_group: number;
+          count: bigint;
+          retry_0: bigint;
+          retry_1: bigint;
+          retry_2: bigint;
+          retry_3_plus: bigint;
+          oldest_stuck: Date;
+        }[]
+      >`
+        SELECT
+          worker_group,
+          COUNT(*) as count,
+          SUM(CASE WHEN retry_count = 0 THEN 1 ELSE 0 END) as retry_0,
+          SUM(CASE WHEN retry_count = 1 THEN 1 ELSE 0 END) as retry_1,
+          SUM(CASE WHEN retry_count = 2 THEN 1 ELSE 0 END) as retry_2,
+          SUM(CASE WHEN retry_count >= 3 THEN 1 ELSE 0 END) as retry_3_plus,
+          MIN(processed_at) as oldest_stuck
+        FROM gps_raw_buffer
+        WHERE process_status = 'processing'
+        AND processed_at < ${stuckThreshold}
+        GROUP BY worker_group
+        ORDER BY worker_group
+      `;
+
+      // Ukupno stuck zapisa
+      const totalStuck = await this.prisma.$queryRaw<{ count: bigint }[]>`
+        SELECT COUNT(*) as count
+        FROM gps_raw_buffer
+        WHERE process_status = 'processing'
+        AND processed_at < ${stuckThreshold}
+      `;
+
+      // Najstariji stuck zapisi (primeri)
+      const oldestStuck = await this.prisma.$queryRaw<
+        {
+          id: bigint;
+          vehicle_id: number;
+          garage_no: string;
+          processed_at: Date;
+          retry_count: number;
+          worker_group: number;
+        }[]
+      >`
+        SELECT id, vehicle_id, garage_no, processed_at, retry_count, worker_group
+        FROM gps_raw_buffer
+        WHERE process_status = 'processing'
+        AND processed_at < ${stuckThreshold}
+        ORDER BY processed_at ASC
+        LIMIT 10
+      `;
+
+      return {
+        success: true,
+        stuckThresholdMinutes,
+        totalStuck: Number(totalStuck[0]?.count || 0),
+        byWorkerGroup: stuckByGroup.map((g) => ({
+          workerGroup: g.worker_group,
+          count: Number(g.count),
+          retry0: Number(g.retry_0),
+          retry1: Number(g.retry_1),
+          retry2: Number(g.retry_2),
+          retry3Plus: Number(g.retry_3_plus),
+          oldestStuck: g.oldest_stuck,
+        })),
+        oldestExamples: oldestStuck.map((r) => ({
+          id: Number(r.id),
+          vehicleId: r.vehicle_id,
+          garageNo: r.garage_no,
+          processedAt: r.processed_at,
+          retryCount: r.retry_count,
+          workerGroup: r.worker_group,
+          stuckMinutes: Math.floor(
+            (new Date().getTime() - new Date(r.processed_at).getTime()) /
+              (1000 * 60),
+          ),
+        })),
+        timestamp: new Date(),
+      };
+    } catch (error) {
+      this.logger.error('Greška pri dohvatanju stuck zapisa:', error);
+      return {
+        success: false,
+        error: error.message,
+        timestamp: new Date(),
+      };
+    }
+  }
+
+  @Post('recover-stuck-records')
+  @RequirePermissions('dispatcher.manage_gps')
+  @ApiOperation({ summary: 'Ručno pokreni recovery stuck processing zapisa' })
+  @ApiResponse({
+    status: 200,
+    description: 'Recovery rezultat',
+  })
+  async recoverStuckRecords() {
+    try {
+      // Pozovi recovery metodu iz GpsProcessorService
+      const { GpsProcessorService } = require('../gps-processor/gps-processor.service');
+
+      // Kreiraj privremenu instancu da pozovemo metodu
+      const processorService = new GpsProcessorService(this.prisma, null);
+      const result = await processorService.recoverStuckRecords();
+
+      this.logger.log(
+        `🔧 Ručni recovery: ${result.recovered} recovered, ${result.failed} failed`,
+      );
+
+      return {
+        success: true,
+        message: 'Recovery uspešno završen',
+        recovered: result.recovered,
+        failed: result.failed,
+        timestamp: new Date(),
+      };
+    } catch (error) {
+      this.logger.error('Greška pri ručnom recovery-ju:', error);
+      return {
+        success: false,
+        message: 'Greška pri recovery-ju',
+        error: error.message,
+        timestamp: new Date(),
       };
     }
   }

@@ -355,17 +355,29 @@ export class GpsProcessorService {
       // Svaki worker uzima podatke za različita vozila koristeći modulo operaciju
       const fetchStart = new Date();
 
-      // Koristi worker_group kolonu za brzu raspodelu (bez MOD kalkulacije)
-      // Svaki worker uzima svoje redove prema worker_group indeksu
-      // SKIP LOCKED uklonjen jer svaki worker ima ekskluzivnu grupu
+      // DEADLOCK FIX:
+      // - FORCE INDEX (idx_worker_processing): Forsira optimizovan composite index
+      //   koji pokriva worker_group + process_status + retry_count + received_at
+      // - SKIP LOCKED: Preskače zapise koje drugi worker-i drže, eliminiše deadlock
+      //
+      // Stari pristup:
+      // - MySQL koristio idx_status_only (samo process_status)
+      // - Skenirao milione 'pending' zapisa, pa filtrirao po worker_group
+      // - Držao lock-ove predugo → deadlock sa UPDATE query-jima
+      //
+      // Novi pristup:
+      // - idx_worker_processing (worker_group, process_status, retry_count, received_at)
+      // - Direktan index seek na worker_group = X, process_status = 'pending'
+      // - Skenira samo ~100-5000 zapisa umesto miliona
+      // - SKIP LOCKED omogućava worker-ima da rade nezavisno
       const batch = await this.prisma.$queryRaw<any[]>`
-        SELECT * FROM gps_raw_buffer 
+        SELECT * FROM gps_raw_buffer FORCE INDEX (idx_worker_processing)
         WHERE worker_group = ${workerId - 1}
-        AND process_status = 'pending' 
+        AND process_status = 'pending'
         AND retry_count < 3
         ORDER BY received_at ASC
         LIMIT ${limit}
-        FOR UPDATE
+        FOR UPDATE SKIP LOCKED
       `;
       const fetchEnd = new Date();
 
@@ -895,6 +907,104 @@ export class GpsProcessorService {
       }
 
       return 0;
+    }
+  }
+
+  /**
+   * Recovery mehanizam za stuck processing zapise
+   * Detektuje i resetuje zapise koji su zaglavljeni u processing statusu
+   * Pokreće se svakih 5 minuta
+   */
+  @Cron('*/5 * * * *') // Svakih 5 minuta
+  async recoverStuckRecords() {
+    try {
+      const stuckThresholdMinutes = 5; // Zapisi stuck duže od 5 minuta
+      const maxRetries = 3; // Maksimalan broj pokušaja
+
+      const stuckThreshold = new Date();
+      stuckThreshold.setMinutes(
+        stuckThreshold.getMinutes() - stuckThresholdMinutes,
+      );
+
+      // Dohvati stuck zapise
+      const stuckRecords = await this.prisma.$queryRaw<
+        { id: bigint; retry_count: number; vehicle_id: number }[]
+      >`
+        SELECT id, retry_count, vehicle_id
+        FROM gps_raw_buffer
+        WHERE process_status = 'processing'
+        AND processed_at < ${stuckThreshold}
+        LIMIT 10000
+      `;
+
+      if (stuckRecords.length === 0) {
+        return { recovered: 0, failed: 0 };
+      }
+
+      this.logger.warn(
+        `🔧 Pronađeno ${stuckRecords.length} stuck processing zapisa (starijih od ${stuckThresholdMinutes} min)`,
+      );
+
+      // Podeli na one koje treba retry-ovati i one koje treba failovati
+      const recordsToRetry: bigint[] = [];
+      const recordsToFail: bigint[] = [];
+
+      stuckRecords.forEach((record) => {
+        if (record.retry_count >= maxRetries - 1) {
+          // Već je bio retry-ovan 2 puta, sad ide u failed
+          recordsToFail.push(record.id);
+        } else {
+          // Retry-uj
+          recordsToRetry.push(record.id);
+        }
+      });
+
+      let recoveredCount = 0;
+      let failedCount = 0;
+
+      // Reset zapisa za retry
+      if (recordsToRetry.length > 0) {
+        const result = await this.prisma.$executeRaw`
+          UPDATE gps_raw_buffer
+          SET process_status = 'pending',
+              retry_count = retry_count + 1,
+              processed_at = NULL,
+              error_message = CONCAT(
+                COALESCE(error_message, ''),
+                ' | Auto-recovery: Reset from stuck processing status at ',
+                NOW()
+              )
+          WHERE id IN (${Prisma.join(recordsToRetry)})
+        `;
+        recoveredCount = result;
+        this.logger.log(
+          `✅ Resetovano ${recoveredCount} stuck zapisa u pending status`,
+        );
+      }
+
+      // Označi kao trajno failed
+      if (recordsToFail.length > 0) {
+        const result = await this.prisma.$executeRaw`
+          UPDATE gps_raw_buffer
+          SET process_status = 'failed',
+              retry_count = retry_count + 1,
+              error_message = CONCAT(
+                COALESCE(error_message, ''),
+                ' | Auto-recovery: Max retries exceeded, marked as failed at ',
+                NOW()
+              )
+          WHERE id IN (${Prisma.join(recordsToFail)})
+        `;
+        failedCount = result;
+        this.logger.warn(
+          `⚠️ Označeno ${failedCount} stuck zapisa kao failed (max retries exceeded)`,
+        );
+      }
+
+      return { recovered: recoveredCount, failed: failedCount };
+    } catch (error) {
+      this.logger.error('Greška pri recovery-ju stuck zapisa:', error);
+      return { recovered: 0, failed: 0 };
     }
   }
 
