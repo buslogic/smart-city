@@ -22,4 +22,3 @@ e2e
 *.test.ts
 docker-compose*.yml
 Dockerfile
-.dockerignore

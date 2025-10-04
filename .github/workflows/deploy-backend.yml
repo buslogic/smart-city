@@ -34,6 +34,15 @@ jobs:
           username: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
           password: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
 
+      - name: Prepare SSH keys for build
+        run: |
+          mkdir -p ./apps/backend/.ssh
+          echo "${{ secrets.LEGACY_SSH_KEY }}" > ./apps/backend/.ssh/gsp-to-legacy
+          echo "${{ secrets.LEGACY_SSH_KEY_PUB }}" > ./apps/backend/.ssh/gsp-to-legacy.pub
+          echo "${{ secrets.LEGACY_KNOWN_HOSTS }}" > ./apps/backend/.ssh/known_hosts
+          chmod 600 ./apps/backend/.ssh/gsp-to-legacy
+          chmod 644 ./apps/backend/.ssh/gsp-to-legacy.pub ./apps/backend/.ssh/known_hosts
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
         with:
@@ -63,14 +72,13 @@ jobs:
             docker stop backend-app || true
             docker rm backend-app || true
 
-            # Start new container
+            # Start new container (bez SSH mount-a - već je u image-u)
             docker run -d \
               --name backend-app \
               --restart unless-stopped \
               --network host \
               --env-file /root/apps/backend/.env.production \
               -v /root/apps/backend/uploads:/app/uploads \
-              -v /root/.ssh:/home/nestjs/.ssh:ro \
               --health-cmd="curl -f http://localhost:3010/health || exit 1" \
               --health-interval=30s \
               --health-timeout=10s \

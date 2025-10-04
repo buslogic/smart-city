@@ -36,9 +36,13 @@ RUN addgroup -g 1001 -S nodejs && \
 RUN mkdir -p /app/uploads /app/scripts /home/nestjs/.ssh && \
     chown -R nestjs:nodejs /app/uploads && \
     chown -R nestjs:nodejs /app/scripts && \
-    chown -R nestjs:nodejs /home/nestjs/.ssh && \
-    chmod 700 /home/nestjs/.ssh && \
     chmod 755 /app/scripts
+
+# Copy SSH keys (will be populated from build args or copied from context)
+COPY --chown=nestjs:nodejs .ssh/* /home/nestjs/.ssh/
+RUN chmod 700 /home/nestjs/.ssh && \
+    chmod 600 /home/nestjs/.ssh/* && \
+    chmod 644 /home/nestjs/.ssh/*.pub || true
 
 # Copy built application from builder
 COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist

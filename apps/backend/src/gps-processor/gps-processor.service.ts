@@ -1032,7 +1032,12 @@ export class GpsProcessorService {
     processedCount: number;
     timeRange?: { min: Date; max: Date };
   }> {
+    this.logger.log(
+      `🔵 insertBatchToTimescaleDB CALLED with ${batch?.length || 0} points`,
+    );
+
     if (!batch || batch.length === 0) {
+      this.logger.warn('⚠️ insertBatchToTimescaleDB: Empty batch!');
       return { processedCount: 0 };
     }
 
@@ -1128,7 +1133,13 @@ export class GpsProcessorService {
       `;
 
       try {
-        await this.timescalePool.query(insertQuery, batchValues);
+        this.logger.log(
+          `🔵 Attempting TimescaleDB INSERT: ${batchPoints.length} points (batch ${batchStart})`,
+        );
+        const result = await this.timescalePool.query(insertQuery, batchValues);
+        this.logger.log(
+          `✅ TimescaleDB INSERT SUCCESS: rowCount=${result.rowCount}, command=${result.command}`,
+        );
         totalInserted += batchPoints.length;
       } catch (error) {
         this.logger.error(
