@@ -336,8 +336,9 @@ const SmartSlowSyncDashboard: React.FC = () => {
 
       // Dodaj date range ako je odabran
       if (tempConfig && tempConfig.syncMode === 'dateRange' && dateRange) {
-        (slowSyncConfig as any).syncFromDate = dateRange[0]?.toISOString();
-        (slowSyncConfig as any).syncToDate = dateRange[1]?.toISOString();
+        (slowSyncConfig as any).syncFromDate = dateRange[0]?.startOf('day').toISOString();
+        // Dodaj 1 dan na endDate da bi krajnji datum bio inkluzivan (ako korisnik odabere "do 04", uključi ceo dan 04)
+        (slowSyncConfig as any).syncToDate = dateRange[1]?.add(1, 'day').startOf('day').toISOString();
       }
 
       await api.post('/api/legacy-sync/slow-sync/start', slowSyncConfig);
@@ -452,8 +453,9 @@ const SmartSlowSyncDashboard: React.FC = () => {
 
       // Dodaj date range ako je odabran
       if (tempConfig && tempConfig.syncMode === 'dateRange' && dateRange) {
-        (slowSyncConfig as any).syncFromDate = dateRange[0]?.toISOString();
-        (slowSyncConfig as any).syncToDate = dateRange[1]?.toISOString();
+        (slowSyncConfig as any).syncFromDate = dateRange[0]?.startOf('day').toISOString();
+        // Dodaj 1 dan na endDate da bi krajnji datum bio inkluzivan (ako korisnik odabere "do 04", uključi ceo dan 04)
+        (slowSyncConfig as any).syncToDate = dateRange[1]?.add(1, 'day').startOf('day').toISOString();
       } else if (tempConfig && tempConfig.syncMode === 'full') {
         // Ukloni date range za full sync
         delete (slowSyncConfig as any).syncFromDate;
@@ -1782,7 +1784,7 @@ const SmartSlowSyncDashboard: React.FC = () => {
               <Text strong>Pauza između batch-ova (min):</Text>
               <InputNumber
                 style={{ width: '100%', marginTop: 8 }}
-                min={5}
+                min={1}
                 max={120}
                 value={tempConfig?.batchDelayMinutes}
                 onChange={(value) => setTempConfig({ ...tempConfig!, batchDelayMinutes: value || 30 })}

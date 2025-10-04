@@ -1,7 +1,14 @@
 import React, { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
 import 'leaflet/dist/leaflet.css';
+
+// Omogući UTC i timezone plugin za dayjs
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 // Fix za Leaflet ikone u React aplikaciji
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -304,7 +311,7 @@ const VehicleMapModern: React.FC<VehicleMapModernProps> = ({
                     fontSize: '11px',
                     color: '#9ca3af'
                   }}>
-                    ⏱ {new Date(vehicle.captured).toLocaleString('sr-RS')}
+                    ⏱ {dayjs.utc(vehicle.captured).tz('Europe/Belgrade').format('DD.MM.YYYY HH:mm:ss')}
                   </div>
 
                   {/* Akcije */}
