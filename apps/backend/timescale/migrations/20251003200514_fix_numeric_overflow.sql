@@ -8,7 +8,7 @@
 -- ==============================================================================
 
 -- VAŽNO: ALTER COLUMN ne radi na hypertable sa columnstore compression
--- Moramo prvo da dekompresujemo, pa onda izmenimo kolonu
+-- Moramo prvo da POTPUNO UKLONIMO compression, pa onda izmenimo kolonu
 
 -- 1. Ukloni compression policy
 SELECT remove_compression_policy('gps_data_lag_filtered', if_exists => true);
@@ -19,7 +19,12 @@ FROM timescaledb_information.chunks c
 WHERE c.hypertable_name = 'gps_data_lag_filtered'
   AND c.is_compressed = true;
 
--- 3. Sada možemo da promenimo tip kolone
+-- 3. POTPUNO UKLONI compression sa tabele (ovo uklanja columnstore settings)
+ALTER TABLE gps_data_lag_filtered SET (
+    timescaledb.compress = false
+);
+
+-- 4. Sada možemo da promenimo tip kolone
 ALTER TABLE gps_data_lag_filtered
 ALTER COLUMN calculated_speed_kmh TYPE NUMERIC(10,2);
 
