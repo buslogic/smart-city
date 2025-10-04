@@ -34,15 +34,6 @@ jobs:
           username: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
           password: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
 
-      - name: Prepare SSH keys for build
-        run: |
-          mkdir -p ./apps/backend/.ssh
-          echo "${{ secrets.LEGACY_SSH_KEY }}" > ./apps/backend/.ssh/gsp-to-legacy
-          echo "${{ secrets.LEGACY_SSH_KEY_PUB }}" > ./apps/backend/.ssh/gsp-to-legacy.pub
-          echo "${{ secrets.LEGACY_KNOWN_HOSTS }}" > ./apps/backend/.ssh/known_hosts
-          chmod 600 ./apps/backend/.ssh/gsp-to-legacy
-          chmod 644 ./apps/backend/.ssh/gsp-to-legacy.pub ./apps/backend/.ssh/known_hosts
-
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
         with:
@@ -65,6 +56,28 @@ jobs:
           username: ${{ secrets.PRODUCTION_USER }}
           key: ${{ secrets.PRODUCTION_SSH_KEY }}
           script: |
+            # Pripremi SSH ključeve na serveru
+            mkdir -p /root/apps/backend/.ssh
+
+            # Kopiraj SSH ključeve iz secrets (preko environment varijabli)
+            cat > /root/apps/backend/.ssh/gsp-to-legacy << 'EOF'
+            ${{ secrets.LEGACY_SSH_KEY }}
+            EOF
+
+            cat > /root/apps/backend/.ssh/gsp-to-legacy.pub << 'EOF'
+            ${{ secrets.LEGACY_SSH_KEY_PUB }}
+            EOF
+
+            cat > /root/apps/backend/.ssh/known_hosts << 'EOF'
+            ${{ secrets.LEGACY_KNOWN_HOSTS }}
+            EOF
+
+            # Postavi pravilne permissions
+            chmod 700 /root/apps/backend/.ssh
+            chmod 600 /root/apps/backend/.ssh/gsp-to-legacy
+            chmod 644 /root/apps/backend/.ssh/gsp-to-legacy.pub
+            chmod 644 /root/apps/backend/.ssh/known_hosts
+
             # Pull latest image
             docker pull registry.digitalocean.com/smart-city/backend:latest
 
@@ -72,18 +85,32 @@ jobs:
             docker stop backend-app || true
             docker rm backend-app || true
 
-            # Start new container (bez SSH mount-a - već je u image-u)
+            # Start new container sa SSH mount-om
             docker run -d \
               --name backend-app \
               --restart unless-stopped \
               --network host \
               --env-file /root/apps/backend/.env.production \
               -v /root/apps/backend/uploads:/app/uploads \
+              -v /root/apps/backend/.ssh:/home/nestjs/.ssh:ro \
               --health-cmd="curl -f http://localhost:3010/health || exit 1" \
               --health-interval=30s \
               --health-timeout=10s \
               --health-retries=3 \
               registry.digitalocean.com/smart-city/backend:latest
+
+            # Popravi ownership SSH ključeva UNUTAR kontejnera (read-only mount problem)
+            # Kopiramo ih u tmpfs i menjamo ownership
+            docker exec -u root backend-app sh -c '
+              mkdir -p /tmp/.ssh &&
+              cp -r /home/nestjs/.ssh/* /tmp/.ssh/ &&
+              chown -R nestjs:nogroup /tmp/.ssh &&
+              chmod 700 /tmp/.ssh &&
+              chmod 600 /tmp/.ssh/gsp-to-legacy /tmp/.ssh/known_hosts &&
+              chmod 644 /tmp/.ssh/*.pub &&
+              rm -rf /home/nestjs/.ssh &&
+              mv /tmp/.ssh /home/nestjs/.ssh
+            '
 
             # Wait for container to be healthy
             echo "Waiting for container to be healthy..."
