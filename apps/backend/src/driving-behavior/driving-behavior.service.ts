@@ -479,27 +479,27 @@ export class DrivingBehaviorService {
           GROUP BY vehicle_id
         ),
         distance_stats AS (
-          -- Kombinacija monthly i hourly agregata za tačne Belgrade km
-          -- Monthly daje UTC bucket, hourly koriguje za UTC+2 offset
+          -- Kombinacija monthly i hourly VIEW-ova za tačne Belgrade km
+          -- Monthly view daje UTC bucket, hourly view koriguje za UTC+2 offset
           WITH monthly_base AS (
             SELECT
               vehicle_id,
-              total_km as km_monthly,
-              active_days
-            FROM monthly_vehicle_distance
+              total_distance_km as km_monthly,
+              num_days as active_days
+            FROM monthly_view_gps_data_5_minute_no_lag_aggregates
             WHERE vehicle_id = ANY($1::int[])
-              AND month_utc = DATE_TRUNC('month', $2::date)::timestamptz
+              AND month = DATE_TRUNC('month', $2::date)::date
           ),
           hourly_start_correction AS (
             -- Dodaj sate od prethodnog meseca koji pripadaju Belgrade mesecu
             -- Npr. za avgust: 31.07 22:00-23:59 UTC = 01.08 00:00-01:59 Belgrade
             SELECT
               vehicle_id,
-              COALESCE(SUM(total_km), 0) as km_to_add
-            FROM hourly_vehicle_distance
+              COALESCE(SUM(total_distance_km), 0) as km_to_add
+            FROM hourly_view_gps_data_5_minute_no_lag_aggregates
             WHERE vehicle_id = ANY($1::int[])
-              AND hour_utc >= (DATE_TRUNC('month', $2::date) - INTERVAL '2 hours')::timestamptz
-              AND hour_utc < DATE_TRUNC('month', $2::date)::timestamptz
+              AND hour >= (DATE_TRUNC('month', $2::date) - INTERVAL '2 hours')::timestamptz
+              AND hour < DATE_TRUNC('month', $2::date)::timestamptz
             GROUP BY vehicle_id
           ),
           hourly_end_correction AS (
@@ -507,11 +507,11 @@ export class DrivingBehaviorService {
             -- Npr. za avgust: 31.08 22:00-23:59 UTC = 01.09 00:00-01:59 Belgrade
             SELECT
               vehicle_id,
-              COALESCE(SUM(total_km), 0) as km_to_subtract
-            FROM hourly_vehicle_distance
+              COALESCE(SUM(total_distance_km), 0) as km_to_subtract
+            FROM hourly_view_gps_data_5_minute_no_lag_aggregates
             WHERE vehicle_id = ANY($1::int[])
-              AND hour_utc >= (DATE_TRUNC('month', $3::date + INTERVAL '1 day') - INTERVAL '2 hours')::timestamptz
-              AND hour_utc < DATE_TRUNC('month', $3::date + INTERVAL '1 day')::timestamptz
+              AND hour >= (DATE_TRUNC('month', $3::date + INTERVAL '1 day') - INTERVAL '2 hours')::timestamptz
+              AND hour < DATE_TRUNC('month', $3::date + INTERVAL '1 day')::timestamptz
             GROUP BY vehicle_id
           )
           SELECT
