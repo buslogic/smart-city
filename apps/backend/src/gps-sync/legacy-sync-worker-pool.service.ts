@@ -1098,10 +1098,18 @@ export class LegacySyncWorkerPoolService {
       );
 
       // 4. Prebaci iz temp tabele u glavnu sa ON CONFLICT
+      // VAŽNO: Eksplicitno kreiramo location iz lat/lng jer trigger ne radi sa TimescaleDB hypertable
       const transferStart = Date.now();
       const result = await client.query(`
-        INSERT INTO gps_data 
-        SELECT * FROM ${tempTableName}
+        INSERT INTO gps_data (
+          time, vehicle_id, garage_no, lat, lng, location,
+          speed, course, alt, state, in_route, data_source
+        )
+        SELECT
+          time, vehicle_id, garage_no, lat, lng,
+          ST_SetSRID(ST_MakePoint(lng, lat), 4326),
+          speed, course, alt, state, in_route, data_source
+        FROM ${tempTableName}
         ON CONFLICT (vehicle_id, time) DO UPDATE SET
           garage_no = EXCLUDED.garage_no,
           lat = EXCLUDED.lat,
