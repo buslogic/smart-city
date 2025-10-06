@@ -21,7 +21,7 @@ import dayjs, { Dayjs } from 'dayjs';
 import { Line, Column, Area } from '@ant-design/plots';
 import { api } from '../../../services/api';
 import { VehicleMapper } from '../../../utils/vehicle-mapper';
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3010';
+import { API_URL as API_BASE } from '../../../config/runtime';
 
 interface Vehicle {
   id: number;

@@ -1,8 +1,7 @@
 import { api } from './api';
 import axios from 'axios';
 import { LoginRequest, LoginResponse, RefreshTokenResponse } from '../types/auth';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3010';
+import { API_URL } from '../config/runtime';
 
 class AuthService {
   async login(credentials: LoginRequest): Promise<LoginResponse> {

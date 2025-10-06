@@ -27,6 +27,7 @@ import {
 } from '@ant-design/icons';
 import axios from 'axios';
 import { useAuthStore } from '../../../stores/auth.store';
+import { API_URL } from '../../../config/runtime';
 
 const { Title, Text } = Typography;
 
@@ -60,7 +61,7 @@ const CompanyInfo: React.FC = () => {
     setLoading(true);
     try {
       const response = await axios.get(
-        `${import.meta.env.VITE_API_URL}/api/settings/company-info`,
+        `${API_URL}/api/settings/company-info`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -75,7 +76,7 @@ const CompanyInfo: React.FC = () => {
           const logoPath = response.data.logo;
           const fullLogoUrl = logoPath.startsWith('http')
             ? logoPath
-            : `${import.meta.env.VITE_API_URL}${logoPath}`;
+            : `${API_URL}${logoPath}`;
           setLogoUrl(fullLogoUrl);
         } else {
           setLogoUrl(null);
@@ -94,7 +95,7 @@ const CompanyInfo: React.FC = () => {
   };
 
   const isProduction = () => {
-    return import.meta.env.VITE_API_URL?.includes('smart-city.rs') ||
+    return API_URL?.includes('smart-city.rs') ||
            import.meta.env.MODE === 'production';
   };
 
@@ -180,7 +181,7 @@ const CompanyInfo: React.FC = () => {
         formData.append('isPublic', 'true');
 
         const uploadResponse = await axios.post(
-          `${import.meta.env.VITE_API_URL}/api/spaces/upload-logo`,
+          `${API_URL}/api/spaces/upload-logo`,
           formData,
           {
             headers: {
@@ -197,7 +198,7 @@ const CompanyInfo: React.FC = () => {
         formData.append('file', file);
 
         const uploadResponse = await axios.post(
-          `${import.meta.env.VITE_API_URL}/api/uploads/company-logo`,
+          `${API_URL}/api/uploads/company-logo`,
           formData,
           {
             headers: {
@@ -213,7 +214,7 @@ const CompanyInfo: React.FC = () => {
       // Ako je relativan path, dodaj base URL za prikaz
       const displayUrl = uploadedLogoUrl.startsWith('http')
         ? uploadedLogoUrl
-        : `${import.meta.env.VITE_API_URL}${uploadedLogoUrl}`;
+        : `${API_URL}${uploadedLogoUrl}`;
 
       setLogoUrl(displayUrl);
       // Koristi setTimeout da izbegneš circular reference
@@ -252,7 +253,7 @@ const CompanyInfo: React.FC = () => {
       };
 
       await axios.post(
-        `${import.meta.env.VITE_API_URL}/api/settings/company-info`,
+        `${API_URL}/api/settings/company-info`,
         dataToSave,
         {
           headers: {

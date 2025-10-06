@@ -1,7 +1,6 @@
 import axios from 'axios';
 import { TokenManager } from '../utils/token';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3010';
+import { API_URL as API_BASE_URL } from '../config/runtime';
 
 export interface DrivingEvent {
   id: number;

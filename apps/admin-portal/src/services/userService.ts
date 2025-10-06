@@ -1,6 +1,7 @@
 import { api } from './api';
 import { TokenManager } from '../utils/token';
 import type { User, UsersResponse } from '../types/user.types';
+import { API_URL } from '../config/runtime';
 
 export const userService = {
   async getUsers(page = 1, pageSize = 10, search?: string): Promise<UsersResponse> {
@@ -117,7 +118,6 @@ export const userService = {
   ): Promise<void> {
     return new Promise((resolve, reject) => {
       // Koristimo samo fetch za SSE - bez EventSource objekta
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3010';
       fetch(`${API_URL}/api/users/sync-legacy-batch`, {
         method: 'POST',
         headers: {

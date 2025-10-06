@@ -34,6 +34,34 @@ Smart City platforma za upravljanje gradskom infrastrukturom sa fokusom na trans
 └── admin-portal/   # Admin UI za upravljanje
 ```
 
+## 🔧 Admin Portal - Runtime Configuration
+
+**VAŽNO:** Admin portal koristi **runtime config sistem** za Kubernetes deploymente!
+
+### Fallback Chain (prioritet)
+1. **window.APP_CONFIG** (Kubernetes ConfigMap) - runtime injection
+2. **import.meta.env.VITE_*** (Vercel/local .env) - build-time
+3. **Hardcoded fallback** (localhost:3010) - default
+
+### Ključni fajlovi
+- **`src/config/runtime.ts`** - Runtime config helper sa fallback-om
+- **`public/config.js`** - Fallback za development/Vercel
+- **`index.html`** - Učitava config.js PRE React aplikacije
+
+### Deployment strategije
+- **Vercel**: Koristi build-time env varijable (`VITE_API_URL`)
+- **Kubernetes**: ConfigMap override-uje `/config.js` sa runtime podešavanjima
+- **Local Dev**: Koristi `.env` fajl ili fallback
+
+### Kako koristiti
+```typescript
+// ✅ ISPRAVNO - uvek koristi runtime helper
+import { API_URL, WS_URL } from '../config/runtime';
+
+// ❌ POGREŠNO - NE koristi direktno import.meta.env
+const url = import.meta.env.VITE_API_URL; // GREŠKA!
+```
+
 ## 📦 Ključni backend moduli
 
 ### Core funkcionalnosti

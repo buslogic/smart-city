@@ -25,12 +25,12 @@ import { api } from '../../../services/api';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/sr';
+import { API_URL as API_BASE } from '../../../config/runtime';
 
 dayjs.extend(relativeTime);
 dayjs.locale('sr');
 
 const { Title, Text } = Typography;
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3010';
 
 interface BufferStatus {
   totalRecords: number;
