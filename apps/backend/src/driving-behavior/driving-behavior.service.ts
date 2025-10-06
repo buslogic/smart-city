@@ -1275,8 +1275,9 @@ export class DrivingBehaviorService {
   }
 
   /**
-   * Get distance statistics from BACKUP AGGREGATES (БEZ VIEW wrappera)
-   * Uses hourly_vehicle_distance and monthly_vehicle_distance
+   * Get distance statistics from BACKUP AGGREGATES
+   * Uses hourly_vehicle_distance and monthly_vehicle_distance VIEW-ovi
+   * (nastali iz gps_data_backup_04102025130800)
    */
   private async getDistanceStatsFromBackupAggregates(
     vehicleIds: number[],
@@ -1287,22 +1288,22 @@ export class DrivingBehaviorService {
       WITH monthly_base AS (
         SELECT
           vehicle_id,
-          distance_km as km_monthly,
+          total_km as km_monthly,
           active_days
         FROM monthly_vehicle_distance
         WHERE vehicle_id = ANY($1::int[])
-          AND month = DATE_TRUNC('month', $2::date)::date
+          AND month_utc = DATE_TRUNC('month', $2::date)::timestamptz
       ),
       hourly_start_correction AS (
         -- Dodaj sate od prethodnog meseca koji pripadaju Belgrade mesecu
         -- Npr. za avgust: 31.07 22:00-23:59 UTC = 01.08 00:00-01:59 Belgrade
         SELECT
           vehicle_id,
-          COALESCE(SUM(distance_km), 0) as km_to_add
+          COALESCE(SUM(total_km), 0) as km_to_add
         FROM hourly_vehicle_distance
         WHERE vehicle_id = ANY($1::int[])
-          AND hour >= (DATE_TRUNC('month', $2::date) - INTERVAL '2 hours')::timestamptz
-          AND hour < DATE_TRUNC('month', $2::date)::timestamptz
+          AND hour_utc >= (DATE_TRUNC('month', $2::date) - INTERVAL '2 hours')::timestamptz
+          AND hour_utc < DATE_TRUNC('month', $2::date)::timestamptz
         GROUP BY vehicle_id
       ),
       hourly_end_correction AS (
@@ -1310,11 +1311,11 @@ export class DrivingBehaviorService {
         -- Npr. za avgust: 31.08 22:00-23:59 UTC = 01.09 00:00-01:59 Belgrade
         SELECT
           vehicle_id,
-          COALESCE(SUM(distance_km), 0) as km_to_subtract
+          COALESCE(SUM(total_km), 0) as km_to_subtract
         FROM hourly_vehicle_distance
         WHERE vehicle_id = ANY($1::int[])
-          AND hour >= (DATE_TRUNC('month', $3::date + INTERVAL '1 day') - INTERVAL '2 hours')::timestamptz
-          AND hour < DATE_TRUNC('month', $3::date + INTERVAL '1 day')::timestamptz
+          AND hour_utc >= (DATE_TRUNC('month', $3::date + INTERVAL '1 day') - INTERVAL '2 hours')::timestamptz
+          AND hour_utc < DATE_TRUNC('month', $3::date + INTERVAL '1 day')::timestamptz
         GROUP BY vehicle_id
       )
       SELECT
