@@ -83,13 +83,15 @@ class DrivingBehaviorService {
    *   1. NO-PostGIS VIEW aggregates (fastest, default)
    *   2. PostGIS VIEW aggregates (backup)
    *   3. Direct from gps_data (slowest, emergency)
+   * DATA SOURCE: Supports main and backup tables
    */
   async getBatchStatistics(
     vehicleIds: number[],
     startDate: string,
     endDate: string,
     useDirectCalculation?: boolean,
-    aggregateType?: 'no_postgis' | 'postgis'
+    aggregateType?: 'no_postgis' | 'postgis',
+    dataSource?: 'main' | 'backup'
   ): Promise<VehicleStatistics[]> {
     try {
       const response = await axios.post(
@@ -99,7 +101,8 @@ class DrivingBehaviorService {
           startDate,
           endDate,
           useDirectCalculation: useDirectCalculation ?? false,
-          aggregateType: aggregateType ?? 'no_postgis'
+          aggregateType: aggregateType ?? 'no_postgis',
+          dataSource: dataSource ?? 'main'
         },
         {
           headers: this.getAuthHeaders(),

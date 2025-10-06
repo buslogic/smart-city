@@ -251,4 +251,15 @@ export class BatchStatisticsDto {
   @IsOptional()
   @IsBoolean()
   useDirectCalculation?: boolean;
+
+  @ApiProperty({
+    enum: ['main', 'backup'],
+    description:
+      'Izvor podataka: main (aktuelni podaci) ili backup (backup tabele)',
+    required: false,
+    default: 'main',
+  })
+  @IsOptional()
+  @IsString()
+  dataSource?: 'main' | 'backup';
 }

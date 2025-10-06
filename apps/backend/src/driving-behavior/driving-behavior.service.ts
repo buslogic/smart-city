@@ -457,6 +457,7 @@ export class DrivingBehaviorService {
    *   1. NO-PostGIS VIEW aggregates (fastest, default) - Haversine formula
    *   2. PostGIS VIEW aggregates (backup) - ST_Distance
    *   3. Direct from gps_data (slowest, emergency) - ST_Distance
+   * DATA SOURCE: Supports main and backup tables
    */
   async getBatchMonthlyStatistics(
     vehicleIds: number[],
@@ -464,26 +465,37 @@ export class DrivingBehaviorService {
     endDate: string,
     useDirectCalculation: boolean = false,
     aggregateType: AggregateType = AggregateType.NO_POSTGIS,
+    dataSource: 'main' | 'backup' = 'main',
   ): Promise<VehicleStatisticsDto[]> {
     try {
-      // Get event statistics (same for all modes)
-      const eventStats = await this.getEventStats(vehicleIds, startDate, endDate);
-
-      // Get distance statistics - TRIPLE MODE
+      // Get event and distance statistics based on data source
+      let eventStats: Map<number, any>;
       let distanceStats: Map<number, any>;
 
-      if (useDirectCalculation) {
-        // OPCIJA 3: Najsporije, emergency
-        this.logger.warn(`⚠️ DIREKTNO računanje iz gps_data (najsporije, sa PostGIS ST_Distance)`);
-        distanceStats = await this.getDistanceStatsDirectly(vehicleIds, startDate, endDate);
-      } else if (aggregateType === AggregateType.NO_POSTGIS) {
-        // OPCIJA 1: Najbrže, default
-        this.logger.log(`✅ NO-PostGIS VIEW agregati (brže, preporučeno, Haversine formula)`);
-        distanceStats = await this.getDistanceStatsFromNoPostGISViews(vehicleIds, startDate, endDate);
+      if (dataSource === 'backup') {
+        // BACKUP TABLES - samo Direct metoda (nema VIEW-ova)
+        this.logger.log(`📦 BACKUP tabele - koristi driving_events_backup_20250930 i gps_data_backup_04102025130800`);
+        eventStats = await this.getEventStatsFromBackup(vehicleIds, startDate, endDate);
+        distanceStats = await this.getDistanceStatsDirectlyFromBackup(vehicleIds, startDate, endDate);
       } else {
-        // OPCIJA 2: Backup
-        this.logger.log(`✅ PostGIS VIEW agregati (backup opcija, ST_Distance)`);
-        distanceStats = await this.getDistanceStatsFromViews(vehicleIds, startDate, endDate);
+        // MAIN TABLES - podržava VIEW i Direct
+        this.logger.log(`📊 MAIN tabele - koristi driving_events i gps_data`);
+        eventStats = await this.getEventStats(vehicleIds, startDate, endDate);
+
+        // Get distance statistics - TRIPLE MODE (samo za main)
+        if (useDirectCalculation) {
+          // OPCIJA 3: Najsporije, emergency
+          this.logger.warn(`⚠️ DIREKTNO računanje iz gps_data (najsporije, sa PostGIS ST_Distance)`);
+          distanceStats = await this.getDistanceStatsDirectly(vehicleIds, startDate, endDate);
+        } else if (aggregateType === AggregateType.NO_POSTGIS) {
+          // OPCIJA 1: Najbrže, default
+          this.logger.log(`✅ NO-PostGIS VIEW agregati (brže, preporučeno, Haversine formula)`);
+          distanceStats = await this.getDistanceStatsFromNoPostGISViews(vehicleIds, startDate, endDate);
+        } else {
+          // OPCIJA 2: Backup
+          this.logger.log(`✅ PostGIS VIEW agregati (backup opcija, ST_Distance)`);
+          distanceStats = await this.getDistanceStatsFromViews(vehicleIds, startDate, endDate);
+        }
       }
 
       // Merge stats and calculate safety scores
@@ -1204,6 +1216,129 @@ export class DrivingBehaviorService {
       vehicleId,
       garageNo: `V${vehicleId}`,
     };
+  }
+
+  /**
+   * ===========================================================================
+   * BACKUP TABLE METHODS
+   * ===========================================================================
+   * Metode za rad sa backup tabelama:
+   * - driving_events_backup_20250930
+   * - gps_data_backup_04102025130800
+   */
+
+  /**
+   * Get event statistics from BACKUP table (driving_events_backup_20250930)
+   */
+  private async getEventStatsFromBackup(
+    vehicleIds: number[],
+    startDate: string,
+    endDate: string,
+  ): Promise<Map<number, any>> {
+    const query = `
+      SELECT
+        vehicle_id,
+        COUNT(*) FILTER (WHERE event_type = 'harsh_acceleration' AND severity >= 4) as severe_acc,
+        COUNT(*) FILTER (WHERE event_type = 'harsh_acceleration' AND severity = 3) as moderate_acc,
+        COUNT(*) FILTER (WHERE event_type = 'harsh_braking' AND severity >= 4) as severe_brake,
+        COUNT(*) FILTER (WHERE event_type = 'harsh_braking' AND severity = 3) as moderate_brake,
+        AVG(g_force)::NUMERIC(5,3) as avg_g_force,
+        MAX(g_force)::NUMERIC(5,3) as max_g_force,
+        COUNT(*) as total_events,
+        MODE() WITHIN GROUP (ORDER BY EXTRACT(HOUR FROM time))::INTEGER as most_common_hour
+      FROM driving_events_backup_20250930
+      WHERE vehicle_id = ANY($1::int[])
+        AND time >= $2::date
+        AND time < $3::date + INTERVAL '1 day'
+      GROUP BY vehicle_id
+    `;
+
+    const result = await this.pgPool.query(query, [vehicleIds, startDate, endDate]);
+
+    const eventMap = new Map<number, any>();
+    result.rows.forEach(row => {
+      eventMap.set(row.vehicle_id, row);
+    });
+
+    this.logger.log(`📦 Event stats iz BACKUP tabele: ${result.rows.length} vozila`);
+
+    return eventMap;
+  }
+
+  /**
+   * Get distance statistics directly from BACKUP table (gps_data_backup_04102025130800)
+   * Uses PostGIS ST_Distance on location field with Belgrade time (UTC+2) handling
+   */
+  private async getDistanceStatsDirectlyFromBackup(
+    vehicleIds: number[],
+    startDate: string,
+    endDate: string,
+  ): Promise<Map<number, any>> {
+    const query = `
+      WITH ordered_points AS (
+        SELECT
+          vehicle_id,
+          time,
+          location,
+          LAG(location) OVER (PARTITION BY vehicle_id ORDER BY time) as prev_location,
+          LAG(time) OVER (PARTITION BY vehicle_id ORDER BY time) as prev_time
+        FROM gps_data_backup_04102025130800
+        WHERE vehicle_id = ANY($1::int[])
+          -- BELGRADE TIME konverzija (UTC+2):
+          -- Početak: YYYY-MM-01 00:00 Belgrade = YYYY-MM-01 00:00 UTC - 2h = prethodni dan 22:00 UTC
+          AND time >= (($2::date)::timestamptz - INTERVAL '2 hours')
+          -- Kraj: YYYY-MM-DD 23:59 Belgrade = YYYY-MM-DD 23:59 UTC + 1 day - 2h = isti dan 22:00 UTC
+          AND time < (($3::date + INTERVAL '1 day')::timestamptz - INTERVAL '2 hours')
+          AND location IS NOT NULL
+          AND speed > 0  -- Samo pokretna vozila
+      ),
+      distance_calc AS (
+        SELECT
+          vehicle_id,
+          SUM(
+            CASE
+              WHEN prev_location IS NOT NULL
+                AND EXTRACT(EPOCH FROM (time - prev_time)) < 300  -- Max 5min gap
+              THEN ST_Distance(location::geography, prev_location::geography) / 1000.0
+              ELSE 0
+            END
+          ) as total_distance_km
+        FROM ordered_points
+        WHERE prev_location IS NOT NULL
+        GROUP BY vehicle_id
+      ),
+      active_days_calc AS (
+        SELECT
+          vehicle_id,
+          COUNT(DISTINCT DATE(time AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Belgrade')) as active_days
+        FROM gps_data_backup_04102025130800
+        WHERE vehicle_id = ANY($1::int[])
+          AND time >= (($2::date)::timestamptz - INTERVAL '2 hours')
+          AND time < (($3::date + INTERVAL '1 day')::timestamptz - INTERVAL '2 hours')
+          AND speed > 0
+        GROUP BY vehicle_id
+      )
+      SELECT
+        COALESCE(d.vehicle_id, a.vehicle_id) as vehicle_id,
+        COALESCE(d.total_distance_km, 0) as total_km,
+        COALESCE(a.active_days, 0) as active_days
+      FROM distance_calc d
+      FULL OUTER JOIN active_days_calc a ON d.vehicle_id = a.vehicle_id
+    `;
+
+    const result = await this.pgPool.query(query, [vehicleIds, startDate, endDate]);
+
+    const distanceMap = new Map<number, any>();
+    result.rows.forEach(row => {
+      distanceMap.set(row.vehicle_id, {
+        total_km: parseFloat(row.total_km) || 0,
+        active_days: row.active_days || 0,
+      });
+    });
+
+    this.logger.log(`📦 Distance stats iz BACKUP tabele: ${result.rows.length} vozila (Belgrade time UTC+2)`);
+
+    return distanceMap;
   }
 
   async onModuleDestroy() {

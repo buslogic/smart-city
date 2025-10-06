@@ -19,6 +19,8 @@ import {
   Tooltip,
   Switch,
   Progress,
+  Radio,
+  Alert,
 } from 'antd';
 import {
   FilePdfOutlined,
@@ -309,6 +311,14 @@ const MonthlyReport: React.FC = () => {
   const reportRef = useRef<HTMLDivElement>(null);
   const [isExecutiveView, setIsExecutiveView] = useState(false); // Toggle između detaljnog i izvršnog prikaza
   const [calculationMethod, setCalculationMethod] = useState<'views' | 'direct'>('views'); // Metoda računanja kilometraže
+  const [dataSource, setDataSource] = useState<'main' | 'backup'>('main'); // Izvor podataka (main ili backup)
+
+  // Auto-switch to Direct method when Backup is selected (Backup nema VIEW-ove)
+  React.useEffect(() => {
+    if (dataSource === 'backup') {
+      setCalculationMethod('direct');
+    }
+  }, [dataSource]);
 
   // Fetch all vehicles
   const { data: vehiclesResponse, isLoading: vehiclesLoading } = useQuery({
@@ -370,7 +380,8 @@ const MonthlyReport: React.FC = () => {
           startDate,
           endDate,
           calculationMethod === 'direct', // Koristi direktno računanje ako je odabrano
-          'no_postgis' // Uvek koristimo NO-PostGIS aggregate (PostGIS je uklonjen)
+          'no_postgis', // Uvek koristimo NO-PostGIS aggregate (PostGIS je uklonjen)
+          dataSource // Izvor podataka (main ili backup)
         );
 
         allStats.push(...chunkStats);
@@ -767,6 +778,48 @@ const MonthlyReport: React.FC = () => {
         </p>
       </div>
 
+      {/* Data Source Selection */}
+      <Card className="mb-4">
+        <Row gutter={16} align="middle">
+          <Col span={24}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <DatabaseOutlined className="text-blue-600 text-xl" />
+                <div>
+                  <label className="text-sm font-semibold text-gray-900">
+                    Izvor podataka:
+                  </label>
+                  <div className="text-xs text-gray-600 mt-1">
+                    Odaberite da li želite prikazati aktuelne ili backup podatke
+                  </div>
+                </div>
+              </div>
+              <Radio.Group
+                value={dataSource}
+                onChange={(e) => setDataSource(e.target.value)}
+                size="large"
+              >
+                <Radio.Button value="main">
+                  📊 Aktuelni podaci
+                </Radio.Button>
+                <Radio.Button value="backup">
+                  💾 Backup (Septembar 2025)
+                </Radio.Button>
+              </Radio.Group>
+            </div>
+            {dataSource === 'backup' && (
+              <Alert
+                message="Backup tabele podržavaju samo Direct metodu računanja"
+                description="Metoda računanja je automatski prebačena na Direct jer backup tabele ne sadrže VIEW aggregate."
+                type="info"
+                showIcon
+                className="mt-3"
+              />
+            )}
+          </Col>
+        </Row>
+      </Card>
+
       {/* Filters */}
       <Card className="mb-4">
         <Row gutter={16} align="middle">
@@ -889,6 +942,7 @@ const MonthlyReport: React.FC = () => {
                 checkedChildren={<><DatabaseOutlined /> Direktno</>}
                 unCheckedChildren={<><ThunderboltOutlined /> VIEW-ovi</>}
                 size="default"
+                disabled={dataSource === 'backup'} // Backup može samo Direct
               />
             </div>
           </Col>

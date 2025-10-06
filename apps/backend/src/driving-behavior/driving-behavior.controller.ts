@@ -182,6 +182,7 @@ export class DrivingBehaviorController {
       dto.endDate,
       dto.useDirectCalculation ?? false,
       dto.aggregateType,
+      dto.dataSource ?? 'main',
     );
   }
 
