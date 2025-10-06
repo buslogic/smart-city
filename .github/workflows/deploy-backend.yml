@@ -34,12 +34,18 @@ jobs:
           username: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
           password: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
 
+      - name: Generate timestamp tag
+        id: timestamp
+        run: echo "tag=$(date +'%Y%m%d_%H%M')" >> $GITHUB_OUTPUT
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
         with:
           context: ./apps/backend
           push: true
-          tags: registry.digitalocean.com/smart-city/backend:latest,registry.digitalocean.com/smart-city/backend:${{ github.sha }}
+          tags: |
+            registry.digitalocean.com/smart-city/backend:latest
+            registry.digitalocean.com/smart-city/backend:${{ steps.timestamp.outputs.tag }}
           cache-from: type=registry,ref=registry.digitalocean.com/smart-city/backend:buildcache
           cache-to: type=registry,ref=registry.digitalocean.com/smart-city/backend:buildcache,mode=max
 
@@ -138,7 +144,7 @@ jobs:
         run: |
           echo "✅ Backend deployed successfully to production!"
           echo "📍 API URL: https://api.smart-city.rs"
-          echo "🔄 Image: registry.digitalocean.com/smart-city/backend:${{ github.sha }}"
+          echo "🔄 Image: registry.digitalocean.com/smart-city/backend:latest"
 
       - name: Send notification on failure
         if: failure()
