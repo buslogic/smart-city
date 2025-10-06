@@ -156,14 +156,17 @@ export class DrivingBehaviorController {
 
   /**
    * OPTIMIZED: Get statistics for multiple vehicles at once
-   * DUAL MODE: Supports both VIEW aggregates (fast) and direct calculation (reliable)
+   * TRIPLE MODE: Supports 3 calculation methods
    */
   @Post('batch-statistics')
   @ApiOperation({
     summary: 'Get statistics for multiple vehicles (BATCH)',
     description:
       'Returns aggregated statistics for multiple vehicles in a single request - optimized for monthly reports. ' +
-      'Supports dual mode: VIEW aggregates (fast, default) or direct calculation from gps_data (slower but reliable).',
+      'Supports 3 modes: ' +
+      '1. NO-PostGIS VIEW aggregates (fastest, default, Haversine formula), ' +
+      '2. PostGIS VIEW aggregates (backup, ST_Distance), ' +
+      '3. Direct from gps_data (slowest, emergency, ST_Distance).',
   })
   @ApiResponse({
     status: 200,
@@ -178,6 +181,7 @@ export class DrivingBehaviorController {
       dto.startDate,
       dto.endDate,
       dto.useDirectCalculation ?? false,
+      dto.aggregateType,
     );
   }
 

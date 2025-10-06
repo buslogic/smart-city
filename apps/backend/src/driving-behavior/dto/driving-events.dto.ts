@@ -21,6 +21,11 @@ export enum SeverityLevel {
   SEVERE = 'severe',
 }
 
+export enum AggregateType {
+  NO_POSTGIS = 'no_postgis', // Novi agregat БEZ PostGIS (brži, default)
+  POSTGIS = 'postgis', // Stari agregat SA PostGIS (backup)
+}
+
 export class DrivingEventDto {
   @ApiProperty({ description: 'Event ID' })
   id: number;
@@ -227,8 +232,19 @@ export class BatchStatisticsDto {
   endDate: string;
 
   @ApiProperty({
+    enum: AggregateType,
     description:
-      'Use direct calculation from gps_data (slower but reliable) instead of VIEW aggregates',
+      'Aggregate type: no_postgis (БEZ PostGIS, brži, default) ili postgis (SA PostGIS, backup)',
+    required: false,
+    default: AggregateType.NO_POSTGIS,
+  })
+  @IsOptional()
+  @IsEnum(AggregateType)
+  aggregateType?: AggregateType;
+
+  @ApiProperty({
+    description:
+      'Zaobiđi aggregate-e i računaj direktno iz gps_data tabele (najsporije, emergency)',
     required: false,
     default: false,
   })

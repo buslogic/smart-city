@@ -13,6 +13,7 @@ import {
   ChartDataPointDto,
   EventType,
   SeverityLevel,
+  AggregateType,
 } from './dto/driving-events.dto';
 
 @Injectable()
@@ -452,25 +453,36 @@ export class DrivingBehaviorService {
   /**
    * OPTIMIZED: Get statistics for multiple vehicles at once
    * Much faster than individual queries!
-   * DUAL MODE: Supports both VIEW aggregates (fast) and direct calculation (reliable)
+   * TRIPLE MODE: Supports 3 calculation methods:
+   *   1. NO-PostGIS VIEW aggregates (fastest, default) - Haversine formula
+   *   2. PostGIS VIEW aggregates (backup) - ST_Distance
+   *   3. Direct from gps_data (slowest, emergency) - ST_Distance
    */
   async getBatchMonthlyStatistics(
     vehicleIds: number[],
     startDate: string,
     endDate: string,
     useDirectCalculation: boolean = false,
+    aggregateType: AggregateType = AggregateType.NO_POSTGIS,
   ): Promise<VehicleStatisticsDto[]> {
     try {
-      // Get event statistics (same for both modes)
+      // Get event statistics (same for all modes)
       const eventStats = await this.getEventStats(vehicleIds, startDate, endDate);
 
-      // Get distance statistics - DUAL MODE
+      // Get distance statistics - TRIPLE MODE
       let distanceStats: Map<number, any>;
+
       if (useDirectCalculation) {
-        this.logger.warn(`⚠️ Using DIRECT calculation from gps_data (slower but reliable)`);
+        // OPCIJA 3: Najsporije, emergency
+        this.logger.warn(`⚠️ DIREKTNO računanje iz gps_data (najsporije, sa PostGIS ST_Distance)`);
         distanceStats = await this.getDistanceStatsDirectly(vehicleIds, startDate, endDate);
+      } else if (aggregateType === AggregateType.NO_POSTGIS) {
+        // OPCIJA 1: Najbrže, default
+        this.logger.log(`✅ NO-PostGIS VIEW agregati (brže, preporučeno, Haversine formula)`);
+        distanceStats = await this.getDistanceStatsFromNoPostGISViews(vehicleIds, startDate, endDate);
       } else {
-        this.logger.log(`✅ Using VIEW aggregates (fast, default method)`);
+        // OPCIJA 2: Backup
+        this.logger.log(`✅ PostGIS VIEW agregati (backup opcija, ST_Distance)`);
         distanceStats = await this.getDistanceStatsFromViews(vehicleIds, startDate, endDate);
       }
 
@@ -588,6 +600,76 @@ export class DrivingBehaviorService {
         active_days: row.active_days || 0,
       });
     });
+
+    return distanceMap;
+  }
+
+  /**
+   * OPCIJA 1B: Get distance statistics from NO-PostGIS VIEW aggregates (FAST - new default)
+   * Uses monthly + hourly VIEW-ova БEZ PostGIS za Belgrade time (UTC+2) correction
+   */
+  private async getDistanceStatsFromNoPostGISViews(
+    vehicleIds: number[],
+    startDate: string,
+    endDate: string,
+  ): Promise<Map<number, any>> {
+    const query = `
+      WITH monthly_base AS (
+        SELECT
+          vehicle_id,
+          total_distance_km as km_monthly,
+          num_days as active_days
+        FROM monthly_view_gps_data_5_minute_no_postgis
+        WHERE vehicle_id = ANY($1::int[])
+          AND month = DATE_TRUNC('month', $2::date)::date
+      ),
+      hourly_start_correction AS (
+        -- Dodaj sate od prethodnog meseca koji pripadaju Belgrade mesecu
+        -- Npr. za avgust: 31.07 22:00-23:59 UTC = 01.08 00:00-01:59 Belgrade
+        SELECT
+          vehicle_id,
+          COALESCE(SUM(total_distance_km), 0) as km_to_add
+        FROM hourly_view_gps_data_5_minute_no_postgis
+        WHERE vehicle_id = ANY($1::int[])
+          AND hour >= (DATE_TRUNC('month', $2::date) - INTERVAL '2 hours')::timestamptz
+          AND hour < DATE_TRUNC('month', $2::date)::timestamptz
+        GROUP BY vehicle_id
+      ),
+      hourly_end_correction AS (
+        -- Oduzmi sate koji ne pripadaju Belgrade mesecu
+        -- Npr. za avgust: 31.08 22:00-23:59 UTC = 01.09 00:00-01:59 Belgrade
+        SELECT
+          vehicle_id,
+          COALESCE(SUM(total_distance_km), 0) as km_to_subtract
+        FROM hourly_view_gps_data_5_minute_no_postgis
+        WHERE vehicle_id = ANY($1::int[])
+          AND hour >= (DATE_TRUNC('month', $3::date + INTERVAL '1 day') - INTERVAL '2 hours')::timestamptz
+          AND hour < DATE_TRUNC('month', $3::date + INTERVAL '1 day')::timestamptz
+        GROUP BY vehicle_id
+      )
+      SELECT
+        COALESCE(m.vehicle_id, hs.vehicle_id, he.vehicle_id) as vehicle_id,
+        COALESCE(m.km_monthly, 0) +
+        COALESCE(hs.km_to_add, 0) -
+        COALESCE(he.km_to_subtract, 0) as total_km,
+        COALESCE(m.active_days, 0) as active_days
+      FROM monthly_base m
+      FULL OUTER JOIN hourly_start_correction hs ON m.vehicle_id = hs.vehicle_id
+      FULL OUTER JOIN hourly_end_correction he ON
+        COALESCE(m.vehicle_id, hs.vehicle_id) = he.vehicle_id
+    `;
+
+    const result = await this.pgPool.query(query, [vehicleIds, startDate, endDate]);
+
+    const distanceMap = new Map<number, any>();
+    result.rows.forEach(row => {
+      distanceMap.set(row.vehicle_id, {
+        total_km: parseFloat(row.total_km) || 0,
+        active_days: row.active_days || 0,
+      });
+    });
+
+    this.logger.log(`✅ NO-PostGIS VIEW agregati: ${result.rows.length} vozila (Haversine formula)`);
 
     return distanceMap;
   }
