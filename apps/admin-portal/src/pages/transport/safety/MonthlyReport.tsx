@@ -31,6 +31,8 @@ import {
   InfoCircleOutlined,
   DashboardOutlined,
   TableOutlined,
+  DatabaseOutlined,
+  ThunderboltOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
@@ -306,6 +308,7 @@ const MonthlyReport: React.FC = () => {
   const [savingConfig, setSavingConfig] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
   const [isExecutiveView, setIsExecutiveView] = useState(false); // Toggle između detaljnog i izvršnog prikaza
+  const [calculationMethod, setCalculationMethod] = useState<'views' | 'direct'>('views'); // Metoda računanja kilometraže
 
   // Fetch all vehicles
   const { data: vehiclesResponse, isLoading: vehiclesLoading } = useQuery({
@@ -365,7 +368,9 @@ const MonthlyReport: React.FC = () => {
         const chunkStats = await drivingBehaviorService.getBatchStatistics(
           chunk,
           startDate,
-          endDate
+          endDate,
+          calculationMethod === 'direct', // Koristi direktno računanje ako je odabrano
+          'no_postgis' // Uvek koristimo NO-PostGIS aggregate (PostGIS je uklonjen)
         );
 
         allStats.push(...chunkStats);
@@ -857,6 +862,34 @@ const MonthlyReport: React.FC = () => {
                   Kompaktni izveštaj optimizovan za upravu i štampu
                 </div>
               )}
+            </div>
+          </Col>
+        </Row>
+
+        {/* Metoda računanja kilometraže */}
+        <Row gutter={16} align="middle" className="mt-4">
+          <Col span={24}>
+            <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <div className="flex items-center space-x-4">
+                <InfoCircleOutlined className="text-blue-600 text-xl" />
+                <div>
+                  <label className="text-sm font-semibold text-blue-900">
+                    Metoda računanja kilometraže:
+                  </label>
+                  <div className="text-xs text-blue-700 mt-1">
+                    {calculationMethod === 'views'
+                      ? '✅ VIEW agregati БEZ PostGIS (Haversine formula) - brže, preporučeno'
+                      : '⚠️ Direktno iz GPS podataka (PostGIS ST_Distance) - sporije, backup opcija'}
+                  </div>
+                </div>
+              </div>
+              <Switch
+                checked={calculationMethod === 'direct'}
+                onChange={(checked) => setCalculationMethod(checked ? 'direct' : 'views')}
+                checkedChildren={<><DatabaseOutlined /> Direktno</>}
+                unCheckedChildren={<><ThunderboltOutlined /> VIEW-ovi</>}
+                size="default"
+              />
             </div>
           </Col>
         </Row>
