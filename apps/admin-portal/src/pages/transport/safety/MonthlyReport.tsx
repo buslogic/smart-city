@@ -19,6 +19,7 @@ import {
   Tooltip,
   Switch,
   Progress,
+  Radio,
 } from 'antd';
 import {
   FilePdfOutlined,
@@ -309,6 +310,7 @@ const MonthlyReport: React.FC = () => {
   const reportRef = useRef<HTMLDivElement>(null);
   const [isExecutiveView, setIsExecutiveView] = useState(false); // Toggle između detaljnog i izvršnog prikaza
   const [calculationMethod, setCalculationMethod] = useState<'views' | 'direct'>('views'); // Metoda računanja kilometraže
+  const [aggregateType, setAggregateType] = useState<'no_postgis' | 'postgis'>('no_postgis'); // Tip agregata (samo za VIEW mode)
 
   // Fetch all vehicles
   const { data: vehiclesResponse, isLoading: vehiclesLoading } = useQuery({
@@ -369,7 +371,8 @@ const MonthlyReport: React.FC = () => {
           chunk,
           startDate,
           endDate,
-          calculationMethod === 'direct' // Koristi direktno računanje ako je odabrano
+          calculationMethod === 'direct', // Koristi direktno računanje ako je odabrano
+          calculationMethod === 'views' ? aggregateType : undefined // Agregat type samo za VIEW mode
         );
 
         allStats.push(...chunkStats);
@@ -868,27 +871,59 @@ const MonthlyReport: React.FC = () => {
         {/* Metoda računanja kilometraže */}
         <Row gutter={16} align="middle" className="mt-4">
           <Col span={24}>
-            <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <div className="flex items-center space-x-4">
-                <InfoCircleOutlined className="text-blue-600 text-xl" />
-                <div>
-                  <label className="text-sm font-semibold text-blue-900">
-                    Metoda računanja kilometraže:
-                  </label>
-                  <div className="text-xs text-blue-700 mt-1">
-                    {calculationMethod === 'views'
-                      ? '✅ VIEW agregati (brže, preporučeno)'
-                      : '⚠️ Direktno iz GPS (sporije, backup opcija)'}
+            <div className="flex flex-col space-y-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              {/* Glavni odabir: VIEW ili Direct */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <InfoCircleOutlined className="text-blue-600 text-xl" />
+                  <div>
+                    <label className="text-sm font-semibold text-blue-900">
+                      Metoda računanja kilometraže:
+                    </label>
                   </div>
                 </div>
+                <Switch
+                  checked={calculationMethod === 'direct'}
+                  onChange={(checked) => setCalculationMethod(checked ? 'direct' : 'views')}
+                  checkedChildren={<><DatabaseOutlined /> Direktno</>}
+                  unCheckedChildren={<><ThunderboltOutlined /> VIEW-ovi</>}
+                  size="default"
+                />
               </div>
-              <Switch
-                checked={calculationMethod === 'direct'}
-                onChange={(checked) => setCalculationMethod(checked ? 'direct' : 'views')}
-                checkedChildren={<><DatabaseOutlined /> Direktno</>}
-                unCheckedChildren={<><ThunderboltOutlined /> VIEW-ovi</>}
-                size="default"
-              />
+
+              {/* Pododabir agregata (samo ako je VIEW) */}
+              {calculationMethod === 'views' && (
+                <div className="flex items-center space-x-4 ml-8 pl-4 border-l-2 border-blue-300">
+                  <label className="text-sm font-medium text-blue-800">
+                    Tip agregata:
+                  </label>
+                  <Radio.Group
+                    value={aggregateType}
+                    onChange={(e) => setAggregateType(e.target.value)}
+                    size="small"
+                  >
+                    <Radio.Button value="no_postgis">
+                      ⚡ БEZ PostGIS (brže, preporučeno)
+                    </Radio.Button>
+                    <Radio.Button value="postgis">
+                      🗺️ SA PostGIS (backup)
+                    </Radio.Button>
+                  </Radio.Group>
+                </div>
+              )}
+
+              {/* Opis trenutnog odabira */}
+              <div className="text-xs text-blue-700 ml-8">
+                {calculationMethod === 'views' ? (
+                  aggregateType === 'no_postgis' ? (
+                    '✅ VIEW agregati БEZ PostGIS (Haversine formula) - brže, paralelizovano'
+                  ) : (
+                    '✅ VIEW agregati SA PostGIS (ST_Distance) - backup opcija'
+                  )
+                ) : (
+                  '⚠️ Direktno iz GPS podataka (sa PostGIS ST_Distance) - najsporije, samo za debug'
+                )}
+              </div>
             </div>
           </Col>
         </Row>
