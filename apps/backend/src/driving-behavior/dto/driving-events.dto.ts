@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsNumber,
@@ -200,4 +201,38 @@ export class ChartDataDto {
 
   @ApiProperty({ description: 'Number of events in this period' })
   eventCount: number;
+}
+
+export class BatchStatisticsDto {
+  @ApiProperty({
+    description: 'Array of vehicle IDs',
+    example: [1, 2, 3, 4, 5],
+    type: [Number],
+  })
+  @IsNumber({}, { each: true })
+  vehicleIds: number[];
+
+  @ApiProperty({
+    description: 'Start date (YYYY-MM-DD)',
+    example: '2025-08-01',
+  })
+  @IsDateString()
+  startDate: string;
+
+  @ApiProperty({
+    description: 'End date (YYYY-MM-DD)',
+    example: '2025-08-31',
+  })
+  @IsDateString()
+  endDate: string;
+
+  @ApiProperty({
+    description:
+      'Use direct calculation from gps_data (slower but reliable) instead of VIEW aggregates',
+    required: false,
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  useDirectCalculation?: boolean;
 }

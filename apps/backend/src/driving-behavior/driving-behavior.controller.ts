@@ -21,6 +21,7 @@ import {
 } from '@nestjs/swagger';
 import { DrivingBehaviorService } from './driving-behavior.service';
 import {
+  BatchStatisticsDto,
   DrivingEventDto,
   GetEventsQueryDto,
   VehicleStatisticsDto,
@@ -155,38 +156,14 @@ export class DrivingBehaviorController {
 
   /**
    * OPTIMIZED: Get statistics for multiple vehicles at once
+   * DUAL MODE: Supports both VIEW aggregates (fast) and direct calculation (reliable)
    */
   @Post('batch-statistics')
   @ApiOperation({
     summary: 'Get statistics for multiple vehicles (BATCH)',
     description:
-      'Returns aggregated statistics for multiple vehicles in a single request - optimized for monthly reports',
-  })
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        vehicleIds: {
-          type: 'array',
-          items: { type: 'number' },
-          description: 'Array of vehicle IDs',
-          example: [1, 2, 3, 4, 5],
-        },
-        startDate: {
-          type: 'string',
-          format: 'date',
-          description: 'Start date (YYYY-MM-DD)',
-          example: '2025-08-01',
-        },
-        endDate: {
-          type: 'string',
-          format: 'date',
-          description: 'End date (YYYY-MM-DD)',
-          example: '2025-08-31',
-        },
-      },
-      required: ['vehicleIds', 'startDate', 'endDate'],
-    },
+      'Returns aggregated statistics for multiple vehicles in a single request - optimized for monthly reports. ' +
+      'Supports dual mode: VIEW aggregates (fast, default) or direct calculation from gps_data (slower but reliable).',
   })
   @ApiResponse({
     status: 200,
@@ -194,12 +171,13 @@ export class DrivingBehaviorController {
     type: [VehicleStatisticsDto],
   })
   async getBatchStatistics(
-    @Body() dto: { vehicleIds: number[]; startDate: string; endDate: string },
+    @Body() dto: BatchStatisticsDto,
   ): Promise<VehicleStatisticsDto[]> {
     return this.drivingBehaviorService.getBatchMonthlyStatistics(
       dto.vehicleIds,
       dto.startDate,
       dto.endDate,
+      dto.useDirectCalculation ?? false,
     );
   }
 

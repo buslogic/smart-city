@@ -79,11 +79,13 @@ class DrivingBehaviorService {
 
   /**
    * OPTIMIZED: Get statistics for multiple vehicles in a single request
+   * DUAL MODE: Supports both VIEW aggregates (fast) and direct calculation (reliable)
    */
   async getBatchStatistics(
     vehicleIds: number[],
     startDate: string,
-    endDate: string
+    endDate: string,
+    useDirectCalculation?: boolean
   ): Promise<VehicleStatistics[]> {
     try {
       const response = await axios.post(
@@ -91,7 +93,8 @@ class DrivingBehaviorService {
         {
           vehicleIds,
           startDate,
-          endDate
+          endDate,
+          useDirectCalculation: useDirectCalculation ?? false
         },
         {
           headers: this.getAuthHeaders(),
