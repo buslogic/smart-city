@@ -286,7 +286,7 @@ export class TimescaledbService {
         aggregateName === 'hourly_vehicle_stats' ||
         aggregateName === 'vehicle_hourly_stats' ||
         aggregateName === 'monthly_vehicle_raw_stats' ||
-        aggregateName === 'gps_data_5_minute_no_lag_aggregate'
+        aggregateName === 'gps_data_5_minute_no_postgis'
       ) {
         // Za velike aggregate, pokreni u pozadini
         this.logger.log(

@@ -527,6 +527,7 @@ export class DrivingBehaviorService {
   /**
    * OPCIJA 1: Get distance statistics from VIEW aggregates (FAST - default)
    * Uses monthly + hourly VIEW-ova for Belgrade time (UTC+2) correction
+   * БEZ PostGIS - koristi custom Haversine funkciju
    */
   private async getDistanceStatsFromViews(
     vehicleIds: number[],
@@ -539,7 +540,7 @@ export class DrivingBehaviorService {
           vehicle_id,
           total_distance_km as km_monthly,
           num_days as active_days
-        FROM monthly_view_gps_data_5_minute_no_lag_aggregates
+        FROM monthly_view_gps_data_5_minute_no_postgis
         WHERE vehicle_id = ANY($1::int[])
           AND month = DATE_TRUNC('month', $2::date)::date
       ),
@@ -549,7 +550,7 @@ export class DrivingBehaviorService {
         SELECT
           vehicle_id,
           COALESCE(SUM(total_distance_km), 0) as km_to_add
-        FROM hourly_view_gps_data_5_minute_no_lag_aggregates
+        FROM hourly_view_gps_data_5_minute_no_postgis
         WHERE vehicle_id = ANY($1::int[])
           AND hour >= (DATE_TRUNC('month', $2::date) - INTERVAL '2 hours')::timestamptz
           AND hour < DATE_TRUNC('month', $2::date)::timestamptz
@@ -561,7 +562,7 @@ export class DrivingBehaviorService {
         SELECT
           vehicle_id,
           COALESCE(SUM(total_distance_km), 0) as km_to_subtract
-        FROM hourly_view_gps_data_5_minute_no_lag_aggregates
+        FROM hourly_view_gps_data_5_minute_no_postgis
         WHERE vehicle_id = ANY($1::int[])
           AND hour >= (DATE_TRUNC('month', $3::date + INTERVAL '1 day') - INTERVAL '2 hours')::timestamptz
           AND hour < DATE_TRUNC('month', $3::date + INTERVAL '1 day')::timestamptz
