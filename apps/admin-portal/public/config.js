@@ -1,24 +1,26 @@
 /**
- * Runtime Configuration - Fallback for Development
+ * Runtime Configuration - Kubernetes ConfigMap Placeholder
  *
- * This file provides default configuration for local development.
- * In Kubernetes, this file will be replaced by a ConfigMap.
+ * This file is intentionally empty for Vercel and local development.
+ * The app will use import.meta.env.VITE_* variables instead.
  *
- * Priority:
- * 1. Kubernetes ConfigMap (overrides this file)
- * 2. This fallback (for local dev and Vercel)
+ * In Kubernetes, this file will be REPLACED by a ConfigMap that sets window.APP_CONFIG.
+ *
+ * Priority (handled by src/config/runtime.ts):
+ * 1. window.APP_CONFIG (Kubernetes ConfigMap) - if set, use it
+ * 2. import.meta.env.VITE_* (Vercel/local .env) - fallback
+ * 3. Hardcoded defaults (localhost:3010) - final fallback
  */
 
-// Initialize APP_CONFIG only if not already set (Kubernetes will set it first)
-window.APP_CONFIG = window.APP_CONFIG || {
-  API_URL: 'http://localhost:3010',
-  WS_URL: 'ws://localhost:3010',
-  COMPANY_NAME: 'Smart City Development',
-  ENVIRONMENT: 'development'
-};
+// DO NOT set window.APP_CONFIG here!
+// Let runtime.ts handle the fallback chain.
 
-// Log config source for debugging
+// Log for debugging
 if (typeof console !== 'undefined' && console.log) {
-  console.log('[Config] Loaded from:', window.APP_CONFIG.ENVIRONMENT === 'development' ? 'fallback (public/config.js)' : 'Kubernetes ConfigMap');
-  console.log('[Config] API_URL:', window.APP_CONFIG.API_URL);
+  if (window.APP_CONFIG) {
+    console.log('[Config] Using Kubernetes ConfigMap');
+    console.log('[Config] API_URL:', window.APP_CONFIG.API_URL);
+  } else {
+    console.log('[Config] No ConfigMap found, using build-time env variables');
+  }
 }
