@@ -313,13 +313,6 @@ const MonthlyReport: React.FC = () => {
   const [calculationMethod, setCalculationMethod] = useState<'views' | 'direct'>('views'); // Metoda računanja kilometraže
   const [dataSource, setDataSource] = useState<'main' | 'backup'>('main'); // Izvor podataka (main ili backup)
 
-  // Auto-switch to Direct method when Backup is selected (Backup nema VIEW-ove)
-  React.useEffect(() => {
-    if (dataSource === 'backup') {
-      setCalculationMethod('direct');
-    }
-  }, [dataSource]);
-
   // Fetch all vehicles
   const { data: vehiclesResponse, isLoading: vehiclesLoading } = useQuery({
     queryKey: ['vehicles-report'],
@@ -807,10 +800,10 @@ const MonthlyReport: React.FC = () => {
                 </Radio.Button>
               </Radio.Group>
             </div>
-            {dataSource === 'backup' && (
+            {dataSource === 'backup' && calculationMethod === 'views' && (
               <Alert
-                message="Backup tabele podržavaju samo Direct metodu računanja"
-                description="Metoda računanja je automatski prebačena na Direct jer backup tabele ne sadrže VIEW aggregate."
+                message="Backup tabele koriste direktne aggregate (БEZ VIEW wrappera)"
+                description="Podaci se učitavaju iz hourly_vehicle_distance i monthly_vehicle_distance agregata."
                 type="info"
                 showIcon
                 className="mt-3"
@@ -931,7 +924,9 @@ const MonthlyReport: React.FC = () => {
                   </label>
                   <div className="text-xs text-blue-700 mt-1">
                     {calculationMethod === 'views'
-                      ? '✅ VIEW agregati БEZ PostGIS (Haversine formula) - brže, preporučeno'
+                      ? dataSource === 'main'
+                        ? '✅ VIEW agregati БEZ PostGIS (Haversine formula) - brže, preporučeno'
+                        : '✅ Backup agregati БEZ PostGIS - hourly/monthly_vehicle_distance'
                       : '⚠️ Direktno iz GPS podataka (PostGIS ST_Distance) - sporije, backup opcija'}
                   </div>
                 </div>
@@ -940,9 +935,8 @@ const MonthlyReport: React.FC = () => {
                 checked={calculationMethod === 'direct'}
                 onChange={(checked) => setCalculationMethod(checked ? 'direct' : 'views')}
                 checkedChildren={<><DatabaseOutlined /> Direktno</>}
-                unCheckedChildren={<><ThunderboltOutlined /> VIEW-ovi</>}
+                unCheckedChildren={<><ThunderboltOutlined /> Agregati</>}
                 size="default"
-                disabled={dataSource === 'backup'} // Backup može samo Direct
               />
             </div>
           </Col>

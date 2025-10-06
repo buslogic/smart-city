@@ -473,10 +473,19 @@ export class DrivingBehaviorService {
       let distanceStats: Map<number, any>;
 
       if (dataSource === 'backup') {
-        // BACKUP TABLES - samo Direct metoda (nema VIEW-ova)
-        this.logger.log(`📦 BACKUP tabele - koristi driving_events_backup_20250930 i gps_data_backup_04102025130800`);
+        // BACKUP TABLES - podržava aggregate i Direct
+        this.logger.log(`📦 BACKUP tabele`);
         eventStats = await this.getEventStatsFromBackup(vehicleIds, startDate, endDate);
-        distanceStats = await this.getDistanceStatsDirectlyFromBackup(vehicleIds, startDate, endDate);
+
+        if (useDirectCalculation) {
+          // Direct iz gps_data_backup БEZ agregata
+          this.logger.warn(`⚠️ DIREKTNO iz gps_data_backup_04102025130800 (БEZ agregata)`);
+          distanceStats = await this.getDistanceStatsDirectlyFromBackup(vehicleIds, startDate, endDate);
+        } else {
+          // Koristi backup aggregate (БEZ VIEW wrappera)
+          this.logger.log(`✅ BACKUP agregati - hourly/monthly_vehicle_distance`);
+          distanceStats = await this.getDistanceStatsFromBackupAggregates(vehicleIds, startDate, endDate);
+        }
       } else {
         // MAIN TABLES - podržava VIEW i Direct
         this.logger.log(`📊 MAIN tabele - koristi driving_events i gps_data`);
@@ -1263,6 +1272,76 @@ export class DrivingBehaviorService {
     this.logger.log(`📦 Event stats iz BACKUP tabele: ${result.rows.length} vozila`);
 
     return eventMap;
+  }
+
+  /**
+   * Get distance statistics from BACKUP AGGREGATES (БEZ VIEW wrappera)
+   * Uses hourly_vehicle_distance and monthly_vehicle_distance
+   */
+  private async getDistanceStatsFromBackupAggregates(
+    vehicleIds: number[],
+    startDate: string,
+    endDate: string,
+  ): Promise<Map<number, any>> {
+    const query = `
+      WITH monthly_base AS (
+        SELECT
+          vehicle_id,
+          distance_km as km_monthly,
+          active_days
+        FROM monthly_vehicle_distance
+        WHERE vehicle_id = ANY($1::int[])
+          AND month = DATE_TRUNC('month', $2::date)::date
+      ),
+      hourly_start_correction AS (
+        -- Dodaj sate od prethodnog meseca koji pripadaju Belgrade mesecu
+        -- Npr. za avgust: 31.07 22:00-23:59 UTC = 01.08 00:00-01:59 Belgrade
+        SELECT
+          vehicle_id,
+          COALESCE(SUM(distance_km), 0) as km_to_add
+        FROM hourly_vehicle_distance
+        WHERE vehicle_id = ANY($1::int[])
+          AND hour >= (DATE_TRUNC('month', $2::date) - INTERVAL '2 hours')::timestamptz
+          AND hour < DATE_TRUNC('month', $2::date)::timestamptz
+        GROUP BY vehicle_id
+      ),
+      hourly_end_correction AS (
+        -- Oduzmi sate koji ne pripadaju Belgrade mesecu
+        -- Npr. za avgust: 31.08 22:00-23:59 UTC = 01.09 00:00-01:59 Belgrade
+        SELECT
+          vehicle_id,
+          COALESCE(SUM(distance_km), 0) as km_to_subtract
+        FROM hourly_vehicle_distance
+        WHERE vehicle_id = ANY($1::int[])
+          AND hour >= (DATE_TRUNC('month', $3::date + INTERVAL '1 day') - INTERVAL '2 hours')::timestamptz
+          AND hour < DATE_TRUNC('month', $3::date + INTERVAL '1 day')::timestamptz
+        GROUP BY vehicle_id
+      )
+      SELECT
+        COALESCE(m.vehicle_id, hs.vehicle_id, he.vehicle_id) as vehicle_id,
+        COALESCE(m.km_monthly, 0) +
+        COALESCE(hs.km_to_add, 0) -
+        COALESCE(he.km_to_subtract, 0) as total_km,
+        COALESCE(m.active_days, 0) as active_days
+      FROM monthly_base m
+      FULL OUTER JOIN hourly_start_correction hs ON m.vehicle_id = hs.vehicle_id
+      FULL OUTER JOIN hourly_end_correction he ON
+        COALESCE(m.vehicle_id, hs.vehicle_id) = he.vehicle_id
+    `;
+
+    const result = await this.pgPool.query(query, [vehicleIds, startDate, endDate]);
+
+    const distanceMap = new Map<number, any>();
+    result.rows.forEach(row => {
+      distanceMap.set(row.vehicle_id, {
+        total_km: parseFloat(row.total_km) || 0,
+        active_days: row.active_days || 0,
+      });
+    });
+
+    this.logger.log(`📦 Backup agregati: ${result.rows.length} vozila (hourly/monthly_vehicle_distance)`);
+
+    return distanceMap;
   }
 
   /**
