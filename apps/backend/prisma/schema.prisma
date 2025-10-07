@@ -747,28 +747,28 @@ model WaterMeterManufacturer {
 }
 
 model WaterMeter {
-  id                Int                     @id @default(autoincrement())
+  id                Int       @id @default(autoincrement())
   counter           Int?
-  idv               String?                 @unique @db.VarChar(255)
-  availabilityId    Int?                    @map("availability_id")
-  typeId            Int?                    @map("type_id")
-  manufacturerId    Int?                    @map("manufacturer_id")
-  serialNumber      String?                 @map("serial_number") @db.VarChar(255)
-  calibratedFrom    DateTime?               @map("calibrated_from")
-  calibratedTo      DateTime?               @map("calibrated_to")
-  module            String?                 @db.VarChar(255)
-  disconnectionDate DateTime?               @map("disconnection_date")
+  idv               String?   @unique @db.VarChar(255)
+  availabilityId    Int?      @map("availability_id")
+  typeId            Int?      @map("type_id")
+  manufacturerId    Int?      @map("manufacturer_id")
+  serialNumber      String?   @map("serial_number") @db.VarChar(255)
+  calibratedFrom    DateTime? @map("calibrated_from")
+  calibratedTo      DateTime? @map("calibrated_to")
+  module            String?   @db.VarChar(255)
+  disconnectionDate DateTime? @map("disconnection_date")
   idmm              Int?
-  sifraPotrosaca    Int?                    @map("sifra_potrosaca")
-  sifraKupca        Int?                    @map("sifra_kupca")
-  aktivan           Boolean                 @default(true)
-  createdAt         DateTime?               @default(now()) @map("created_at")
-  updatedAt         DateTime?               @updatedAt @map("updated_at")
+  sifraPotrosaca    Int?      @map("sifra_potrosaca")
+  sifraKupca        Int?      @map("sifra_kupca")
+  aktivan           Boolean   @default(true)
+  createdAt         DateTime? @default(now()) @map("created_at")
+  updatedAt         DateTime? @updatedAt @map("updated_at")
 
-  type              WaterMeterType?         @relation(fields: [typeId], references: [id], map: "FK_vodovod_water_meter_type_id")
-  availability      WaterMeterAvailability? @relation(fields: [availabilityId], references: [id], map: "FK_vodovod_water_meter_availability_id")
-  manufacturer      WaterMeterManufacturer? @relation(fields: [manufacturerId], references: [id], map: "FK_vodovod_water_meter_manufacturer_id")
-  replacements      ReplacedWaterMeter[]
+  type         WaterMeterType?         @relation(fields: [typeId], references: [id], map: "FK_vodovod_water_meter_type_id")
+  availability WaterMeterAvailability? @relation(fields: [availabilityId], references: [id], map: "FK_vodovod_water_meter_availability_id")
+  manufacturer WaterMeterManufacturer? @relation(fields: [manufacturerId], references: [id], map: "FK_vodovod_water_meter_manufacturer_id")
+  replacements ReplacedWaterMeter[]
 
   @@index([typeId], map: "FK_vodovod_water_meter_type_id")
   @@index([availabilityId], map: "FK_vodovod_water_meter_availability_id")
@@ -780,29 +780,29 @@ model WaterMeter {
 }
 
 model ReplacedWaterMeter {
-  id                 Int                     @id @default(autoincrement())
-  counter            Int?
-  idv                String?                 @unique @db.VarChar(255)
-  availability       Int?
-  type               Int?
-  manufacturer       Int?
-  serialNumber       String?                 @map("serial_number") @db.VarChar(255)
-  calibratedFrom     DateTime?               @map("calibrated_from")
-  calibratedTo       DateTime?               @map("calibrated_to")
-  module             String?                 @db.VarChar(255)
-  disconnectionDate  DateTime?               @map("disconnection_date")
-  idmm               Int?
-  sifraPotrosaca     Int?                    @map("sifra_potrosaca")
-  sifraKupca         Int?                    @map("sifra_kupca")
-  aktivan            Boolean                 @default(true)
-  replacedId         Int?                    @map("replaced_id")
-  createdAt          DateTime?               @default(now()) @map("created_at")
-  updatedAt          DateTime?               @updatedAt @map("updated_at")
+  id                Int       @id @default(autoincrement())
+  counter           Int?
+  idv               String?   @unique @db.VarChar(255)
+  availability      Int?
+  type              Int?
+  manufacturer      Int?
+  serialNumber      String?   @map("serial_number") @db.VarChar(255)
+  calibratedFrom    DateTime? @map("calibrated_from")
+  calibratedTo      DateTime? @map("calibrated_to")
+  module            String?   @db.VarChar(255)
+  disconnectionDate DateTime? @map("disconnection_date")
+  idmm              Int?
+  sifraPotrosaca    Int?      @map("sifra_potrosaca")
+  sifraKupca        Int?      @map("sifra_kupca")
+  aktivan           Boolean   @default(true)
+  replacedId        Int?      @map("replaced_id")
+  createdAt         DateTime? @default(now()) @map("created_at")
+  updatedAt         DateTime? @updatedAt @map("updated_at")
 
-  replacedMeter      WaterMeter?             @relation(fields: [replacedId], references: [id], map: "fk_replaced_water_meter_original")
-  typeRef            WaterMeterType?         @relation(fields: [type], references: [id])
-  availabilityRef    WaterMeterAvailability? @relation(fields: [availability], references: [id])
-  manufacturerRef    WaterMeterManufacturer? @relation(fields: [manufacturer], references: [id])
+  replacedMeter   WaterMeter?             @relation(fields: [replacedId], references: [id], map: "fk_replaced_water_meter_original")
+  typeRef         WaterMeterType?         @relation(fields: [type], references: [id])
+  availabilityRef WaterMeterAvailability? @relation(fields: [availability], references: [id])
+  manufacturerRef WaterMeterManufacturer? @relation(fields: [manufacturer], references: [id])
 
   @@index([replacedId], map: "fk_replaced_water_meter_original")
   @@map("vodovod_replaced_water_meter")
