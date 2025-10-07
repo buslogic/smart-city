@@ -32,6 +32,12 @@ import { EmailTemplatesModule } from './email-templates/email-templates.module';
 import { MigrationModule } from './migration/migration.module';
 import { SettingsModule } from './settings/settings.module';
 import { UserGroupsModule } from './user-groups/user-groups.module';
+import { WaterMeterTypesModule } from './water-meter-types/water-meter-types.module';
+import { WaterMeterAvailabilityModule } from './water-meter-availability/water-meter-availability.module';
+import { WaterMeterManufacturersModule } from './water-meter-manufacturers/water-meter-manufacturers.module';
+import { WaterMeterRemarksModule } from './water-meter-remarks/water-meter-remarks.module';
+import { WaterMeterModule } from './water-meter/water-meter.module';
+import { ReplacementWaterMetersModule } from './replacement-water-meters/replacement-water-meters.module';
 
 @Module({
   imports: [
@@ -66,6 +72,12 @@ import { UserGroupsModule } from './user-groups/user-groups.module';
     MigrationModule,
     SettingsModule,
     UserGroupsModule,
+    WaterMeterTypesModule,
+    WaterMeterAvailabilityModule,
+    WaterMeterManufacturersModule,
+    WaterMeterRemarksModule,
+    WaterMeterModule,
+    ReplacementWaterMetersModule,
   ],
   controllers: [AppController],
   providers: [

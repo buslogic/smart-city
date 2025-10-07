@@ -1,6 +1,9 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ConfigProvider, App as AntApp } from 'antd';
 import srRS from 'antd/locale/sr_RS';
+import { LocalizationProvider } from '@mui/x-date-pickers';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import 'dayjs/locale/sr';
 import { AuthGuard } from './components/guards/AuthGuard';
 import { PermissionGuard } from './components/guards/PermissionGuard';
 import ModernMenu from './components/layout/ModernMenu';
@@ -27,13 +30,62 @@ import DashboardPage from './pages/dashboard/DashboardPage';
 import TimescaleDB from './pages/transport/maintenance/TimescaleDB';
 import MigrationPage from './pages/migration/MigrationPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
+import WaterMeterTypesPage from './pages/water-meter-types/WaterMeterTypesPage';
+
+// Vodovod pages
+import WaterSystemCitiesPage from './pages/WaterSystemCitiesPage';
+import WaterSystemStreetsPage from './pages/WaterSystemStreetsPage';
+import WaterSystemZonesPage from './pages/WaterSystemZonesPage';
+import WaterSystemRegionPage from './pages/WaterSystemRegionPage';
+import WaterMeterPage from './pages/water-meter/WaterMeterPage';
+import WaterMeterManufacturersPage from './pages/WaterMeterManufacturersPage';
+import WaterMeterAvailabilityPage from './pages/WaterMeterAvailabilityPage';
+import ReplacementWaterMetersPage from './pages/ReplacementWaterMetersPage';
+import WaterMeterRemarksPage from './pages/WaterMeterRemarksPage';
+import ReviewModifiedWaterMetersPage from './pages/ReviewModifiedWaterMetersPage';
+import MeasuringPointsPage from './pages/MeasuringPointsPage';
+import MeasuringPointsByAddressPage from './pages/MeasuringPointsByAddressPage';
+import MeasuringPointsConsumptionPage from './pages/MeasuringPointsConsumptionPage';
+import ReadingsPage from './pages/ReadingsPage';
+import ReadingListsPage from './pages/ReadingListsPage';
+import ReadingListsDataEntryPage from './pages/ReadingListsDataEntryPage';
+import ReadingListsPrintPage from './pages/ReadingListsPrintPage';
+import ReadingAnomaliesPage from './pages/ReadingAnomaliesPage';
+import WaterReadersPage from './pages/WaterReadersPage';
+import WaterServicesPage from './pages/WaterServicesPage';
+import ManageWaterServicesPage from './pages/ManageWaterServicesPage';
+import WaterServicesPricelistPage from './pages/WaterServicesPricelistPage';
+import WaterServicePricelistHistoryPage from './pages/WaterServicePricelistHistoryPage';
+import WaterServicesReviewPage from './pages/WaterServicesReviewPage';
+import WaterMeterCalculationPage from './pages/WaterMeterCalculationPage';
+import BillingCampaignPage from './pages/BillingCampaignPage';
+import CampaignPage from './pages/CampaignPage';
+import SubCampaignPage from './pages/SubCampaignPage';
+import InputCalculationStatePage from './pages/InputCalculationStatePage';
+import PaymentsPage from './pages/PaymentsPage';
+import PaymentsByPaymentMethodPage from './pages/PaymentsByPaymentMethodPage';
+import CashRegisterPage from './pages/CashRegisterPage';
+import CashiersPage from './pages/CashiersPage';
+import CashiersSessionPage from './pages/CashiersSessionPage';
+import CashRegisterReportPage from './pages/CashRegisterReportPage';
+import FiscalDevicePage from './pages/FiscalDevicePage';
+import SubsidiesPage from './pages/SubsidiesPage';
+import SubsidiesUserAssignmentPage from './pages/SubsidiesUserAssignmentPage';
+import UserAccountPage from './pages/user-account/UserAccountPage';
+import HouseCouncilPage from './pages/HouseCouncilPage';
+import ComplaintPage from './pages/ComplaintPage';
+import ComplaintsByAssignePage from './pages/ComplaintsByAssignePage';
+import ComplaintPrioritiesPage from './pages/ComplaintPrioritiesPage';
+import WaterSupplyNotesPage from './pages/WaterSupplyNotesPage';
+import NoteCategoriesPage from './pages/NoteCategoriesPage';
 
 function App() {
   return (
     <ConfigProvider locale={srRS}>
-      <AntApp>
-        <Router>
-          <Routes>
+      <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="sr">
+        <AntApp>
+          <Router>
+            <Routes>
           {/* Public routes */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
@@ -234,10 +286,80 @@ function App() {
                 </PermissionGuard>
               }
             />
+
+            {/* Vodovod routes */}
+            {/* Vodovodni sistem */}
+            <Route path="vodovod/regioni" element={<PermissionGuard permissions={['water_system.regions:view']}><WaterSystemRegionPage /></PermissionGuard>} />
+            <Route path="vodovod/gradovi" element={<PermissionGuard permissions={['water_system.cities:view']}><WaterSystemCitiesPage /></PermissionGuard>} />
+            <Route path="vodovod/zone" element={<PermissionGuard permissions={['water_system.zones:view']}><WaterSystemZonesPage /></PermissionGuard>} />
+            <Route path="vodovod/ulice" element={<PermissionGuard permissions={['water_system.streets:view']}><WaterSystemStreetsPage /></PermissionGuard>} />
+
+            {/* Vodomeri */}
+            <Route path="vodovod/vodomeri" element={<PermissionGuard permissions={['water_meters:view']}><WaterMeterPage /></PermissionGuard>} />
+            <Route path="vodovod/tipovi-vodomera" element={<PermissionGuard permissions={['water_meter_types:view']}><WaterMeterTypesPage /></PermissionGuard>} />
+            <Route path="vodovod/proizvodjaci-vodomera" element={<PermissionGuard permissions={['water_meter_manufacturers:view']}><WaterMeterManufacturersPage /></PermissionGuard>} />
+            <Route path="vodovod/dostupnost-vodomera" element={<PermissionGuard permissions={['water_meter_availability:view']}><WaterMeterAvailabilityPage /></PermissionGuard>} />
+            <Route path="vodovod/zamena-vodomera" element={<PermissionGuard permissions={['water_meter_replacement:view']}><ReplacementWaterMetersPage /></PermissionGuard>} />
+            <Route path="vodovod/napomene-vodomera" element={<PermissionGuard permissions={['water_meter_remarks:view']}><WaterMeterRemarksPage /></PermissionGuard>} />
+            <Route path="vodovod/pregled-izmenjenih-vodomera" element={<PermissionGuard permissions={['water_meter_review:view']}><ReviewModifiedWaterMetersPage /></PermissionGuard>} />
+
+            {/* Merilna mesta */}
+            <Route path="vodovod/merilna-mesta" element={<PermissionGuard permissions={['measuring_points:view']}><MeasuringPointsPage /></PermissionGuard>} />
+            <Route path="vodovod/merilna-mesta-po-adresi" element={<PermissionGuard permissions={['measuring_points_by_address:view']}><MeasuringPointsByAddressPage /></PermissionGuard>} />
+            <Route path="vodovod/potrosnja-merilnih-mesta" element={<PermissionGuard permissions={['measuring_points_consumption:view']}><MeasuringPointsConsumptionPage /></PermissionGuard>} />
+
+            {/* Očitavanja */}
+            <Route path="vodovod/ocitavanja" element={<PermissionGuard permissions={['readings:view']}><ReadingsPage /></PermissionGuard>} />
+            <Route path="vodovod/liste-ocitavanja" element={<PermissionGuard permissions={['reading_lists:view']}><ReadingListsPage /></PermissionGuard>} />
+            <Route path="vodovod/unos-ocitavanja" element={<PermissionGuard permissions={['reading_data_entry:view']}><ReadingListsDataEntryPage /></PermissionGuard>} />
+            <Route path="vodovod/stampa-lista" element={<PermissionGuard permissions={['reading_lists_print:view']}><ReadingListsPrintPage /></PermissionGuard>} />
+            <Route path="vodovod/anomalije-ocitavanja" element={<PermissionGuard permissions={['reading_anomalies:view']}><ReadingAnomaliesPage /></PermissionGuard>} />
+            <Route path="vodovod/ocitaci" element={<PermissionGuard permissions={['water_readers:view']}><WaterReadersPage /></PermissionGuard>} />
+
+            {/* Usluge */}
+            <Route path="vodovod/usluge" element={<PermissionGuard permissions={['water_services:view']}><WaterServicesPage /></PermissionGuard>} />
+            <Route path="vodovod/upravljanje-uslugama" element={<PermissionGuard permissions={['water_services_manage:view']}><ManageWaterServicesPage /></PermissionGuard>} />
+            <Route path="vodovod/cenovnik-usluga" element={<PermissionGuard permissions={['water_services_pricelist:view']}><WaterServicesPricelistPage /></PermissionGuard>} />
+            <Route path="vodovod/istorija-cenovnika" element={<PermissionGuard permissions={['water_service_pricelist_history:view']}><WaterServicePricelistHistoryPage /></PermissionGuard>} />
+            <Route path="vodovod/pregled-usluga" element={<PermissionGuard permissions={['water_services_review:view']}><WaterServicesReviewPage /></PermissionGuard>} />
+
+            {/* Obračun */}
+            <Route path="vodovod/kalkulacija-vodomera" element={<PermissionGuard permissions={['water_meter_calculation:view']}><WaterMeterCalculationPage /></PermissionGuard>} />
+            <Route path="vodovod/kampanja-obracuna" element={<PermissionGuard permissions={['billing_campaign:view']}><BillingCampaignPage /></PermissionGuard>} />
+            <Route path="vodovod/kampanja" element={<PermissionGuard permissions={['campaign:view']}><CampaignPage /></PermissionGuard>} />
+            <Route path="vodovod/pod-kampanja" element={<PermissionGuard permissions={['sub_campaign:view']}><SubCampaignPage /></PermissionGuard>} />
+            <Route path="vodovod/stanje-unosa-obracuna" element={<PermissionGuard permissions={['input_calculation_state:view']}><InputCalculationStatePage /></PermissionGuard>} />
+
+            {/* Naplata */}
+            <Route path="vodovod/uplate" element={<PermissionGuard permissions={['payments:view']}><PaymentsPage /></PermissionGuard>} />
+            <Route path="vodovod/uplate-po-nacinu-placanja" element={<PermissionGuard permissions={['payments_by_method:view']}><PaymentsByPaymentMethodPage /></PermissionGuard>} />
+            <Route path="vodovod/blagajna" element={<PermissionGuard permissions={['cash_register:view']}><CashRegisterPage /></PermissionGuard>} />
+            <Route path="vodovod/blagajnici" element={<PermissionGuard permissions={['cashiers:view']}><CashiersPage /></PermissionGuard>} />
+            <Route path="vodovod/sesija-blagajnika" element={<PermissionGuard permissions={['cashiers_session:view']}><CashiersSessionPage /></PermissionGuard>} />
+            <Route path="vodovod/izvestaj-blagajne" element={<PermissionGuard permissions={['cash_register_report:view']}><CashRegisterReportPage /></PermissionGuard>} />
+            <Route path="vodovod/fiskalni-uredjaj" element={<PermissionGuard permissions={['fiscal_device:view']}><FiscalDevicePage /></PermissionGuard>} />
+
+            {/* Subvencije */}
+            <Route path="vodovod/subvencije" element={<PermissionGuard permissions={['subsidies:view']}><SubsidiesPage /></PermissionGuard>} />
+            <Route path="vodovod/dodela-subvencija" element={<PermissionGuard permissions={['subsidies_assignment:view']}><SubsidiesUserAssignmentPage /></PermissionGuard>} />
+
+            {/* Korisnički nalozi */}
+            <Route path="vodovod/korisnicki-nalozi" element={<PermissionGuard permissions={['user_accounts:view']}><UserAccountPage /></PermissionGuard>} />
+            <Route path="vodovod/kucivetnici" element={<PermissionGuard permissions={['house_council:view']}><HouseCouncilPage /></PermissionGuard>} />
+
+            {/* Reklamacije */}
+            <Route path="vodovod/reklamacije" element={<PermissionGuard permissions={['complaints:view']}><ComplaintPage /></PermissionGuard>} />
+            <Route path="vodovod/reklamacije-po-zaduzenom" element={<PermissionGuard permissions={['complaints_by_assignee:view']}><ComplaintsByAssignePage /></PermissionGuard>} />
+            <Route path="vodovod/prioriteti-reklamacija" element={<PermissionGuard permissions={['complaint_priorities:view']}><ComplaintPrioritiesPage /></PermissionGuard>} />
+
+            {/* Napomene */}
+            <Route path="vodovod/napomene-vodosnabdevanja" element={<PermissionGuard permissions={['water_supply_notes:view']}><WaterSupplyNotesPage /></PermissionGuard>} />
+            <Route path="vodovod/kategorije-napomena" element={<PermissionGuard permissions={['note_categories:view']}><NoteCategoriesPage /></PermissionGuard>} />
           </Route>
         </Routes>
       </Router>
-      </AntApp>
+        </AntApp>
+      </LocalizationProvider>
     </ConfigProvider>
   );
 }

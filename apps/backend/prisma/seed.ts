@@ -93,6 +93,42 @@ async function main() {
     { name: 'dispatcher:view_analytics', resource: 'dispatcher_analytics', action: 'read', description: 'Pregled analitike vozila' },
     { name: 'dispatcher:manage_routes', resource: 'dispatcher_routes', action: 'manage', description: 'Upravljanje rutama' },
     { name: 'dispatcher:emergency_actions', resource: 'dispatcher', action: 'emergency', description: 'Hitne akcije u dispečerskom modulu' },
+
+    // Water Meter Types permissions
+    { name: 'water_meter_types:create', resource: 'water_meter_types', action: 'create', description: 'Kreiranje tipova vodomera' },
+    { name: 'water_meter_types:view', resource: 'water_meter_types', action: 'view', description: 'Pregled tipova vodomera' },
+    { name: 'water_meter_types:update', resource: 'water_meter_types', action: 'update', description: 'Ažuriranje tipova vodomera' },
+    { name: 'water_meter_types:delete', resource: 'water_meter_types', action: 'delete', description: 'Brisanje tipova vodomera' },
+
+    // Water Meter Availability permissions
+    { name: 'water_meter_availability:create', resource: 'water_meter_availability', action: 'create', description: 'Kreiranje dostupnosti vodomera' },
+    { name: 'water_meter_availability:view', resource: 'water_meter_availability', action: 'view', description: 'Pregled dostupnosti vodomera' },
+    { name: 'water_meter_availability:update', resource: 'water_meter_availability', action: 'update', description: 'Ažuriranje dostupnosti vodomera' },
+    { name: 'water_meter_availability:delete', resource: 'water_meter_availability', action: 'delete', description: 'Brisanje dostupnosti vodomera' },
+
+    // Water Meter Manufacturers permissions
+    { name: 'water_meter_manufacturers:create', resource: 'water_meter_manufacturers', action: 'create', description: 'Kreiranje proizvođača vodomera' },
+    { name: 'water_meter_manufacturers:view', resource: 'water_meter_manufacturers', action: 'view', description: 'Pregled proizvođača vodomera' },
+    { name: 'water_meter_manufacturers:update', resource: 'water_meter_manufacturers', action: 'update', description: 'Ažuriranje proizvođača vodomera' },
+    { name: 'water_meter_manufacturers:delete', resource: 'water_meter_manufacturers', action: 'delete', description: 'Brisanje proizvođača vodomera' },
+
+    // Water Meters permissions
+    { name: 'water_meters:create', resource: 'water_meters', action: 'create', description: 'Kreiranje vodomera' },
+    { name: 'water_meters:view', resource: 'water_meters', action: 'view', description: 'Pregled vodomera' },
+    { name: 'water_meters:update', resource: 'water_meters', action: 'update', description: 'Ažuriranje vodomera' },
+    { name: 'water_meters:delete', resource: 'water_meters', action: 'delete', description: 'Brisanje vodomera' },
+
+    // Replacement Water Meters permissions
+    { name: 'replacement_water_meters:create', resource: 'replacement_water_meters', action: 'create', description: 'Kreiranje zamenjenih vodomera' },
+    { name: 'replacement_water_meters:view', resource: 'replacement_water_meters', action: 'view', description: 'Pregled zamenjenih vodomera' },
+    { name: 'replacement_water_meters:update', resource: 'replacement_water_meters', action: 'update', description: 'Ažuriranje zamenjenih vodomera' },
+    { name: 'replacement_water_meters:delete', resource: 'replacement_water_meters', action: 'delete', description: 'Brisanje zamenjenih vodomera' },
+
+    // Water Meter Remarks (Readings) permissions
+    { name: 'water_meter_remarks:create', resource: 'water_meter_remarks', action: 'create', description: 'Kreiranje napomena vodomera' },
+    { name: 'water_meter_remarks:view', resource: 'water_meter_remarks', action: 'view', description: 'Pregled napomena vodomera' },
+    { name: 'water_meter_remarks:update', resource: 'water_meter_remarks', action: 'update', description: 'Ažuriranje napomena vodomera' },
+    { name: 'water_meter_remarks:delete', resource: 'water_meter_remarks', action: 'delete', description: 'Brisanje napomena vodomera' },
   ];
 
   for (const permission of permissions) {
