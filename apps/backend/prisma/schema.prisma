@@ -832,3 +832,82 @@ model WaterMeterReading {
 
   @@map("vodovod_water_meter_readings")
 }
+
+model OrderingCity {
+  id        Int       @id @default(autoincrement())
+  cityName  String    @map("city_name") @db.VarChar(255)
+  zipCode   String?   @map("zip_code") @db.VarChar(20)
+  aktivan   Boolean   @default(true)
+  createdAt DateTime? @default(now()) @map("created_at")
+  updatedAt DateTime? @updatedAt @map("updated_at")
+
+  addresses OrderingAddress[]
+
+  @@map("ordering_cities")
+}
+
+model OrderingAddress {
+  id          Int       @id @default(autoincrement())
+  addressName String    @map("address_name") @db.VarChar(255)
+  cityId      Int?      @map("city_id")
+  zoneId      Int?      @map("zone_id")
+  aktivan     Boolean   @default(true)
+  createdAt   DateTime? @default(now()) @map("created_at")
+  updatedAt   DateTime? @updatedAt @map("updated_at")
+
+  city            OrderingCity?          @relation(fields: [cityId], references: [id], map: "FK_ordering_addresses_city_id")
+  zone            VodvodZone?            @relation(fields: [zoneId], references: [id], map: "FK_ordering_addresses_zone_id")
+  measuringPoints VodvodMeasuringPoint[]
+
+  @@index([cityId], map: "FK_ordering_addresses_city_id")
+  @@index([zoneId], map: "FK_ordering_addresses_zone_id")
+  @@map("ordering_addresses")
+}
+
+model VodvodRegion {
+  id         Int       @id @default(autoincrement())
+  regionName String    @map("region_name") @db.VarChar(255)
+  aktivan    Boolean   @default(true)
+  createdAt  DateTime? @default(now()) @map("created_at")
+  updatedAt  DateTime? @updatedAt @map("updated_at")
+
+  zones VodvodZone[]
+
+  @@map("vodovod_regions")
+}
+
+model VodvodZone {
+  id        Int       @id @default(autoincrement())
+  zoneName  String    @map("zone_name") @db.VarChar(255)
+  regionId  Int?      @map("region_id")
+  aktivan   Boolean   @default(true)
+  createdAt DateTime? @default(now()) @map("created_at")
+  updatedAt DateTime? @updatedAt @map("updated_at")
+
+  region          VodvodRegion?          @relation(fields: [regionId], references: [id], map: "FK_vodovod_zones_region_id")
+  addresses       OrderingAddress[]
+  measuringPoints VodvodMeasuringPoint[]
+
+  @@index([regionId], map: "FK_vodovod_zones_region_id")
+  @@map("vodovod_zones")
+}
+
+model VodvodMeasuringPoint {
+  IDMM        Int       @id @map("IDMM")
+  IDU         Int?      @map("IDU")
+  zoneId      Int?      @map("zone_id")
+  streetId    Int?      @map("street_id")
+  houseNumber String?   @map("house_number") @db.VarChar(50)
+  typeId      Int?      @map("type_id")
+  status      Int?
+  aktivan     Boolean   @default(true)
+  createdAt   DateTime? @default(now()) @map("created_at")
+  updatedAt   DateTime? @updatedAt @map("updated_at")
+
+  address OrderingAddress? @relation(fields: [IDU], references: [id], map: "FK_vodovod_measuring_points_address_id")
+  zone    VodvodZone?      @relation(fields: [zoneId], references: [id], map: "FK_vodovod_measuring_points_zone_id")
+
+  @@index([IDU], map: "FK_vodovod_measuring_points_address_id")
+  @@index([zoneId], map: "FK_vodovod_measuring_points_zone_id")
+  @@map("vodovod_measuring_points")
+}

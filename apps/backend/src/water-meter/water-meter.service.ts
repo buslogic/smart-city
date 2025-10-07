@@ -8,14 +8,36 @@ export class WaterMeterService {
   constructor(private prisma: PrismaService) {}
 
   async findAll() {
-    return this.prisma.waterMeter.findMany({
-      include: {
-        type: true,
-        availability: true,
-        manufacturer: true,
-      },
-      orderBy: { id: 'desc' },
-    });
+    // Raw SQL query sa svim JOIN-ovima
+    // Napomena: vodovod_measuring_points i ordering_addresses trenutno ne postoje u ovoj bazi
+    const waterMeters = await this.prisma.$queryRaw<any[]>`
+      SELECT
+        t1.id,
+        t1.idmm,
+        CONCAT(t2.id, ' | ', t2.type) as type_id,
+        CONCAT(t3.id, ' | ', t3.availability) as availability_id,
+        CONCAT(t4.id, ' | ', t4.manufacturer) as manufacturer_id,
+        t1.calibrated_from,
+        t1.calibrated_to,
+        t1.serial_number,
+        t1.counter,
+        t1.idv,
+        t1.module,
+        t1.disconnection_date
+      FROM vodovod_water_meter AS t1
+      LEFT JOIN vodovod_water_meter_type AS t2 ON t2.id = t1.type_id
+      LEFT JOIN vodovod_water_meter_availability AS t3 ON t3.id = t1.availability_id
+      LEFT JOIN vodovod_water_meter_manufacturer AS t4 ON t4.id = t1.manufacturer_id
+      WHERE t1.aktivan = 1
+      ORDER BY t1.id DESC
+    `;
+
+    // Formatiranje measuring_point polja
+    // TODO: Dodati JOIN sa vodovod_measuring_points kada bude migrirana
+    return waterMeters.map((wm) => ({
+      ...wm,
+      measuring_point: wm.idmm ? `${wm.idmm}` : null,
+    }));
   }
 
   async findOne(id: number) {
