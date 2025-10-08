@@ -5,12 +5,12 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { LegacyDatabasesService } from '../legacy-databases/legacy-databases.service';
-import { CreateCentralPointDto } from './dto/create-central-point.dto';
-import { UpdateCentralPointDto } from './dto/update-central-point.dto';
+import { CreatePriceListGroupDto } from './dto/create-price-list-group.dto';
+import { UpdatePriceListGroupDto } from './dto/update-price-list-group.dto';
 import { createConnection } from 'mysql2/promise';
 
 @Injectable()
-export class CentralPointsService {
+export class PriceListGroupsService {
   constructor(
     private prisma: PrismaService,
     private legacyDatabasesService: LegacyDatabasesService,
@@ -18,128 +18,94 @@ export class CentralPointsService {
 
   // ========== GLAVNI SERVER (NAŠA BAZA) ==========
 
-  async create(createCentralPointDto: CreateCentralPointDto) {
-    const result = await this.prisma.centralPoint.create({
+  async create(createPriceListGroupDto: CreatePriceListGroupDto) {
+    const { legacyCityId, ...rest } = createPriceListGroupDto;
+
+    const result = await this.prisma.priceTableGroup.create({
       data: {
-        ...createCentralPointDto,
+        ...rest,
         dateTime: new Date(), // Automatski setuj trenutno vreme
+        legacyCityId: legacyCityId ? BigInt(legacyCityId) : null,
       },
     });
 
     // Konvertuj BigInt u string za JSON serialization
     return {
       ...result,
-      androidAdmin: result.androidAdmin.toString(),
+      id: result.id.toString(),
+      legacyTicketingId: result.legacyTicketingId ? result.legacyTicketingId.toString() : null,
+      legacyCityId: result.legacyCityId ? result.legacyCityId.toString() : null,
     };
   }
 
   async findAllMain() {
-    const results = await this.prisma.centralPoint.findMany({
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        name: true,
-        address: true,
-        zip: true,
-        city: true,
-        phone1: true,
-        phone2: true,
-        email: true,
-        boss: true,
-        bossPhone: true,
-        bossEmail: true,
-        mainStationUid: true,
-        longitude: true,
-        latitude: true,
-        comment: true,
-        owes: true,
-        expects: true,
-        saldo: true,
-        incomeSettlementTimeframe: true,
-        changedBy: true,
-        dateTime: true,
-        enableJavaApplet: true,
-        enableTicketReturn: true,
-        enableTicketDelete: true,
-        enableOtherTicketsCheck: true,
-        enableJournalCheck: true,
-        internalFuel: true,
-        color: true,
-        lineColor: true,
-        // ISKLJUČUJEMO BLOB polja za brže učitavanje
-        // image: false,
-        // imageAndroid: false,
-        // customerInfoCloseDeparture: false,
-        // customerInfoOpenDeparture: false,
-        // validatorCloseDeparture: false,
-        // validatorOpenDeparture: false,
-        sendAndroidPinRequestToAdmin: true,
-        androidAdmin: true,
-        countryId: true,
-        countryName: true,
-        vatId: true,
-        createdAt: true,
-        updatedAt: true,
-        otherCpView: true,
-        dispatchOrderByCp: true,
-        active: true,
-        placeOfInvoice: true,
-        currentAccount: true,
-        currentAccountForPlastic: true,
-        depotCode: true,
-        creatingZipByGtfsStandard: true,
-        defaultDeviceListSubgroupId: true,
-        legacyTicketingId: true,
-        legacyCityId: true,
-        syncSource: true,
-        syncWithCityServer: true,
-      },
+    const results = await this.prisma.priceTableGroup.findMany({
+      orderBy: { dateTime: 'desc' },
     });
 
     // Konvertuj BigInt u string za JSON serialization
-    return results.map((cp) => ({
-      ...cp,
-      androidAdmin: cp.androidAdmin.toString(),
+    return results.map((group) => ({
+      ...group,
+      id: group.id.toString(),
+      legacyTicketingId: group.legacyTicketingId ? group.legacyTicketingId.toString() : null,
+      legacyCityId: group.legacyCityId ? group.legacyCityId.toString() : null,
     }));
   }
 
   async findOne(id: number) {
-    const centralPoint = await this.prisma.centralPoint.findUnique({
-      where: { id },
+    const priceListGroup = await this.prisma.priceTableGroup.findUnique({
+      where: { id: BigInt(id) },
     });
 
-    if (!centralPoint) {
-      throw new NotFoundException(`Centralna tačka sa ID ${id} nije pronađena`);
+    if (!priceListGroup) {
+      throw new NotFoundException(`Grupa cenovnika sa ID ${id} nije pronađena`);
     }
 
     // Konvertuj BigInt u string za JSON serialization
     return {
-      ...centralPoint,
-      androidAdmin: centralPoint.androidAdmin.toString(),
+      ...priceListGroup,
+      id: priceListGroup.id.toString(),
+      legacyTicketingId: priceListGroup.legacyTicketingId ? priceListGroup.legacyTicketingId.toString() : null,
+      legacyCityId: priceListGroup.legacyCityId ? priceListGroup.legacyCityId.toString() : null,
     };
   }
 
-  async update(id: number, updateCentralPointDto: UpdateCentralPointDto) {
+  async update(id: number, updatePriceListGroupDto: UpdatePriceListGroupDto) {
     await this.findOne(id); // Proverava da li postoji
 
-    const result = await this.prisma.centralPoint.update({
-      where: { id },
-      data: updateCentralPointDto,
+    const { legacyCityId, ...rest } = updatePriceListGroupDto;
+
+    const result = await this.prisma.priceTableGroup.update({
+      where: { id: BigInt(id) },
+      data: {
+        ...rest,
+        dateTime: new Date(), // Ažuriraj vreme izmene
+        legacyCityId: legacyCityId !== undefined ? (legacyCityId ? BigInt(legacyCityId) : null) : undefined,
+      },
     });
 
     // Konvertuj BigInt u string za JSON serialization
     return {
       ...result,
-      androidAdmin: result.androidAdmin.toString(),
+      id: result.id.toString(),
+      legacyTicketingId: result.legacyTicketingId ? result.legacyTicketingId.toString() : null,
+      legacyCityId: result.legacyCityId ? result.legacyCityId.toString() : null,
     };
   }
 
   async remove(id: number) {
     await this.findOne(id); // Proverava da li postoji
 
-    return this.prisma.centralPoint.delete({
-      where: { id },
+    const result = await this.prisma.priceTableGroup.delete({
+      where: { id: BigInt(id) },
     });
+
+    return {
+      ...result,
+      id: result.id.toString(),
+      legacyTicketingId: result.legacyTicketingId ? result.legacyTicketingId.toString() : null,
+      legacyCityId: result.legacyCityId ? result.legacyCityId.toString() : null,
+    };
   }
 
   // ========== TIKETING SERVER (LEGACY BAZA) ==========
@@ -157,7 +123,7 @@ export class CentralPointsService {
   // ========== SINHRONIZACIJA ==========
 
   async syncFromTicketing(userId: number) {
-    console.log('🔄 Starting Ticketing Server sync...');
+    console.log('🔄 Starting Ticketing Server sync for price list groups...');
     const startTime = Date.now();
 
     let created = 0;
@@ -167,6 +133,31 @@ export class CentralPointsService {
     let totalProcessed = 0;
 
     try {
+      // Prvo učitaj ID-eve sinhronizovanih centralnih tačaka
+      const syncedCentralPoints = await this.prisma.centralPoint.findMany({
+        where: { syncWithCityServer: true },
+        select: { legacyTicketingId: true },
+      });
+
+      const syncedIds = syncedCentralPoints
+        .map((cp) => cp.legacyTicketingId)
+        .filter((id) => id !== null);
+
+      if (syncedIds.length === 0) {
+        console.log('⚠️ Nema sinhronizovanih centralnih tačaka');
+        return {
+          success: true,
+          created: 0,
+          updated: 0,
+          skipped: 0,
+          errors: 0,
+          totalProcessed: 0,
+          message: 'Nema sinhronizovanih centralnih tačaka za procesiranje',
+        };
+      }
+
+      console.log(`📍 Found ${syncedIds.length} synced central points:`, syncedIds);
+
       // Pronađi legacy bazu
       const legacyDb = await this.prisma.legacyDatabase.findFirst({
         where: { subtype: 'main_ticketing_database' },
@@ -192,15 +183,47 @@ export class CentralPointsService {
       });
 
       try {
-        // Učitaj sve rekorde iz legacy tabele
-        const [rows] = await connection.execute(
-          'SELECT * FROM central_points ORDER BY id ASC',
-        );
+        // Prvo učitaj sve jedinstvene date_valid_from vrednosti iz linija koje pripadaju sinhronizovanim centralnim tačkama
+        const idsPlaceholder = syncedIds.map(() => '?').join(',');
+        const dateQuery = `
+          SELECT DISTINCT date_valid_from
+          FROM price_tables_index
+          WHERE central_point_db_id IN (${idsPlaceholder})
+          ORDER BY date_valid_from DESC
+        `;
 
+        const [dateRows] = await connection.execute(dateQuery, syncedIds);
+        const dateValidFromList = (dateRows as any[]).map((row) => row.date_valid_from);
+
+        if (dateValidFromList.length === 0) {
+          console.log('⚠️ Nema linija za sinhronizovane centralne tačke');
+          await connection.end();
+          return {
+            success: true,
+            created: 0,
+            updated: 0,
+            skipped: 0,
+            errors: 0,
+            totalProcessed: 0,
+            message: 'Nema linija za sinhronizovane centralne tačke',
+          };
+        }
+
+        console.log(`📅 Found ${dateValidFromList.length} unique date_valid_from values`);
+
+        // Sada učitaj samo grupe cenovnika koje odgovaraju tim datumima
+        const datePlaceholder = dateValidFromList.map(() => '?').join(',');
+        const groupQuery = `
+          SELECT * FROM price_table_groups
+          WHERE date_valid_from IN (${datePlaceholder})
+          ORDER BY id ASC
+        `;
+
+        const [rows] = await connection.execute(groupQuery, dateValidFromList);
         const legacyRecords = rows as any[];
         totalProcessed = legacyRecords.length;
 
-        console.log(`📊 Found ${totalProcessed} records in legacy database`);
+        console.log(`📊 Found ${totalProcessed} price list groups to sync`);
 
         // Procesiraj u batch-ovima od 50 rekorda
         const BATCH_SIZE = 50;
@@ -209,7 +232,7 @@ export class CentralPointsService {
 
           for (const legacyRecord of batch) {
             try {
-              const result = await this.processCentralPointSync(legacyRecord);
+              const result = await this.processPriceListGroupSyncFromTicketing(legacyRecord);
 
               switch (result.action) {
                 case 'create':
@@ -265,7 +288,7 @@ export class CentralPointsService {
   }
 
   async syncFromCity(userId: number) {
-    console.log('🔄 Starting City Server sync...');
+    console.log('🔄 Starting City Server sync for price list groups...');
     const startTime = Date.now();
 
     let created = 0;
@@ -302,7 +325,7 @@ export class CentralPointsService {
       try {
         // Učitaj sve rekorde iz legacy tabele
         const [rows] = await connection.execute(
-          'SELECT * FROM central_points ORDER BY id ASC',
+          'SELECT * FROM price_table_groups ORDER BY id ASC',
         );
 
         const legacyRecords = rows as any[];
@@ -317,9 +340,7 @@ export class CentralPointsService {
 
           for (const legacyRecord of batch) {
             try {
-              const result = await this.processCentralPointCitySync(
-                legacyRecord,
-              );
+              const result = await this.processPriceListGroupSyncFromCity(legacyRecord);
 
               switch (result.action) {
                 case 'create':
@@ -374,84 +395,36 @@ export class CentralPointsService {
     }
   }
 
-  private async processCentralPointCitySync(legacyRecord: any) {
-    const legacyId = legacyRecord.id;
+  // ========== HELPER METODE ==========
 
-    // Proveri da li rekord već postoji
-    const existingRecord = await this.prisma.centralPoint.findUnique({
-      where: { legacyCityId: legacyId },
-    });
+  private async processPriceListGroupSyncFromTicketing(legacyRecord: any) {
+    const legacyId = BigInt(legacyRecord.id);
 
-    // Mapiraj legacy podatke
-    const mappedData = this.mapLegacyCentralPoint(legacyRecord);
-
-    if (!existingRecord) {
-      // CREATE - novi rekord
-      await this.prisma.centralPoint.create({
-        data: {
-          ...mappedData,
-          legacyCityId: legacyId,
-          syncSource: 'manual', // Ne setujemo ticketing_sync za Gradski server
-        },
-      });
-
-      return { action: 'create' };
-    } else {
-      // Proveri syncSource
-      if (existingRecord.syncSource === 'manual') {
-        // SKIP - zaštiti ručne izmene
-        return { action: 'skip' };
-      }
-
-      // UPDATE - ažuriraj postojeći rekord
-      await this.prisma.centralPoint.update({
-        where: { id: existingRecord.id },
-        data: {
-          ...mappedData,
-          legacyCityId: legacyId,
-          // Ne menjamo syncSource - ostaje 'manual' ili 'ticketing_sync'
-        },
-      });
-
-      return { action: 'update' };
-    }
-  }
-
-  private async processCentralPointSync(legacyRecord: any) {
-    const legacyId = legacyRecord.id;
-
-    // Proveri da li rekord već postoji
-    const existingRecord = await this.prisma.centralPoint.findUnique({
+    // Proveri da li rekord već postoji na osnovu legacyTicketingId
+    const existingRecord = await this.prisma.priceTableGroup.findUnique({
       where: { legacyTicketingId: legacyId },
     });
 
     // Mapiraj legacy podatke
-    const mappedData = this.mapLegacyCentralPoint(legacyRecord);
+    const mappedData = this.mapLegacyPriceListGroup(legacyRecord);
 
     if (!existingRecord) {
       // CREATE - novi rekord
-      await this.prisma.centralPoint.create({
+      await this.prisma.priceTableGroup.create({
         data: {
           ...mappedData,
           legacyTicketingId: legacyId,
-          syncSource: 'ticketing_sync',
         },
       });
 
       return { action: 'create' };
     } else {
-      // Proveri syncSource
-      if (existingRecord.syncSource === 'manual') {
-        // SKIP - zaštiti ručne izmene
-        return { action: 'skip' };
-      }
-
       // UPDATE - ažuriraj postojeći rekord
-      await this.prisma.centralPoint.update({
+      await this.prisma.priceTableGroup.update({
         where: { id: existingRecord.id },
         data: {
           ...mappedData,
-          syncSource: 'ticketing_sync',
+          legacyTicketingId: legacyId,
         },
       });
 
@@ -459,7 +432,42 @@ export class CentralPointsService {
     }
   }
 
-  private mapLegacyCentralPoint(legacy: any) {
+  private async processPriceListGroupSyncFromCity(legacyRecord: any) {
+    const legacyId = BigInt(legacyRecord.id);
+
+    // Proveri da li rekord već postoji na osnovu legacyCityId
+    const existingRecord = await this.prisma.priceTableGroup.findUnique({
+      where: { legacyCityId: legacyId },
+    });
+
+    // Mapiraj legacy podatke
+    const mappedData = this.mapLegacyPriceListGroup(legacyRecord);
+
+    if (!existingRecord) {
+      // CREATE - novi rekord
+      await this.prisma.priceTableGroup.create({
+        data: {
+          ...mappedData,
+          legacyCityId: legacyId,
+        },
+      });
+
+      return { action: 'create' };
+    } else {
+      // UPDATE - ažuriraj postojeći rekord
+      await this.prisma.priceTableGroup.update({
+        where: { id: existingRecord.id },
+        data: {
+          ...mappedData,
+          legacyCityId: legacyId,
+        },
+      });
+
+      return { action: 'update' };
+    }
+  }
+
+  private mapLegacyPriceListGroup(legacy: any) {
     // Helper za parsiranje datuma
     const parseDate = (value: any): Date => {
       if (!value) return new Date();
@@ -467,108 +475,46 @@ export class CentralPointsService {
       return isNaN(date.getTime()) ? new Date() : date;
     };
 
-    // Helper za parsiranje brojeva
-    const parseNumber = (value: any, defaultValue: number = 0): number => {
-      const parsed = parseFloat(value);
-      return isNaN(parsed) ? defaultValue : parsed;
-    };
+    // Helper za formatiranje datuma kao string (YYYY-MM-DD)
+    // VAŽNO: Ne koristimo new Date() jer pravi timezone konverziju koja pomera datum za 1 dan
+    const formatDateString = (value: any): string => {
+      if (!value) return new Date().toISOString().split('T')[0];
 
-    // Helper za parsiranje boolean iz 0/1
-    const parseBoolean = (value: any): boolean => {
-      return value === 1 || value === '1' || value === true;
+      // Ako je već string u YYYY-MM-DD formatu, vrati direktno
+      const strValue = value.toString().trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(strValue)) {
+        return strValue;
+      }
+
+      // Ako je Date objekat, ekstraktuj komponente lokalno (bez UTC konverzije)
+      if (value instanceof Date) {
+        const year = value.getFullYear();
+        const month = String(value.getMonth() + 1).padStart(2, '0');
+        const day = String(value.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+
+      // Fallback: pokušaj parsiranje
+      const date = new Date(value);
+      if (isNaN(date.getTime())) return new Date().toISOString().split('T')[0];
+
+      // Ekstraktuj komponente lokalno (bez UTC konverzije)
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
     };
 
     return {
-      // Osnovne informacije
-      name: legacy.cp_name || '',
-      address: legacy.cp_address || '',
-      zip: legacy.cp_zip || '',
-      city: legacy.cp_city || '',
-
-      // Kontakt
-      phone1: legacy.cp_phone1 || '',
-      phone2: legacy.cp_phone2 || '',
-      email: legacy.cp_email || '',
-
-      // Boss
-      boss: legacy.cp_boss || '',
-      bossPhone: legacy.cp_boss_phone || '',
-      bossEmail: legacy.cp_boss_email || '',
-
-      // Geografija
-      mainStationUid: legacy.main_station_uid || '',
-      longitude: legacy.cp_longitude || '',
-      latitude: legacy.cp_latitude || '',
-
-      // Komentar
-      comment: legacy.cp_comment || '',
-
-      // Finansije
-      owes: parseNumber(legacy.cp_owes),
-      expects: parseNumber(legacy.cp_expects),
-      saldo: parseNumber(legacy.cp_saldo),
-      incomeSettlementTimeframe:
-        legacy.income_settlement_timeframe_cp || '0',
-
-      // Audit
+      dateValidFrom: formatDateString(legacy.date_valid_from),
+      status: legacy.status || 'N',
+      synchroStatus: legacy.synchro_status || 'N',
+      sendIncremental: legacy.send_incremental || '0',
       changedBy: legacy.changed_by || 'legacy_sync',
       dateTime: parseDate(legacy.date_time),
-
-      // Java/Applet settings
-      enableJavaApplet: parseBoolean(legacy.enablejavaapplet),
-      enableTicketReturn: parseInt(legacy.enableticketreturn) || 0,
-      enableTicketDelete: parseBoolean(legacy.enableticketdelete),
-      enableOtherTicketsCheck: parseBoolean(legacy.enableotherticketscheck),
-      enableJournalCheck: parseInt(legacy.enablejournalcheck) || 1,
-
-      // Fuel
-      internalFuel: legacy.internal_fuel !== null ? parseBoolean(legacy.internal_fuel) : null,
-
-      // UI/Display
-      color: legacy.cp_color || '#000000',
-      lineColor: legacy.cp_line_color || '#000000',
-      image: legacy.cp_image || null,
-      imageAndroid: legacy.cp_image_android || null,
-
-      // Customer info images
-      customerInfoCloseDeparture: legacy.cp_customer_info_close_departure || null,
-      customerInfoOpenDeparture: legacy.cp_customer_info_open_departure || null,
-      validatorCloseDeparture: legacy.cp_validator_close_departure || null,
-      validatorOpenDeparture: legacy.cp_validator_open_departure || null,
-
-      // Android settings
-      sendAndroidPinRequestToAdmin: parseInt(legacy.send_android_pin_request_to_admin) || 0,
-      androidAdmin: BigInt(legacy.android_admin || 0),
-
-      // Country/VAT
-      countryId: parseInt(legacy.cp_country_id) || 0,
-      countryName: legacy.cp_country_name || null,
-      vatId: legacy.cp_vat_id || null,
-
-      // Additional settings
-      otherCpView: parseInt(legacy.other_cp_view) || 0,
-      dispatchOrderByCp: parseInt(legacy.dispatch_order_by_cp) || 0,
-      active: parseBoolean(legacy.active),
-
-      // Invoice/Account
-      placeOfInvoice: legacy.place_of_the_invoice || null,
-      currentAccount: legacy.current_account || null,
-      currentAccountForPlastic: legacy.current_account_for_plastic || null,
-
-      // Depot
-      depotCode: legacy.depot_code ? legacy.depot_code.trim() : null,
-
-      // GTFS
-      creatingZipByGtfsStandard: parseBoolean(legacy.creating_zip_by_gtfs_starndard),
-
-      // Device list
-      defaultDeviceListSubgroupId: legacy.default_device_list_subgroup_id
-        ? parseInt(legacy.default_device_list_subgroup_id)
-        : null,
+      name: legacy.name || '',
     };
   }
-
-  // ========== HELPER METODE ==========
 
   private async findAllFromLegacy(subtype: string) {
     try {
@@ -597,9 +543,10 @@ export class CentralPointsService {
       });
 
       try {
-        // Učitaj sve central points iz legacy baze
+        // Učitaj sve price_table_groups iz legacy baze
+        // Koristi DATE_FORMAT da bi MySQL vratio string u YYYY-MM-DD formatu
         const [rows] = await connection.execute(
-          'SELECT * FROM central_points ORDER BY id DESC',
+          'SELECT id, DATE_FORMAT(date_valid_from, "%Y-%m-%d") as date_valid_from, status, synchro_status, send_incremental, changed_by, date_time, name FROM price_table_groups ORDER BY id DESC',
         );
 
         return rows;
@@ -611,37 +558,6 @@ export class CentralPointsService {
       console.error(`Greška pri učitavanju iz legacy baze (${subtype}):`, error);
       throw new InternalServerErrorException(
         `Greška pri konektovanju na legacy bazu: ${error.message}`,
-      );
-    }
-  }
-
-  async findSyncedWithTicketing() {
-    try {
-      // Jednostavan query samo za centralne tačke sa syncWithCityServer = true
-      const query = `
-        SELECT
-          id,
-          cp_name as name,
-          legacy_ticketing_id,
-          0 as lines_count
-        FROM \`central_points\`
-        WHERE sync_with_city_server = true
-        ORDER BY cp_name ASC
-      `;
-
-      const results: any[] = await this.prisma.$queryRawUnsafe(query);
-
-      // Konvertuj BigInt u number za JSON serialization
-      return results.map((row) => ({
-        id: Number(row.id),
-        name: row.name,
-        legacyTicketingId: row.legacy_ticketing_id,
-        linesCount: 0, // Za sada bez brojanja linija
-      }));
-    } catch (error) {
-      console.error('Greška pri učitavanju sinhronizovanih CP:', error);
-      throw new InternalServerErrorException(
-        `Greška pri učitavanju centralnih tačaka: ${error.message}`,
       );
     }
   }

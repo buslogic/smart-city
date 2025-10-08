@@ -41,6 +41,19 @@ export class CentralPointsController {
     return this.centralPointsService.create(createCentralPointDto);
   }
 
+  @Get('synced-with-ticketing')
+  @ApiOperation({
+    summary: 'Centralne tačke označene za sinhronizaciju sa gradskim serverom',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista centralnih tačaka',
+  })
+  @RequirePermissions('transport.administration.central_points.ticketing:view')
+  findSyncedWithTicketing() {
+    return this.centralPointsService.findSyncedWithTicketing();
+  }
+
   @Get('main')
   @ApiOperation({ summary: 'Sve centralne tačke sa Glavnog servera' })
   @ApiResponse({ status: 200, description: 'Lista centralnih tačaka' })

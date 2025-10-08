@@ -14,6 +14,9 @@ import Vehicles from './pages/transport/Vehicles';
 import VehicleSync from './pages/transport/VehicleSync';
 import GpsLagTransfer from './pages/transport/vehicles/GpsLagTransfer';
 import CentralPoints from './pages/transport/administration/CentralPoints';
+import PriceListGroups from './pages/transport/administration/PriceListGroups';
+import Lines from './pages/transport/administration/Lines';
+import TimetableDates from './pages/transport/administration/TimetableDates';
 import MapVehiclesModern from './pages/transport/dispatcher/MapVehiclesModern';
 import VehicleAnalytics from './pages/transport/dispatcher/VehicleAnalytics';
 import GpsSync from './pages/transport/dispatcher/GpsSync';
@@ -150,6 +153,54 @@ function App() {
                   ]}
                 >
                   <CentralPoints />
+                </PermissionGuard>
+              }
+            />
+
+            <Route
+              path="transport/administration/price-list-groups"
+              element={
+                <PermissionGuard
+                  permissions={[
+                    'transport.administration.price_list_groups:view',
+                    'transport.administration.price_list_groups.main:view',
+                    'transport.administration.price_list_groups.ticketing:view',
+                    'transport.administration.price_list_groups.city:view'
+                  ]}
+                >
+                  <PriceListGroups />
+                </PermissionGuard>
+              }
+            />
+
+            <Route
+              path="transport/administration/lines"
+              element={
+                <PermissionGuard
+                  permissions={[
+                    'transport.administration.lines:view',
+                    'transport.administration.lines.main:view',
+                    'transport.administration.lines.ticketing:view',
+                    'transport.administration.lines.city:view'
+                  ]}
+                >
+                  <Lines />
+                </PermissionGuard>
+              }
+            />
+
+            <Route
+              path="transport/administration/timetable-dates"
+              element={
+                <PermissionGuard
+                  permissions={[
+                    'transport.administration.timetable_dates:view',
+                    'transport.administration.timetable_dates.main:view',
+                    'transport.administration.timetable_dates.ticketing:view',
+                    'transport.administration.timetable_dates.city:view'
+                  ]}
+                >
+                  <TimetableDates />
                 </PermissionGuard>
               }
             />

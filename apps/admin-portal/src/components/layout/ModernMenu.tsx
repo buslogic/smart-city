@@ -33,7 +33,10 @@ import {
   ThunderboltOutlined,
   ToolOutlined,
   RadarChartOutlined,
-  AlertOutlined
+  AlertOutlined,
+  TagsOutlined,
+  BranchesOutlined,
+  CalendarOutlined
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { useAuthStore } from '../../stores/auth.store';
@@ -280,6 +283,45 @@ const ModernMenu: React.FC = () => {
                   'transport.administration.central_points.main:view',
                   'transport.administration.central_points.ticketing:view',
                   'transport.administration.central_points.city:view',
+                ],
+              },
+              {
+                key: '/transport/administration/price-list-groups',
+                menuOrder: 301520000000,
+                icon: <TagsOutlined />,
+                label: 'Grupe cenovnika',
+                // Prikaži ako korisnik ima bar jednu view permisiju (kontejner ili bilo koji server)
+                permissions: [
+                  'transport.administration.price_list_groups:view',
+                  'transport.administration.price_list_groups.main:view',
+                  'transport.administration.price_list_groups.ticketing:view',
+                  'transport.administration.price_list_groups.city:view',
+                ],
+              },
+              {
+                key: '/transport/administration/lines',
+                menuOrder: 301530000000,
+                icon: <BranchesOutlined />,
+                label: 'Linije',
+                // Prikaži ako korisnik ima bar jednu view permisiju (kontejner ili bilo koji server)
+                permissions: [
+                  'transport.administration.lines:view',
+                  'transport.administration.lines.main:view',
+                  'transport.administration.lines.ticketing:view',
+                  'transport.administration.lines.city:view',
+                ],
+              },
+              {
+                key: '/transport/administration/timetable-dates',
+                menuOrder: 301540000000,
+                icon: <CalendarOutlined />,
+                label: 'Grupe za RedVoznje',
+                // Prikaži ako korisnik ima bar jednu view permisiju (kontejner ili bilo koji server)
+                permissions: [
+                  'transport.administration.timetable_dates:view',
+                  'transport.administration.timetable_dates.main:view',
+                  'transport.administration.timetable_dates.ticketing:view',
+                  'transport.administration.timetable_dates.city:view',
                 ],
               },
             ],

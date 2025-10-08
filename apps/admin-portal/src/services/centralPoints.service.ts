@@ -55,6 +55,7 @@ export interface CentralPoint {
   legacyTicketingId?: number | null;
   legacyCityId?: number | null;
   syncSource?: string;
+  syncWithCityServer?: boolean;
 }
 
 export interface CreateCentralPointDto {
@@ -119,6 +120,13 @@ export interface SyncResult {
   message: string;
 }
 
+export interface SyncedCentralPoint {
+  id: number;
+  name: string;
+  legacyTicketingId: number;
+  linesCount: number;
+}
+
 class CentralPointsService {
   // ========== GLAVNI SERVER ==========
 
@@ -167,6 +175,13 @@ class CentralPointsService {
 
   async syncFromCity(): Promise<SyncResult> {
     const response = await api.post('/api/central-points/sync-city');
+    return response.data;
+  }
+
+  // ========== SINHRONIZOVANE CENTRALNE TAČKE ==========
+
+  async getSyncedWithTicketing(): Promise<SyncedCentralPoint[]> {
+    const response = await api.get('/api/central-points/synced-with-ticketing');
     return response.data;
   }
 }

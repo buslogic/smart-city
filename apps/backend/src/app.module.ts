@@ -34,6 +34,9 @@ import { SettingsModule } from './settings/settings.module';
 import { UserGroupsModule } from './user-groups/user-groups.module';
 import { GpsLagMonitoringModule } from './gps-lag-monitoring/gps-lag-monitoring.module';
 import { CentralPointsModule } from './central-points/central-points.module';
+import { PriceListGroupsModule } from './price-list-groups/price-list-groups.module';
+import { LinesModule } from './lines/lines.module';
+import { TimetableDatesModule } from './timetable-dates/timetable-dates.module';
 
 @Module({
   imports: [
@@ -70,6 +73,9 @@ import { CentralPointsModule } from './central-points/central-points.module';
     SettingsModule,
     UserGroupsModule,
     CentralPointsModule,
+    PriceListGroupsModule,
+    LinesModule,
+    TimetableDatesModule,
   ],
   controllers: [AppController],
   providers: [

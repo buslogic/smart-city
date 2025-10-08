@@ -229,4 +229,8 @@ export class CreateCentralPointDto {
   @IsInt()
   @IsOptional()
   legacyCityId?: number | null;
+
+  @IsBoolean()
+  @IsOptional()
+  syncWithCityServer?: boolean;
 }

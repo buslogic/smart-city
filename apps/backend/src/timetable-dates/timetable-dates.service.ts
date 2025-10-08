@@ -5,12 +5,12 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { LegacyDatabasesService } from '../legacy-databases/legacy-databases.service';
-import { CreateCentralPointDto } from './dto/create-central-point.dto';
-import { UpdateCentralPointDto } from './dto/update-central-point.dto';
+import { CreateTimetableDateDto } from './dto/create-timetable-date.dto';
+import { UpdateTimetableDateDto } from './dto/update-timetable-date.dto';
 import { createConnection } from 'mysql2/promise';
 
 @Injectable()
-export class CentralPointsService {
+export class TimetableDatesService {
   constructor(
     private prisma: PrismaService,
     private legacyDatabasesService: LegacyDatabasesService,
@@ -18,128 +18,113 @@ export class CentralPointsService {
 
   // ========== GLAVNI SERVER (NAŠA BAZA) ==========
 
-  async create(createCentralPointDto: CreateCentralPointDto) {
-    const result = await this.prisma.centralPoint.create({
+  async create(createTimetableDateDto: CreateTimetableDateDto) {
+    const { legacyCityId, ...rest } = createTimetableDateDto;
+
+    const result = await this.prisma.timetableDate.create({
       data: {
-        ...createCentralPointDto,
+        ...rest,
         dateTime: new Date(), // Automatski setuj trenutno vreme
+        legacyCityId: legacyCityId ? BigInt(legacyCityId) : null,
       },
     });
 
     // Konvertuj BigInt u string za JSON serialization
     return {
       ...result,
-      androidAdmin: result.androidAdmin.toString(),
+      id: result.id.toString(),
+      legacyTicketingId: result.legacyTicketingId
+        ? result.legacyTicketingId.toString()
+        : null,
+      legacyCityId: result.legacyCityId ? result.legacyCityId.toString() : null,
     };
   }
 
   async findAllMain() {
-    const results = await this.prisma.centralPoint.findMany({
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        name: true,
-        address: true,
-        zip: true,
-        city: true,
-        phone1: true,
-        phone2: true,
-        email: true,
-        boss: true,
-        bossPhone: true,
-        bossEmail: true,
-        mainStationUid: true,
-        longitude: true,
-        latitude: true,
-        comment: true,
-        owes: true,
-        expects: true,
-        saldo: true,
-        incomeSettlementTimeframe: true,
-        changedBy: true,
-        dateTime: true,
-        enableJavaApplet: true,
-        enableTicketReturn: true,
-        enableTicketDelete: true,
-        enableOtherTicketsCheck: true,
-        enableJournalCheck: true,
-        internalFuel: true,
-        color: true,
-        lineColor: true,
-        // ISKLJUČUJEMO BLOB polja za brže učitavanje
-        // image: false,
-        // imageAndroid: false,
-        // customerInfoCloseDeparture: false,
-        // customerInfoOpenDeparture: false,
-        // validatorCloseDeparture: false,
-        // validatorOpenDeparture: false,
-        sendAndroidPinRequestToAdmin: true,
-        androidAdmin: true,
-        countryId: true,
-        countryName: true,
-        vatId: true,
-        createdAt: true,
-        updatedAt: true,
-        otherCpView: true,
-        dispatchOrderByCp: true,
-        active: true,
-        placeOfInvoice: true,
-        currentAccount: true,
-        currentAccountForPlastic: true,
-        depotCode: true,
-        creatingZipByGtfsStandard: true,
-        defaultDeviceListSubgroupId: true,
-        legacyTicketingId: true,
-        legacyCityId: true,
-        syncSource: true,
-        syncWithCityServer: true,
-      },
+    const results = await this.prisma.timetableDate.findMany({
+      orderBy: { dateTime: 'desc' },
     });
 
     // Konvertuj BigInt u string za JSON serialization
-    return results.map((cp) => ({
-      ...cp,
-      androidAdmin: cp.androidAdmin.toString(),
+    return results.map((group) => ({
+      ...group,
+      id: group.id.toString(),
+      legacyTicketingId: group.legacyTicketingId
+        ? group.legacyTicketingId.toString()
+        : null,
+      legacyCityId: group.legacyCityId ? group.legacyCityId.toString() : null,
     }));
   }
 
   async findOne(id: number) {
-    const centralPoint = await this.prisma.centralPoint.findUnique({
-      where: { id },
+    const timetableDate = await this.prisma.timetableDate.findUnique({
+      where: { id: BigInt(id) },
     });
 
-    if (!centralPoint) {
-      throw new NotFoundException(`Centralna tačka sa ID ${id} nije pronađena`);
+    if (!timetableDate) {
+      throw new NotFoundException(
+        `Grupa za RedVoznje sa ID ${id} nije pronađena`,
+      );
     }
 
     // Konvertuj BigInt u string za JSON serialization
     return {
-      ...centralPoint,
-      androidAdmin: centralPoint.androidAdmin.toString(),
+      ...timetableDate,
+      id: timetableDate.id.toString(),
+      legacyTicketingId: timetableDate.legacyTicketingId
+        ? timetableDate.legacyTicketingId.toString()
+        : null,
+      legacyCityId: timetableDate.legacyCityId
+        ? timetableDate.legacyCityId.toString()
+        : null,
     };
   }
 
-  async update(id: number, updateCentralPointDto: UpdateCentralPointDto) {
+  async update(id: number, updateTimetableDateDto: UpdateTimetableDateDto) {
     await this.findOne(id); // Proverava da li postoji
 
-    const result = await this.prisma.centralPoint.update({
-      where: { id },
-      data: updateCentralPointDto,
+    const { legacyCityId, ...rest } = updateTimetableDateDto;
+
+    const result = await this.prisma.timetableDate.update({
+      where: { id: BigInt(id) },
+      data: {
+        ...rest,
+        dateTime: new Date(), // Ažuriraj vreme izmene
+        legacyCityId:
+          legacyCityId !== undefined
+            ? legacyCityId
+              ? BigInt(legacyCityId)
+              : null
+            : undefined,
+      },
     });
 
     // Konvertuj BigInt u string za JSON serialization
     return {
       ...result,
-      androidAdmin: result.androidAdmin.toString(),
+      id: result.id.toString(),
+      legacyTicketingId: result.legacyTicketingId
+        ? result.legacyTicketingId.toString()
+        : null,
+      legacyCityId: result.legacyCityId ? result.legacyCityId.toString() : null,
     };
   }
 
   async remove(id: number) {
     await this.findOne(id); // Proverava da li postoji
 
-    return this.prisma.centralPoint.delete({
-      where: { id },
+    const result = await this.prisma.timetableDate.delete({
+      where: { id: BigInt(id) },
     });
+
+    return {
+      ...result,
+      id: result.id.toString(),
+      legacyTicketingId: result.legacyTicketingId
+        ? result.legacyTicketingId.toString()
+        : null,
+      legacyCityId: result.legacyCityId ? result.legacyCityId.toString() : null,
+    };
   }
 
   // ========== TIKETING SERVER (LEGACY BAZA) ==========
@@ -157,7 +142,7 @@ export class CentralPointsService {
   // ========== SINHRONIZACIJA ==========
 
   async syncFromTicketing(userId: number) {
-    console.log('🔄 Starting Ticketing Server sync...');
+    console.log('🔄 Starting Ticketing Server sync for timetable dates...');
     const startTime = Date.now();
 
     let created = 0;
@@ -192,9 +177,30 @@ export class CentralPointsService {
       });
 
       try {
+        // Prvo proveri da li tabela postoji
+        const [tables] = await connection.execute(
+          "SHOW TABLES LIKE 'timetable_dates'",
+        );
+
+        if ((tables as any[]).length === 0) {
+          console.warn(
+            '⚠️ Tabela "timetable_dates" ne postoji u legacy bazi - preskačem sinhronizaciju',
+          );
+          return {
+            success: true,
+            created: 0,
+            updated: 0,
+            skipped: 0,
+            errors: 0,
+            totalProcessed: 0,
+            message:
+              'Tabela "timetable_dates" ne postoji u legacy bazi - nije bilo šta da se sinhronizuje',
+          };
+        }
+
         // Učitaj sve rekorde iz legacy tabele
         const [rows] = await connection.execute(
-          'SELECT * FROM central_points ORDER BY id ASC',
+          'SELECT * FROM timetable_dates ORDER BY id ASC',
         );
 
         const legacyRecords = rows as any[];
@@ -209,7 +215,8 @@ export class CentralPointsService {
 
           for (const legacyRecord of batch) {
             try {
-              const result = await this.processCentralPointSync(legacyRecord);
+              const result =
+                await this.processTimetableDateSyncFromTicketing(legacyRecord);
 
               switch (result.action) {
                 case 'create':
@@ -265,7 +272,7 @@ export class CentralPointsService {
   }
 
   async syncFromCity(userId: number) {
-    console.log('🔄 Starting City Server sync...');
+    console.log('🔄 Starting City Server sync for timetable dates...');
     const startTime = Date.now();
 
     let created = 0;
@@ -300,9 +307,30 @@ export class CentralPointsService {
       });
 
       try {
+        // Prvo proveri da li tabela postoji
+        const [tables] = await connection.execute(
+          "SHOW TABLES LIKE 'timetable_dates'",
+        );
+
+        if ((tables as any[]).length === 0) {
+          console.warn(
+            '⚠️ Tabela "timetable_dates" ne postoji u legacy bazi - preskačem sinhronizaciju',
+          );
+          return {
+            success: true,
+            created: 0,
+            updated: 0,
+            skipped: 0,
+            errors: 0,
+            totalProcessed: 0,
+            message:
+              'Tabela "timetable_dates" ne postoji u legacy bazi - nije bilo šta da se sinhronizuje',
+          };
+        }
+
         // Učitaj sve rekorde iz legacy tabele
         const [rows] = await connection.execute(
-          'SELECT * FROM central_points ORDER BY id ASC',
+          'SELECT * FROM timetable_dates ORDER BY id ASC',
         );
 
         const legacyRecords = rows as any[];
@@ -317,9 +345,8 @@ export class CentralPointsService {
 
           for (const legacyRecord of batch) {
             try {
-              const result = await this.processCentralPointCitySync(
-                legacyRecord,
-              );
+              const result =
+                await this.processTimetableDateSyncFromCity(legacyRecord);
 
               switch (result.action) {
                 case 'create':
@@ -374,84 +401,36 @@ export class CentralPointsService {
     }
   }
 
-  private async processCentralPointCitySync(legacyRecord: any) {
-    const legacyId = legacyRecord.id;
+  // ========== HELPER METODE ==========
 
-    // Proveri da li rekord već postoji
-    const existingRecord = await this.prisma.centralPoint.findUnique({
-      where: { legacyCityId: legacyId },
-    });
+  private async processTimetableDateSyncFromTicketing(legacyRecord: any) {
+    const legacyId = BigInt(legacyRecord.id);
 
-    // Mapiraj legacy podatke
-    const mappedData = this.mapLegacyCentralPoint(legacyRecord);
-
-    if (!existingRecord) {
-      // CREATE - novi rekord
-      await this.prisma.centralPoint.create({
-        data: {
-          ...mappedData,
-          legacyCityId: legacyId,
-          syncSource: 'manual', // Ne setujemo ticketing_sync za Gradski server
-        },
-      });
-
-      return { action: 'create' };
-    } else {
-      // Proveri syncSource
-      if (existingRecord.syncSource === 'manual') {
-        // SKIP - zaštiti ručne izmene
-        return { action: 'skip' };
-      }
-
-      // UPDATE - ažuriraj postojeći rekord
-      await this.prisma.centralPoint.update({
-        where: { id: existingRecord.id },
-        data: {
-          ...mappedData,
-          legacyCityId: legacyId,
-          // Ne menjamo syncSource - ostaje 'manual' ili 'ticketing_sync'
-        },
-      });
-
-      return { action: 'update' };
-    }
-  }
-
-  private async processCentralPointSync(legacyRecord: any) {
-    const legacyId = legacyRecord.id;
-
-    // Proveri da li rekord već postoji
-    const existingRecord = await this.prisma.centralPoint.findUnique({
+    // Proveri da li rekord već postoji na osnovu legacyTicketingId
+    const existingRecord = await this.prisma.timetableDate.findUnique({
       where: { legacyTicketingId: legacyId },
     });
 
     // Mapiraj legacy podatke
-    const mappedData = this.mapLegacyCentralPoint(legacyRecord);
+    const mappedData = this.mapLegacyTimetableDate(legacyRecord);
 
     if (!existingRecord) {
       // CREATE - novi rekord
-      await this.prisma.centralPoint.create({
+      await this.prisma.timetableDate.create({
         data: {
           ...mappedData,
           legacyTicketingId: legacyId,
-          syncSource: 'ticketing_sync',
         },
       });
 
       return { action: 'create' };
     } else {
-      // Proveri syncSource
-      if (existingRecord.syncSource === 'manual') {
-        // SKIP - zaštiti ručne izmene
-        return { action: 'skip' };
-      }
-
       // UPDATE - ažuriraj postojeći rekord
-      await this.prisma.centralPoint.update({
+      await this.prisma.timetableDate.update({
         where: { id: existingRecord.id },
         data: {
           ...mappedData,
-          syncSource: 'ticketing_sync',
+          legacyTicketingId: legacyId,
         },
       });
 
@@ -459,7 +438,42 @@ export class CentralPointsService {
     }
   }
 
-  private mapLegacyCentralPoint(legacy: any) {
+  private async processTimetableDateSyncFromCity(legacyRecord: any) {
+    const legacyId = BigInt(legacyRecord.id);
+
+    // Proveri da li rekord već postoji na osnovu legacyCityId
+    const existingRecord = await this.prisma.timetableDate.findUnique({
+      where: { legacyCityId: legacyId },
+    });
+
+    // Mapiraj legacy podatke
+    const mappedData = this.mapLegacyTimetableDate(legacyRecord);
+
+    if (!existingRecord) {
+      // CREATE - novi rekord
+      await this.prisma.timetableDate.create({
+        data: {
+          ...mappedData,
+          legacyCityId: legacyId,
+        },
+      });
+
+      return { action: 'create' };
+    } else {
+      // UPDATE - ažuriraj postojeći rekord
+      await this.prisma.timetableDate.update({
+        where: { id: existingRecord.id },
+        data: {
+          ...mappedData,
+          legacyCityId: legacyId,
+        },
+      });
+
+      return { action: 'update' };
+    }
+  }
+
+  private mapLegacyTimetableDate(legacy: any) {
     // Helper za parsiranje datuma
     const parseDate = (value: any): Date => {
       if (!value) return new Date();
@@ -467,108 +481,27 @@ export class CentralPointsService {
       return isNaN(date.getTime()) ? new Date() : date;
     };
 
-    // Helper za parsiranje brojeva
-    const parseNumber = (value: any, defaultValue: number = 0): number => {
-      const parsed = parseFloat(value);
-      return isNaN(parsed) ? defaultValue : parsed;
+    // Helper za formatiranje datuma kao string (YYYY-MM-DD)
+    const formatDateString = (value: any): string => {
+      if (!value) return new Date().toISOString().split('T')[0];
+      const date = new Date(value);
+      if (isNaN(date.getTime())) return new Date().toISOString().split('T')[0];
+      return date.toISOString().split('T')[0];
     };
 
-    // Helper za parsiranje boolean iz 0/1
-    const parseBoolean = (value: any): boolean => {
-      return value === 1 || value === '1' || value === true;
-    };
-
+    // Legacy tabela ima: datum, kad, timetable_name, date_valid_to, changed_by (INT)
+    // NEMA: status, synchro_status, send_incremental - postavi default vrednosti
     return {
-      // Osnovne informacije
-      name: legacy.cp_name || '',
-      address: legacy.cp_address || '',
-      zip: legacy.cp_zip || '',
-      city: legacy.cp_city || '',
-
-      // Kontakt
-      phone1: legacy.cp_phone1 || '',
-      phone2: legacy.cp_phone2 || '',
-      email: legacy.cp_email || '',
-
-      // Boss
-      boss: legacy.cp_boss || '',
-      bossPhone: legacy.cp_boss_phone || '',
-      bossEmail: legacy.cp_boss_email || '',
-
-      // Geografija
-      mainStationUid: legacy.main_station_uid || '',
-      longitude: legacy.cp_longitude || '',
-      latitude: legacy.cp_latitude || '',
-
-      // Komentar
-      comment: legacy.cp_comment || '',
-
-      // Finansije
-      owes: parseNumber(legacy.cp_owes),
-      expects: parseNumber(legacy.cp_expects),
-      saldo: parseNumber(legacy.cp_saldo),
-      incomeSettlementTimeframe:
-        legacy.income_settlement_timeframe_cp || '0',
-
-      // Audit
-      changedBy: legacy.changed_by || 'legacy_sync',
-      dateTime: parseDate(legacy.date_time),
-
-      // Java/Applet settings
-      enableJavaApplet: parseBoolean(legacy.enablejavaapplet),
-      enableTicketReturn: parseInt(legacy.enableticketreturn) || 0,
-      enableTicketDelete: parseBoolean(legacy.enableticketdelete),
-      enableOtherTicketsCheck: parseBoolean(legacy.enableotherticketscheck),
-      enableJournalCheck: parseInt(legacy.enablejournalcheck) || 1,
-
-      // Fuel
-      internalFuel: legacy.internal_fuel !== null ? parseBoolean(legacy.internal_fuel) : null,
-
-      // UI/Display
-      color: legacy.cp_color || '#000000',
-      lineColor: legacy.cp_line_color || '#000000',
-      image: legacy.cp_image || null,
-      imageAndroid: legacy.cp_image_android || null,
-
-      // Customer info images
-      customerInfoCloseDeparture: legacy.cp_customer_info_close_departure || null,
-      customerInfoOpenDeparture: legacy.cp_customer_info_open_departure || null,
-      validatorCloseDeparture: legacy.cp_validator_close_departure || null,
-      validatorOpenDeparture: legacy.cp_validator_open_departure || null,
-
-      // Android settings
-      sendAndroidPinRequestToAdmin: parseInt(legacy.send_android_pin_request_to_admin) || 0,
-      androidAdmin: BigInt(legacy.android_admin || 0),
-
-      // Country/VAT
-      countryId: parseInt(legacy.cp_country_id) || 0,
-      countryName: legacy.cp_country_name || null,
-      vatId: legacy.cp_vat_id || null,
-
-      // Additional settings
-      otherCpView: parseInt(legacy.other_cp_view) || 0,
-      dispatchOrderByCp: parseInt(legacy.dispatch_order_by_cp) || 0,
-      active: parseBoolean(legacy.active),
-
-      // Invoice/Account
-      placeOfInvoice: legacy.place_of_the_invoice || null,
-      currentAccount: legacy.current_account || null,
-      currentAccountForPlastic: legacy.current_account_for_plastic || null,
-
-      // Depot
-      depotCode: legacy.depot_code ? legacy.depot_code.trim() : null,
-
-      // GTFS
-      creatingZipByGtfsStandard: parseBoolean(legacy.creating_zip_by_gtfs_starndard),
-
-      // Device list
-      defaultDeviceListSubgroupId: legacy.default_device_list_subgroup_id
-        ? parseInt(legacy.default_device_list_subgroup_id)
-        : null,
+      dateValidFrom: formatDateString(legacy.datum),
+      dateValidTo: legacy.date_valid_to ? formatDateString(legacy.date_valid_to) : null,
+      status: 'N', // Default vrednost - ne postoji u legacy tabeli
+      synchroStatus: 'N', // Default vrednost - ne postoji u legacy tabeli
+      sendIncremental: '0', // Default vrednost - ne postoji u legacy tabeli
+      changedBy: legacy.changed_by?.toString() || 'legacy_sync', // INT u legacy, VARCHAR u našoj bazi
+      dateTime: parseDate(legacy.kad),
+      name: legacy.timetable_name || '',
     };
   }
-
-  // ========== HELPER METODE ==========
 
   private async findAllFromLegacy(subtype: string) {
     try {
@@ -597,9 +530,23 @@ export class CentralPointsService {
       });
 
       try {
-        // Učitaj sve central points iz legacy baze
+        // Prvo proveri da li tabela postoji
+        const [tables] = await connection.execute(
+          "SHOW TABLES LIKE 'timetable_dates'",
+        );
+
+        if ((tables as any[]).length === 0) {
+          console.warn(
+            `⚠️ Tabela 'timetable_dates' ne postoji u legacy bazi (${subtype})`,
+          );
+          // Vrati prazan niz umesto greške
+          return [];
+        }
+
+        // Učitaj sve timetable_dates iz legacy baze
+        // Legacy struktura: datum, kad, id, timetable_name, date_valid_to, changed_by
         const [rows] = await connection.execute(
-          'SELECT * FROM central_points ORDER BY id DESC',
+          'SELECT id, DATE_FORMAT(datum, "%Y-%m-%d") as date_valid_from, timetable_name as name, DATE_FORMAT(date_valid_to, "%Y-%m-%d") as date_valid_to, changed_by, kad as date_time FROM timetable_dates ORDER BY id DESC',
         );
 
         return rows;
@@ -608,40 +555,12 @@ export class CentralPointsService {
         await connection.end();
       }
     } catch (error) {
-      console.error(`Greška pri učitavanju iz legacy baze (${subtype}):`, error);
+      console.error(
+        `Greška pri učitavanju iz legacy baze (${subtype}):`,
+        error,
+      );
       throw new InternalServerErrorException(
         `Greška pri konektovanju na legacy bazu: ${error.message}`,
-      );
-    }
-  }
-
-  async findSyncedWithTicketing() {
-    try {
-      // Jednostavan query samo za centralne tačke sa syncWithCityServer = true
-      const query = `
-        SELECT
-          id,
-          cp_name as name,
-          legacy_ticketing_id,
-          0 as lines_count
-        FROM \`central_points\`
-        WHERE sync_with_city_server = true
-        ORDER BY cp_name ASC
-      `;
-
-      const results: any[] = await this.prisma.$queryRawUnsafe(query);
-
-      // Konvertuj BigInt u number za JSON serialization
-      return results.map((row) => ({
-        id: Number(row.id),
-        name: row.name,
-        legacyTicketingId: row.legacy_ticketing_id,
-        linesCount: 0, // Za sada bez brojanja linija
-      }));
-    } catch (error) {
-      console.error('Greška pri učitavanju sinhronizovanih CP:', error);
-      throw new InternalServerErrorException(
-        `Greška pri učitavanju centralnih tačaka: ${error.message}`,
       );
     }
   }

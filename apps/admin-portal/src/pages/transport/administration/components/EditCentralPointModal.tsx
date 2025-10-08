@@ -46,6 +46,7 @@ const EditCentralPointModal: React.FC<EditCentralPointModalProps> = ({
         active: centralPoint.active,
         legacyTicketingId: centralPoint.legacyTicketingId,
         legacyCityId: centralPoint.legacyCityId,
+        syncWithCityServer: centralPoint.syncWithCityServer ?? false,
       });
     }
   }, [open, centralPoint, form]);
@@ -264,6 +265,15 @@ const EditCentralPointModal: React.FC<EditCentralPointModalProps> = ({
           tooltip="ID iz Gradskog servera - ručno setovati za povezivanje sa Gradskim serverom"
         >
           <InputNumber style={{ width: '100%' }} min={1} />
+        </Form.Item>
+
+        <Form.Item
+          label="Sinhronizacija sa gradskim serverom"
+          name="syncWithCityServer"
+          valuePropName="checked"
+          tooltip="Omogući automatsku sinhronizaciju sa gradskim serverom"
+        >
+          <Switch />
         </Form.Item>
 
         {/* Status */}

@@ -16,30 +16,30 @@ import {
   EditOutlined,
   DeleteOutlined,
   ReloadOutlined,
-  EnvironmentOutlined,
+  TagsOutlined,
   ExclamationCircleOutlined,
 } from '@ant-design/icons';
-import { usePermissions } from '../../../../hooks/usePermissions';
-import { centralPointsService, CentralPoint } from '../../../../services/centralPoints.service';
-import EditCentralPointModal from './EditCentralPointModal';
+import { usePermissions } from '../../../../../hooks/usePermissions';
+import { timetableDatesService, TimetableDate } from '../../../../../services/timetableDates.service';
+import EditTimetableDateModal from './EditTimetableDateModal';
 
 const { Title, Text } = Typography;
 
 const MainServerTab: React.FC = () => {
   const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<CentralPoint[]>([]);
+  const [data, setData] = useState<TimetableDate[]>([]);
   const [editModalOpen, setEditModalOpen] = useState(false);
-  const [selectedCentralPoint, setSelectedCentralPoint] = useState<CentralPoint | null>(null);
+  const [selectedGroup, setSelectedGroup] = useState<TimetableDate | null>(null);
   const { hasPermission } = usePermissions();
   const { modal, message } = App.useApp();
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const centralPoints = await centralPointsService.getAllMain();
-      setData(centralPoints);
+      const groups = await timetableDatesService.getAllMain();
+      setData(groups);
     } catch (error: any) {
-      console.error('Greška pri učitavanju centralnih tačaka:', error);
+      console.error('Greška pri učitavanju grupa za RedVoznje:', error);
       message.error(error.response?.data?.message || 'Greška pri učitavanju podataka');
     } finally {
       setLoading(false);
@@ -50,32 +50,37 @@ const MainServerTab: React.FC = () => {
     loadData();
   }, []);
 
-  const handleEdit = (record: CentralPoint) => {
-    setSelectedCentralPoint(record);
+  const handleEdit = (record: TimetableDate) => {
+    setSelectedGroup(record);
     setEditModalOpen(true);
   };
 
-  const handleEditClose = () => {
+  const handleCreate = () => {
+    setSelectedGroup(null);
+    setEditModalOpen(true);
+  };
+
+  const handleModalClose = () => {
     setEditModalOpen(false);
-    setSelectedCentralPoint(null);
+    setSelectedGroup(null);
   };
 
-  const handleEditSuccess = () => {
-    loadData(); // Reload data after successful edit
+  const handleModalSuccess = () => {
+    loadData();
   };
 
-  const handleDelete = (record: CentralPoint) => {
+  const handleDelete = (record: TimetableDate) => {
     modal.confirm({
       title: 'Potvrda brisanja',
       icon: <ExclamationCircleOutlined />,
-      content: `Da li ste sigurni da želite da obrišete centralnu tačku "${record.name}"?`,
+      content: `Da li ste sigurni da želite da obrišete grupu cenovnika "${record.name}"?`,
       okText: 'Da, obriši',
       okType: 'danger',
       cancelText: 'Otkaži',
       onOk: async () => {
         try {
-          await centralPointsService.delete(record.id);
-          message.success('Centralna tačka uspešno obrisana');
+          await timetableDatesService.delete(Number(record.id));
+          message.success('Grupa za RedVoznje uspešno obrisana');
           loadData();
         } catch (error: any) {
           console.error('Greška pri brisanju:', error);
@@ -91,7 +96,7 @@ const MainServerTab: React.FC = () => {
       dataIndex: 'id',
       key: 'id',
       width: 80,
-      sorter: (a: CentralPoint, b: CentralPoint) => a.id - b.id,
+      sorter: (a: TimetableDate, b: TimetableDate) => Number(a.id) - Number(b.id),
       defaultSortOrder: 'ascend' as const,
     },
     {
@@ -99,26 +104,14 @@ const MainServerTab: React.FC = () => {
       dataIndex: 'legacyTicketingId',
       key: 'legacyTicketingId',
       width: 100,
-      render: (id: number | null) => id ?? '-',
+      render: (id: string | null) => id ?? '-',
     },
     {
       title: 'Gradski ID',
       dataIndex: 'legacyCityId',
       key: 'legacyCityId',
       width: 100,
-      render: (id: number | null) => id ?? '-',
-    },
-    {
-      title: 'Sinhronizacija sa gradskim serverom',
-      dataIndex: 'syncWithCityServer',
-      key: 'syncWithCityServer',
-      width: 200,
-      align: 'center' as const,
-      render: (enabled: boolean) => (
-        <Tag color={enabled ? 'blue' : 'default'}>
-          {enabled ? 'Uključeno' : 'Isključeno'}
-        </Tag>
-      ),
+      render: (id: string | null) => id ?? '-',
     },
     {
       title: 'Naziv',
@@ -127,43 +120,59 @@ const MainServerTab: React.FC = () => {
       render: (text: string) => <Text strong>{text}</Text>,
     },
     {
-      title: 'Adresa',
-      dataIndex: 'address',
-      key: 'address',
+      title: 'Važi od',
+      dataIndex: 'dateValidFrom',
+      key: 'dateValidFrom',
+      render: (date: string) => new Date(date).toLocaleDateString('sr-RS'),
     },
     {
-      title: 'Grad',
-      dataIndex: 'city',
-      key: 'city',
-    },
-    {
-      title: 'Telefon',
-      dataIndex: 'phone1',
-      key: 'phone1',
-    },
-    {
-      title: 'Email',
-      dataIndex: 'email',
-      key: 'email',
+      title: 'Važi do',
+      dataIndex: 'dateValidTo',
+      key: 'dateValidTo',
+      render: (date: string | null) => date ? new Date(date).toLocaleDateString('sr-RS') : '-',
     },
     {
       title: 'Status',
-      dataIndex: 'active',
-      key: 'active',
+      dataIndex: 'status',
+      key: 'status',
       align: 'center' as const,
-      render: (active: boolean) => (
-        <Tag color={active ? 'green' : 'red'}>
-          {active ? 'Aktivna' : 'Neaktivna'}
+      render: (status: string) => (
+        <Tag color={status === 'A' ? 'green' : 'default'}>
+          {status === 'A' ? 'Aktivna' : 'Neaktivna'}
         </Tag>
       ),
+    },
+    {
+      title: 'Synchro Status',
+      dataIndex: 'synchroStatus',
+      key: 'synchroStatus',
+      align: 'center' as const,
+      render: (status: string) => (
+        <Tag color={status === 'A' ? 'blue' : 'default'}>
+          {status}
+        </Tag>
+      ),
+    },
+    {
+      title: 'Promenio',
+      dataIndex: 'changedBy',
+      key: 'changedBy',
+    },
+    {
+      title: 'Datum promene',
+      dataIndex: 'dateTime',
+      key: 'dateTime',
+      render: (date: string) => new Date(date).toLocaleString('sr-RS'),
     },
     {
       title: 'Akcije',
       key: 'actions',
       align: 'center' as const,
-      render: (_: any, record: CentralPoint) => (
+      fixed: 'right' as const,
+      width: 120,
+      render: (_: any, record: TimetableDate) => (
         <Space>
-          {hasPermission('transport.administration.central_points.main:update') && (
+          {hasPermission('transport.administration.timetable_dates.main:update') && (
             <Tooltip title="Izmeni">
               <Button
                 type="text"
@@ -172,7 +181,7 @@ const MainServerTab: React.FC = () => {
               />
             </Tooltip>
           )}
-          {hasPermission('transport.administration.central_points.main:delete') && (
+          {hasPermission('transport.administration.timetable_dates.main:delete') && (
             <Tooltip title="Obriši">
               <Button
                 type="text"
@@ -193,10 +202,10 @@ const MainServerTab: React.FC = () => {
         <Row justify="space-between" align="middle">
           <Col>
             <Space>
-              <EnvironmentOutlined style={{ fontSize: 24, color: '#1890ff' }} />
+              <TagsOutlined style={{ fontSize: 24, color: '#1890ff' }} />
               <div>
                 <Title level={4} style={{ margin: 0 }}>Glavni Server</Title>
-                <Text type="secondary">Centralne tačke na glavnom serveru</Text>
+                <Text type="secondary">Grupe za RedVoznje na glavnom serveru</Text>
               </div>
             </Space>
           </Col>
@@ -205,11 +214,11 @@ const MainServerTab: React.FC = () => {
               <Button icon={<ReloadOutlined />} onClick={loadData} loading={loading}>
                 Osveži
               </Button>
-              {hasPermission('transport.administration.central_points.main:create') && (
+              {hasPermission('transport.administration.timetable_dates.main:create') && (
                 <Button
                   type="primary"
                   icon={<PlusOutlined />}
-                  onClick={() => message.info('Create forma - biće implementirana')}
+                  onClick={handleCreate}
                 >
                   Dodaj
                 </Button>
@@ -226,18 +235,19 @@ const MainServerTab: React.FC = () => {
         loading={loading}
         pagination={{
           showSizeChanger: true,
-          showTotal: (total) => `Ukupno ${total} centralnih tačaka`,
+          showTotal: (total) => `Ukupno ${total} grupa za RedVoznje`,
         }}
         locale={{
           emptyText: 'Nema podataka',
         }}
+        scroll={{ x: 1200 }}
       />
 
-      <EditCentralPointModal
+      <EditTimetableDateModal
         open={editModalOpen}
-        centralPoint={selectedCentralPoint}
-        onClose={handleEditClose}
-        onSuccess={handleEditSuccess}
+        priceListGroup={selectedGroup}
+        onClose={handleModalClose}
+        onSuccess={handleModalSuccess}
       />
     </div>
   );
