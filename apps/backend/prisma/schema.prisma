@@ -803,8 +803,20 @@ model CentralPoint {
   // Device list
   defaultDeviceListSubgroupId Int? @map("default_device_list_subgroup_id")
 
+  // Legacy sync tracking
+  legacyTicketingId Int?                    @unique @map("legacy_ticketing_id")
+  legacyCityId      Int?                    @unique @map("legacy_city_id")
+  syncSource        CentralPointSyncSource? @default(manual) @map("sync_source")
+
   @@index([mainStationUid])
   @@index([active])
   @@index([depotCode])
+  @@index([legacyTicketingId])
+  @@index([legacyCityId])
   @@map("central_points")
+}
+
+enum CentralPointSyncSource {
+  manual
+  ticketing_sync
 }

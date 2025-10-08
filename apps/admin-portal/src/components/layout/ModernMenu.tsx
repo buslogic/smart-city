@@ -274,7 +274,13 @@ const ModernMenu: React.FC = () => {
                 menuOrder: 301510000000,
                 icon: <EnvironmentOutlined />,
                 label: 'Centralne tačke',
-                permissions: ['transport.administration.central_points:view'],
+                // Prikaži ako korisnik ima bar jednu view permisiju (kontejner ili bilo koji server)
+                permissions: [
+                  'transport.administration.central_points:view',
+                  'transport.administration.central_points.main:view',
+                  'transport.administration.central_points.ticketing:view',
+                  'transport.administration.central_points.city:view',
+                ],
               },
             ],
           },

@@ -141,7 +141,14 @@ function App() {
             <Route
               path="transport/administration/central-points"
               element={
-                <PermissionGuard permissions={['transport.administration.central_points:view']}>
+                <PermissionGuard
+                  permissions={[
+                    'transport.administration.central_points:view',
+                    'transport.administration.central_points.main:view',
+                    'transport.administration.central_points.ticketing:view',
+                    'transport.administration.central_points.city:view'
+                  ]}
+                >
                   <CentralPoints />
                 </PermissionGuard>
               }

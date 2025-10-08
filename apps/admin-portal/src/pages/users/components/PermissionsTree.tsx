@@ -123,6 +123,11 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
       // Treći nivo - Administracija
       if (menuOrder === 301510000000) return 'Centralne tačke';
 
+      // Četvrti nivo - Centralne tačke pod-serveri
+      if (menuOrder >= 301510010000 && menuOrder < 301510020000) return 'Glavni Server';
+      if (menuOrder >= 301510100000 && menuOrder < 301510200000) return 'Tiketing Server';
+      if (menuOrder >= 301510200000 && menuOrder < 301510300000) return 'Gradski Server';
+
       // Treći nivo - Dispečerski Modul
       if (menuOrder === 302010000000) return 'Mapa';
       if (menuOrder === 302020000000) return 'Analitika vozila';

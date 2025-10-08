@@ -52,6 +52,9 @@ export interface CentralPoint {
   depotCode?: string | null;
   creatingZipByGtfsStandard: boolean;
   defaultDeviceListSubgroupId?: number | null;
+  legacyTicketingId?: number | null;
+  legacyCityId?: number | null;
+  syncSource?: string;
 }
 
 export interface CreateCentralPointDto {
@@ -106,6 +109,16 @@ export interface CreateCentralPointDto {
 
 export type UpdateCentralPointDto = Partial<CreateCentralPointDto>;
 
+export interface SyncResult {
+  success: boolean;
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: number;
+  totalProcessed: number;
+  message: string;
+}
+
 class CentralPointsService {
   // ========== GLAVNI SERVER ==========
 
@@ -140,10 +153,20 @@ class CentralPointsService {
     return response.data;
   }
 
+  async syncFromTicketing(): Promise<SyncResult> {
+    const response = await api.post('/api/central-points/sync-ticketing');
+    return response.data;
+  }
+
   // ========== GRADSKI SERVER (LEGACY) ==========
 
   async getAllCity(): Promise<any[]> {
     const response = await api.get('/api/central-points/city');
+    return response.data;
+  }
+
+  async syncFromCity(): Promise<SyncResult> {
+    const response = await api.post('/api/central-points/sync-city');
     return response.data;
   }
 }

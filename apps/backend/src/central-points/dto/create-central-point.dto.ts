@@ -220,4 +220,13 @@ export class CreateCentralPointDto {
   @IsInt()
   @IsOptional()
   defaultDeviceListSubgroupId?: number | null;
+
+  // Legacy sync tracking
+  @IsInt()
+  @IsOptional()
+  legacyTicketingId?: number | null;
+
+  @IsInt()
+  @IsOptional()
+  legacyCityId?: number | null;
 }

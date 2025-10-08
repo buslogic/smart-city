@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Tabs, Card, Typography } from 'antd';
 import {
   EnvironmentOutlined,
@@ -13,8 +13,8 @@ import CityServerTab from './components/CityServerTab';
 const { Title } = Typography;
 
 const CentralPoints: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('main-server');
   const { hasPermission } = usePermissions();
+  const [activeTab, setActiveTab] = useState('main-server');
 
   const tabItems = [
     {
@@ -30,7 +30,7 @@ const CentralPoints: React.FC = () => {
           <MainServerTab />
         </div>
       ),
-      permission: 'transport.administration.central_points:view',
+      permission: 'transport.administration.central_points.main:view',
     },
     {
       key: 'ticketing-server',
@@ -65,13 +65,22 @@ const CentralPoints: React.FC = () => {
   ];
 
   // Filtriraj tabove na osnovu permisija
-  const visibleTabItems = tabItems.filter(tab => {
-    const hasAccess = !tab.permission || hasPermission(tab.permission);
-    console.log(`Tab "${tab.key}" - Permission: "${tab.permission}" - HasAccess: ${hasAccess}`);
-    return hasAccess;
-  });
+  const visibleTabItems = useMemo(() => {
+    return tabItems.filter(tab => {
+      const hasAccess = !tab.permission || hasPermission(tab.permission);
+      return hasAccess;
+    });
+  }, [hasPermission]);
 
-  console.log('Total visible tabs:', visibleTabItems.length, visibleTabItems.map(t => t.key));
+  // Automatski postavi prvi dostupan tab kao aktivan ako trenutni nije dostupan
+  useEffect(() => {
+    if (visibleTabItems.length > 0) {
+      const isActiveTabVisible = visibleTabItems.some(tab => tab.key === activeTab);
+      if (!isActiveTabVisible) {
+        setActiveTab(visibleTabItems[0].key);
+      }
+    }
+  }, [visibleTabItems, activeTab]);
 
   return (
     <div className="space-y-4">
