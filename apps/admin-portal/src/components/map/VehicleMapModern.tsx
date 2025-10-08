@@ -311,7 +311,7 @@ const VehicleMapModern: React.FC<VehicleMapModernProps> = ({
                     fontSize: '11px',
                     color: '#9ca3af'
                   }}>
-                    ⏱ {dayjs.utc(vehicle.captured).tz('Europe/Belgrade').format('DD.MM.YYYY HH:mm:ss')}
+                    ⏱ {dayjs(vehicle.captured).format('DD.MM.YYYY HH:mm:ss')}
                   </div>
 
                   {/* Akcije */}

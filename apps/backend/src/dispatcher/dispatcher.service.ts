@@ -539,13 +539,16 @@ export class DispatcherService {
     vehicleId: number,
     startDate: Date,
     endDate: Date,
+    source: 'gps_data' | 'gps_data_lag_filtered' = 'gps_data',
   ) {
     try {
       this.logger.log(
-        `📍 Dohvatanje GPS istorije za vozilo ${vehicleId} od ${startDate.toISOString()} do ${endDate.toISOString()}`,
+        `📍 Dohvatanje GPS istorije za vozilo ${vehicleId} od ${startDate.toISOString()} do ${endDate.toISOString()} iz ${source}`,
       );
 
-      // Query za dohvatanje GPS tačaka
+      // Query za dohvatanje GPS tačaka - koristi odgovarajuću tabelu
+      // Za gps_data_lag_filtered automatski isključi outlier-e
+      const isLagFiltered = source === 'gps_data_lag_filtered';
       const gpsQuery = `
         SELECT
           time,
@@ -558,18 +561,25 @@ export class DispatcherService {
           line_number,
           people_in,
           people_out
-        FROM gps_data
+        FROM ${source}
         WHERE vehicle_id = $1
           AND time >= $2
           AND time <= $3
+          ${isLagFiltered ? 'AND is_outlier = FALSE' : ''}
         ORDER BY time ASC
       `;
+
+      // DEBUG: Loguj kompletan query
+      this.logger.log(`🔍 [Service] SQL Query: ${gpsQuery.replace(/\s+/g, ' ').trim()}`);
+      this.logger.log(`📊 [Service] Parametri: vehicleId=${vehicleId}, start=${startDate.toISOString()}, end=${endDate.toISOString()}`);
 
       const result = await this.pgPool.query(gpsQuery, [
         vehicleId,
         startDate,
         endDate,
       ]);
+
+      this.logger.log(`✅ [Service] Pronađeno ${result.rows.length} tačaka iz tabele ${source}`);
 
       const points = result.rows;
 
