@@ -2,24 +2,38 @@
 
 # Vodič za dodavanje nove opcije menija u Smart City Admin Portal
 
-## 📋 BRZI PREGLED - 4 KORAKA
+## 🎯 KLJUČNA PRAVILA (pročitaj PRE početka!)
 
-1. **KORAK 1:** Dodaj opciju u meni i kreiraj stranicu
-   - ModernMenuV1.tsx - dodaj meni opciju
-   - Kreiraj React komponentu stranice
-   - App.tsx - dodaj rutu sa PermissionGuard
-   
-2. **KORAK 2:** Kreiraj permisiju u bazi
-   - Napravi SQL INSERT za permisiju
-   - Format: `modul.resurs:akcija` (DVOTAČKA pre akcije!)
-   
-3. **KORAK 3:** Ažuriraj RBAC Tree
-   - PermissionsTree.tsx - dodaj sekciju za nove permisije
-   - Opciono: dodaj custom labele
-   
-4. **KORAK 4:** Kreiraj Prisma migraciju
-   - Napravi migration.sql fajl
-   - Pokreni `npx prisma migrate deploy`
+### ⚠️ MenuOrder brojevi - NIKAD NE POMERAJ postojeće!
+- ✅ **Koristi "između" brojeve**: 301500000000 između 301 i 302
+- ❌ **NE POMERAJ** postojeće menuOrder brojeve
+- 💡 **Zbog toga smo ostavili velike razmake** - da možemo dodavati između!
+
+### ⚠️ Format permisija - DVOTAČKA pre akcije!
+- ✅ `transport.administration:view` (ISPRAVNO)
+- ❌ `transport.administration.view` (POGREŠNO)
+
+### ⚠️ SQL kolone - snake_case OBAVEZNO!
+- ✅ `menu_order`, `description_sr`, `updated_at` (ISPRAVNO)
+- ❌ `menuOrder`, `descriptionSr`, `updatedAt` (POGREŠNO)
+
+---
+
+## 📋 BRZI PREGLED - 6 KORAKA
+
+1. **KORAK 1:** Odredi menuOrder broj (IZMEĐU postojećih!)
+
+2. **KORAK 2:** Kreiraj Prisma migraciju sa permisijama
+   - Koristi snake_case kolone
+   - Dodaj sve CRUD permisije odjednom
+
+3. **KORAK 3:** Pokreni migraciju i dodeli SUPER_ADMIN roli
+
+4. **KORAK 4:** Dodaj opciju u ModernMenu.tsx
+
+5. **KORAK 5:** Ažuriraj PermissionsTree getMenuName() mapiranje
+
+6. **KORAK 6:** Kreiraj stranicu i dodaj rutu u App.tsx
 
 ## ⚠️ VAŽNO: Konvencija imenovanja permisija
 
@@ -61,329 +75,457 @@ Primeri:
 
 ---
 
-## KORAK 1: Dodavanje opcije u meni i kreiranje stranice
+## 🔢 MenuOrder Struktura i Pravila
 
-**Cilj:** Dodati novu opciju/grupu u postojeći meni i kreirati osnovnu stranicu
+### Kako funkcioniše menuOrder?
 
-**Vreme potrebno:** 5-10 minuta
-
-### ⚠️ PRE POČETKA: Permisije MORAJU koristiti DVOTAČKU (:) pre akcije
-Primer: `maintenance.timescaledb:view` ✅ NE `maintenance.timescaledb.view` ❌
-
-### 1.1 **Dodavanje opcije u meni komponentu**
-Fajl: `/apps/admin-portal/src/components/layout/ModernMenuV1.tsx`
-
-#### Za grupu (folder) sa pod-opcijama:
-```typescript
-{
-  name: 'Alati za održavanje',
-  icon: Settings,  // Ikona iz lucide-react
-  hasSubmenu: true,
-  isOpen: expandedSections.has('Alati za održavanje'),
-  setOpen: () => toggleSection('Alati za održavanje'),
-  submenu: [
-    {
-      name: 'TimescaleDB',
-      href: '/transport/maintenance/timescaledb',  // Putanja
-      icon: Database,
-      permissions: ['maintenance.timescaledb:view'],  // Permisija sa DVOTAČKOM pre akcije
-    },
-  ].filter(item => !item.permissions || item.permissions.some(p => hasPermission(p))),
-},
+MenuOrder je **12-cifreni broj** koji određuje poziciju i nivo u hijerarhiji:
+```
+XXYYZZ000000
+││││││
+││││└└─ Fine-grained sorting (4 cifre - ne koristimo)
+││└└─── Treći nivo (ZZ) - opcije unutar grupe
+└└───── Drugi nivo (YY) - grupe unutar glavnog menija
 ```
 
-#### Lokacija u hijerarhiji:
-- Grupa se dodaje u `submenu` array postojeće grupe
-- U našem slučaju: `Autobuski Prevoznici` → `submenu` → nova grupa `Alati za održavanje`
+### Glavni nivoi (prvi par XX):
+- **10** (100000000000) - Dashboard
+- **20** (200000000000) - Korisnici
+- **30** (300000000000) - Autobuski Prevoznici (Transport)
+- **40** (400000000000) - Podešavanje
 
-### 1.2 **Auto-expand sekcija**
-U istom fajlu, dodaj logiku za auto-otvaranje menija kada je opcija aktivna:
+### Drugi nivo - Autobuski Prevoznici (3Y):
+- **301000000000** - Vozila
+- **301500000000** - Administracija (NOVI - IZMEĐU!)
+- **302000000000** - Dispečerski Modul
+- **303000000000** - Bezbednost
+- **304000000000** - Održavanje
+
+### Treći nivo - Vozila (301Z):
+- **301010000000** - Lista Vozila
+- **301020000000** - Sinhronizacija
+- **301030000000** - GPS Real-Time Sync
+- itd.
+
+### 🎯 Pravilo za određivanje novog broja:
+
+1. **Pronađi gde želiš da ubaciš opciju**
+2. **Pogledaj susedne brojeve**
+3. **Uzmi "između" vrednost**
+
+**Primer:**
+- Vozila = **301000000000**
+- Dispečerski = **302000000000**
+- Nova grupa između? = **301500000000** ✅
+
+### ⚠️ Zašto string slicing logika radi?
+
+PermissionsTree koristi **string slicing** (ne Math.floor):
+```typescript
+// STARA logika (ne radi sa "između" brojevima):
+Math.floor(301500000000 / 1000000000) = 301 ❌
+
+// NOVA logika (string slicing - radi savršeno):
+"301500000000".substring(0, 4) = "3015" ✅
+"301000000000".substring(0, 4) = "3010" ✅
+```
+
+Svaki par cifara je **jedinstveni grupirajući ključ**!
+
+---
+
+## KORAK 1: Odredi menuOrder brojeve
+
+**Primer: Dodavanje "Administracija" grupe sa "Centralne tačke" opcijom**
+
+### 1.1 Proveri postojeće brojeve
+```bash
+docker exec smartcity-mysql-local mysql -u smartcity_user -pSecurePassword123! smartcity_dev -e "SELECT menu_order, name, resource FROM permissions WHERE menu_order >= 301000000000 AND menu_order < 303000000000 ORDER BY menu_order LIMIT 20;"
+```
+
+### 1.2 Odredi nove brojeve
+
+Želiš da **"Administracija"** bude između **"Vozila"** (301) i **"Dispečerski"** (302):
+
+- **Administracija grupa**: 301500000000 (301.5 - IZMEĐU!)
+- **Centralne tačke - view**: 301510000000
+- **Centralne tačke - create**: 301510000001
+- **Centralne tačke - update**: 301510000002
+- **Centralne tačke - delete**: 301510000003
+
+---
+
+## KORAK 2: Kreiranje Prisma migracije
+
+### 2.1 Kreiraj folder za migraciju
+```bash
+# Generiši timestamp
+date +"%Y%m%d%H%M%S"
+# Npr: 20251007071814
+
+mkdir -p /home/kocev/smart-city/apps/backend/prisma/migrations/20251007071814_add_administration_central_points_permissions
+```
+
+### 2.2 Kreiraj migration.sql fajl
+
+**Fajl:** `migrations/20251007071814_add_administration_central_points_permissions/migration.sql`
+
+```sql
+-- Add administration and central points permissions
+
+-- 1. Grupa "Administracija" - pristup podmeniju
+INSERT INTO permissions (name, resource, action, description, description_sr, category, menu_order, updated_at)
+VALUES (
+  'transport.administration:view',
+  'transport.administration',
+  'view',
+  'Access to administration submenu',
+  'Pristup podmeniju administracija',
+  'transport',
+  301500000000,
+  NOW()
+);
+
+-- 2. Centralne tačke - VIEW permisija
+INSERT INTO permissions (name, resource, action, description, description_sr, category, menu_order, updated_at)
+VALUES (
+  'transport.administration.central_points:view',
+  'transport.administration.central_points',
+  'view',
+  'View central points',
+  'Pregled centralnih tačaka',
+  'transport',
+  301510000000,
+  NOW()
+);
+
+-- 3. Centralne tačke - CREATE permisija
+INSERT INTO permissions (name, resource, action, description, description_sr, category, menu_order, updated_at)
+VALUES (
+  'transport.administration.central_points:create',
+  'transport.administration.central_points',
+  'create',
+  'Create central points',
+  'Kreiranje centralnih tačaka',
+  'transport',
+  301510000001,
+  NOW()
+);
+
+-- 4. Centralne tačke - UPDATE permisija
+INSERT INTO permissions (name, resource, action, description, description_sr, category, menu_order, updated_at)
+VALUES (
+  'transport.administration.central_points:update',
+  'transport.administration.central_points',
+  'update',
+  'Update central points',
+  'Izmena centralnih tačaka',
+  'transport',
+  301510000002,
+  NOW()
+);
+
+-- 5. Centralne tačke - DELETE permisija
+INSERT INTO permissions (name, resource, action, description, description_sr, category, menu_order, updated_at)
+VALUES (
+  'transport.administration.central_points:delete',
+  'transport.administration.central_points',
+  'delete',
+  'Delete central points',
+  'Brisanje centralnih tačaka',
+  'transport',
+  301510000003,
+  NOW()
+);
+```
+
+**⚠️ VAŽNO:**
+- Koristi **snake_case** za kolone: `menu_order`, `description_sr`, `updated_at`
+- Koristi **DVOTAČKU** u name: `transport.administration:view`
+- **NE dodavaj** permisije rolama u migraciji - to se radi posle!
+
+---
+
+## KORAK 3: Pokreni migraciju i dodeli permisije
+
+### 3.1 Primeni migraciju
+```bash
+cd /home/kocev/smart-city/apps/backend
+npx prisma migrate deploy
+```
+
+### 3.2 Proveri da li su permisije ubačene
+```bash
+docker exec smartcity-mysql-local mysql -u smartcity_user -pSecurePassword123! smartcity_dev -e "SELECT id, name, resource, menu_order, description_sr FROM permissions WHERE resource LIKE 'transport.administration%' ORDER BY menu_order;"
+```
+
+### 3.3 Dodeli permisije SUPER_ADMIN roli
+```bash
+docker exec smartcity-mysql-local mysql -u smartcity_user -pSecurePassword123! smartcity_dev -e "INSERT INTO role_permissions (roleId, permissionId) SELECT 1, id FROM permissions WHERE resource LIKE 'transport.administration%';"
+```
+
+### 3.4 Proveri dodeljene permisije
+```bash
+docker exec smartcity-mysql-local mysql -u smartcity_user -pSecurePassword123! smartcity_dev -e "SELECT r.name as role_name, p.name as permission_name, p.description_sr FROM role_permissions rp JOIN roles r ON rp.roleId = r.id JOIN permissions p ON rp.permissionId = p.id WHERE p.resource LIKE 'transport.administration%' ORDER BY p.menu_order;"
+```
+
+---
+
+## KORAK 4: Dodavanje opcije u meni (ModernMenu.tsx)
+
+**Fajl:** `/apps/admin-portal/src/components/layout/ModernMenu.tsx`
+
+### 4.1 Dodaj novu grupu u menuItems array
+
+Pronađi odgovarajuću poziciju u `children` array-u (npr. između Vozila i Dispečerskog):
+
+```typescript
+children: [
+  {
+    key: 'vehicles',
+    menuOrder: 301000000000,
+    icon: <CarOutlined />,
+    label: 'Vozila',
+    children: [
+      // ... postojeće opcije
+    ],
+  },
+  // 🆕 NOVA GRUPA - Dodaj ovde!
+  {
+    key: 'administration',
+    menuOrder: 301500000000,
+    icon: <SettingOutlined />,
+    label: 'Administracija',
+    children: [
+      {
+        key: '/transport/administration/central-points',
+        menuOrder: 301510000000,
+        icon: <EnvironmentOutlined />,
+        label: 'Centralne tačke',
+        permissions: ['transport.administration.central_points:view'],
+      },
+    ],
+  },
+  {
+    key: 'dispatcher',
+    menuOrder: 302000000000,
+    icon: <RadarChartOutlined />,
+    label: 'Dispečerski Modul',
+    // ... ostale opcije
+  },
+],
+```
+
+### 4.2 Dodaj auto-expand logiku
+
+U `useEffect` hook-u za auto-otvaranje menija:
 
 ```typescript
 useEffect(() => {
   const path = location.pathname;
-  // ... postojeći kod ...
-  if (path.includes('/maintenance/')) {
-    expandedSections.add('Autobuski Prevoznici');  // Parent grupa
-    expandedSections.add('Alati za održavanje');     // Nova grupa
+  const keys: string[] = [];
+
+  if (path.includes('/transport/')) {
+    keys.push('transport');
+    if (path.includes('/vehicle')) keys.push('vehicles');
+    if (path.includes('/administration/')) keys.push('administration'); // 🆕 DODAJ OVO!
+    if (path.includes('/dispatcher/')) keys.push('dispatcher');
+    if (path.includes('/safety/')) keys.push('safety');
+    if (path.includes('/maintenance/')) keys.push('maintenance');
   }
-  setExpandedSections(new Set(expandedSections));
+
+  setOpenKeys(keys);
 }, [location.pathname]);
 ```
 
-### 1.3 **Kreiranje stranice komponente**
-Fajl: `/apps/admin-portal/src/pages/transport/maintenance/TimescaleDB.tsx`
+---
+
+## KORAK 5: Ažuriranje PermissionsTree mapiranja
+
+**Fajl:** `/apps/admin-portal/src/pages/users/components/PermissionsTree.tsx`
+
+### 5.1 Dodaj menuOrder mapiranje u getMenuName() funkciju
+
+Pronađi `getMenuName()` funkciju i dodaj nove menuOrder brojeve:
+
+```typescript
+const getMenuName = (menuOrder: number): string => {
+  // ... postojeći kod ...
+
+  // Drugi nivo - Transport
+  if (menuOrder === 301000000000) return 'Vozila';
+  if (menuOrder === 301500000000) return 'Administracija'; // 🆕 DODAJ OVO!
+  if (menuOrder === 302000000000) return 'Dispečerski Modul';
+  if (menuOrder === 303000000000) return 'Bezbednost i Analiza';
+  if (menuOrder === 304000000000) return 'Održavanje Sistema';
+
+  // ... postojeći kod ...
+
+  // Treći nivo - Administracija
+  if (menuOrder === 301510000000) return 'Centralne tačke'; // 🆕 DODAJ OVO!
+
+  // ... ostali nivoi
+}
+```
+
+**⚠️ VAŽNO:** Proveri da li postoje i drugi menuOrder brojevi koje treba ažurirati!
+
+---
+
+## KORAK 6: Kreiranje stranice i dodavanje rute
+
+### 6.1 Kreiraj folder za stranicu
+```bash
+mkdir -p /home/kocev/smart-city/apps/admin-portal/src/pages/transport/administration
+```
+
+### 6.2 Kreiraj React komponentu
+
+**Fajl:** `/apps/admin-portal/src/pages/transport/administration/CentralPoints.tsx`
 
 ```typescript
 import React from 'react';
 import { Card, Typography } from 'antd';
-import { DatabaseOutlined } from '@ant-design/icons';
+import { EnvironmentOutlined } from '@ant-design/icons';
 
 const { Title } = Typography;
 
-const TimescaleDB: React.FC = () => {
+const CentralPoints: React.FC = () => {
   return (
     <div className="p-6">
       <Card>
         <div className="flex items-center gap-3 mb-4">
-          <DatabaseOutlined className="text-2xl text-blue-500" />
-          <Title level={2} className="mb-0">TimescaleDB</Title>
+          <EnvironmentOutlined className="text-2xl text-blue-500" />
+          <Title level={2} className="mb-0">Centralne tačke</Title>
         </div>
-        
+
         <div className="text-gray-600">
-          <p>TimescaleDB stranica</p>
+          <p>Stranica za upravljanje centralnim tačkama</p>
         </div>
       </Card>
     </div>
   );
 };
 
-export default TimescaleDB;
+export default CentralPoints;
 ```
 
-### 1.4 **Dodavanje rute**
-Fajl: `/apps/admin-portal/src/App.tsx`
+### 6.3 Dodaj rutu u App.tsx
+
+**Fajl:** `/apps/admin-portal/src/App.tsx`
 
 #### Import komponente:
 ```typescript
-import TimescaleDB from './pages/transport/maintenance/TimescaleDB';
+import CentralPoints from './pages/transport/administration/CentralPoints';
 ```
 
-#### Definisanje rute:
+#### Dodaj rutu:
 ```typescript
-<Route 
-  path="transport/maintenance/timescaledb" 
+<Route
+  path="transport/administration/central-points"
   element={
-    <PermissionGuard permissions={['maintenance.timescaledb:view']}>
-      <TimescaleDB />
+    <PermissionGuard permissions={['transport.administration.central_points:view']}>
+      <CentralPoints />
     </PermissionGuard>
-  } 
+  }
 />
 ```
 
-### 1.5 **Permisije**
-
-#### Frontend permisija:
-- Koristi se u `PermissionGuard` komponenti
-- Format: `['maintenance.timescaledb:view']` (sa DVOTAČKOM pre akcije!)
-
-#### Backend permisija (ako treba):
-Dodaj u `/apps/backend/src/permissions/config/route-permissions.config.ts`:
-```typescript
-{
-  route: '/transport/maintenance/timescaledb',
-  requiredPermissions: ['maintenance.timescaledb:view'],
-  optionalPermissions: [],
-}
-```
-
 ---
 
-## KORAK 2: Kreiranje permisije u bazi podataka
+## ✅ TESTIRANJE I VERIFIKACIJA
 
-**Cilj:** Kreirati permisiju u bazi i dodeliti je odgovarajućim rolama
-
-**Vreme potrebno:** 5 minuta
-
-### 2.1 **Struktura tabele permissions**
-
-Tabela: `permissions`
-
-Polja:
-- `name` - jedinstveno ime (npr. `maintenance.timescaledb:view`)
-- `resource` - resurs (npr. `maintenance.timescaledb`)
-- `action` - akcija (npr. `view`)
-- `description` - opis na engleskom
-- `description_sr` - opis na srpskom
-- `category` - kategorija (npr. `maintenance`)
-
-### 2.2 **SQL za kreiranje permisije**
-
-```sql
-INSERT INTO permissions (name, resource, action, description, description_sr, category)
-VALUES (
-  'maintenance.timescaledb:view',
-  'maintenance.timescaledb',
-  'view',
-  'View TimescaleDB maintenance page',
-  'Pregled TimescaleDB stranice za održavanje',
-  'maintenance'
-);
-```
-
-### 2.3 **Dodela permisije roli**
-
-```sql
--- Dodeli permisiju SUPER_ADMIN roli (obično ima role_id = 1)
-INSERT INTO role_permissions (role_id, permission_id)
-SELECT 1, id FROM permissions WHERE name = 'maintenance.timescaledb:view';
-
--- Ili za specifičnu rolu po nazivu
-INSERT INTO role_permissions (role_id, permission_id)
-SELECT r.id, p.id 
-FROM roles r, permissions p 
-WHERE r.name = 'SUPER_ADMIN' 
-AND p.name = 'maintenance.timescaledb:view';
-```
-
-### 2.4 **Provera**
-
-```sql
--- Proveri da li je permisija kreirana
-SELECT * FROM permissions WHERE name = 'maintenance.timescaledb:view';
-
--- Proveri koje role imaju ovu permisiju
-SELECT r.name as role_name, p.name as permission_name
-FROM role_permissions rp
-JOIN roles r ON rp.role_id = r.id
-JOIN permissions p ON rp.permission_id = p.id
-WHERE p.name = 'maintenance.timescaledb:view';
-```
-
----
-
-## KORAK 3: Ažuriranje RBAC Tree komponente
-
-**Cilj:** Dodati novu permisiju u RBAC tree kako bi se mogla dodeljivati kroz UI
-
-**Fajl:** `/apps/admin-portal/src/pages/users/components/PermissionsTree.tsx`
-
-### 3.1 **Pronađi odgovarajuću sekciju**
-
-Pronađi gde se nalazi grupa kojoj dodaješ opciju. U našem primeru, tražimo `Autobuski Prevoznici` grupu.
-
-### 3.2 **Dodaj novu sekciju za permisije**
-
-```typescript
-{
-  id: 'maintenance-tools',
-  name: 'Alati za održavanje',
-  type: 'section',
-  icon: <Settings className="h-4 w-4" />,
-  children: allPermissions
-    .filter(p => p.resource.startsWith('maintenance.') || p.resource === 'maintenance')
-    .map(p => ({
-      id: `perm-${p.id}`,
-      name: getPermissionLabel(p),
-      type: 'permission' as const,
-      permission: p,
-      color: getPermissionColor(p.action),
-    })),
-},
-```
-
-### 3.3 **Dodaj labele za nove permisije (opciono)**
-
-U funkciji `getPermissionLabel`, dodaj specifične labele:
-
-```typescript
-// Specifični labeli za maintenance permisije
-if (permission.resource === 'maintenance.timescaledb') {
-  const maintenanceLabels: Record<string, string> = {
-    'view': 'Pregled TimescaleDB alata',
-    'manage': 'Upravljanje TimescaleDB alatima',
-  };
-  if (maintenanceLabels[permission.action]) {
-    return maintenanceLabels[permission.action];
-  }
-}
-```
-
----
-
-## KORAK 4: Kreiranje Prisma migracije
-
-**Cilj:** Kreirati migraciju koja će dodati permisiju u bazu podataka
-
-**Vreme potrebno:** 5 minuta
-
-### 4.1 **Kreiraj migraciju fajl**
-
-Putanja: `/apps/backend/prisma/migrations/[timestamp]_add_[feature]_permission/migration.sql`
-
-Primer: `/apps/backend/prisma/migrations/20250908193730_add_maintenance_timescaledb_permission/migration.sql`
-
-### 4.2 **Sadržaj migracije**
-
-```sql
--- Add maintenance.timescaledb:view permission
-INSERT INTO permissions (name, resource, action, description, description_sr, category, created_at, updated_at)
-VALUES (
-  'maintenance.timescaledb:view',
-  'maintenance.timescaledb',
-  'view',
-  'View TimescaleDB maintenance page',
-  'Pregled TimescaleDB stranice za održavanje',
-  'maintenance',
-  NOW(),
-  NOW()
-);
-```
-
-**VAŽNO:** 
-- NE dodaji permisije rolama u migraciji
-- Samo dodaj permisiju u `permissions` tabelu
-- Role će dodeliti permisiju kroz UI
-
-### 4.3 **Pokreni migraciju**
-
+### 1. Build test
 ```bash
-cd /home/kocev/smart-city/apps/backend
-npx prisma migrate deploy
+cd /home/kocev/smart-city/apps/admin-portal
+npm run build
 ```
 
-### 4.4 **Proveri migraciju**
+### 2. Proveri da li meni prikazuje novu opciju
+- Pokreni aplikaciju: `npm run dev:admin`
+- Uloguj se sa SUPER_ADMIN nalogom
+- Proveri da li se vidi: **Autobuski Prevoznici → Administracija → Centralne tačke**
 
+### 3. Proveri PermissionsTree
+- Idi na **Korisnici → Role i Permisije**
+- Otvori bilo koju rolu
+- Proveri da li se vidi sekcija **"Administracija"** sa permisijama
+
+### 4. Test permisija
 ```bash
-# Proveri da li je permisija dodana
-npx prisma studio
-# Ili kroz SQL
-SELECT * FROM permissions WHERE name = 'maintenance.timescaledb:view';
+# Proveri koje role imaju pristup
+docker exec smartcity-mysql-local mysql -u smartcity_user -pSecurePassword123! smartcity_dev -e "SELECT r.name, COUNT(p.id) as permissions_count FROM role_permissions rp JOIN roles r ON rp.roleId = r.id JOIN permissions p ON rp.permissionId = p.id WHERE p.resource LIKE 'transport.administration%' GROUP BY r.name;"
 ```
 
 ---
 
-## DODATNE INFORMACIJE
+## 📚 DODATNE INFORMACIJE
 
-### Struktura putanja
+### Struktura menuOrder brojeva
 
-```
-/transport/                         # Root za transport modul
-  /vehicles                         # Vozila
-  /dispatcher/                      # Dispečerski modul
-    /map-vehicles
-    /analytics
-    /gps-sync
-  /safety/                          # Bezbednost
-    /aggressive-driving
-    /monthly-report
-  /maintenance/                     # NOVA GRUPA - Alati za održavanje
-    /timescaledb                    # Nova opcija
-```
+**Zapamti:**
+- Uvek koristi "između" brojeve - ne pomeraj postojeće!
+- String slicing logika omogućava precizno grupisanje
+- Svaki par cifara je jedinstveni nivo hijerarhije
 
-### Česta greška - Ikone
+### Česte greške koje treba izbegavati
 
-Sve ikone dolaze iz `lucide-react` biblioteke. Import:
-```typescript
-import { Database, Settings, Tool } from 'lucide-react';
-```
+1. **❌ Pomeranje postojećih menuOrder brojeva**
+   - Može pokvariti postojeći PermissionsTree
 
-### Napomene
+2. **❌ Korišćenje tačke (.) umesto dvotačke (:) pre akcije**
+   - `transport.administration.view` ❌
+   - `transport.administration:view` ✅
 
-1. **Hijerarhija menija**: Maksimalno 3 nivoa (Glavna grupa → Podgrupa → Opcija)
-2. **Permisije**: Svaka opcija mora imati permisiju
-3. **Auto-expand**: Obavezno dodaj logiku za auto-otvaranje
-4. **Putanje**: Uvek počinju sa `/` i prate hijerarhiju menija
-5. **Komponente**: Kreiraj u folder strukturi koja odgovara putanji
+3. **❌ camelCase kolone u SQL-u**
+   - `menuOrder` ❌
+   - `menu_order` ✅
 
-### Primer dodavanja jednostavne opcije (bez podgrupe)
+4. **❌ Zaboravljanje ažuriranja getMenuName() funkcije**
+   - PermissionsTree neće prikazati pravilno novu grupu
 
-Ako treba dodati samo jednu opciju bez grupe:
-```typescript
-{
-  name: 'Ime Opcije',
-  href: '/transport/ime-opcije',
-  icon: IconName,
-  permissions: ['modul.resurs:akcija'],  // SA DVOTAČKOM pre akcije!
-}
-```
+5. **❌ Zaboravljanje auto-expand logike**
+   - Meni se neće automatski otvoriti kada je opcija aktivna
+
+### Quick Reference - Fajlovi koje treba ažurirati
+
+1. **Backend - Prisma migracija**
+   - `/apps/backend/prisma/migrations/[timestamp]_[name]/migration.sql`
+
+2. **Frontend - Meni**
+   - `/apps/admin-portal/src/components/layout/ModernMenu.tsx`
+
+3. **Frontend - Permissions Tree**
+   - `/apps/admin-portal/src/pages/users/components/PermissionsTree.tsx`
+
+4. **Frontend - Stranica**
+   - `/apps/admin-portal/src/pages/[path]/[ComponentName].tsx`
+
+5. **Frontend - Rute**
+   - `/apps/admin-portal/src/App.tsx`
+
+### Krajnji checklist ✅
+
+- [ ] MenuOrder brojevi određeni (IZMEĐU postojećih!)
+- [ ] Prisma migracija kreirana sa snake_case kolonama
+- [ ] Migracija primenjena (`prisma migrate deploy`)
+- [ ] Permisije dodeljene SUPER_ADMIN roli
+- [ ] ModernMenu.tsx ažuriran sa novom grupom
+- [ ] Auto-expand logika dodata
+- [ ] PermissionsTree getMenuName() ažuriran
+- [ ] React komponenta stranice kreirana
+- [ ] App.tsx ruta dodata sa PermissionGuard
+- [ ] Build test prošao (`npm run build`)
+- [ ] Aplikacija testirana - meni opcija vidljiva
+- [ ] PermissionsTree prikazuje permisije ispravno
+
+---
+
+## 🎉 Gotovo!
+
+Sada imaš potpuno funkcionalnu novu meni opciju sa permisijama, rutom i stranicom!
+
+**Sledeći koraci:**
+- Implementiraj funkcionalnost na stranici (tabele, forme, itd.)
+- Dodaj backend endpoint-e ako je potrebno
+- Kreiraj dodatne CRUD operacije

@@ -13,6 +13,7 @@ import ApiKeys from './pages/settings/ApiKeys';
 import Vehicles from './pages/transport/Vehicles';
 import VehicleSync from './pages/transport/VehicleSync';
 import GpsLagTransfer from './pages/transport/vehicles/GpsLagTransfer';
+import CentralPoints from './pages/transport/administration/CentralPoints';
 import MapVehiclesModern from './pages/transport/dispatcher/MapVehiclesModern';
 import VehicleAnalytics from './pages/transport/dispatcher/VehicleAnalytics';
 import GpsSync from './pages/transport/dispatcher/GpsSync';
@@ -129,15 +130,24 @@ function App() {
             />
 
             <Route
-              path="transport/vehicle-sync" 
+              path="transport/vehicle-sync"
               element={
                 <PermissionGuard permissions={['vehicles.sync:view']}>
                   <VehicleSync />
                 </PermissionGuard>
-              } 
+              }
             />
-            
-            <Route 
+
+            <Route
+              path="transport/administration/central-points"
+              element={
+                <PermissionGuard permissions={['transport.administration.central_points:view']}>
+                  <CentralPoints />
+                </PermissionGuard>
+              }
+            />
+
+            <Route
               path="transport/gps-buffer-status" 
               element={
                 <PermissionGuard permissions={['dispatcher:sync_gps']}>

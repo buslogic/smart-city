@@ -263,6 +263,22 @@ const ModernMenu: React.FC = () => {
             ],
           },
           {
+            key: 'administration',
+            menuOrder: 301500000000,
+            icon: <SettingOutlined />,
+            label: 'Administracija',
+            // permissions: ['transport.administration:view'], // ❌ Uklonjeno - hijerarhijska logika
+            children: [
+              {
+                key: '/transport/administration/central-points',
+                menuOrder: 301510000000,
+                icon: <EnvironmentOutlined />,
+                label: 'Centralne tačke',
+                permissions: ['transport.administration.central_points:view'],
+              },
+            ],
+          },
+          {
             key: 'dispatcher',
             menuOrder: 302000000000,
             icon: <RadarChartOutlined />,
@@ -388,6 +404,7 @@ const ModernMenu: React.FC = () => {
     if (path.includes('/transport/')) {
       keys.push('transport');
       if (path.includes('/vehicle')) keys.push('vehicles');
+      if (path.includes('/administration/')) keys.push('administration');
       if (path.includes('/dispatcher/')) keys.push('dispatcher');
       if (path.includes('/safety/')) keys.push('safety');
       if (path.includes('/maintenance/')) keys.push('maintenance');

@@ -107,6 +107,7 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
 
       // Drugi nivo - Transport
       if (menuOrder === 301000000000) return 'Vozila';
+      if (menuOrder === 301500000000) return 'Administracija';
       if (menuOrder === 302000000000) return 'Dispečerski Modul';
       if (menuOrder === 303000000000) return 'Bezbednost i Analiza';
       if (menuOrder === 304000000000) return 'Održavanje Sistema';
@@ -118,6 +119,9 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
       if (menuOrder === 301040000000) return 'Legacy Sync';
       if (menuOrder === 301050000000) return 'GPS Migration';
       if (menuOrder === 301060000000) return 'GPS LAG Transfer';
+
+      // Treći nivo - Administracija
+      if (menuOrder === 301510000000) return 'Centralne tačke';
 
       // Treći nivo - Dispečerski Modul
       if (menuOrder === 302010000000) return 'Mapa';
@@ -201,16 +205,25 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
 
     // Rekurzivna funkcija za kreiranje hijerarhije na bilo kom nivou
     const buildHierarchy = (permissions: Permission[], levelDepth: number = 0): PermissionNode[] => {
-      const levelDivisor = Math.pow(10, 11 - (levelDepth * 2)); // 100000000000, 1000000000, 10000000, itd.
-      const nextLevelDivisor = Math.pow(10, 11 - ((levelDepth + 1) * 2));
-
-      // Grupiši permisije po trenutnom nivou
+      // Grupiši permisije po trenutnom nivou koristeći string slicing
+      // menuOrder struktura: XXYYZZ000000 (12 cifara)
+      // levelDepth 0: grupiši po XX (pozicije 0-2)
+      // levelDepth 1: grupiši po XXYY (pozicije 0-4)
+      // levelDepth 2: grupiši po XXYYZZ (pozicije 0-6)
       const groups = permissions.reduce((acc, permission) => {
         const menuOrder = permission.menuOrder!;
-        const currentLevelValue = Math.floor(menuOrder / levelDivisor);
-        const nextLevelValue = Math.floor((menuOrder % levelDivisor) / nextLevelDivisor);
+        const menuOrderStr = menuOrder.toString().padStart(12, '0');
 
-        const groupKey = currentLevelValue.toString();
+        // Uzmi cifre do trenutnog nivoa (uključivo)
+        const currentGroupDigits = (levelDepth + 1) * 2;
+        const groupKey = menuOrderStr.substring(0, currentGroupDigits);
+
+        // Proveri da li ima sledeći nivo
+        const nextLevelStart = currentGroupDigits;
+        const nextLevelEnd = nextLevelStart + 2;
+        const nextLevelDigits = menuOrderStr.substring(nextLevelStart, nextLevelEnd);
+        const hasSubLevel = nextLevelDigits !== '00';
+
         if (!acc[groupKey]) {
           acc[groupKey] = {
             mainPermissions: [],
@@ -218,7 +231,7 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
           };
         }
 
-        if (nextLevelValue === 0) {
+        if (!hasSubLevel) {
           acc[groupKey].mainPermissions.push(permission);
         } else {
           acc[groupKey].subPermissions.push(permission);
@@ -343,9 +356,9 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
 
         return node;
       }).sort((a, b) => {
-        // Sortiraju se po groupKey numerički (1, 2, 3, 4...)
-        const aGroupKey = parseInt(a.id.split('-')[2]); // level-0-1 -> 1
-        const bGroupKey = parseInt(b.id.split('-')[2]); // level-0-2 -> 2
+        // Sortiraju se po groupKey numerički (3010, 3015, 3020...)
+        const aGroupKey = parseInt(a.id.split('-')[2]); // level-1-3010 -> 3010
+        const bGroupKey = parseInt(b.id.split('-')[2]); // level-1-3015 -> 3015
         return aGroupKey - bGroupKey;
       });
     };
