@@ -711,3 +711,100 @@ enum ApiKeyType {
   ADMIN_ACCESS
   INTEGRATION
 }
+
+model CentralPoint {
+  id Int @id @default(autoincrement())
+
+  // Osnovne informacije
+  name    String @map("cp_name") @db.VarChar(400)
+  address String @map("cp_address") @db.VarChar(400)
+  zip     String @map("cp_zip") @db.VarChar(10)
+  city    String @map("cp_city") @db.VarChar(100)
+
+  // Kontakt informacije
+  phone1 String @map("cp_phone1") @db.VarChar(50)
+  phone2 String @map("cp_phone2") @db.VarChar(50)
+  email  String @map("cp_email") @db.VarChar(255)
+
+  // Boss informacije
+  boss      String @map("cp_boss") @db.VarChar(200)
+  bossPhone String @map("cp_boss_phone") @db.VarChar(50)
+  bossEmail String @map("cp_boss_email") @db.VarChar(255)
+
+  // Geografija
+  mainStationUid String @map("main_station_uid") @db.VarChar(6)
+  longitude      String @map("cp_longitude") @db.VarChar(50)
+  latitude       String @map("cp_latitude") @db.VarChar(50)
+
+  // Komentar
+  comment String @map("cp_comment") @db.VarChar(400)
+
+  // Finansije
+  owes                      Float  @map("cp_owes") @db.Float
+  expects                   Float  @map("cp_expects") @db.Float
+  saldo                     Float  @map("cp_saldo") @db.Float
+  incomeSettlementTimeframe String @default("0") @map("income_settlement_timeframe_cp") @db.VarChar(10)
+
+  // Audit trail
+  changedBy String   @map("changed_by") @db.VarChar(100)
+  dateTime  DateTime @map("date_time") @db.DateTime(0)
+
+  // Java/Applet settings
+  enableJavaApplet        Boolean @default(false) @map("enablejavaapplet")
+  enableTicketReturn      Int     @default(0) @map("enableticketreturn") @db.SmallInt
+  enableTicketDelete      Boolean @default(false) @map("enableticketdelete")
+  enableOtherTicketsCheck Boolean @default(true) @map("enableotherticketscheck")
+  enableJournalCheck      Int     @default(1) @map("enablejournalcheck") @db.TinyInt
+
+  // Fuel
+  internalFuel Boolean? @map("internal_fuel")
+
+  // UI/Display
+  color        String @map("cp_color") @db.VarChar(7)
+  lineColor    String @map("cp_line_color") @db.VarChar(7)
+  image        Bytes? @map("cp_image") @db.MediumBlob
+  imageAndroid Bytes? @map("cp_image_android") @db.MediumBlob
+
+  // Customer info images
+  customerInfoCloseDeparture Bytes? @map("cp_customer_info_close_departure") @db.MediumBlob
+  customerInfoOpenDeparture  Bytes? @map("cp_customer_info_open_departure") @db.MediumBlob
+  validatorCloseDeparture    Bytes? @map("cp_validator_close_departure") @db.MediumBlob
+  validatorOpenDeparture     Bytes? @map("cp_validator_open_departure") @db.MediumBlob
+
+  // Android settings
+  sendAndroidPinRequestToAdmin Int    @default(0) @map("send_android_pin_request_to_admin") @db.TinyInt
+  androidAdmin                 BigInt @default(0) @map("android_admin")
+
+  // Country/VAT info
+  countryId   Int     @default(0) @map("cp_country_id")
+  countryName String? @map("cp_country_name") @db.VarChar(50)
+  vatId       String? @map("cp_vat_id") @db.VarChar(15)
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Additional settings
+  otherCpView       Int     @default(0) @map("other_cp_view") @db.UnsignedTinyInt
+  dispatchOrderByCp Int     @default(0) @map("dispatch_order_by_cp") @db.UnsignedTinyInt
+  active            Boolean @default(false)
+
+  // Invoice/Account info
+  placeOfInvoice           String? @map("place_of_the_invoice") @db.VarChar(100)
+  currentAccount           String? @map("current_account") @db.VarChar(100)
+  currentAccountForPlastic String? @map("current_account_for_plastic") @db.VarChar(100)
+
+  // Depot
+  depotCode String? @map("depot_code") @db.VarChar(20)
+
+  // GTFS
+  creatingZipByGtfsStandard Boolean @default(false) @map("creating_zip_by_gtfs_starndard")
+
+  // Device list
+  defaultDeviceListSubgroupId Int? @map("default_device_list_subgroup_id")
+
+  @@index([mainStationUid])
+  @@index([active])
+  @@index([depotCode])
+  @@map("central_points")
+}

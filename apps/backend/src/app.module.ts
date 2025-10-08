@@ -33,6 +33,7 @@ import { MigrationModule } from './migration/migration.module';
 import { SettingsModule } from './settings/settings.module';
 import { UserGroupsModule } from './user-groups/user-groups.module';
 import { GpsLagMonitoringModule } from './gps-lag-monitoring/gps-lag-monitoring.module';
+import { CentralPointsModule } from './central-points/central-points.module';
 
 @Module({
   imports: [
@@ -68,6 +69,7 @@ import { GpsLagMonitoringModule } from './gps-lag-monitoring/gps-lag-monitoring.
     MigrationModule,
     SettingsModule,
     UserGroupsModule,
+    CentralPointsModule,
   ],
   controllers: [AppController],
   providers: [

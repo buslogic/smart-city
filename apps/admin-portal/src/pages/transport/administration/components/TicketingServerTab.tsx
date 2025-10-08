@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Card,
   Table,
@@ -8,81 +8,79 @@ import {
   Row,
   Col,
   Tag,
-  Tooltip,
+  message,
 } from 'antd';
 import {
-  PlusOutlined,
-  EditOutlined,
-  DeleteOutlined,
   ReloadOutlined,
   TagOutlined,
 } from '@ant-design/icons';
-import { usePermissions } from '../../../../hooks/usePermissions';
+import { centralPointsService } from '../../../../services/centralPoints.service';
 
 const { Title, Text } = Typography;
 
-interface CentralPoint {
-  id: string;
-  name: string;
-  code: string;
-  latitude: number;
-  longitude: number;
-  type: string;
-  isActive: boolean;
-  createdAt: string;
-}
-
 const TicketingServerTab: React.FC = () => {
   const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<CentralPoint[]>([]);
-  const { hasPermission } = usePermissions();
+  const [data, setData] = useState<any[]>([]);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const centralPoints = await centralPointsService.getAllTicketing();
+      setData(centralPoints);
+    } catch (error: any) {
+      console.error('Greška pri učitavanju centralnih tačaka (Tiketing):', error);
+      message.error(error.response?.data?.message || 'Greška pri učitavanju podataka');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const columns = [
     {
+      title: 'ID',
+      dataIndex: 'id',
+      key: 'id',
+      width: 80,
+    },
+    {
       title: 'Naziv',
-      dataIndex: 'name',
-      key: 'name',
+      dataIndex: 'cp_name',
+      key: 'cp_name',
       render: (text: string) => <Text strong>{text}</Text>,
     },
     {
-      title: 'Kod',
-      dataIndex: 'code',
-      key: 'code',
+      title: 'Adresa',
+      dataIndex: 'cp_address',
+      key: 'cp_address',
     },
     {
-      title: 'Tip',
-      dataIndex: 'type',
-      key: 'type',
-      render: (type: string) => <Tag color="purple">{type}</Tag>,
+      title: 'Grad',
+      dataIndex: 'cp_city',
+      key: 'cp_city',
+    },
+    {
+      title: 'Telefon',
+      dataIndex: 'cp_phone1',
+      key: 'cp_phone1',
+    },
+    {
+      title: 'Email',
+      dataIndex: 'cp_email',
+      key: 'cp_email',
     },
     {
       title: 'Status',
-      dataIndex: 'isActive',
-      key: 'isActive',
+      dataIndex: 'active',
+      key: 'active',
       align: 'center' as const,
-      render: (isActive: boolean) => (
-        <Tag color={isActive ? 'green' : 'red'}>
-          {isActive ? 'Aktivna' : 'Neaktivna'}
+      render: (active: number) => (
+        <Tag color={active === 1 ? 'green' : 'red'}>
+          {active === 1 ? 'Aktivna' : 'Neaktivna'}
         </Tag>
-      ),
-    },
-    {
-      title: 'Akcije',
-      key: 'actions',
-      align: 'center' as const,
-      render: (_: any, record: CentralPoint) => (
-        <Space>
-          {hasPermission('transport.administration.central_points.ticketing:update') && (
-            <Tooltip title="Izmeni">
-              <Button type="text" icon={<EditOutlined />} />
-            </Tooltip>
-          )}
-          {hasPermission('transport.administration.central_points.ticketing:delete') && (
-            <Tooltip title="Obriši">
-              <Button type="text" danger icon={<DeleteOutlined />} />
-            </Tooltip>
-          )}
-        </Space>
       ),
     },
   ];
@@ -96,21 +94,14 @@ const TicketingServerTab: React.FC = () => {
               <TagOutlined style={{ fontSize: 24, color: '#722ed1' }} />
               <div>
                 <Title level={4} style={{ margin: 0 }}>Tiketing Server</Title>
-                <Text type="secondary">Centralne tačke na Tiketing serveru</Text>
+                <Text type="secondary">Centralne tačke na Tiketing serveru (READ-ONLY)</Text>
               </div>
             </Space>
           </Col>
           <Col>
-            <Space>
-              <Button icon={<ReloadOutlined />} onClick={() => setLoading(true)}>
-                Osveži
-              </Button>
-              {hasPermission('transport.administration.central_points.ticketing:create') && (
-                <Button type="primary" icon={<PlusOutlined />}>
-                  Dodaj
-                </Button>
-              )}
-            </Space>
+            <Button icon={<ReloadOutlined />} onClick={loadData} loading={loading}>
+              Osveži
+            </Button>
           </Col>
         </Row>
       </Card>

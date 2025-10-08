@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Card,
   Table,
@@ -9,6 +9,8 @@ import {
   Col,
   Tag,
   Tooltip,
+  message,
+  Modal,
 } from 'antd';
 import {
   PlusOutlined,
@@ -16,26 +18,56 @@ import {
   DeleteOutlined,
   ReloadOutlined,
   EnvironmentOutlined,
+  ExclamationCircleOutlined,
 } from '@ant-design/icons';
 import { usePermissions } from '../../../../hooks/usePermissions';
+import { centralPointsService, CentralPoint } from '../../../../services/centralPoints.service';
 
 const { Title, Text } = Typography;
-
-interface CentralPoint {
-  id: string;
-  name: string;
-  code: string;
-  latitude: number;
-  longitude: number;
-  type: string;
-  isActive: boolean;
-  createdAt: string;
-}
+const { confirm } = Modal;
 
 const MainServerTab: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<CentralPoint[]>([]);
   const { hasPermission } = usePermissions();
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const centralPoints = await centralPointsService.getAllMain();
+      setData(centralPoints);
+    } catch (error: any) {
+      console.error('Greška pri učitavanju centralnih tačaka:', error);
+      message.error(error.response?.data?.message || 'Greška pri učitavanju podataka');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const handleDelete = (record: CentralPoint) => {
+    confirm({
+      title: 'Potvrda brisanja',
+      icon: <ExclamationCircleOutlined />,
+      content: `Da li ste sigurni da želite da obrišete centralnu tačku "${record.name}"?`,
+      okText: 'Da, obriši',
+      okType: 'danger',
+      cancelText: 'Otkaži',
+      onOk: async () => {
+        try {
+          await centralPointsService.delete(record.id);
+          message.success('Centralna tačka uspešno obrisana');
+          loadData();
+        } catch (error: any) {
+          console.error('Greška pri brisanju:', error);
+          message.error(error.response?.data?.message || 'Greška pri brisanju');
+        }
+      },
+    });
+  };
 
   const columns = [
     {
@@ -45,24 +77,33 @@ const MainServerTab: React.FC = () => {
       render: (text: string) => <Text strong>{text}</Text>,
     },
     {
-      title: 'Kod',
-      dataIndex: 'code',
-      key: 'code',
+      title: 'Adresa',
+      dataIndex: 'address',
+      key: 'address',
     },
     {
-      title: 'Tip',
-      dataIndex: 'type',
-      key: 'type',
-      render: (type: string) => <Tag color="blue">{type}</Tag>,
+      title: 'Grad',
+      dataIndex: 'city',
+      key: 'city',
+    },
+    {
+      title: 'Telefon',
+      dataIndex: 'phone1',
+      key: 'phone1',
+    },
+    {
+      title: 'Email',
+      dataIndex: 'email',
+      key: 'email',
     },
     {
       title: 'Status',
-      dataIndex: 'isActive',
-      key: 'isActive',
+      dataIndex: 'active',
+      key: 'active',
       align: 'center' as const,
-      render: (isActive: boolean) => (
-        <Tag color={isActive ? 'green' : 'red'}>
-          {isActive ? 'Aktivna' : 'Neaktivna'}
+      render: (active: boolean) => (
+        <Tag color={active ? 'green' : 'red'}>
+          {active ? 'Aktivna' : 'Neaktivna'}
         </Tag>
       ),
     },
@@ -74,12 +115,21 @@ const MainServerTab: React.FC = () => {
         <Space>
           {hasPermission('transport.administration.central_points:update') && (
             <Tooltip title="Izmeni">
-              <Button type="text" icon={<EditOutlined />} />
+              <Button
+                type="text"
+                icon={<EditOutlined />}
+                onClick={() => message.info('Edit forma - biće implementirana')}
+              />
             </Tooltip>
           )}
           {hasPermission('transport.administration.central_points:delete') && (
             <Tooltip title="Obriši">
-              <Button type="text" danger icon={<DeleteOutlined />} />
+              <Button
+                type="text"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={() => handleDelete(record)}
+              />
             </Tooltip>
           )}
         </Space>
@@ -102,11 +152,15 @@ const MainServerTab: React.FC = () => {
           </Col>
           <Col>
             <Space>
-              <Button icon={<ReloadOutlined />} onClick={() => setLoading(true)}>
+              <Button icon={<ReloadOutlined />} onClick={loadData} loading={loading}>
                 Osveži
               </Button>
               {hasPermission('transport.administration.central_points:create') && (
-                <Button type="primary" icon={<PlusOutlined />}>
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  onClick={() => message.info('Create forma - biće implementirana')}
+                >
                   Dodaj
                 </Button>
               )}
