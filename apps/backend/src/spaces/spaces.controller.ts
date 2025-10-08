@@ -96,6 +96,54 @@ export class SpacesController {
     };
   }
 
+  @Post('upload-logo')
+  @ApiOperation({ summary: 'Upload company logo (bez dodatnih permisija)' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB max
+      },
+    }),
+  )
+  @UseGuards(JwtAuthGuard) // Samo JWT auth, bez permisija
+  async uploadLogo(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() uploadDto: FileUploadDto,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Fajl nije prosleđen');
+    }
+
+    // Validacija da je slika (uključujući SVG za logo)
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/svg+xml', 'image/webp'];
+    if (!allowedTypes.includes(file.mimetype)) {
+      throw new BadRequestException('Samo slike su dozvoljene za logo (JPEG, PNG, GIF, SVG, WebP)');
+    }
+
+    const fileName = this.spacesService.generateFileName(file.originalname, 'logo');
+
+    // Uzmi company code iz env varijable i generiši folder path
+    const companyCode = this.configService.get('COMPANY_CODE', 'default');
+    const folder = SpacesPathHelper.getFolderPath(companyCode, 'company-logos');
+
+    const result = await this.spacesService.uploadFile(file.buffer, {
+      folder, // npr. "litas/company-logos"
+      fileName,
+      contentType: file.mimetype,
+      isPublic: true, // Company logo je javan
+      metadata: {
+        originalName: file.originalname,
+        uploadedAt: new Date().toISOString(),
+      },
+    });
+
+    return {
+      success: true,
+      file: result,
+    };
+  }
+
   @Post('upload')
   @ApiOperation({ summary: 'Upload jednog fajla' })
   @ApiConsumes('multipart/form-data')

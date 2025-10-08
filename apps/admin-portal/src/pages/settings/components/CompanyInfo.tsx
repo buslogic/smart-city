@@ -25,8 +25,7 @@ import {
   HomeOutlined,
   IdcardOutlined
 } from '@ant-design/icons';
-import axios from 'axios';
-import { useAuthStore } from '../../../stores/auth.store';
+import { api } from '../../../services/api';
 import { API_URL } from '../../../config/runtime';
 
 const { Title, Text } = Typography;
@@ -46,7 +45,6 @@ interface CompanyInfoData {
 
 const CompanyInfo: React.FC = () => {
   const [form] = Form.useForm();
-  const { accessToken } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -60,14 +58,7 @@ const CompanyInfo: React.FC = () => {
   const fetchCompanyInfo = async () => {
     setLoading(true);
     try {
-      const response = await axios.get(
-        `${API_URL}/api/settings/company-info`,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        }
-      );
+      const response = await api.get('/api/settings/company-info');
 
       if (response.data) {
         form.setFieldsValue(response.data);
@@ -180,15 +171,9 @@ const CompanyInfo: React.FC = () => {
         formData.append('folder', 'company-logos');
         formData.append('isPublic', 'true');
 
-        const uploadResponse = await axios.post(
-          `${API_URL}/api/spaces/upload-logo`,
-          formData,
-          {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              // Ne postavljaj Content-Type, axios će automatski postaviti boundary
-            },
-          }
+        const uploadResponse = await api.post(
+          '/api/spaces/upload-logo',
+          formData
         );
 
         uploadedLogoUrl = uploadResponse.data.file.url;
@@ -197,15 +182,9 @@ const CompanyInfo: React.FC = () => {
         const formData = new FormData();
         formData.append('file', file);
 
-        const uploadResponse = await axios.post(
-          `${API_URL}/api/uploads/company-logo`,
-          formData,
-          {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              // Ne postavljaj Content-Type, axios će automatski postaviti boundary
-            },
-          }
+        const uploadResponse = await api.post(
+          '/api/uploads/company-logo',
+          formData
         );
 
         uploadedLogoUrl = uploadResponse.data.file.url;
@@ -252,15 +231,7 @@ const CompanyInfo: React.FC = () => {
         logo: logoPath
       };
 
-      await axios.post(
-        `${API_URL}/api/settings/company-info`,
-        dataToSave,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        }
-      );
+      await api.post('/api/settings/company-info', dataToSave);
 
       message.success('Informacije o kompaniji uspešno sačuvane');
     } catch (error) {

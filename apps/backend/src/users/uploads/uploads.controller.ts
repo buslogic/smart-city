@@ -10,6 +10,7 @@ import {
   Get,
   Param,
   Logger,
+  UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -21,10 +22,12 @@ import type { Response } from 'express';
 import { SpacesService } from '../../spaces/spaces.service';
 import { ConfigService } from '@nestjs/config';
 import { SpacesPathHelper } from '../../common/helpers/spaces-path.helper';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 
 @ApiTags('uploads')
 @Controller('uploads')
 @ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 export class UploadsController {
   private readonly logger = new Logger(UploadsController.name);
   private readonly isProduction: boolean;
