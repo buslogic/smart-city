@@ -829,7 +829,7 @@ model PriceTableGroup {
   synchroStatus     String   @default("N") @map("synchro_status") @db.VarChar(5)
   sendIncremental   String   @default("0") @map("send_incremental") @db.VarChar(5)
   changedBy         String   @map("changed_by") @db.VarChar(100)
-  dateTime          DateTime @map("date_time")
+  dateTime          DateTime @map("date_time") @db.DateTime(0)
   name              String   @db.VarChar(100)
   legacyTicketingId BigInt?  @unique @map("legacy_ticketing_id")
   legacyCityId      BigInt?  @unique @map("legacy_city_id")
@@ -877,20 +877,20 @@ model Line {
   lineTypeId                        Int                @default(0) @map("line_type_id") @db.SmallInt
   lineType                          String             @default("none") @map("line_type") @db.VarChar(100)
   changedSinceSync                  String             @default("0") @map("changed_since_sync") @db.VarChar(2)
-  changeLog                         String             @default("") @map("change_log") @db.LongText
+  changeLog                         String             @map("change_log") @db.LongText
   changeIncremental                 String             @default("0") @map("change_incremental") @db.VarChar(5)
   centralPointDbId                  String             @default("0") @map("central_point_db_id") @db.VarChar(10)
   centralPointName                  String             @map("central_point_name") @db.VarChar(200)
   changedBy                         String             @map("changed_by") @db.VarChar(50)
-  dateTime                          DateTime           @default(now()) @map("date_time")
+  dateTime                          DateTime           @default(now()) @map("date_time") @db.DateTime(0)
   status                            String             @default("N") @map("status") @db.VarChar(8)
   busOperator                       Int                @default(0) @map("bus_operator") @db.SmallInt
   displayByDispachPlanning          Boolean            @default(false) @map("display_by_dispach_planning")
-  lineRoute                         String             @default("") @map("line_route") @db.LongText
-  lineRoute1                        String             @default("") @map("line_route1") @db.LongText
+  lineRoute                         String             @map("line_route") @db.LongText
+  lineRoute1                        String             @map("line_route1") @db.LongText
   bestfrom                          DateTime?          @map("bestfrom") @db.Date
-  gLineRoute                        String             @default("") @map("g_line_route") @db.LongText
-  gLineRoute1                       String             @default("") @map("g_line_route1") @db.LongText
+  gLineRoute                        String             @map("g_line_route") @db.LongText
+  gLineRoute1                       String             @map("g_line_route1") @db.LongText
   maxSpeed                          Int                @default(0) @map("max_speed") @db.TinyInt
   timeAllowed                       Int                @default(0) @map("time_allowed") @db.SmallInt
   isolatedExportsAccountingSoftware Boolean            @default(false) @map("isolated_exports_accounting_software")
@@ -969,13 +969,14 @@ model TimetableDate {
   synchroStatus     String   @default("N") @map("synchro_status") @db.VarChar(5)
   sendIncremental   String   @default("0") @map("send_incremental") @db.VarChar(5)
   changedBy         String   @map("changed_by") @db.VarChar(100)
-  dateTime          DateTime @map("date_time")
+  dateTime          DateTime @map("date_time") @db.DateTime(0)
   name              String   @db.VarChar(100)
   legacyTicketingId BigInt?  @unique @map("legacy_ticketing_id")
   legacyCityId      BigInt?  @unique @map("legacy_city_id")
 
   @@unique([dateValidFrom], map: "unique_date_valid_from")
   @@index([dateValidFrom], map: "idx_date_valid_from")
+  @@index([dateValidTo], map: "idx_date_valid_to")
   @@index([status], map: "idx_status")
   @@index([synchroStatus], map: "idx_synchro_status")
   @@index([legacyTicketingId], map: "idx_legacy_ticketing_id")
