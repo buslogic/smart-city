@@ -935,8 +935,8 @@ model Line {
   lineKmMeanValueWithBusTerminus    Decimal?           @default(0.000) @map("line_km_mean_value_with_bus_terminus") @db.Decimal(8, 3)
   systemTypesId                     Int                @map("system_types_id")
   categoriesLineId                  Int                @map("categories_line_id")
-  timeFromByLine                    DateTime           @default(dbgenerated("'00:00:00'")) @map("time_from_by_line") @db.Time
-  timeToByLine                      DateTime           @default(dbgenerated("'23:59:59'")) @map("time_to_by_line") @db.Time
+  timeFromByLine                    DateTime           @map("time_from_by_line") @db.Time(0)
+  timeToByLine                      DateTime           @map("time_to_by_line") @db.Time(0)
   onlineDiscountType                OnlineDiscountType @default(ZERO) @map("online_discount_type")
   showOnWeb                         Boolean            @default(false) @map("show_on_web")
   updatedAt                         DateTime?          @default(now()) @updatedAt @map("updated_at")
