@@ -1014,3 +1014,74 @@ model PriceVariation {
   @@index([legacyCityId])
   @@map("price_variations")
 }
+
+model VremenaPolaska {
+  id                   Int       @id @default(autoincrement()) @db.UnsignedInt
+  datum                DateTime  @db.Date
+  idlinije             String    @db.VarChar(50)
+  smer                 Int       @db.TinyInt
+  pon                  String    @db.Text
+  uto                  String    @db.Text
+  sre                  String    @db.Text
+  cet                  String    @db.Text
+  pet                  String    @db.Text
+  sub                  String    @db.Text
+  ned                  String    @db.Text
+  dk1                  String    @db.Text
+  dk1naziv             String    @map("dk1naziv") @db.VarChar(20)
+  dk2                  String    @db.Text
+  dk2naziv             String    @map("dk2naziv") @db.VarChar(20)
+  dk3                  String    @db.Text
+  dk3naziv             String    @map("dk3naziv") @db.VarChar(20)
+  dk4                  String    @db.Text
+  dk4naziv             String    @map("dk4naziv") @db.VarChar(20)
+  variation            Int       @default(0) @db.TinyInt
+  datetimeFrom         DateTime  @default(now()) @map("datetime_from")
+  datetimeTo           DateTime  @default(now()) @map("datetime_to")
+  variationDescription String    @default("") @map("variation_description") @db.VarChar(100)
+  updatedAt            DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+
+  @@unique([datum, idlinije, smer, datetimeFrom], map: "datum_idlinije_smer_datetime_from")
+  @@index([datum], map: "datum_2")
+  @@index([idlinije])
+  @@index([smer])
+  @@map("vremena_polaska")
+}
+
+model VremenaPolaskaSt {
+  id                       Int       @id @default(autoincrement()) @db.UnsignedInt
+  datum                    DateTime  @db.Date
+  idlinije                 String    @default("") @db.VarChar(40)
+  smer                     Int       @default(0) @db.UnsignedTinyInt
+  dan                      String    @default("") @db.VarChar(3)
+  vreme                    String    @default("") @db.VarChar(5)
+  stanice                  String    @default("") @db.VarChar(3000)
+  opis                     String    @default("") @db.VarChar(200)
+  centralPoint             Int       @default(0) @map("central_point") @db.UnsignedInt
+  pauza                    String    @default("") @db.VarChar(200)
+  defaultTimes             String    @default("") @map("default_times") @db.VarChar(400)
+  dayBefore                Int       @default(0) @map("day_before") @db.UnsignedTinyInt
+  defaultPeron             String    @default("") @map("default_peron") @db.VarChar(20)
+  numDepartures            Int       @default(1) @map("num_departures") @db.UnsignedTinyInt
+  defaultNumSeats          Int       @default(57) @map("default_num_seats") @db.UnsignedTinyInt
+  timetableShortCommentsId Int       @default(0) @map("timetable_short_comments_id") @db.UnsignedInt
+  vehicleChassisTypesId    Int       @default(0) @map("vehicle_chassis_types_id") @db.UnsignedInt
+  gtfsTripId               String    @default("") @map("gtfs_trip_id") @db.VarChar(50)
+  serviceId                String    @default("") @map("service_id") @db.VarChar(50)
+  notOfficial              Int       @default(0) @map("not_official") @db.UnsignedTinyInt
+  compCode                 Int       @default(0) @map("comp_code") @db.UnsignedTinyInt
+  vehicleGroupTypesId      Int       @default(0) @map("vehicle_group_types_id") @db.UnsignedSmallInt
+  turageNo                 Int       @default(0) @map("turage_no") @db.UnsignedSmallInt
+  departureNoInTurage      Int       @default(0) @map("departure_no_in_turage") @db.UnsignedTinyInt
+  updatedAt                DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+
+  @@unique([idlinije, smer, dan, vreme, centralPoint], map: "datum")
+  @@index([datum], map: "datum_2")
+  @@index([idlinije], map: "idlinije_3")
+  @@index([gtfsTripId], map: "gtfs_trip_id")
+  @@index([serviceId], map: "service_id")
+  @@index([datum, dan, vreme], map: "datum_dan_vreme")
+  @@index([datum, idlinije, dan, vreme, serviceId], map: "datum_idlinije_dan_vreme_service_id")
+  @@index([idlinije, centralPoint, dan], map: "idlinije_cp_dan")
+  @@map("vremena_polaska_st")
+}
