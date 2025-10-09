@@ -805,10 +805,10 @@ model CentralPoint {
   defaultDeviceListSubgroupId Int? @map("default_device_list_subgroup_id")
 
   // Legacy sync tracking
-  legacyTicketingId    Int?                    @unique @map("legacy_ticketing_id")
-  legacyCityId         Int?                    @unique @map("legacy_city_id")
-  syncSource           CentralPointSyncSource? @default(manual) @map("sync_source")
-  syncWithCityServer   Boolean                 @default(false) @map("sync_with_city_server")
+  legacyTicketingId  Int?                    @unique @map("legacy_ticketing_id")
+  legacyCityId       Int?                    @unique @map("legacy_city_id")
+  syncSource         CentralPointSyncSource? @default(manual) @map("sync_source")
+  syncWithCityServer Boolean                 @default(false) @map("sync_with_city_server")
 
   @@index([mainStationUid])
   @@index([active])
@@ -992,4 +992,25 @@ enum OnlineDiscountType {
   ZERO @map("0")
   ONE  @map("1")
   TWO  @map("2")
+}
+
+model PriceVariation {
+  id                   Int       @id @default(autoincrement())
+  variationName        String    @map("variation_name") @db.VarChar(250)
+  variationDescription String    @map("variation_description") @db.VarChar(255)
+  gtfsRouteSettingsId  String?   @map("gtfs_route_settings_id") @db.VarChar(250)
+  direction            String?   @db.VarChar(10)
+  mainBasicRoute       Boolean?  @map("main_basic_route")
+  datetimeFrom         DateTime? @map("datetime_from")
+  datetimeTo           DateTime? @map("datetime_to")
+  lineTypeId           Int       @map("line_type_id")
+  updatedAt            DateTime? @default(now()) @updatedAt @map("updated_at")
+  legacyTicketingId    BigInt?   @unique @map("legacy_ticketing_id")
+  legacyCityId         BigInt?   @unique @map("legacy_city_id")
+
+  @@index([variationName])
+  @@index([lineTypeId])
+  @@index([legacyTicketingId])
+  @@index([legacyCityId])
+  @@map("price_variations")
 }
