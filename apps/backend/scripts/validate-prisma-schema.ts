@@ -58,7 +58,11 @@ class PrismaSchemaValidator {
       const result = await execAsync(command, { cwd: this.projectPath });
       return result;
     } catch (error: any) {
-      throw new Error(`Command failed: ${command}\n${error.message}`);
+      // Preserve stdout and stderr even when command fails
+      const err: any = new Error(`Command failed: ${command}\n${error.message}`);
+      err.stdout = error.stdout || '';
+      err.stderr = error.stderr || '';
+      throw err;
     }
   }
 
