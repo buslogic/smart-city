@@ -245,7 +245,7 @@ const MainServerTab: React.FC = () => {
 
       <EditTimetableDateModal
         open={editModalOpen}
-        priceListGroup={selectedGroup}
+        timetableDate={selectedGroup}
         onClose={handleModalClose}
         onSuccess={handleModalSuccess}
       />
