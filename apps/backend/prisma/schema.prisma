@@ -837,7 +837,6 @@ model PriceTableGroup {
   lines             Line[]
 
   @@unique([dateValidFrom], map: "unique_date_valid_from")
-  @@index([dateValidFrom], map: "idx_date_valid_from")
   @@index([status], map: "idx_status")
   @@index([synchroStatus], map: "idx_synchro_status")
   @@index([legacyTicketingId], map: "idx_legacy_ticketing_id")
@@ -976,7 +975,6 @@ model TimetableDate {
   legacyCityId      BigInt?  @unique @map("legacy_city_id")
 
   @@unique([dateValidFrom], map: "unique_date_valid_from")
-  @@index([dateValidFrom], map: "idx_date_valid_from")
   @@index([dateValidTo], map: "idx_date_valid_to")
   @@index([status], map: "idx_status")
   @@index([synchroStatus], map: "idx_synchro_status")
