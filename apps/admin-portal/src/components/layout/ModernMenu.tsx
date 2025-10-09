@@ -299,16 +299,36 @@ const ModernMenu: React.FC = () => {
                 ],
               },
               {
+                key: '/transport/administration/lines-admin',
+                menuOrder: 301525000000,
+                icon: <BranchesOutlined />,
+                label: 'Linije Administracija',
+                permissions: ['transport.administration.lines_admin:view'],
+              },
+              {
                 key: '/transport/administration/lines',
                 menuOrder: 301530000000,
                 icon: <BranchesOutlined />,
-                label: 'Linije',
+                label: 'Linije Sync.',
                 // Prikaži ako korisnik ima bar jednu view permisiju (kontejner ili bilo koji server)
                 permissions: [
                   'transport.administration.lines:view',
                   'transport.administration.lines.main:view',
                   'transport.administration.lines.ticketing:view',
                   'transport.administration.lines.city:view',
+                ],
+              },
+              {
+                key: '/transport/administration/variations',
+                menuOrder: 301535000000,
+                icon: <TagsOutlined />,
+                label: 'Varijacije',
+                // Prikaži ako korisnik ima bar jednu view permisiju (kontejner ili bilo koji server)
+                permissions: [
+                  'transport.administration.variations:view',
+                  'transport.administration.variations.main:view',
+                  'transport.administration.variations.ticketing:view',
+                  'transport.administration.variations.city:view',
                 ],
               },
               {

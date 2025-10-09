@@ -36,7 +36,9 @@ import { GpsLagMonitoringModule } from './gps-lag-monitoring/gps-lag-monitoring.
 import { CentralPointsModule } from './central-points/central-points.module';
 import { PriceListGroupsModule } from './price-list-groups/price-list-groups.module';
 import { LinesModule } from './lines/lines.module';
+import { PriceVariationsModule } from './price-variations/price-variations.module';
 import { TimetableDatesModule } from './timetable-dates/timetable-dates.module';
+import { LinesAdministrationModule } from './lines-administration/lines-administration.module';
 
 @Module({
   imports: [
@@ -75,6 +77,8 @@ import { TimetableDatesModule } from './timetable-dates/timetable-dates.module';
     CentralPointsModule,
     PriceListGroupsModule,
     LinesModule,
+    LinesAdministrationModule,
+    PriceVariationsModule,
     TimetableDatesModule,
   ],
   controllers: [AppController],

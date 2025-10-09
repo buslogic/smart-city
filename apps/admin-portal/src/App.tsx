@@ -16,6 +16,8 @@ import GpsLagTransfer from './pages/transport/vehicles/GpsLagTransfer';
 import CentralPoints from './pages/transport/administration/CentralPoints';
 import PriceListGroups from './pages/transport/administration/PriceListGroups';
 import Lines from './pages/transport/administration/Lines';
+import LinesAdministration from './pages/transport/administration/LinesAdministration';
+import Variations from './pages/transport/administration/Variations';
 import TimetableDates from './pages/transport/administration/TimetableDates';
 import MapVehiclesModern from './pages/transport/dispatcher/MapVehiclesModern';
 import VehicleAnalytics from './pages/transport/dispatcher/VehicleAnalytics';
@@ -185,6 +187,31 @@ function App() {
                   ]}
                 >
                   <Lines />
+                </PermissionGuard>
+              }
+            />
+
+            <Route
+              path="transport/administration/lines-admin"
+              element={
+                <PermissionGuard permissions={['transport.administration.lines_admin:view']}>
+                  <LinesAdministration />
+                </PermissionGuard>
+              }
+            />
+
+            <Route
+              path="transport/administration/variations"
+              element={
+                <PermissionGuard
+                  permissions={[
+                    'transport.administration.variations:view',
+                    'transport.administration.variations.main:view',
+                    'transport.administration.variations.ticketing:view',
+                    'transport.administration.variations.city:view'
+                  ]}
+                >
+                  <Variations />
                 </PermissionGuard>
               }
             />
