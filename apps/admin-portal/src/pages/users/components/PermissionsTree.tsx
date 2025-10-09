@@ -126,6 +126,8 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
       if (menuOrder === 301525000000) return 'Linije Administracija';
       if (menuOrder === 301530000000) return 'Linije Sync.';
       if (menuOrder === 301535000000) return 'Varijacije';
+      if (menuOrder === 301540000000) return 'Grupe za RedVoznje';
+      if (menuOrder === 301545000000) return 'RedVoznje Sync.';
 
       // Četvrti nivo - Centralne tačke pod-serveri
       if (menuOrder >= 301510010000 && menuOrder < 301510020000) return 'Glavni Server';

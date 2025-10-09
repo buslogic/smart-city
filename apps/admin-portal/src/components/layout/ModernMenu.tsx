@@ -344,6 +344,19 @@ const ModernMenu: React.FC = () => {
                   'transport.administration.timetable_dates.city:view',
                 ],
               },
+              {
+                key: '/transport/administration/timetable-sync',
+                menuOrder: 301545000000,
+                icon: <SyncOutlined />,
+                label: 'RedVoznje Sync.',
+                // Prikaži ako korisnik ima bar jednu view permisiju (kontejner ili bilo koji server)
+                permissions: [
+                  'transport.administration.timetable_sync:view',
+                  'transport.administration.timetable_sync.main:view',
+                  'transport.administration.timetable_sync.ticketing:view',
+                  'transport.administration.timetable_sync.city:view',
+                ],
+              },
             ],
           },
           {

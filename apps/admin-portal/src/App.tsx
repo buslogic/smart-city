@@ -19,6 +19,7 @@ import Lines from './pages/transport/administration/Lines';
 import LinesAdministration from './pages/transport/administration/LinesAdministration';
 import Variations from './pages/transport/administration/Variations';
 import TimetableDates from './pages/transport/administration/TimetableDates';
+import TimetableSync from './pages/transport/administration/TimetableSync';
 import MapVehiclesModern from './pages/transport/dispatcher/MapVehiclesModern';
 import VehicleAnalytics from './pages/transport/dispatcher/VehicleAnalytics';
 import GpsSync from './pages/transport/dispatcher/GpsSync';
@@ -228,6 +229,22 @@ function App() {
                   ]}
                 >
                   <TimetableDates />
+                </PermissionGuard>
+              }
+            />
+
+            <Route
+              path="transport/administration/timetable-sync"
+              element={
+                <PermissionGuard
+                  permissions={[
+                    'transport.administration.timetable_sync:view',
+                    'transport.administration.timetable_sync.main:view',
+                    'transport.administration.timetable_sync.ticketing:view',
+                    'transport.administration.timetable_sync.city:view',
+                  ]}
+                >
+                  <TimetableSync />
                 </PermissionGuard>
               }
             />
