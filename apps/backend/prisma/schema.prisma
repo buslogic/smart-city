@@ -1,3 +1,4 @@
+// Smart City Prisma Schema - Last validated: 2025-10-09
 generator client {
   provider = "prisma-client-js"
 }
