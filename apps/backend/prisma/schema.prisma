@@ -1040,11 +1040,15 @@ model VremenaPolaska {
   datetimeTo           DateTime  @default(now()) @map("datetime_to")
   variationDescription String    @default("") @map("variation_description") @db.VarChar(100)
   updatedAt            DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  legacyTicketingId    BigInt?   @map("legacy_ticketing_id")
+  legacyCityId         BigInt?   @map("legacy_city_id")
 
   @@unique([datum, idlinije, smer, datetimeFrom], map: "datum_idlinije_smer_datetime_from")
   @@index([datum], map: "datum_2")
   @@index([idlinije])
   @@index([smer])
+  @@index([legacyTicketingId])
+  @@index([legacyCityId])
   @@map("vremena_polaska")
 }
 
@@ -1074,6 +1078,8 @@ model VremenaPolaskaSt {
   turageNo                 Int       @default(0) @map("turage_no") @db.UnsignedSmallInt
   departureNoInTurage      Int       @default(0) @map("departure_no_in_turage") @db.UnsignedTinyInt
   updatedAt                DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  legacyTicketingId        BigInt?   @map("legacy_ticketing_id")
+  legacyCityId             BigInt?   @map("legacy_city_id")
 
   @@unique([idlinije, smer, dan, vreme, centralPoint], map: "datum")
   @@index([datum], map: "datum_2")
@@ -1083,5 +1089,29 @@ model VremenaPolaskaSt {
   @@index([datum, dan, vreme], map: "datum_dan_vreme")
   @@index([datum, idlinije, dan, vreme, serviceId], map: "datum_idlinije_dan_vreme_service_id")
   @@index([idlinije, centralPoint, dan], map: "idlinije_cp_dan")
+  @@index([legacyTicketingId])
+  @@index([legacyCityId])
   @@map("vremena_polaska_st")
+}
+
+model UniqueStationIdLocal {
+  uniqueId                String    @id @map("unique_id") @db.VarChar(5)
+  stationName             String    @map("station_name") @db.VarChar(50)
+  gpsx                    Decimal   @db.Decimal(15, 10)
+  gpsy                    Decimal   @db.Decimal(15, 10)
+  description             String    @default("") @db.VarChar(500)
+  range                   Int       @default(20)
+  rangeForDriverConsole   Int       @default(20) @map("range_for_driver_console")
+  rangeForValidators      Int       @default(20) @map("range_for_validators")
+  changed                 Boolean
+  mainOperator            Boolean   @map("main_operator")
+  groupId                 Int       @map("group_id") @db.UnsignedTinyInt
+  readyForBooking         Int       @default(0) @map("ready_for_booking") @db.TinyInt
+  usedInBooking           Int       @default(0) @map("used_in_booking") @db.UnsignedTinyInt
+  dateValidFrom           DateTime? @map("date_valid_from") @db.Date
+  legacyTicketingId       BigInt?   @unique @map("legacy_ticketing_id")
+  legacyCityId            BigInt?   @unique @map("legacy_city_id")
+
+  @@index([stationName])
+  @@map("unique_station_id_local")
 }
