@@ -286,6 +286,19 @@ const ModernMenu: React.FC = () => {
                 ],
               },
               {
+                key: '/transport/administration/stops-sync',
+                menuOrder: 301515000000,
+                icon: <EnvironmentOutlined />,
+                label: 'Stajališta Sync.',
+                // Prikaži ako korisnik ima bar jednu view permisiju (kontejner ili bilo koji server)
+                permissions: [
+                  'transport.administration.stops_sync:view',
+                  'transport.administration.stops_sync.main:view',
+                  'transport.administration.stops_sync.ticketing:view',
+                  'transport.administration.stops_sync.city:view',
+                ],
+              },
+              {
                 key: '/transport/administration/price-list-groups',
                 menuOrder: 301520000000,
                 icon: <TagsOutlined />,

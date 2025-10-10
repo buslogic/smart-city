@@ -14,6 +14,7 @@ import Vehicles from './pages/transport/Vehicles';
 import VehicleSync from './pages/transport/VehicleSync';
 import GpsLagTransfer from './pages/transport/vehicles/GpsLagTransfer';
 import CentralPoints from './pages/transport/administration/CentralPoints';
+import StopsSync from './pages/transport/administration/StopsSync';
 import PriceListGroups from './pages/transport/administration/PriceListGroups';
 import Lines from './pages/transport/administration/Lines';
 import LinesAdministration from './pages/transport/administration/LinesAdministration';
@@ -156,6 +157,22 @@ function App() {
                   ]}
                 >
                   <CentralPoints />
+                </PermissionGuard>
+              }
+            />
+
+            <Route
+              path="transport/administration/stops-sync"
+              element={
+                <PermissionGuard
+                  permissions={[
+                    'transport.administration.stops_sync:view',
+                    'transport.administration.stops_sync.main:view',
+                    'transport.administration.stops_sync.ticketing:view',
+                    'transport.administration.stops_sync.city:view'
+                  ]}
+                >
+                  <StopsSync />
                 </PermissionGuard>
               }
             />

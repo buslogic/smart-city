@@ -35,10 +35,12 @@ import { UserGroupsModule } from './user-groups/user-groups.module';
 import { GpsLagMonitoringModule } from './gps-lag-monitoring/gps-lag-monitoring.module';
 import { CentralPointsModule } from './central-points/central-points.module';
 import { PriceListGroupsModule } from './price-list-groups/price-list-groups.module';
+import { StopsSyncModule } from './stops-sync/stops-sync.module';
 import { LinesModule } from './lines/lines.module';
 import { PriceVariationsModule } from './price-variations/price-variations.module';
 import { TimetableDatesModule } from './timetable-dates/timetable-dates.module';
 import { LinesAdministrationModule } from './lines-administration/lines-administration.module';
+import { TimetableSchedulesModule } from './timetable-schedules/timetable-schedules.module';
 
 @Module({
   imports: [
@@ -76,10 +78,12 @@ import { LinesAdministrationModule } from './lines-administration/lines-administ
     UserGroupsModule,
     CentralPointsModule,
     PriceListGroupsModule,
+    StopsSyncModule,
     LinesModule,
     LinesAdministrationModule,
     PriceVariationsModule,
     TimetableDatesModule,
+    TimetableSchedulesModule,
   ],
   controllers: [AppController],
   providers: [

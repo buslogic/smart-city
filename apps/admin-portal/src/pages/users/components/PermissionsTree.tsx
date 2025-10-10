@@ -122,6 +122,7 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
 
       // Treći nivo - Administracija
       if (menuOrder === 301510000000) return 'Centralne tačke';
+      if (menuOrder === 301515000000) return 'Stajališta Sync.';
       if (menuOrder === 301520000000) return 'Grupe cenovnika';
       if (menuOrder === 301525000000) return 'Linije Administracija';
       if (menuOrder === 301530000000) return 'Linije Sync.';
@@ -133,6 +134,11 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
       if (menuOrder >= 301510010000 && menuOrder < 301510020000) return 'Glavni Server';
       if (menuOrder >= 301510100000 && menuOrder < 301510200000) return 'Tiketing Server';
       if (menuOrder >= 301510200000 && menuOrder < 301510300000) return 'Gradski Server';
+
+      // Četvrti nivo - Stajališta Sync. pod-serveri
+      if (menuOrder >= 301515010000 && menuOrder < 301515020000) return 'Glavni Server';
+      if (menuOrder >= 301515100000 && menuOrder < 301515200000) return 'Tiketing Server';
+      if (menuOrder >= 301515200000 && menuOrder < 301515300000) return 'Gradski Server';
 
       // Četvrti nivo - Grupe cenovnika pod-serveri
       if (menuOrder >= 301520010000 && menuOrder < 301520020000) return 'Glavni Server';
