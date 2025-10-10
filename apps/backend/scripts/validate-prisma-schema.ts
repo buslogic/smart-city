@@ -185,6 +185,74 @@ class PrismaSchemaValidator {
   }
 
   /**
+   * Filter drift output to ignore dynamically created tables
+   */
+  private filterIgnoredTables(diffOutput: string): { filtered: string; ignored: string[] } {
+    // Get ignore patterns from environment variable
+    const ignorePatterns = process.env.PRISMA_IGNORE_TABLES?.split(',') || [];
+
+    // Default patterns for dynamically created tables
+    const defaultPatterns = [
+      'price_lists_line_uids_\\d{4}_\\d{2}_\\d{2}', // Dynamic tables like price_lists_line_uids_2023_09_01
+    ];
+
+    const allPatterns = [...defaultPatterns, ...ignorePatterns].filter(p => p.trim());
+
+    if (allPatterns.length === 0) {
+      return { filtered: diffOutput, ignored: [] };
+    }
+
+    const ignoredTables: string[] = [];
+    const lines = diffOutput.split('\n');
+    const filteredLines: string[] = [];
+    let skip = false;
+
+    for (const line of lines) {
+      // Check if line mentions a table that should be ignored
+      const shouldIgnore = allPatterns.some(pattern => {
+        const regex = new RegExp(pattern);
+        if (regex.test(line)) {
+          // Extract table name if possible
+          const tableMatch = line.match(/`([^`]+)`|TABLE\s+(\S+)/i);
+          if (tableMatch) {
+            const tableName = tableMatch[1] || tableMatch[2];
+            if (!ignoredTables.includes(tableName)) {
+              ignoredTables.push(tableName);
+            }
+          }
+          return true;
+        }
+        return false;
+      });
+
+      if (shouldIgnore) {
+        skip = true;
+        continue;
+      }
+
+      // Skip CREATE TABLE statements for ignored tables
+      if (line.match(/CREATE TABLE/i) && allPatterns.some(p => new RegExp(p).test(line))) {
+        skip = true;
+        continue;
+      }
+
+      // Resume after completing ignored table
+      if (skip && (line.trim() === '' || line.match(/^(CREATE|ALTER|DROP)\s/i))) {
+        skip = false;
+      }
+
+      if (!skip) {
+        filteredLines.push(line);
+      }
+    }
+
+    return {
+      filtered: filteredLines.join('\n').trim(),
+      ignored: ignoredTables
+    };
+  }
+
+  /**
    * Check 2: Verify schema matches actual database
    */
   private async checkSchemaVsDatabase(): Promise<ValidationResult['checks']['schemaVsDatabase']> {
@@ -203,18 +271,26 @@ class PrismaSchemaValidator {
           'npx prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --exit-code'
         );
 
+        // Filter out ignored tables
+        const { filtered: filteredOutput, ignored: ignoredTables } = this.filterIgnoredTables(diffOutput);
+
+        if (ignoredTables.length > 0) {
+          console.log(`   ⏭️  Ignoring ${ignoredTables.length} dynamic table(s): ${ignoredTables.join(', ')}`);
+        }
+
         // If command succeeds or output contains "No difference detected", there's no drift
-        if (diffOutput.includes('No difference detected') || !diffOutput.trim()) {
+        if (filteredOutput.includes('No difference detected') || !filteredOutput.trim()) {
           return {
             passed: true,
-            message: 'Schema matches the database structure'
+            message: 'Schema matches the database structure',
+            details: ignoredTables.length > 0 ? { ignoredTables } : undefined
           };
         }
 
         return {
           passed: false,
           message: 'Schema drift detected',
-          details: { drift: diffOutput }
+          details: { drift: filteredOutput, ignoredTables }
         };
       } catch (error: any) {
         // Exit code 0 means no difference
@@ -225,11 +301,27 @@ class PrismaSchemaValidator {
           };
         }
 
+        // Filter out ignored tables from error output
+        const { filtered: filteredOutput, ignored: ignoredTables } = this.filterIgnoredTables(error.stdout || error.message);
+
+        if (ignoredTables.length > 0) {
+          console.log(`   ⏭️  Ignoring ${ignoredTables.length} dynamic table(s): ${ignoredTables.join(', ')}`);
+        }
+
+        // If after filtering there's no drift, pass
+        if (!filteredOutput.trim() || filteredOutput.includes('No difference detected')) {
+          return {
+            passed: true,
+            message: 'Schema matches the database structure (dynamic tables ignored)',
+            details: { ignoredTables }
+          };
+        }
+
         // Any other error means drift or actual error
         return {
           passed: false,
           message: 'Schema drift detected',
-          details: { drift: error.stdout || error.message }
+          details: { drift: filteredOutput, ignoredTables }
         };
       }
     } catch (error: any) {
