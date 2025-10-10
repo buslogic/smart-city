@@ -17,6 +17,8 @@ import {
   PlusOutlined,
   SearchOutlined,
   WarningOutlined,
+  ClockCircleOutlined,
+  EnvironmentOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import {
@@ -27,6 +29,8 @@ import {
   VariationStatusType,
 } from '../../../services/linesAdministration.service';
 import StatusBadge from '../../../components/common/StatusBadge';
+import TimetableModal from '../../../components/transport/TimetableModal';
+import StationsModal from '../../../components/transport/StationsModal';
 import dayjs from 'dayjs';
 
 const { Title } = Typography;
@@ -46,6 +50,12 @@ const LinesAdministration: React.FC = () => {
     pageSize: 50,
     total: 0,
   });
+  const [timetableModalVisible, setTimetableModalVisible] = useState(false);
+  const [selectedPriceTableIdent, setSelectedPriceTableIdent] = useState<string | null>(null);
+  const [selectedLineNumber, setSelectedLineNumber] = useState<string | undefined>();
+  const [stationsModalVisible, setStationsModalVisible] = useState(false);
+  const [stationsPriceTableIdent, setStationsPriceTableIdent] = useState<string | null>(null);
+  const [stationsLineNumber, setStationsLineNumber] = useState<string | undefined>();
 
   // Učitaj price_table_groups na mount
   useEffect(() => {
@@ -115,6 +125,38 @@ const LinesAdministration: React.FC = () => {
       pageSize: paginationConfig.pageSize || 50,
       total: pagination.total,
     });
+  };
+
+  const handleOpenTimetable = (record: LineWithVariation) => {
+    if (!record.priceTableIdent) {
+      message.warning('Nema dostupnih podataka o redu vožnje za ovu liniju');
+      return;
+    }
+    setSelectedPriceTableIdent(record.priceTableIdent);
+    setSelectedLineNumber(record.lineNumberForDisplay);
+    setTimetableModalVisible(true);
+  };
+
+  const handleCloseTimetable = () => {
+    setTimetableModalVisible(false);
+    setSelectedPriceTableIdent(null);
+    setSelectedLineNumber(undefined);
+  };
+
+  const handleOpenStations = (record: LineWithVariation) => {
+    if (!record.priceTableIdent) {
+      message.warning('Nema dostupnih podataka o stajalištima za ovu liniju');
+      return;
+    }
+    setStationsPriceTableIdent(record.priceTableIdent);
+    setStationsLineNumber(record.lineNumberForDisplay);
+    setStationsModalVisible(true);
+  };
+
+  const handleCloseStations = () => {
+    setStationsModalVisible(false);
+    setStationsPriceTableIdent(null);
+    setStationsLineNumber(undefined);
   };
 
   const columns: ColumnsType<LineWithVariation> = [
@@ -198,6 +240,37 @@ const LinesAdministration: React.FC = () => {
         <span className={status === 'A' ? 'text-green-600 font-semibold' : 'text-red-600'}>
           {status === 'A' ? 'Aktivna' : 'Neaktivna'}
         </span>
+      ),
+    },
+    {
+      title: 'Administracija',
+      key: 'actions',
+      width: 180,
+      align: 'center',
+      fixed: 'right',
+      render: (_: any, record: LineWithVariation) => (
+        <Space>
+          <Tooltip title="Red vožnje">
+            <Button
+              type="primary"
+              size="small"
+              icon={<ClockCircleOutlined />}
+              onClick={() => handleOpenTimetable(record)}
+            >
+              RV
+            </Button>
+          </Tooltip>
+          <Tooltip title="Stajališta">
+            <Button
+              type="default"
+              size="small"
+              icon={<EnvironmentOutlined />}
+              onClick={() => handleOpenStations(record)}
+            >
+              ST
+            </Button>
+          </Tooltip>
+        </Space>
       ),
     },
   ];
@@ -335,6 +408,22 @@ const LinesAdministration: React.FC = () => {
             }}
           />
         </Spin>
+
+        {/* Timetable Modal */}
+        <TimetableModal
+          visible={timetableModalVisible}
+          onClose={handleCloseTimetable}
+          priceTableIdent={selectedPriceTableIdent}
+          lineNumberForDisplay={selectedLineNumber}
+        />
+
+        {/* Stations Modal */}
+        <StationsModal
+          visible={stationsModalVisible}
+          onClose={handleCloseStations}
+          priceTableIdent={stationsPriceTableIdent}
+          lineNumberForDisplay={stationsLineNumber}
+        />
       </Card>
     </div>
   );

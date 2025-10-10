@@ -13,6 +13,7 @@ export class LineResponseDto {
   direction: string;
   lineType: string;
   lineStatus: string;
+  priceTableIdent: string;
   variationId: number | null;
   variationName: string | null;
   datetimeFrom: Date | null;

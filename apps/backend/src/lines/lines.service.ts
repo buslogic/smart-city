@@ -689,4 +689,212 @@ export class LinesService {
       legacyCityId: line.legacyCityId ? line.legacyCityId.toString() : null,
     };
   }
+
+  // ========== LINE UIDS SYNC (STANICE NA LINIJAMA) ==========
+
+  /**
+   * Sinhronizacija price_lists_line_uids tabele za odabranu grupu cenovnika
+   * Automatski kreira tabelu ako ne postoji (iz template-a)
+   */
+  async syncLineUidsFromTicketing(dateValidFrom: string): Promise<{
+    success: boolean;
+    tableName: string;
+    tableCreated: boolean;
+    totalRecords: number;
+    inserted: number;
+    duration: string;
+    message: string;
+  }> {
+    console.log(
+      `🔄 Starting Line UIDs sync for date: ${dateValidFrom}...`,
+    );
+    const startTime = Date.now();
+
+    // 1. Format table name (npr. "2023-09-01" -> "price_lists_line_uids_2023_09_01")
+    const tableName = `price_lists_line_uids_${dateValidFrom.replace(/-/g, '_')}`;
+
+    // 2. Proveri da li tabela postoji
+    const tableExists = await this.checkIfTableExists(tableName);
+    const tableCreated = !tableExists;
+
+    // 3. Ako ne postoji, kreiraj iz template-a
+    if (!tableExists) {
+      console.log(`📋 Table ${tableName} does not exist, creating from template...`);
+      await this.createTableFromTemplate(tableName);
+    } else {
+      console.log(`✅ Table ${tableName} already exists`);
+    }
+
+    // 4. Konektuj se na legacy bazu
+    const legacyDb = await this.prisma.legacyDatabase.findFirst({
+      where: { subtype: 'main_ticketing_database' },
+    });
+
+    if (!legacyDb) {
+      throw new NotFoundException(
+        'Legacy baza "Glavna Ticketing Baza" nije pronađena',
+      );
+    }
+
+    // 5. Sinhronizuj podatke sa legacy tabele u našu tabelu
+    const inserted = await this.syncDataFromLegacy(
+      tableName,
+      dateValidFrom,
+      legacyDb,
+    );
+
+    const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+    console.log(`✅ Line UIDs sync completed in ${duration}s`);
+
+    return {
+      success: true,
+      tableName,
+      tableCreated,
+      totalRecords: inserted,
+      inserted,
+      duration: `${duration}s`,
+      message: `${tableCreated ? 'Tabela kreirana i ' : ''}Sinhronizovano ${inserted} stanica za grupu ${dateValidFrom}`,
+    };
+  }
+
+  /**
+   * Proveri da li tabela postoji u bazi
+   */
+  private async checkIfTableExists(tableName: string): Promise<boolean> {
+    const result = await this.prisma.$queryRawUnsafe<{ count: number }[]>(
+      `
+      SELECT COUNT(*) as count
+      FROM information_schema.tables
+      WHERE table_schema = DATABASE()
+      AND table_name = ?
+    `,
+      tableName,
+    );
+
+    return result[0].count > 0;
+  }
+
+  /**
+   * Kreiraj novu tabelu iz template-a
+   */
+  private async createTableFromTemplate(tableName: string): Promise<void> {
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE ${tableName} LIKE price_lists_line_uids_template`,
+    );
+    console.log(`✅ Created table: ${tableName}`);
+  }
+
+  /**
+   * Sinhronizuj podatke sa legacy servera u našu tabelu
+   */
+  private async syncDataFromLegacy(
+    tableName: string,
+    dateValidFrom: string,
+    legacyDb: any,
+  ): Promise<number> {
+    const decryptedPassword =
+      this.legacyDatabasesService.decryptPassword(legacyDb.password);
+
+    const connection = await createConnection({
+      host: legacyDb.host,
+      port: legacyDb.port,
+      user: legacyDb.username,
+      password: decryptedPassword,
+      database: legacyDb.database,
+    });
+
+    try {
+      // Učitaj podatke iz legacy tabele
+      const legacyTableName = `price_lists_line_uids_${dateValidFrom.replace(/-/g, '_')}`;
+
+      console.log(`📥 Fetching data from legacy table: ${legacyTableName}`);
+
+      const [rows] = await connection.execute(
+        `SELECT * FROM ${legacyTableName}`,
+      );
+
+      const legacyRecords = rows as any[];
+      console.log(`📊 Found ${legacyRecords.length} records in legacy table`);
+
+      if (legacyRecords.length === 0) {
+        return 0;
+      }
+
+      // Najpre obriši postojeće podatke za ovu verziju cenovnika (ako postoje)
+      await this.prisma.$executeRawUnsafe(
+        `DELETE FROM ${tableName} WHERE pricelist_version = ?`,
+        dateValidFrom,
+      );
+
+      console.log(`🗑️  Cleared existing data for pricelist version: ${dateValidFrom}`);
+
+      // Batch insert u našu tabelu
+      const BATCH_SIZE = 100;
+      let totalInserted = 0;
+
+      for (let i = 0; i < legacyRecords.length; i += BATCH_SIZE) {
+        const batch = legacyRecords.slice(i, i + BATCH_SIZE);
+
+        // Prepare values for batch insert
+        const values = batch.map((record) => {
+          return `(
+            ${record.price_tables_index_id},
+            ${record.station_number},
+            ${record.station_uid},
+            ${record.disable_show_on_public},
+            '${this.formatDateTime(record.pricelist_version)}',
+            ${record.active_flag},
+            ${record.changed_by},
+            '${this.formatDateTime(record.change_date_time)}',
+            ${record.transient_station}
+          )`;
+        }).join(',');
+
+        const insertQuery = `
+          INSERT INTO ${tableName}
+          (price_tables_index_id, station_number, station_uid, disable_show_on_public,
+           pricelist_version, active_flag, changed_by, change_date_time, transient_station)
+          VALUES ${values}
+        `;
+
+        await this.prisma.$executeRawUnsafe(insertQuery);
+        totalInserted += batch.length;
+
+        const processed = Math.min(i + BATCH_SIZE, legacyRecords.length);
+        console.log(
+          `📈 Progress: ${processed}/${legacyRecords.length} (${Math.round((processed / legacyRecords.length) * 100)}%)`,
+        );
+      }
+
+      console.log(`✅ Inserted ${totalInserted} records into ${tableName}`);
+      return totalInserted;
+    } finally {
+      await connection.end();
+    }
+  }
+
+  /**
+   * Helper za formatiranje datuma za SQL
+   */
+  private formatDateTime(value: any): string {
+    if (!value) return new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+    if (value instanceof Date) {
+      return value.toISOString().slice(0, 19).replace('T', ' ');
+    }
+
+    if (typeof value === 'string') {
+      // Ako je već u MySQL formatu (YYYY-MM-DD HH:MM:SS)
+      if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)) {
+        return value;
+      }
+      // Pokušaj parsiranje
+      const date = new Date(value);
+      if (!isNaN(date.getTime())) {
+        return date.toISOString().slice(0, 19).replace('T', ' ');
+      }
+    }
+
+    return new Date().toISOString().slice(0, 19).replace('T', ' ');
+  }
 }

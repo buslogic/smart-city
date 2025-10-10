@@ -22,6 +22,7 @@ export interface LineWithVariation {
   datetimeFrom: Date | null;
   datetimeTo: Date | null;
   variationStatus: VariationStatusType;
+  priceTableIdent?: string;
 }
 
 export interface PriceTableGroup {
@@ -49,6 +50,82 @@ export interface GetLinesParams {
   showInactive?: boolean;
 }
 
+export interface TimetableSchedule {
+  id: number;
+  datum: string;
+  idlinije: string;
+  smer: number;
+  pon: string;
+  uto: string;
+  sre: string;
+  cet: string;
+  pet: string;
+  sub: string;
+  ned: string;
+  dk1: string;
+  dk1naziv: string;
+  dk2: string;
+  dk2naziv: string;
+  dk3: string;
+  dk3naziv: string;
+  dk4: string;
+  dk4naziv: string;
+  variation: number;
+  datetimeFrom: Date;
+  datetimeTo: Date;
+  variationDescription: string;
+  legacyTicketingId: number | null;
+  legacyCityId: number | null;
+}
+
+export interface TimetableResponse {
+  schedules: TimetableSchedule[];
+  lineInfo: {
+    lineNumber: string;
+    lineNumberForDisplay: string;
+    lineTitle: string;
+  };
+}
+
+export interface StationTimes {
+  id: number;
+  datum: string;
+  idlinije: string;
+  smer: number;
+  dan: string;
+  vreme: string;
+  stanice: string;
+  stationNames?: string; // CSV naziva stanica (separator: |||)
+  opis: string;
+  gtfsTripId: string;
+  legacyTicketingId: number | null;
+  legacyCityId: number | null;
+}
+
+export interface StationOnLine {
+  stationNumber: number;
+  stationUid: number;
+  stationName: string | null;
+  gpsx: string | null;
+  gpsy: string | null;
+  disableShowOnPublic: boolean;
+  transientStation: boolean;
+  changedBy: number;
+  changeDateTime: Date;
+}
+
+export interface StationsOnLineResponse {
+  stations: StationOnLine[];
+  lineInfo: {
+    lineNumber: string;
+    lineNumberForDisplay: string;
+    lineTitle: string;
+    dateValidFrom: string;
+  };
+  tableName: string;
+  totalStations: number;
+}
+
 class LinesAdministrationService {
   async getPriceTableGroups(): Promise<PriceTableGroup[]> {
     const response = await api.get('/api/lines-administration/groups');
@@ -57,6 +134,28 @@ class LinesAdministrationService {
 
   async getLines(params: GetLinesParams): Promise<PaginatedLinesResponse> {
     const response = await api.get('/api/lines-administration/lines', { params });
+    return response.data;
+  }
+
+  async getTimetables(priceTableIdent: string): Promise<TimetableResponse> {
+    const response = await api.get(`/api/lines-administration/lines/${encodeURIComponent(priceTableIdent)}/timetables`);
+    return response.data;
+  }
+
+  async getStationTimes(
+    idlinije: string,
+    smer: number,
+    dan: string,
+    vreme: string
+  ): Promise<StationTimes> {
+    const response = await api.get('/api/lines-administration/station-times', {
+      params: { idlinije, smer, dan, vreme },
+    });
+    return response.data;
+  }
+
+  async getStationsOnLine(priceTableIdent: string): Promise<StationsOnLineResponse> {
+    const response = await api.get(`/api/lines-administration/lines/${encodeURIComponent(priceTableIdent)}/stations`);
     return response.data;
   }
 }

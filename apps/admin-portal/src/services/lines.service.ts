@@ -210,6 +210,16 @@ export interface SyncResult {
   message: string;
 }
 
+export interface LineUidsSyncResult {
+  success: boolean;
+  tableName: string;
+  tableCreated: boolean;
+  totalRecords: number;
+  inserted: number;
+  duration: string;
+  message: string;
+}
+
 export interface PaginatedResponse<T> {
   data: T[];
   total: number;
@@ -269,6 +279,15 @@ class LinesService {
 
   async syncFromTicketing(): Promise<SyncResult> {
     const response = await api.post('/api/lines/sync-ticketing');
+    return response.data;
+  }
+
+  async syncLineUidsFromTicketing(
+    dateValidFrom: string,
+  ): Promise<LineUidsSyncResult> {
+    const response = await api.post(
+      `/api/lines/sync-line-uids/${dateValidFrom}`,
+    );
     return response.data;
   }
 
