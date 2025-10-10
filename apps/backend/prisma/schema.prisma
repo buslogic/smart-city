@@ -1099,7 +1099,7 @@ model UniqueStationIdLocal {
   stationName             String    @map("station_name") @db.VarChar(50)
   gpsx                    Decimal   @db.Decimal(15, 10)
   gpsy                    Decimal   @db.Decimal(15, 10)
-  description             String    @default("") @db.VarChar(500)
+  description             String    @db.VarChar(500)
   range                   Int       @default(20)
   rangeForDriverConsole   Int       @default(20) @map("range_for_driver_console")
   rangeForValidators      Int       @default(20) @map("range_for_validators")
@@ -1109,9 +1109,25 @@ model UniqueStationIdLocal {
   readyForBooking         Int       @default(0) @map("ready_for_booking") @db.TinyInt
   usedInBooking           Int       @default(0) @map("used_in_booking") @db.UnsignedTinyInt
   dateValidFrom           DateTime? @map("date_valid_from") @db.Date
-  legacyTicketingId       BigInt?   @unique @map("legacy_ticketing_id")
-  legacyCityId            BigInt?   @unique @map("legacy_city_id")
+  legacyTicketingId       BigInt?   @unique(map: "legacy_ticketing_id") @map("legacy_ticketing_id")
+  legacyCityId            BigInt?   @unique(map: "legacy_city_id") @map("legacy_city_id")
 
-  @@index([stationName])
+  @@index([stationName], map: "station_name")
   @@map("unique_station_id_local")
+}
+
+model PriceListsLineUidsTemplate {
+  priceTablesIndexId  Int      @map("price_tables_index_id") @db.UnsignedMediumInt
+  stationNumber       Int      @default(1) @map("station_number") @db.UnsignedTinyInt
+  stationUid          Int      @default(0) @map("station_uid") @db.UnsignedSmallInt
+  disableShowOnPublic Boolean  @default(false) @map("disable_show_on_public")
+  pricelistVersion    DateTime @map("pricelist_version") @db.DateTime(0)
+  activeFlag          Boolean  @map("active_flag")
+  changedBy           Int      @default(0) @map("changed_by") @db.UnsignedSmallInt
+  changeDateTime      DateTime @default(now()) @map("change_date_time") @db.Timestamp(0)
+  transientStation    Int      @default(0) @map("transient_station") @db.UnsignedTinyInt
+
+  @@id([priceTablesIndexId, stationNumber, pricelistVersion, activeFlag])
+  @@index([stationUid], map: "idx_station_uid")
+  @@map("price_lists_line_uids_template")
 }
