@@ -206,42 +206,93 @@ class PrismaSchemaValidator {
     const lines = diffOutput.split('\n');
     const filteredLines: string[] = [];
     let skip = false;
+    let inCreateTable = false;
+    let inRemovedTables = false;
+    let removedTablesHeaderIndex = -1;
+    let hasNonIgnoredTablesInSection = false;
 
     for (const line of lines) {
-      // Check if line mentions a table that should be ignored
-      const shouldIgnore = allPatterns.some(pattern => {
-        const regex = new RegExp(pattern);
-        if (regex.test(line)) {
-          // Extract table name if possible
-          const tableMatch = line.match(/`([^`]+)`|TABLE\s+(\S+)/i);
-          if (tableMatch) {
-            const tableName = tableMatch[1] || tableMatch[2];
-            if (!ignoredTables.includes(tableName)) {
-              ignoredTables.push(tableName);
-            }
+      const trimmedLine = line.trim();
+
+      // Check if entering "Removed tables" section
+      if (trimmedLine.match(/^\[-\]\s+Removed\s+tables/i)) {
+        inRemovedTables = true;
+        removedTablesHeaderIndex = filteredLines.length;
+        hasNonIgnoredTablesInSection = false;
+        filteredLines.push(line); // Add header provisionally
+        continue;
+      }
+
+      // If in "Removed tables" section, check each table entry
+      if (inRemovedTables && trimmedLine.startsWith('-')) {
+        const tableName = trimmedLine.replace(/^-\s*/, '').trim();
+        const shouldIgnore = allPatterns.some(pattern => {
+          const regex = new RegExp(pattern);
+          return regex.test(tableName);
+        });
+
+        if (shouldIgnore) {
+          if (!ignoredTables.includes(tableName)) {
+            ignoredTables.push(tableName);
           }
-          return true;
+          continue; // Skip this line
         }
-        return false;
-      });
 
-      if (shouldIgnore) {
-        skip = true;
+        // Not ignored, add to output
+        hasNonIgnoredTablesInSection = true;
+        filteredLines.push(line);
         continue;
       }
 
-      // Skip CREATE TABLE statements for ignored tables
-      if (line.match(/CREATE TABLE/i) && allPatterns.some(p => new RegExp(p).test(line))) {
-        skip = true;
+      // Exit "Removed tables" section when we hit empty line or new section
+      if (inRemovedTables && (trimmedLine === '' || trimmedLine.match(/^\[/))) {
+        // If no non-ignored tables were found, remove the section header too
+        if (!hasNonIgnoredTablesInSection && removedTablesHeaderIndex >= 0) {
+          filteredLines.splice(removedTablesHeaderIndex, 1);
+        }
+        inRemovedTables = false;
+        removedTablesHeaderIndex = -1;
+        filteredLines.push(line);
         continue;
       }
 
-      // Resume after completing ignored table
-      if (skip && (line.trim() === '' || line.match(/^(CREATE|ALTER|DROP)\s/i))) {
-        skip = false;
+      // Check if this line starts a CREATE TABLE for an ignored table
+      if (line.match(/CREATE TABLE/i)) {
+        const shouldIgnore = allPatterns.some(pattern => {
+          const regex = new RegExp(pattern);
+          if (regex.test(line)) {
+            // Extract table name
+            const tableMatch = line.match(/`([^`]+)`/);
+            if (tableMatch) {
+              const tableName = tableMatch[1];
+              if (!ignoredTables.includes(tableName)) {
+                ignoredTables.push(tableName);
+              }
+            }
+            return true;
+          }
+          return false;
+        });
+
+        if (shouldIgnore) {
+          skip = true;
+          inCreateTable = true;
+          continue;
+        }
       }
 
-      if (!skip) {
+      // If we're skipping a CREATE TABLE block, continue until we find the closing semicolon
+      if (skip && inCreateTable) {
+        // Check if this line ends the CREATE TABLE statement (contains semicolon)
+        if (line.includes(');')) {
+          inCreateTable = false;
+          skip = false;
+        }
+        continue;
+      }
+
+      // Add non-ignored lines to output
+      if (!skip && !inRemovedTables) {
         filteredLines.push(line);
       }
     }
