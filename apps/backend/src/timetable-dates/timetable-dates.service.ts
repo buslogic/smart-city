@@ -29,10 +29,21 @@ export class TimetableDatesService {
       },
     });
 
-    // Konvertuj BigInt u string za JSON serialization
+    // Helper funkcija za formatiranje datuma bez UTC konverzije
+    const formatDateLocal = (date: Date): string => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    // Konvertuj BigInt u string i datume u lokalni format
     return {
       ...result,
       id: result.id.toString(),
+      dateValidFrom: formatDateLocal(new Date(result.dateValidFrom)),
+      dateValidTo: result.dateValidTo ? formatDateLocal(new Date(result.dateValidTo)) : null,
+      dateTime: new Date(result.dateTime).toISOString(),
       legacyTicketingId: result.legacyTicketingId
         ? result.legacyTicketingId.toString()
         : null,
@@ -45,10 +56,21 @@ export class TimetableDatesService {
       orderBy: { dateTime: 'desc' },
     });
 
-    // Konvertuj BigInt u string za JSON serialization
+    // Helper funkcija za formatiranje datuma bez UTC konverzije
+    const formatDateLocal = (date: Date): string => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    // Konvertuj BigInt u string i datume u lokalni format
     return results.map((group) => ({
       ...group,
       id: group.id.toString(),
+      dateValidFrom: formatDateLocal(new Date(group.dateValidFrom)),
+      dateValidTo: group.dateValidTo ? formatDateLocal(new Date(group.dateValidTo)) : null,
+      dateTime: new Date(group.dateTime).toISOString(), // DateTime može ostati ISO
       legacyTicketingId: group.legacyTicketingId
         ? group.legacyTicketingId.toString()
         : null,
@@ -67,10 +89,21 @@ export class TimetableDatesService {
       );
     }
 
-    // Konvertuj BigInt u string za JSON serialization
+    // Helper funkcija za formatiranje datuma bez UTC konverzije
+    const formatDateLocal = (date: Date): string => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    // Konvertuj BigInt u string i datume u lokalni format
     return {
       ...timetableDate,
       id: timetableDate.id.toString(),
+      dateValidFrom: formatDateLocal(new Date(timetableDate.dateValidFrom)),
+      dateValidTo: timetableDate.dateValidTo ? formatDateLocal(new Date(timetableDate.dateValidTo)) : null,
+      dateTime: new Date(timetableDate.dateTime).toISOString(),
       legacyTicketingId: timetableDate.legacyTicketingId
         ? timetableDate.legacyTicketingId.toString()
         : null,
@@ -99,10 +132,21 @@ export class TimetableDatesService {
       },
     });
 
-    // Konvertuj BigInt u string za JSON serialization
+    // Helper funkcija za formatiranje datuma bez UTC konverzije
+    const formatDateLocal = (date: Date): string => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    // Konvertuj BigInt u string i datume u lokalni format
     return {
       ...result,
       id: result.id.toString(),
+      dateValidFrom: formatDateLocal(new Date(result.dateValidFrom)),
+      dateValidTo: result.dateValidTo ? formatDateLocal(new Date(result.dateValidTo)) : null,
+      dateTime: new Date(result.dateTime).toISOString(),
       legacyTicketingId: result.legacyTicketingId
         ? result.legacyTicketingId.toString()
         : null,
@@ -117,9 +161,20 @@ export class TimetableDatesService {
       where: { id: BigInt(id) },
     });
 
+    // Helper funkcija za formatiranje datuma bez UTC konverzije
+    const formatDateLocal = (date: Date): string => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
     return {
       ...result,
       id: result.id.toString(),
+      dateValidFrom: formatDateLocal(new Date(result.dateValidFrom)),
+      dateValidTo: result.dateValidTo ? formatDateLocal(new Date(result.dateValidTo)) : null,
+      dateTime: new Date(result.dateTime).toISOString(),
       legacyTicketingId: result.legacyTicketingId
         ? result.legacyTicketingId.toString()
         : null,
@@ -481,12 +536,27 @@ export class TimetableDatesService {
       return isNaN(date.getTime()) ? new Date() : date;
     };
 
-    // Helper za formatiranje datuma kao string (YYYY-MM-DD)
+    // Helper za formatiranje datuma kao string (YYYY-MM-DD) BEZ UTC konverzije
     const formatDateString = (value: any): string => {
-      if (!value) return new Date().toISOString().split('T')[0];
+      if (!value) {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
       const date = new Date(value);
-      if (isNaN(date.getTime())) return new Date().toISOString().split('T')[0];
-      return date.toISOString().split('T')[0];
+      if (isNaN(date.getTime())) {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
     };
 
     // Legacy tabela ima: datum, kad, timetable_name, date_valid_to, changed_by (INT)

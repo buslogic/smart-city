@@ -32,7 +32,9 @@ const EditTimetableDateModal: React.FC<EditTimetableDateModalProps> = ({
         // Edit mode - populate form with existing data
         form.setFieldsValue({
           name: timetableDate.name,
-          dateValidFrom: dayjs(timetableDate.dateValidFrom),
+          // VAŽNO: Parsiraj datum sa preciznim formatom da ne dođe do UTC konverzije
+          dateValidFrom: dayjs(timetableDate.dateValidFrom, 'YYYY-MM-DD'),
+          dateValidTo: timetableDate.dateValidTo ? dayjs(timetableDate.dateValidTo, 'YYYY-MM-DD') : undefined,
           status: timetableDate.status,
           synchroStatus: timetableDate.synchroStatus,
           sendIncremental: timetableDate.sendIncremental,

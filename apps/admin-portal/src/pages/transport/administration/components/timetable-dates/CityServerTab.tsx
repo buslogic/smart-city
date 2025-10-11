@@ -99,13 +99,23 @@ const CityServerTab: React.FC = () => {
       title: 'Važi od',
       dataIndex: 'date_valid_from',
       key: 'date_valid_from',
-      render: (date: string) => date ? new Date(date).toLocaleDateString('sr-RS') : '-',
+      render: (date: string) => {
+        if (!date) return '-';
+        // Backend vraća datum u YYYY-MM-DD formatu, samo formatiraj za prikaz
+        const [year, month, day] = date.split('-');
+        return `${day}.${month}.${year}.`;
+      },
     },
     {
       title: 'Važi do',
       dataIndex: 'date_valid_to',
       key: 'date_valid_to',
-      render: (date: string | null) => date ? new Date(date).toLocaleDateString('sr-RS') : '-',
+      render: (date: string | null) => {
+        if (!date) return '-';
+        // Backend vraća datum u YYYY-MM-DD formatu, samo formatiraj za prikaz
+        const [year, month, day] = date.split('-');
+        return `${day}.${month}.${year}.`;
+      },
     },
     {
       title: 'Status',

@@ -23,7 +23,37 @@ export interface PaginatedResponse<T> {
   limit: number;
 }
 
+export interface MainScheduleLine {
+  priceTableIdent: string;
+  lineNumber: string;
+  lineNumberForDisplay: string;
+  lineTitle: string;
+  direction: string;
+  lineType: string;
+  totalSchedules: number;
+  hasTicketingData: boolean;
+  hasCityData: boolean;
+  legacyTicketingCount: number;
+  legacyCityCount: number;
+}
+
+export interface MainSchedulesResponse {
+  data: MainScheduleLine[];
+  total: number;
+}
+
 class TimetableSchedulesService {
+  // ========== GLAVNI SERVER (LOKALNI MYSQL) ==========
+
+  async getAllMain(dateValidFrom?: string): Promise<MainSchedulesResponse> {
+    const params: any = {};
+    if (dateValidFrom) {
+      params.dateValidFrom = dateValidFrom;
+    }
+    const response = await api.get('/api/timetable-schedules/main', { params });
+    return response.data;
+  }
+
   // ========== TIKETING SERVER ==========
 
   async getAllVremenaPolaskaTicketing(

@@ -6,6 +6,10 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { LegacyDatabasesService } from '../legacy-databases/legacy-databases.service';
 import { createConnection } from 'mysql2/promise';
+import {
+  MainScheduleLineDto,
+  MainSchedulesResponseDto,
+} from './dto/main-schedules-response.dto';
 
 export interface SyncResult {
   created: number;
@@ -21,6 +25,88 @@ export class TimetableSchedulesService {
     private prisma: PrismaService,
     private legacyDatabasesService: LegacyDatabasesService,
   ) {}
+
+  // ========== GLAVNI SERVER (LOKALNI MYSQL) ==========
+
+  async findAllMain(dateValidFrom?: string): Promise<MainSchedulesResponseDto> {
+    try {
+      // Ako nije prosleđen dateValidFrom, uzmi prvi aktivan price_table_group
+      if (!dateValidFrom) {
+        const activeGroup = await this.prisma.$queryRaw<any[]>`
+          SELECT date_valid_from
+          FROM price_table_groups
+          WHERE status = 'A'
+          ORDER BY date_valid_from DESC
+          LIMIT 1
+        `;
+
+        if (activeGroup.length === 0) {
+          return { data: [], total: 0 };
+        }
+
+        // Format date to YYYY-MM-DD (koristimo lokalno vreme, ne UTC!)
+        const dateObj =
+          activeGroup[0].date_valid_from instanceof Date
+            ? activeGroup[0].date_valid_from
+            : new Date(activeGroup[0].date_valid_from);
+        const year = dateObj.getFullYear();
+        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const day = String(dateObj.getDate()).padStart(2, '0');
+        dateValidFrom = `${year}-${month}-${day}`;
+      }
+
+      // Query: Get all lines for the selected date_valid_from with statistics
+      const linesWithStats = await this.prisma.$queryRawUnsafe<any[]>(
+        `
+        SELECT
+          l.price_table_ident as priceTableIdent,
+          l.line_number as lineNumber,
+          l.line_number_for_display as lineNumberForDisplay,
+          l.line_title as lineTitle,
+          l.direction_id_for_display as direction,
+          l.line_type as lineType,
+          COUNT(vp.id) as totalSchedules,
+          SUM(CASE WHEN vp.legacy_ticketing_id IS NOT NULL THEN 1 ELSE 0 END) as legacyTicketingCount,
+          SUM(CASE WHEN vp.legacy_city_id IS NOT NULL THEN 1 ELSE 0 END) as legacyCityCount
+        FROM \`lines\` l
+        LEFT JOIN vremena_polaska vp
+          ON vp.idlinije = l.price_table_ident
+          AND vp.datum = ?
+        WHERE l.date_valid_from = ?
+        GROUP BY l.id, l.price_table_ident, l.line_number, l.line_number_for_display, l.line_title, l.direction_id_for_display, l.line_type
+        HAVING totalSchedules > 0
+        ORDER BY l.line_number_for_display
+        `,
+        dateValidFrom,
+        dateValidFrom,
+      );
+
+      // Convert BigInt to Number and map to DTO
+      const data: MainScheduleLineDto[] = linesWithStats.map((line) => ({
+        priceTableIdent: line.priceTableIdent,
+        lineNumber: line.lineNumber,
+        lineNumberForDisplay: line.lineNumberForDisplay,
+        lineTitle: line.lineTitle,
+        direction: line.direction || '',
+        lineType: line.lineType || '',
+        totalSchedules: Number(line.totalSchedules) || 0,
+        hasTicketingData: Number(line.legacyTicketingCount) > 0,
+        hasCityData: Number(line.legacyCityCount) > 0,
+        legacyTicketingCount: Number(line.legacyTicketingCount) || 0,
+        legacyCityCount: Number(line.legacyCityCount) || 0,
+      }));
+
+      return {
+        data,
+        total: data.length,
+      };
+    } catch (error) {
+      console.error('Greška pri učitavanju glavnih podataka:', error);
+      throw new InternalServerErrorException(
+        `Greška pri učitavanju glavnih podataka: ${error.message}`,
+      );
+    }
+  }
 
   // ========== TIKETING SERVER (LEGACY BAZA) ==========
 

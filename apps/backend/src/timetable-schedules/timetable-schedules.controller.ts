@@ -19,6 +19,7 @@ import type { Request } from 'express';
 import { TimetableSchedulesService } from './timetable-schedules.service';
 import { QueryTimetableSchedulesDto } from './dto/query-timetable-schedules.dto';
 import { SyncTimetableSchedulesDto } from './dto/sync-timetable-schedules.dto';
+import { MainSchedulesResponseDto } from './dto/main-schedules-response.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
@@ -31,6 +32,25 @@ export class TimetableSchedulesController {
   constructor(
     private readonly timetableSchedulesService: TimetableSchedulesService,
   ) {}
+
+  // ========== GLAVNI SERVER ENDPOINTS (LOKALNI MYSQL) ==========
+
+  @Get('main')
+  @ApiOperation({
+    summary: 'Lista sinhronizovanih linija sa Glavnog servera',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista linija sa statistikom sinhronizacije',
+    type: MainSchedulesResponseDto,
+  })
+  @ApiQuery({ name: 'dateValidFrom', required: false, type: String })
+  @RequirePermissions('transport.administration.timetable_sync.main:view')
+  findAllMain(
+    @Query('dateValidFrom') dateValidFrom?: string,
+  ): Promise<MainSchedulesResponseDto> {
+    return this.timetableSchedulesService.findAllMain(dateValidFrom);
+  }
 
   // ========== TIKETING SERVER ENDPOINTS (READ-ONLY) ==========
 

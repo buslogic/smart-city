@@ -123,13 +123,22 @@ const MainServerTab: React.FC = () => {
       title: 'Važi od',
       dataIndex: 'dateValidFrom',
       key: 'dateValidFrom',
-      render: (date: string) => new Date(date).toLocaleDateString('sr-RS'),
+      render: (date: string) => {
+        // Backend već vraća datum u YYYY-MM-DD formatu, samo formatiraj za prikaz
+        const [year, month, day] = date.split('-');
+        return `${day}.${month}.${year}.`;
+      },
     },
     {
       title: 'Važi do',
       dataIndex: 'dateValidTo',
       key: 'dateValidTo',
-      render: (date: string | null) => date ? new Date(date).toLocaleDateString('sr-RS') : '-',
+      render: (date: string | null) => {
+        if (!date) return '-';
+        // Backend već vraća datum u YYYY-MM-DD formatu, samo formatiraj za prikaz
+        const [year, month, day] = date.split('-');
+        return `${day}.${month}.${year}.`;
+      },
     },
     {
       title: 'Status',
