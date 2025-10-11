@@ -1168,3 +1168,51 @@ model TurnusDays {
   @@index([dayname])
   @@map("turnus_days")
 }
+
+model ChangesCodesTours {
+  id                    Int      @id @default(autoincrement())
+  turnusId              Int      @map("turnus_id") @db.UnsignedMediumInt
+  turnusName            String   @map("turnus_name") @db.VarChar(320)
+  lineNo                String   @map("line_no") @db.VarChar(6)
+  startTime             DateTime @map("start_time") @db.Time(0)
+  direction             Int      @db.TinyInt
+  duration              DateTime @db.Time(0)
+  centralPoint          String   @map("central_point") @db.VarChar(4)
+  changeCode            Int      @map("change_code")
+  jobId                 Int      @map("job_id") @db.SmallInt
+  newStartTime          DateTime @map("new_start_time") @db.Time(0)
+  newDuration           DateTime @map("new_duration") @db.Time(0)
+  startStation          Int      @map("start_station") @db.SmallInt
+  endStation            Int      @map("end_station") @db.SmallInt
+  dayNumber             Int      @map("day_number") @db.TinyInt
+  lineTypeId            Int      @map("line_type_id") @db.TinyInt
+  rezijski              String   @db.VarChar(20)
+  printId               String   @map("print_id") @db.VarChar(4)
+  betweenRez            Int      @map("between_rez") @db.UnsignedTinyInt
+  busNumber             Int      @default(1) @map("bus_number") @db.UnsignedTinyInt
+  startStationId        Int      @map("start_station_id") @db.UnsignedMediumInt
+  endStationId          Int      @map("end_station_id") @db.UnsignedMediumInt
+  changeTime            DateTime @map("change_time") @db.DateTime(0)
+  changeUser            String   @map("change_user") @db.VarChar(8)
+  active                Int      @db.UnsignedTinyInt
+  firstDayDurationPart  DateTime @map("first_day_duration_part") @db.Time(0)
+  secondDayDurationPart DateTime @map("second_day_duration_part") @db.Time(0)
+  customId              String   @map("custom_id") @db.VarChar(20)
+  transportId           String   @map("transport_id") @db.VarChar(20)
+  departureNumber       Int      @map("departure_number") @db.UnsignedTinyInt
+  shiftNumber           Int      @map("shift_number") @db.UnsignedTinyInt
+  turageNo              Int      @default(0) @map("turage_no") @db.UnsignedSmallInt
+  departureNoInTurage   Int      @map("departure_no_in_turage") @db.UnsignedTinyInt
+
+  @@index([turnusId])
+  @@index([lineTypeId])
+  @@index([centralPoint])
+  @@index([turnusName])
+  @@index([lineNo])
+  @@index([changeCode])
+  @@index([startTime])
+  @@index([centralPoint, turnusName], map: "testaca")
+  @@index([turnusId, turnusName], map: "turnus_id_2")
+  @@index([lineNo, direction, startTime], map: "line_no2")
+  @@map("changes_codes_tours")
+}

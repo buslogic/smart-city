@@ -19,6 +19,7 @@ import {
   WarningOutlined,
   ClockCircleOutlined,
   EnvironmentOutlined,
+  TeamOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import {
@@ -31,6 +32,7 @@ import {
 import StatusBadge from '../../../components/common/StatusBadge';
 import TimetableModal from '../../../components/transport/TimetableModal';
 import StationsModal from '../../../components/transport/StationsModal';
+import TurnusiModal from '../../../components/transport/TurnusiModal';
 import dayjs from 'dayjs';
 
 const { Title } = Typography;
@@ -56,6 +58,9 @@ const LinesAdministration: React.FC = () => {
   const [stationsModalVisible, setStationsModalVisible] = useState(false);
   const [stationsPriceTableIdent, setStationsPriceTableIdent] = useState<string | null>(null);
   const [stationsLineNumber, setStationsLineNumber] = useState<string | undefined>();
+  const [turnusiModalVisible, setTurnusiModalVisible] = useState(false);
+  const [turnusiLineNumber, setTurnusiLineNumber] = useState<string | null>(null);
+  const [turnusiLineNumberForDisplay, setTurnusiLineNumberForDisplay] = useState<string | undefined>();
 
   // Učitaj price_table_groups na mount
   useEffect(() => {
@@ -159,6 +164,18 @@ const LinesAdministration: React.FC = () => {
     setStationsLineNumber(undefined);
   };
 
+  const handleOpenTurnusi = (record: LineWithVariation) => {
+    setTurnusiLineNumber(record.lineNumber);
+    setTurnusiLineNumberForDisplay(record.lineNumberForDisplay);
+    setTurnusiModalVisible(true);
+  };
+
+  const handleCloseTurnusi = () => {
+    setTurnusiModalVisible(false);
+    setTurnusiLineNumber(null);
+    setTurnusiLineNumberForDisplay(undefined);
+  };
+
   const columns: ColumnsType<LineWithVariation> = [
     {
       title: 'Sistemski broj linije',
@@ -245,7 +262,7 @@ const LinesAdministration: React.FC = () => {
     {
       title: 'Administracija',
       key: 'actions',
-      width: 180,
+      width: 240,
       align: 'center',
       fixed: 'right',
       render: (_: any, record: LineWithVariation) => (
@@ -268,6 +285,16 @@ const LinesAdministration: React.FC = () => {
               onClick={() => handleOpenStations(record)}
             >
               ST
+            </Button>
+          </Tooltip>
+          <Tooltip title="Turnusi">
+            <Button
+              type="default"
+              size="small"
+              icon={<TeamOutlined />}
+              onClick={() => handleOpenTurnusi(record)}
+            >
+              TU
             </Button>
           </Tooltip>
         </Space>
@@ -423,6 +450,14 @@ const LinesAdministration: React.FC = () => {
           onClose={handleCloseStations}
           priceTableIdent={stationsPriceTableIdent}
           lineNumberForDisplay={stationsLineNumber}
+        />
+
+        {/* Turnusi Modal */}
+        <TurnusiModal
+          visible={turnusiModalVisible}
+          onClose={handleCloseTurnusi}
+          lineNumber={turnusiLineNumber}
+          lineNumberForDisplay={turnusiLineNumberForDisplay}
         />
       </Card>
     </div>

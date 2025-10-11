@@ -42,6 +42,7 @@ import { TimetableDatesModule } from './timetable-dates/timetable-dates.module';
 import { LinesAdministrationModule } from './lines-administration/lines-administration.module';
 import { TimetableSchedulesModule } from './timetable-schedules/timetable-schedules.module';
 import { TurnusiSyncModule } from './turnusi-sync/turnusi-sync.module';
+import { TurnusiModule } from './turnusi/turnusi.module';
 
 @Module({
   imports: [
@@ -86,6 +87,7 @@ import { TurnusiSyncModule } from './turnusi-sync/turnusi-sync.module';
     TimetableDatesModule,
     TimetableSchedulesModule,
     TurnusiSyncModule,
+    TurnusiModule,
   ],
   controllers: [AppController],
   providers: [

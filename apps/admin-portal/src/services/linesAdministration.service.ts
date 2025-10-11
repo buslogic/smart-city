@@ -126,6 +126,83 @@ export interface StationsOnLineResponse {
   totalStations: number;
 }
 
+export interface TurnusRecord {
+  id: number;
+  turnusId: number;
+  turnusName: string;
+  lineNo: string;
+  startTime: Date;
+  direction: number;
+  duration: Date;
+  centralPoint: string;
+  changeCode: number;
+  jobId: number;
+  newStartTime: Date;
+  newDuration: Date;
+  startStation: number;
+  endStation: number;
+  dayNumber: number;
+  lineTypeId: number;
+  rezijski: string;
+  printId: string;
+  betweenRez: number;
+  busNumber: number;
+  startStationId: number;
+  endStationId: number;
+  changeTime: Date;
+  changeUser: string;
+  active: number;
+  firstDayDurationPart: Date;
+  secondDayDurationPart: Date;
+  customId: string;
+  transportId: string;
+  departureNumber: number;
+  shiftNumber: number;
+  turageNo: number;
+  departureNoInTurage: number;
+  // Line info from lines table JOIN
+  lineNumberForDisplay?: string;
+  lineTitle?: string;
+  lineTitleForDisplay?: string;
+}
+
+export interface TurnusiResponse {
+  data: TurnusRecord[];
+  total: number;
+  lineNumber: string;
+}
+
+export interface ShiftDetail {
+  shiftNumber: number;
+  firstDepartureTime: Date;
+  lastDepartureTime: Date;
+  departureCount: number;
+}
+
+export interface GroupedTurnus {
+  turnusId: number;
+  turnusName: string;
+  transportId: string;
+  dayNumber: number;
+  active: number;
+  departureCount: number;
+  firstDepartureTime: Date;
+  lastDepartureTime: Date;
+  linesServed: string[];
+  shiftsCount: number;
+  driversNeeded: number;
+  shiftNumbers: number[];
+  shiftDetails: ShiftDetail[];
+  turageNumbers: number[];
+  departures: TurnusRecord[];
+}
+
+export interface GroupedTurnusiResponse {
+  grouped: GroupedTurnus[];
+  total: number;
+  lineNumber: string;
+}
+
 class LinesAdministrationService {
   async getPriceTableGroups(): Promise<PriceTableGroup[]> {
     const response = await api.get('/api/lines-administration/groups');
@@ -156,6 +233,16 @@ class LinesAdministrationService {
 
   async getStationsOnLine(priceTableIdent: string): Promise<StationsOnLineResponse> {
     const response = await api.get(`/api/lines-administration/lines/${encodeURIComponent(priceTableIdent)}/stations`);
+    return response.data;
+  }
+
+  async getTurnusiByLine(lineNumber: string): Promise<TurnusiResponse> {
+    const response = await api.get(`/api/turnusi/local/by-line/${encodeURIComponent(lineNumber)}`);
+    return response.data;
+  }
+
+  async getTurnusiGroupedByLine(lineNumber: string): Promise<GroupedTurnusiResponse> {
+    const response = await api.get(`/api/turnusi/local/by-line/${encodeURIComponent(lineNumber)}/grouped`);
     return response.data;
   }
 }

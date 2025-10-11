@@ -371,16 +371,29 @@ const ModernMenu: React.FC = () => {
                 ],
               },
               {
-                key: '/transport/administration/turnusi-sync',
+                key: '/transport/administration/turnusi-groups-sync',
                 menuOrder: 301550000000,
                 icon: <SyncOutlined />,
-                label: 'Turnusi Sync',
+                label: 'Turnusi Grupe Sync',
                 // Prikaži ako korisnik ima bar jednu view permisiju (kontejner ili bilo koji server)
                 permissions: [
                   'transport.administration.turnusi_sync:view',
                   'transport.administration.turnusi_sync.main:view',
                   'transport.administration.turnusi_sync.ticketing:view',
                   'transport.administration.turnusi_sync.city:view',
+                ],
+              },
+              {
+                key: '/transport/administration/turnusi',
+                menuOrder: 301555000000,
+                icon: <SyncOutlined />,
+                label: 'Turnusi Sync',
+                // Prikaži ako korisnik ima bar jednu view permisiju (kontejner ili bilo koji server)
+                permissions: [
+                  'transport.administration.turnusi:view',
+                  'transport.administration.turnusi.main:view',
+                  'transport.administration.turnusi.ticketing:view',
+                  'transport.administration.turnusi.city:view',
                 ],
               },
             ],
@@ -515,7 +528,7 @@ const ModernMenu: React.FC = () => {
       if (path.includes('/dispatcher/')) keys.push('dispatcher');
       if (path.includes('/safety/')) keys.push('safety');
       if (path.includes('/maintenance/')) keys.push('maintenance');
-      if (path.includes('/turnusi-sync')) keys.push('administration');
+      if (path.includes('/turnusi')) keys.push('administration');
     }
     if (path.includes('/settings/')) keys.push('settings');
 
