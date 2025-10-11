@@ -21,6 +21,7 @@ import LinesAdministration from './pages/transport/administration/LinesAdministr
 import Variations from './pages/transport/administration/Variations';
 import TimetableDates from './pages/transport/administration/TimetableDates';
 import TimetableSync from './pages/transport/administration/TimetableSync';
+import TurnusiSync from './pages/transport/administration/TurnusiSync';
 import MapVehiclesModern from './pages/transport/dispatcher/MapVehiclesModern';
 import VehicleAnalytics from './pages/transport/dispatcher/VehicleAnalytics';
 import GpsSync from './pages/transport/dispatcher/GpsSync';
@@ -262,6 +263,22 @@ function App() {
                   ]}
                 >
                   <TimetableSync />
+                </PermissionGuard>
+              }
+            />
+
+            <Route
+              path="transport/administration/turnusi-sync"
+              element={
+                <PermissionGuard
+                  permissions={[
+                    'transport.administration.turnusi_sync:view',
+                    'transport.administration.turnusi_sync.main:view',
+                    'transport.administration.turnusi_sync.ticketing:view',
+                    'transport.administration.turnusi_sync.city:view',
+                  ]}
+                >
+                  <TurnusiSync />
                 </PermissionGuard>
               }
             />

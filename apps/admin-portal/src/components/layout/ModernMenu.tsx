@@ -370,6 +370,19 @@ const ModernMenu: React.FC = () => {
                   'transport.administration.timetable_sync.city:view',
                 ],
               },
+              {
+                key: '/transport/administration/turnusi-sync',
+                menuOrder: 301550000000,
+                icon: <SyncOutlined />,
+                label: 'Turnusi Sync',
+                // Prikaži ako korisnik ima bar jednu view permisiju (kontejner ili bilo koji server)
+                permissions: [
+                  'transport.administration.turnusi_sync:view',
+                  'transport.administration.turnusi_sync.main:view',
+                  'transport.administration.turnusi_sync.ticketing:view',
+                  'transport.administration.turnusi_sync.city:view',
+                ],
+              },
             ],
           },
           {
@@ -502,6 +515,7 @@ const ModernMenu: React.FC = () => {
       if (path.includes('/dispatcher/')) keys.push('dispatcher');
       if (path.includes('/safety/')) keys.push('safety');
       if (path.includes('/maintenance/')) keys.push('maintenance');
+      if (path.includes('/turnusi-sync')) keys.push('administration');
     }
     if (path.includes('/settings/')) keys.push('settings');
 
