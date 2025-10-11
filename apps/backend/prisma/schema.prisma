@@ -1095,22 +1095,22 @@ model VremenaPolaskaSt {
 }
 
 model UniqueStationIdLocal {
-  uniqueId                String    @id @map("unique_id") @db.VarChar(5)
-  stationName             String    @map("station_name") @db.VarChar(50)
-  gpsx                    Decimal   @db.Decimal(15, 10)
-  gpsy                    Decimal   @db.Decimal(15, 10)
-  description             String    @db.VarChar(500)
-  range                   Int       @default(20)
-  rangeForDriverConsole   Int       @default(20) @map("range_for_driver_console")
-  rangeForValidators      Int       @default(20) @map("range_for_validators")
-  changed                 Boolean
-  mainOperator            Boolean   @map("main_operator")
-  groupId                 Int       @map("group_id") @db.UnsignedTinyInt
-  readyForBooking         Int       @default(0) @map("ready_for_booking") @db.TinyInt
-  usedInBooking           Int       @default(0) @map("used_in_booking") @db.UnsignedTinyInt
-  dateValidFrom           DateTime? @map("date_valid_from") @db.Date
-  legacyTicketingId       BigInt?   @unique(map: "legacy_ticketing_id") @map("legacy_ticketing_id")
-  legacyCityId            BigInt?   @unique(map: "legacy_city_id") @map("legacy_city_id")
+  uniqueId              String    @id @map("unique_id") @db.VarChar(5)
+  stationName           String    @map("station_name") @db.VarChar(50)
+  gpsx                  Decimal   @db.Decimal(15, 10)
+  gpsy                  Decimal   @db.Decimal(15, 10)
+  description           String    @db.VarChar(500)
+  range                 Int       @default(20)
+  rangeForDriverConsole Int       @default(20) @map("range_for_driver_console")
+  rangeForValidators    Int       @default(20) @map("range_for_validators")
+  changed               Boolean
+  mainOperator          Boolean   @map("main_operator")
+  groupId               Int       @map("group_id") @db.UnsignedTinyInt
+  readyForBooking       Int       @default(0) @map("ready_for_booking") @db.TinyInt
+  usedInBooking         Int       @default(0) @map("used_in_booking") @db.UnsignedTinyInt
+  dateValidFrom         DateTime? @map("date_valid_from") @db.Date
+  legacyTicketingId     BigInt?   @unique(map: "legacy_ticketing_id") @map("legacy_ticketing_id")
+  legacyCityId          BigInt?   @unique(map: "legacy_city_id") @map("legacy_city_id")
 
   @@index([stationName], map: "station_name")
   @@map("unique_station_id_local")
@@ -1130,4 +1130,41 @@ model PriceListsLineUidsTemplate {
   @@id([priceTablesIndexId, stationNumber, pricelistVersion, activeFlag])
   @@index([stationUid], map: "idx_station_uid")
   @@map("price_lists_line_uids_template")
+}
+
+model TurnusGroupsName {
+  id            Int      @id @default(autoincrement()) @db.SmallInt
+  name          String   @db.VarChar(50)
+  active        Boolean
+  changedBy     Int      @map("changed_by") @db.MediumInt
+  changeDate    DateTime @default(now()) @updatedAt @map("change_date") @db.Timestamp(0)
+  dateValidFrom DateTime @map("date_valid_from") @db.Date
+
+  @@index([active])
+  @@index([dateValidFrom])
+  @@map("turnus_groups_names")
+}
+
+model TurnusGroupsAssign {
+  turnusId   Int      @map("turnus_id") @db.MediumInt
+  groupId    Int      @map("group_id") @db.SmallInt
+  changedBy  Int      @map("changed_by") @db.MediumInt
+  changeDate DateTime @default(now()) @updatedAt @map("change_date") @db.Timestamp(0)
+  dateFrom   DateTime @default(dbgenerated("'2023-11-01 00:00:00'")) @map("date_from")
+  dateTo     DateTime @default(dbgenerated("'2037-11-01 00:00:00'")) @map("date_to")
+
+  @@id([turnusId, groupId, dateFrom])
+  @@index([turnusId])
+  @@index([groupId])
+  @@map("turnus_groups_assign")
+}
+
+model TurnusDays {
+  id       Int    @id @default(autoincrement())
+  turnusId Int    @map("turnus_id") @db.MediumInt
+  dayname  String @db.VarChar(20)
+
+  @@index([turnusId])
+  @@index([dayname])
+  @@map("turnus_days")
 }

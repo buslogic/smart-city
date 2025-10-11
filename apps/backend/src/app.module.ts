@@ -41,6 +41,7 @@ import { PriceVariationsModule } from './price-variations/price-variations.modul
 import { TimetableDatesModule } from './timetable-dates/timetable-dates.module';
 import { LinesAdministrationModule } from './lines-administration/lines-administration.module';
 import { TimetableSchedulesModule } from './timetable-schedules/timetable-schedules.module';
+import { TurnusiSyncModule } from './turnusi-sync/turnusi-sync.module';
 
 @Module({
   imports: [
@@ -84,6 +85,7 @@ import { TimetableSchedulesModule } from './timetable-schedules/timetable-schedu
     PriceVariationsModule,
     TimetableDatesModule,
     TimetableSchedulesModule,
+    TurnusiSyncModule,
   ],
   controllers: [AppController],
   providers: [
