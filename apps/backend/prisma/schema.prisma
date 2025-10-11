@@ -1150,8 +1150,8 @@ model TurnusGroupsAssign {
   groupId    Int      @map("group_id") @db.SmallInt
   changedBy  Int      @map("changed_by") @db.MediumInt
   changeDate DateTime @default(now()) @updatedAt @map("change_date") @db.Timestamp(0)
-  dateFrom   DateTime @default(dbgenerated("'2023-11-01 00:00:00'")) @map("date_from")
-  dateTo     DateTime @default(dbgenerated("'2037-11-01 00:00:00'")) @map("date_to")
+  dateFrom   DateTime @default(dbgenerated("'2023-11-01 00:00:00'")) @map("date_from") @db.DateTime(0)
+  dateTo     DateTime @default(dbgenerated("'2037-11-01 00:00:00'")) @map("date_to") @db.DateTime(0)
 
   @@id([turnusId, groupId, dateFrom])
   @@index([turnusId])
