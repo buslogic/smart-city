@@ -223,7 +223,7 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
     return (
       <div style={{ padding: '0 16px', background: '#fafafa' }}>
         <div style={{ marginBottom: 6, padding: '4px 0' }}>
-          <Space size="medium" wrap>
+          <Space size="middle" wrap>
             <Text strong style={{ fontSize: '14px' }}>
               📊 Detalji turaže: {record.turnusName}
             </Text>
