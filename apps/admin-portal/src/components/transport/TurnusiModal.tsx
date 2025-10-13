@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   Modal,
   Table,
@@ -11,6 +11,12 @@ import {
   Space,
   Tooltip,
   Progress,
+  Input,
+  Checkbox,
+  Button,
+  Card,
+  Row,
+  Col,
 } from 'antd';
 import {
   ClockCircleOutlined,
@@ -20,6 +26,9 @@ import {
   RightOutlined,
   CarOutlined,
   FieldTimeOutlined,
+  SearchOutlined,
+  FilterOutlined,
+  ClearOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
@@ -48,6 +57,11 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
 }) => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<GroupedTurnusiResponse | null>(null);
+
+  // Filter state
+  const [selectedDays, setSelectedDays] = useState<string[]>([]);
+  const [searchTurnusId, setSearchTurnusId] = useState('');
+  const [searchTurnusName, setSearchTurnusName] = useState('');
 
   useEffect(() => {
     if (visible && lineNumber) {
@@ -79,6 +93,55 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
   const getDayName = (day: number): string => {
     const dayNames = ['Nedelja', 'Ponedeljak', 'Utorak', 'Sreda', 'Četvrtak', 'Petak', 'Subota'];
     return dayNames[day] || `Dan ${day}`;
+  };
+
+  // All available days from data
+  const availableDays = useMemo(() => {
+    if (!data) return [];
+    const days = Array.from(new Set(data.grouped.map(t => t.dayname))).filter(Boolean);
+    // Sort days by order: Ponedeljak -> Nedelja
+    const dayOrder = ['Ponedeljak', 'Utorak', 'Sreda', 'Četvrtak', 'Petak', 'Subota', 'Nedelja'];
+    return days.sort((a, b) => dayOrder.indexOf(a) - dayOrder.indexOf(b));
+  }, [data]);
+
+  // Filtered data based on selected filters
+  const filteredData = useMemo(() => {
+    if (!data) return null;
+
+    let filtered = data.grouped;
+
+    // Filter by selected days
+    if (selectedDays.length > 0) {
+      filtered = filtered.filter(t => selectedDays.includes(t.dayname));
+    }
+
+    // Filter by turnus ID
+    if (searchTurnusId.trim()) {
+      filtered = filtered.filter(t =>
+        t.turnusId.toString().includes(searchTurnusId.trim())
+      );
+    }
+
+    // Filter by turnus name
+    if (searchTurnusName.trim()) {
+      const searchLower = searchTurnusName.trim().toLowerCase();
+      filtered = filtered.filter(t =>
+        t.turnusName.toLowerCase().includes(searchLower)
+      );
+    }
+
+    return {
+      ...data,
+      grouped: filtered,
+      total: filtered.length,
+    };
+  }, [data, selectedDays, searchTurnusId, searchTurnusName]);
+
+  // Reset all filters
+  const handleResetFilters = () => {
+    setSelectedDays([]);
+    setSearchTurnusId('');
+    setSearchTurnusName('');
   };
 
   // Colors for shift visualization (used in both nested table and 24h timeline)
@@ -325,13 +388,13 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
     },
     {
       title: 'Dan',
-      dataIndex: 'dayNumber',
-      key: 'dayNumber',
+      dataIndex: 'dayname',
+      key: 'dayname',
       width: 130,
       align: 'center',
-      render: (day: number) => (
+      render: (dayname: string) => (
         <Tag color="blue" style={{ fontSize: '13px', padding: '4px 12px' }}>
-          {getDayName(day)}
+          {dayname || 'N/A'}
         </Tag>
       ),
     },
@@ -643,11 +706,94 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
               </Descriptions>
             </div>
 
+            {/* Filters Card */}
+            <Card
+              size="small"
+              title={
+                <Space>
+                  <FilterOutlined style={{ color: '#1890ff' }} />
+                  <Text strong>Filteri</Text>
+                  {(selectedDays.length > 0 || searchTurnusId || searchTurnusName) && (
+                    <Tag color="blue">
+                      {selectedDays.length + (searchTurnusId ? 1 : 0) + (searchTurnusName ? 1 : 0)} aktivan
+                    </Tag>
+                  )}
+                </Space>
+              }
+              extra={
+                <Button
+                  size="small"
+                  icon={<ClearOutlined />}
+                  onClick={handleResetFilters}
+                  disabled={selectedDays.length === 0 && !searchTurnusId && !searchTurnusName}
+                >
+                  Resetuj filtere
+                </Button>
+              }
+              style={{ marginBottom: 16 }}
+            >
+              <Row gutter={[16, 16]}>
+                {/* Day selection */}
+                <Col span={24}>
+                  <div>
+                    <Text strong style={{ marginBottom: 8, display: 'block' }}>
+                      Dani u opticaju:
+                    </Text>
+                    <Checkbox.Group
+                      value={selectedDays}
+                      onChange={(checkedValues) => setSelectedDays(checkedValues as string[])}
+                      style={{ width: '100%' }}
+                    >
+                      <Space wrap size={[8, 8]}>
+                        {availableDays.map((day) => (
+                          <Checkbox key={day} value={day}>
+                            {day}
+                          </Checkbox>
+                        ))}
+                      </Space>
+                    </Checkbox.Group>
+                  </div>
+                </Col>
+
+                {/* Search by Turnus ID */}
+                <Col xs={24} sm={12} md={8}>
+                  <div>
+                    <Text strong style={{ marginBottom: 8, display: 'block' }}>
+                      Turnus ID:
+                    </Text>
+                    <Input
+                      placeholder="Pretraži po ID-u"
+                      prefix={<SearchOutlined />}
+                      value={searchTurnusId}
+                      onChange={(e) => setSearchTurnusId(e.target.value)}
+                      allowClear
+                    />
+                  </div>
+                </Col>
+
+                {/* Search by Turnus Name */}
+                <Col xs={24} sm={12} md={8}>
+                  <div>
+                    <Text strong style={{ marginBottom: 8, display: 'block' }}>
+                      Naziv turaže:
+                    </Text>
+                    <Input
+                      placeholder="Pretraži po nazivu"
+                      prefix={<SearchOutlined />}
+                      value={searchTurnusName}
+                      onChange={(e) => setSearchTurnusName(e.target.value)}
+                      allowClear
+                    />
+                  </div>
+                </Col>
+              </Row>
+            </Card>
+
             {/* Expandable Table */}
             <Table
               columns={masterColumns}
-              dataSource={data.grouped}
-              rowKey="turnusId"
+              dataSource={filteredData?.grouped || []}
+              rowKey={(record) => `${record.turnusId}-${record.dayname}`}
               expandable={{
                 expandedRowRender,
                 expandRowByClick: true,

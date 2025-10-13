@@ -192,12 +192,38 @@ export class TurnusiService {
         };
       }
 
+      // Extract unique turnus_id values
+      const uniqueTurnusIds = Array.from(
+        new Set(turnusi.map((t) => t.turnusId))
+      );
+
+      console.log(`📋 Found ${uniqueTurnusIds.length} unique turnus IDs`);
+
+      // Fetch turnus_days data for all turnusi
+      const turnusDays = await this.prisma.$queryRaw<any[]>`
+        SELECT DISTINCT turnus_id as turnusId, dayname as dayname
+        FROM turnus_days
+        WHERE turnus_id IN (${Prisma.join(uniqueTurnusIds)})
+        ORDER BY turnus_id, dayname
+      `;
+
+      // Create map: turnus_id -> array of daynames
+      const turnusDaysMap = new Map<number, string[]>();
+      turnusDays.forEach((td) => {
+        if (!turnusDaysMap.has(td.turnusId)) {
+          turnusDaysMap.set(td.turnusId, []);
+        }
+        turnusDaysMap.get(td.turnusId)!.push(td.dayname);
+      });
+
+      console.log(`📅 Found turnus_days for ${turnusDaysMap.size} turnusi`);
+      console.log(`🔍 Sample turnus_days record:`, turnusDays[0]);
+      console.log(`🔍 Sample turnusDaysMap entry:`, Array.from(turnusDaysMap.entries())[0]);
+
       // Extract unique line numbers WITH direction suffix (e.g., "5135", "5135B")
       const uniqueLineNumbers = Array.from(
         new Set(turnusi.map((t) => t.lineNo))
       );
-
-      console.log(`📋 Found unique line numbers (with directions):`, uniqueLineNumbers);
 
       // Fetch line info from lines table for ALL directions
       const lineInfos = await this.prisma.$queryRaw<any[]>`
@@ -220,10 +246,8 @@ export class TurnusiService {
         });
       });
 
-      console.log(`📊 Line info map (with directions):`, lineInfoMap);
-
-      // Group by turnus_id
-      const groupedMap = new Map<number, any>();
+      // Group by (turnus_id, dayname) combination
+      const groupedMap = new Map<string, any>();
 
       turnusi.forEach((turnus) => {
         // Use full lineNo (with direction suffix like "5135B") for lookup
@@ -233,47 +257,55 @@ export class TurnusiService {
           lineTitleForDisplay: turnus.lineNo,
         };
 
-        if (!groupedMap.has(turnus.turnusId)) {
-          groupedMap.set(turnus.turnusId, {
-            turnusId: turnus.turnusId,
-            turnusName: turnus.turnusName,
-            transportId: turnus.transportId,
-            dayNumber: turnus.dayNumber,
-            active: turnus.active,
-            departureCount: 0,
-            departures: [],
-            firstDepartureTime: null,
-            lastDepartureTime: null,
-            linesServed: new Set(),
-            shiftNumbers: new Set(),
-            turageNumbers: new Set(),
+        // Get all days this turnus operates on
+        const days = turnusDaysMap.get(turnus.turnusId) || [];
+
+        // Create a record for each day
+        days.forEach((dayname) => {
+          const groupKey = `${turnus.turnusId}-${dayname}`;
+
+          if (!groupedMap.has(groupKey)) {
+            groupedMap.set(groupKey, {
+              turnusId: turnus.turnusId,
+              turnusName: turnus.turnusName,
+              transportId: turnus.transportId,
+              dayname: dayname,
+              active: turnus.active,
+              departureCount: 0,
+              departures: [],
+              firstDepartureTime: null,
+              lastDepartureTime: null,
+              linesServed: new Set(),
+              shiftNumbers: new Set(),
+              turageNumbers: new Set(),
+            });
+          }
+
+          const group = groupedMap.get(groupKey);
+          group.departureCount++;
+
+          // Attach line info to departure record
+          group.departures.push({
+            ...turnus,
+            lineNumberForDisplay: lineInfo.lineNumberForDisplay,
+            lineTitle: lineInfo.lineTitle,
+            lineTitleForDisplay: lineInfo.lineTitleForDisplay,
           });
-        }
 
-        const group = groupedMap.get(turnus.turnusId);
-        group.departureCount++;
+          // Track lines - line_no already contains direction info (e.g., "5135" and "5135B")
+          group.linesServed.add(turnus.lineNo);
+          group.shiftNumbers.add(turnus.shiftNumber);
+          group.turageNumbers.add(turnus.turageNo);
 
-        // Attach line info to departure record
-        group.departures.push({
-          ...turnus,
-          lineNumberForDisplay: lineInfo.lineNumberForDisplay,
-          lineTitle: lineInfo.lineTitle,
-          lineTitleForDisplay: lineInfo.lineTitleForDisplay,
+          // Calculate first and last departure time
+          const startTime = new Date(turnus.startTime);
+          if (!group.firstDepartureTime || startTime < group.firstDepartureTime) {
+            group.firstDepartureTime = startTime;
+          }
+          if (!group.lastDepartureTime || startTime > group.lastDepartureTime) {
+            group.lastDepartureTime = startTime;
+          }
         });
-
-        // Track lines - line_no already contains direction info (e.g., "5135" and "5135B")
-        group.linesServed.add(turnus.lineNo);
-        group.shiftNumbers.add(turnus.shiftNumber);
-        group.turageNumbers.add(turnus.turageNo);
-
-        // Calculate first and last departure time
-        const startTime = new Date(turnus.startTime);
-        if (!group.firstDepartureTime || startTime < group.firstDepartureTime) {
-          group.firstDepartureTime = startTime;
-        }
-        if (!group.lastDepartureTime || startTime > group.lastDepartureTime) {
-          group.lastDepartureTime = startTime;
-        }
       });
 
       // Convert Map to array and format
@@ -304,7 +336,7 @@ export class TurnusiService {
           turnusId: group.turnusId,
           turnusName: group.turnusName,
           transportId: group.transportId,
-          dayNumber: group.dayNumber,
+          dayname: group.dayname,
           active: group.active,
           departureCount: group.departureCount,
           firstDepartureTime: group.firstDepartureTime,

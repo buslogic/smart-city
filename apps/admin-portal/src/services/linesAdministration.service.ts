@@ -183,7 +183,7 @@ export interface GroupedTurnus {
   turnusId: number;
   turnusName: string;
   transportId: string;
-  dayNumber: number;
+  dayname: string;
   active: number;
   departureCount: number;
   firstDepartureTime: Date;
