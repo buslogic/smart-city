@@ -88,11 +88,11 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
         title: 'Polazak #',
         dataIndex: 'departureNoInTurage',
         key: 'departureNoInTurage',
-        width: 90,
+        width: 80,
         align: 'center',
         fixed: 'left',
         render: (num: number) => (
-          <Tag color="blue" style={{ fontSize: '13px', fontWeight: 'bold' }}>
+          <Tag color="blue" style={{ fontSize: '11px', fontWeight: 'bold', padding: '2px 8px', margin: 0 }}>
             #{num}
           </Tag>
         ),
@@ -101,55 +101,66 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
         title: 'Smena',
         dataIndex: 'shiftNumber',
         key: 'shiftNumber',
-        width: 80,
+        width: 75,
         align: 'center',
         fixed: 'left',
         render: (shift: number) => (
-          <Tag color="orange" style={{ fontSize: '13px', fontWeight: 'bold' }}>
-            Smena {shift}
+          <Tag color="orange" style={{ fontSize: '11px', fontWeight: 'bold', padding: '2px 6px', margin: 0 }}>
+            S{shift}
           </Tag>
         ),
       },
       {
-        title: 'Vreme polaska',
+        title: 'Polazak',
         dataIndex: 'startTime',
         key: 'startTime',
-        width: 120,
+        width: 90,
         align: 'center',
         render: (time: Date) => (
-          <Space>
-            <ClockCircleOutlined style={{ color: '#1890ff' }} />
-            <Text strong style={{ fontFamily: 'monospace', fontSize: '14px' }}>
-              {formatTime(time)}
-            </Text>
-          </Space>
+          <Text strong style={{ fontFamily: 'monospace', fontSize: '12px' }}>
+            {formatTime(time)}
+          </Text>
         ),
       },
       {
         title: 'Linija',
         key: 'lineInfo',
-        width: 200,
+        width: 300,
         align: 'left',
-        render: (_: any, record: TurnusRecord) => (
-          <div>
-            <Tag color="purple" style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: 4 }}>
-              {record.lineNumberForDisplay || record.lineNo}
-            </Tag>
-            {record.lineTitle && (
-              <div>
-                <Text type="secondary" style={{ fontSize: '11px' }}>
-                  {record.lineTitle}
-                </Text>
+        render: (_: any, record: TurnusRecord) => {
+          const lineNum = record.lineNumberForDisplay || record.lineNo;
+          const lineTitle = record.lineTitle;
+
+          return (
+            <Tooltip title={lineTitle}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Tag color="purple" style={{ fontSize: '12px', fontWeight: 'bold', margin: 0 }}>
+                  {lineNum}
+                </Tag>
+                {lineTitle && (
+                  <Text
+                    type="secondary"
+                    style={{
+                      fontSize: '11px',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      flex: 1
+                    }}
+                  >
+                    {lineTitle}
+                  </Text>
+                )}
               </div>
-            )}
-          </div>
-        ),
+            </Tooltip>
+          );
+        },
       },
       {
         title: 'Smer',
         dataIndex: 'lineNo',
         key: 'smer',
-        width: 100,
+        width: 70,
         align: 'center',
         render: (lineNo: string) => {
           // Determine direction from line_no: "5135" = A, "5135B" = B
@@ -158,8 +169,8 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
           const color = hasDirectionSuffix ? 'green' : 'blue';
 
           return (
-            <Tag color={color} style={{ fontSize: '13px' }}>
-              Smer {smer}
+            <Tag color={color} style={{ fontSize: '11px', padding: '2px 8px', margin: 0 }}>
+              {smer}
             </Tag>
           );
         },
@@ -168,7 +179,7 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
         title: 'Trajanje',
         dataIndex: 'duration',
         key: 'duration',
-        width: 100,
+        width: 75,
         align: 'center',
         render: (duration: Date | string) => {
           // Backend returns duration as ISO string like "1970-01-01T00:55:00.000Z"
@@ -191,28 +202,28 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
           }
 
           return (
-            <Text style={{ fontFamily: 'monospace', fontSize: '13px' }}>
+            <Text style={{ fontFamily: 'monospace', fontSize: '11px' }}>
               {durationStr}
             </Text>
           );
         },
       },
       {
-        title: 'Turaža',
+        title: 'Tur',
         dataIndex: 'turageNo',
         key: 'turageNo',
-        width: 80,
+        width: 50,
         align: 'center',
         render: (num: number) => (
-          <Text strong>{num}</Text>
+          <Text strong style={{ fontSize: '11px' }}>{num}</Text>
         ),
       },
     ];
 
     return (
-      <div style={{ padding: '0 24px', background: '#fafafa' }}>
-        <div style={{ marginBottom: 12, padding: '8px 0' }}>
-          <Space size="large" wrap>
+      <div style={{ padding: '0 16px', background: '#fafafa' }}>
+        <div style={{ marginBottom: 6, padding: '4px 0' }}>
+          <Space size="medium" wrap>
             <Text strong style={{ fontSize: '14px' }}>
               📊 Detalji turaže: {record.turnusName}
             </Text>
@@ -265,7 +276,7 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
           size="small"
           rowKey="id"
           bordered
-          scroll={{ x: 1000 }}
+          scroll={{ x: 900 }}
         />
       </div>
     );

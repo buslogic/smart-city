@@ -192,19 +192,14 @@ export class TurnusiService {
         };
       }
 
-      // Extract unique base line numbers (strip direction suffix like "B" from "5135B")
+      // Extract unique line numbers WITH direction suffix (e.g., "5135", "5135B")
       const uniqueLineNumbers = Array.from(
-        new Set(
-          turnusi.map((t) => {
-            // Remove any letter suffix (A, B, C, etc.)
-            return t.lineNo.replace(/[A-Z]+$/, '');
-          })
-        )
+        new Set(turnusi.map((t) => t.lineNo))
       );
 
-      console.log(`📋 Found unique base line numbers:`, uniqueLineNumbers);
+      console.log(`📋 Found unique line numbers (with directions):`, uniqueLineNumbers);
 
-      // Fetch line info from lines table
+      // Fetch line info from lines table for ALL directions
       const lineInfos = await this.prisma.$queryRaw<any[]>`
         SELECT
           line_number as lineNumber,
@@ -215,7 +210,7 @@ export class TurnusiService {
         WHERE line_number IN (${Prisma.join(uniqueLineNumbers)})
       `;
 
-      // Create map for quick lookup: lineNumber -> line info
+      // Create map for quick lookup: lineNumber (with suffix) -> line info
       const lineInfoMap = new Map<string, any>();
       lineInfos.forEach((info) => {
         lineInfoMap.set(info.lineNumber, {
@@ -225,15 +220,14 @@ export class TurnusiService {
         });
       });
 
-      console.log(`📊 Line info map:`, lineInfoMap);
+      console.log(`📊 Line info map (with directions):`, lineInfoMap);
 
       // Group by turnus_id
       const groupedMap = new Map<number, any>();
 
       turnusi.forEach((turnus) => {
-        // Get base line number for this turnus
-        const baseLineNo = turnus.lineNo.replace(/[A-Z]+$/, '');
-        const lineInfo = lineInfoMap.get(baseLineNo) || {
+        // Use full lineNo (with direction suffix like "5135B") for lookup
+        const lineInfo = lineInfoMap.get(turnus.lineNo) || {
           lineNumberForDisplay: turnus.lineNo,
           lineTitle: turnus.lineNo,
           lineTitleForDisplay: turnus.lineNo,
