@@ -81,6 +81,9 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
     return dayNames[day] || `Dan ${day}`;
   };
 
+  // Colors for shift visualization (used in both nested table and 24h timeline)
+  const shiftColors = ['#1890ff', '#52c41a', '#faad14', '#f5222d', '#722ed1'];
+
   // Expandable nested table for detailed departures
   const expandedRowRender = (record: GroupedTurnus) => {
     const nestedColumns: ColumnsType<TurnusRecord> = [
@@ -105,7 +108,10 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
         align: 'center',
         fixed: 'left',
         render: (shift: number) => (
-          <Tag color="orange" style={{ fontSize: '11px', fontWeight: 'bold', padding: '2px 6px', margin: 0 }}>
+          <Tag
+            color={shiftColors[(shift - 1) % shiftColors.length]}
+            style={{ fontSize: '11px', fontWeight: 'bold', padding: '2px 6px', margin: 0 }}
+          >
             S{shift}
           </Tag>
         ),
@@ -445,9 +451,6 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
         const totalMinutes = endMinutes >= startMinutes ? endMinutes - startMinutes : DAY_MINUTES - startMinutes + endMinutes;
         const totalHours = Math.floor(totalMinutes / 60);
         const totalMins = totalMinutes % 60;
-
-        // Colors for shifts
-        const shiftColors = ['#1890ff', '#52c41a', '#faad14', '#f5222d', '#722ed1'];
 
         return (
           <div style={{ width: '100%', paddingBottom: '20px' }}>
