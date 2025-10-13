@@ -1,0 +1,33 @@
+{
+  "timestamp": "2025-10-11T14:14:24.979Z",
+  "checks": {
+    "migrationsVsSchema": {
+      "passed": true,
+      "message": "Migrations successfully applied to fresh database",
+      "details": {
+        "status": "Prisma schema loaded from prisma/schema.prisma\nDatasource \"db\": MySQL database \"prisma_validation_1760192064979\" at \"localhost:3325\"\n\n162 migrations found in prisma/migrations\n\nDatabase schema is up to date!\n"
+      }
+    },
+    "schemaVsDatabase": {
+      "passed": false,
+      "message": "Schema drift detected",
+      "details": {
+        "drift": "[*] Changed the `changes_codes_tours` table\n  [*] Renamed index `central_point` to `changes_codes_tours_central_point_idx`\n  [*] Renamed index `change_code` to `changes_codes_tours_change_code_idx`\n  [*] Renamed index `line_no` to `changes_codes_tours_line_no_idx`\n  [*] Renamed index `line_type_id` to `changes_codes_tours_line_type_id_idx`\n  [*] Renamed index `start_time` to `changes_codes_tours_start_time_idx`\n  [*] Renamed index `turnus_id` to `changes_codes_tours_turnus_id_idx`\n  [*] Renamed index `turnus_name` to `changes_codes_tours_turnus_name_idx`",
+        "ignoredTables": [
+          "price_lists_line_uids_2023_09_01"
+        ]
+      }
+    },
+    "migrationHistory": {
+      "passed": true,
+      "message": "Migration history is consistent",
+      "details": {
+        "status": "Prisma schema loaded from prisma/schema.prisma\nDatasource \"db\": MySQL database \"smartcity_dev\" at \"localhost:3325\"\n\n162 migrations found in prisma/migrations\n\nDatabase schema is up to date!\n"
+      }
+    }
+  },
+  "summary": {
+    "allPassed": false,
+    "recommendation": "⚠️  Issues detected. Recommended actions:\n   - Run prisma migrate dev to sync database"
+  }
+}

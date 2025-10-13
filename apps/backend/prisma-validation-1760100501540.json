@@ -1,0 +1,31 @@
+{
+  "timestamp": "2025-10-10T12:47:54.631Z",
+  "checks": {
+    "migrationsVsSchema": {
+      "passed": true,
+      "message": "Migrations successfully applied to fresh database",
+      "details": {
+        "status": "Prisma schema loaded from prisma/schema.prisma\nDatasource \"db\": MySQL database \"prisma_validation_1760100474631\" at \"localhost:3325\"\n\n156 migrations found in prisma/migrations\n\nDatabase schema is up to date!\n"
+      }
+    },
+    "schemaVsDatabase": {
+      "passed": false,
+      "message": "Schema drift detected",
+      "details": {
+        "drift": "[-] Removed tables\n\n[*] Changed the `unique_station_id_local` table\n  [*] Altered column `description` (default changed from `None` to `Some(Value(String(\"\")))`)\n  [*] Renamed index `legacy_city_id` to `unique_station_id_local_legacy_city_id_key`\n  [*] Renamed index `legacy_ticketing_id` to `unique_station_id_local_legacy_ticketing_id_key`\n  [*] Renamed index `station_name` to `unique_station_id_local_station_name_idx`",
+        "ignoredTables": []
+      }
+    },
+    "migrationHistory": {
+      "passed": true,
+      "message": "Migration history is consistent",
+      "details": {
+        "status": "Prisma schema loaded from prisma/schema.prisma\nDatasource \"db\": MySQL database \"smartcity_dev\" at \"localhost:3325\"\n\n156 migrations found in prisma/migrations\n\nDatabase schema is up to date!\n"
+      }
+    }
+  },
+  "summary": {
+    "allPassed": false,
+    "recommendation": "⚠️  Issues detected. Recommended actions:\n   - Run prisma migrate dev to sync database"
+  }
+}
