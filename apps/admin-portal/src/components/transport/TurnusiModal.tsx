@@ -524,6 +524,11 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
                 const leftPercent = (shiftStart / DAY_MINUTES) * 100;
                 const widthPercent = (shiftDuration / DAY_MINUTES) * 100;
 
+                // Format shift duration as HH:mm
+                const durationHours = Math.floor(shiftDuration / 60);
+                const durationMinutes = shiftDuration % 60;
+                const durationText = `${String(durationHours).padStart(2, '0')}:${String(durationMinutes).padStart(2, '0')}`;
+
                 return (
                   <Tooltip
                     key={shift.shiftNumber}
@@ -540,7 +545,7 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
                         alignItems: 'center',
                         justifyContent: 'center',
                         color: 'white',
-                        fontSize: '11px',
+                        fontSize: '10px',
                         fontWeight: 'bold',
                         cursor: 'pointer',
                         transition: 'opacity 0.2s',
@@ -549,7 +554,7 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
                       onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
                       onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
                     >
-                      {widthPercent > 8 && `S${shift.shiftNumber}`}
+                      {widthPercent > 8 && `S${shift.shiftNumber} - ${durationText}`}
                     </div>
                   </Tooltip>
                 );
