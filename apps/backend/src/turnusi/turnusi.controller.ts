@@ -18,6 +18,7 @@ import {
 import type { Request } from 'express';
 import { TurnusiService } from './turnusi.service';
 import { QueryChangesCodeToursDto } from './dto/query-changes-codes-tours.dto';
+import { QueryMainChangesCodesDto } from './dto/query-main-changes-codes.dto';
 import { SyncChangesCodesToursDto } from './dto/sync-changes-codes-tours.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
@@ -85,6 +86,27 @@ export class TurnusiController {
   ) {
     const userId = (req.user as any)?.id || 1;
     return this.turnusiService.syncChangesCodesFromTicketing(dto.groupId, userId);
+  }
+
+  // ========== GLAVNI SERVER ENDPOINTS (NAŠA BAZA) ==========
+
+  @Get('main/changes-codes')
+  @ApiOperation({
+    summary: 'Changes codes tours iz naše smartcity_dev baze',
+  })
+  @ApiResponse({ status: 200, description: 'Lista changes codes tours' })
+  @ApiQuery({ name: 'groupId', required: false, type: Number })
+  @ApiQuery({ name: 'lineNumber', required: false, type: String })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @RequirePermissions('transport.administration.turnusi.main:view')
+  getAllChangesCodesMain(@Query() query: QueryMainChangesCodesDto) {
+    return this.turnusiService.getAllChangesCodesMain(
+      query.groupId,
+      query.lineNumber,
+      query.page,
+      query.limit,
+    );
   }
 
   // ========== LOCAL DATABASE ENDPOINTS ==========

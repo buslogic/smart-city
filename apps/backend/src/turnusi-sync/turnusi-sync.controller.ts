@@ -73,6 +73,57 @@ export class TurnusiSyncController {
     );
   }
 
+  // ========== GLAVNI SERVER ENDPOINTS (NAŠA BAZA) ==========
+
+  @Get('main/groups')
+  @ApiOperation({
+    summary: 'Grupe turnusa iz naše smartcity_dev baze',
+  })
+  @ApiResponse({ status: 200, description: 'Lista grupa turnusa' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @RequirePermissions('transport.administration.turnusi_sync.main:view')
+  getAllGroupsMain(@Query() query: QueryTurnusiDto) {
+    return this.turnusiSyncService.getAllGroupsMain(
+      query.page,
+      query.limit,
+    );
+  }
+
+  @Get('main/assign')
+  @ApiOperation({
+    summary: 'Dodele turnusa iz naše smartcity_dev baze',
+  })
+  @ApiResponse({ status: 200, description: 'Lista dodela turnusa' })
+  @ApiQuery({ name: 'groupId', required: false, type: Number })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @RequirePermissions('transport.administration.turnusi_sync.main:view')
+  getAllAssignMain(@Query() query: QueryTurnusiDto) {
+    return this.turnusiSyncService.getAllAssignMain(
+      query.groupId,
+      query.page,
+      query.limit,
+    );
+  }
+
+  @Get('main/days')
+  @ApiOperation({
+    summary: 'Dani turnusa iz naše smartcity_dev baze',
+  })
+  @ApiResponse({ status: 200, description: 'Lista dana turnusa' })
+  @ApiQuery({ name: 'groupId', required: false, type: Number })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @RequirePermissions('transport.administration.turnusi_sync.main:view')
+  getAllDaysMain(@Query() query: QueryTurnusiDto) {
+    return this.turnusiSyncService.getAllDaysMain(
+      query.groupId,
+      query.page,
+      query.limit,
+    );
+  }
+
   @Post('sync-ticketing')
   @ApiOperation({
     summary: 'Sinhronizacija Turnusa sa Tiketing servera',

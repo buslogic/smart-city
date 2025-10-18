@@ -24,6 +24,7 @@ export interface TurnusGroup {
   date_valid_from: string;
 }
 
+// Legacy baza (snake_case)
 export interface ChangesCodeTour {
   id: number;
   turnus_id: number;
@@ -60,6 +61,43 @@ export interface ChangesCodeTour {
   departure_no_in_turage: number;
 }
 
+// Naša baza (camelCase - Prisma)
+export interface ChangesCodeTourMain {
+  id: number;
+  turnusId: number;
+  turnusName: string;
+  lineNo: string;
+  startTime: string;
+  direction: number;
+  duration: string;
+  centralPoint: string;
+  changeCode: number;
+  jobId: number;
+  newStartTime: string;
+  newDuration: string;
+  startStation: number;
+  endStation: number;
+  dayNumber: number;
+  lineTypeId: number;
+  rezijski: string;
+  printId: string;
+  betweenRez: number;
+  busNumber: number;
+  startStationId: number;
+  endStationId: number;
+  changeTime: string;
+  changeUser: string;
+  active: number;
+  firstDayDurationPart: string;
+  secondDayDurationPart: string;
+  customId: string;
+  transportId: string;
+  departureNumber: number;
+  shiftNumber: number;
+  turageNo: number;
+  departureNoInTurage: number;
+}
+
 class TurnusiService {
   // ========== TIKETING SERVER (READ-ONLY) ==========
 
@@ -86,6 +124,27 @@ class TurnusiService {
   async syncFromTicketing(groupId: number): Promise<SyncResultDetail> {
     const response = await api.post('/api/turnusi/sync-ticketing', {
       groupId,
+    });
+    return response.data;
+  }
+
+  // ========== GLAVNI SERVER (NAŠA BAZA) ==========
+
+  async getAllChangesCodesMain(
+    groupId?: number,
+    lineNumber?: string,
+    page = 1,
+    limit = 50,
+  ): Promise<PaginatedResponse<ChangesCodeTourMain>> {
+    const params: any = { page, limit };
+    if (groupId) {
+      params.groupId = groupId;
+    }
+    if (lineNumber) {
+      params.lineNumber = lineNumber;
+    }
+    const response = await api.get('/api/turnusi/main/changes-codes', {
+      params,
     });
     return response.data;
   }

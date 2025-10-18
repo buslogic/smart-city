@@ -367,6 +367,62 @@ export class TurnusiService {
     }
   }
 
+  async getAllChangesCodesMain(
+    groupId?: number,
+    lineNumber?: string,
+    page = 1,
+    limit = 50,
+  ) {
+    try {
+      const offset = (page - 1) * limit;
+      const where: Prisma.ChangesCodesToursWhereInput = {};
+
+      // Filter by groupId (preko JOIN sa turnus_groups_assign)
+      if (groupId) {
+        const assignedTurnusi = await this.prisma.turnusGroupsAssign.findMany({
+          where: { groupId },
+          select: { turnusId: true },
+        });
+
+        const turnusIds = assignedTurnusi.map((a) => a.turnusId);
+        if (turnusIds.length > 0) {
+          where.turnusId = { in: turnusIds };
+        } else {
+          // Ako nema dodeljenih turnusa za ovu grupu, vrati prazno
+          return { data: [], total: 0, page, limit };
+        }
+      }
+
+      // Filter by lineNumber
+      if (lineNumber) {
+        where.lineNo = lineNumber;
+      }
+
+      // Get total count
+      const total = await this.prisma.changesCodesTours.count({ where });
+
+      // Get paginated data
+      const data = await this.prisma.changesCodesTours.findMany({
+        where,
+        skip: offset,
+        take: limit,
+        orderBy: [{ turnusId: 'asc' }, { startTime: 'asc' }],
+      });
+
+      return {
+        data,
+        total,
+        page,
+        limit,
+      };
+    } catch (error) {
+      console.error('Greška pri učitavanju changes_codes_tours iz naše baze:', error);
+      throw new InternalServerErrorException(
+        `Greška pri učitavanju podataka: ${error.message}`,
+      );
+    }
+  }
+
   // ========== SINHRONIZACIJA ==========
 
   async syncChangesCodesFromTicketing(

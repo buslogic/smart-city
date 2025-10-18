@@ -194,6 +194,110 @@ export class TurnusiSyncService {
     }
   }
 
+  // ========== GLAVNI SERVER (NAŠA SMARTCITY_DEV BAZA) ==========
+
+  async getAllGroupsMain(page = 1, limit = 50) {
+    try {
+      const offset = (page - 1) * limit;
+
+      // Get total count
+      const total = await this.prisma.turnusGroupsName.count();
+
+      // Get paginated data
+      const data = await this.prisma.turnusGroupsName.findMany({
+        skip: offset,
+        take: limit,
+        orderBy: { id: 'asc' },
+      });
+
+      return {
+        data,
+        total,
+        page,
+        limit,
+      };
+    } catch (error) {
+      console.error('Greška pri učitavanju grupa turnusa iz naše baze:', error);
+      throw new InternalServerErrorException(
+        `Greška pri učitavanju podataka: ${error.message}`,
+      );
+    }
+  }
+
+  async getAllAssignMain(groupId?: number, page = 1, limit = 50) {
+    try {
+      const offset = (page - 1) * limit;
+
+      const where = groupId ? { groupId } : {};
+
+      // Get total count
+      const total = await this.prisma.turnusGroupsAssign.count({ where });
+
+      // Get paginated data
+      const data = await this.prisma.turnusGroupsAssign.findMany({
+        where,
+        skip: offset,
+        take: limit,
+        orderBy: { turnusId: 'asc' },
+      });
+
+      return {
+        data,
+        total,
+        page,
+        limit,
+      };
+    } catch (error) {
+      console.error('Greška pri učitavanju dodela turnusa iz naše baze:', error);
+      throw new InternalServerErrorException(
+        `Greška pri učitavanju podataka: ${error.message}`,
+      );
+    }
+  }
+
+  async getAllDaysMain(groupId?: number, page = 1, limit = 50) {
+    try {
+      const offset = (page - 1) * limit;
+
+      let where = {};
+
+      // Ako je groupId prosleđen, treba filtrirati preko turnus_groups_assign tabele
+      if (groupId) {
+        // Prvo pronađi sve turnusId koji pripadaju ovoj grupi
+        const assignedTurnusi = await this.prisma.turnusGroupsAssign.findMany({
+          where: { groupId },
+          select: { turnusId: true },
+        });
+
+        const turnusIds = assignedTurnusi.map(a => a.turnusId);
+        where = { turnusId: { in: turnusIds } };
+      }
+
+      // Get total count
+      const total = await this.prisma.turnusDays.count({ where });
+
+      // Get paginated data
+      const data = await this.prisma.turnusDays.findMany({
+        where,
+        skip: offset,
+        take: limit,
+        orderBy: { turnusId: 'asc' },
+      });
+
+      return {
+        data,
+        total,
+        page,
+        limit,
+      };
+    } catch (error) {
+      console.error('Greška pri učitavanju dana turnusa iz naše baze:', error);
+      throw new InternalServerErrorException(
+        `Greška pri učitavanju podataka: ${error.message}`,
+      );
+    }
+  }
+
   // ========== SINHRONIZACIJA ==========
 
   async syncAllFromTicketing(userId: number) {
