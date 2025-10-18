@@ -226,7 +226,7 @@ export class UsersController {
   }
 
   @Post('sync-settings')
-  @RequirePermissions('users:create')
+  @RequirePermissions('users.groups:create')
   @ApiOperation({ summary: 'Update sync role settings' })
   @ApiResponse({
     status: 200,
@@ -237,7 +237,7 @@ export class UsersController {
   }
 
   @Post('sync-legacy')
-  @RequirePermissions('users:create')
+  @RequirePermissions('users.groups:create')
   @ApiOperation({ summary: 'Sync users from legacy database' })
   @ApiResponse({
     status: 200,
@@ -248,7 +248,7 @@ export class UsersController {
   }
 
   @Post('sync-legacy-batch')
-  @RequirePermissions('users:create')
+  @RequirePermissions('users.groups:create')
   @ApiOperation({ summary: 'Sync users from legacy database in batches with progress tracking via SSE' })
   @ApiResponse({
     status: 200,

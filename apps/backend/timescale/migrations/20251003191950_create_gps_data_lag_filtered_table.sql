@@ -202,12 +202,11 @@ GROUP BY DATE(time AT TIME ZONE 'Europe/Belgrade'), vehicle_id, garage_no;
 
 -- Podesi kompresiju za uštedu prostora
 -- NAPOMENA: vehicle_id je u segmentby, pa ne može biti u orderby
--- VAŽNO: Koristimo običnu compression (NE columnstore) jer ALTER COLUMN ne radi sa columnstore
+-- Omogući kompresiju
 ALTER TABLE gps_data_lag_filtered SET (
     timescaledb.compress,
     timescaledb.compress_orderby = 'time DESC',
-    timescaledb.compress_segmentby = 'vehicle_id',
-    timescaledb.compress_columnstore = false
+    timescaledb.compress_segmentby = 'vehicle_id'
 );
 
 -- Kompresuj chunk-ove starije od 30 dana

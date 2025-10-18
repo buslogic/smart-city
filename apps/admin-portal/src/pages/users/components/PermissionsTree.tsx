@@ -157,6 +157,11 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
       if (menuOrder === 302020000000) return 'Analitika vozila';
       if (menuOrder === 302030000000) return 'GPS Sync';
       if (menuOrder === 302040000000) return 'Karton Vozača';
+      if (menuOrder === 302050000000) return 'Planiranje';
+
+      // Četvrti nivo - Planiranje (pod Dispečerskim modulom)
+      if (menuOrder === 302050010000) return 'Raspored';
+      if (menuOrder === 302050020000) return 'Default Turnusa';
 
       // Treći nivo - Bezbednost i Analiza
       if (menuOrder === 303010000000) return 'Agresivna vožnja';
@@ -167,17 +172,20 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
       if (menuOrder === 304010000000) return 'TimescaleDB';
 
       // Drugi nivo - Podešavanje
-      if (menuOrder === 401000000000) return 'Opšte informacije';
+      if (menuOrder === 401000000000) return 'Opšta'; // Folder
       if (menuOrder === 402000000000) return 'API Ključevi';
-      if (menuOrder === 403000000000) return 'Email šabloni';
 
-      // Treći nivo - Settings pod-opcije
-      if (menuOrder >= 401010000000 && menuOrder < 401020000000) return 'Informacije o Kompaniji';
-      if (menuOrder >= 401020000000 && menuOrder < 401030000000) return 'Legacy Baze';
-      if (menuOrder >= 401030000000 && menuOrder < 401040000000) return 'Legacy Tabele';
-      if (menuOrder >= 401040000000 && menuOrder < 401050000000) return 'Email Šabloni';
-      if (menuOrder >= 401050000000 && menuOrder < 401060000000) return 'API Podešavanja';
-      if (menuOrder >= 401060000000 && menuOrder < 401070000000) return 'Sistemska Podešavanja';
+      // Treći nivo - Opšta pod-grupe (4. nivo u hijerarhiji)
+      if (menuOrder === 401010000000) return 'Informacije o Kompaniji';
+      if (menuOrder === 401020000000) return 'Legacy Baze';
+      if (menuOrder === 401030000000) return 'Legacy Tabele';
+      if (menuOrder === 401040000000) return 'Email Šabloni';
+
+      // Četvrti nivo - Pojedinačne permisije
+      if (menuOrder >= 401010000001 && menuOrder < 401010999999) return 'Informacije o Kompaniji';
+      if (menuOrder >= 401020000001 && menuOrder < 401020999999) return 'Legacy Baze';
+      if (menuOrder >= 401030000001 && menuOrder < 401030999999) return 'Legacy Tabele';
+      if (menuOrder >= 401040000001 && menuOrder < 401040999999) return 'Email Šabloni';
 
       // Fallback za permisije - koristi resource ili description
       const permission = allPermissions.find(p => p.menuOrder === menuOrder);
@@ -295,6 +303,10 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
                              permission.resource.includes('.roles') ||
                              permission.resource.includes('.groups') ||
                              permission.resource.includes('.driver_card') ||
+                             permission.resource.includes('.schedule') ||
+                             // Legacy databases i tables - SVE akcije (.read, .create, .update, .delete) su meni opcije
+                             (permission.resource === 'legacy_databases' && ['read', 'create', 'update', 'delete'].includes(permission.action)) ||
+                             (permission.resource === 'legacy_tables' && ['read', 'create', 'update', 'delete'].includes(permission.action)) ||
                              permission.action === 'view' && (
                                permission.resource.endsWith('.administration') ||
                                permission.resource.endsWith('.management') ||
@@ -307,8 +319,6 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
                                permission.resource.startsWith('settings.') ||
                                permission.resource === 'api_settings' ||
                                permission.resource === 'system_settings' ||
-                               permission.resource === 'legacy_databases' ||
-                               permission.resource === 'legacy_tables' ||
                                // Transport related menu options (treći nivo)
                                permission.resource === 'vehicles' ||
                                permission.resource.startsWith('vehicles.') ||
@@ -316,6 +326,7 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
                                permission.resource === 'dispatcher.driver_card' ||
                                permission.resource.startsWith('safety.') ||
                                permission.resource.startsWith('maintenance.') ||
+                               permission.resource.startsWith('planning.') ||
                                permission.resource.startsWith('gps.') ||
                                permission.resource.startsWith('legacy.') ||
                                permission.resource === 'system'
