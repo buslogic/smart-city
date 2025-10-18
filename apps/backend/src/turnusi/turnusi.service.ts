@@ -375,46 +375,104 @@ export class TurnusiService {
   ) {
     try {
       const offset = (page - 1) * limit;
-      const where: Prisma.ChangesCodesToursWhereInput = {};
 
-      // Filter by groupId (preko JOIN sa turnus_groups_assign)
+      // Koristimo raw SQL sa JOIN da izbegnemo MySQL "too many placeholders" grešku
       if (groupId) {
-        const assignedTurnusi = await this.prisma.turnusGroupsAssign.findMany({
-          where: { groupId },
-          select: { turnusId: true },
+        // Build WHERE clause za lineNumber
+        const lineFilter = lineNumber
+          ? Prisma.sql`AND cct.line_no = ${lineNumber}`
+          : Prisma.empty;
+
+        // Count query sa JOIN
+        const countResult = await this.prisma.$queryRaw<[{ count: bigint }]>`
+          SELECT COUNT(DISTINCT cct.id) as count
+          FROM changes_codes_tours cct
+          INNER JOIN turnus_groups_assign tga ON cct.turnus_id = tga.turnus_id
+          WHERE tga.group_id = ${groupId}
+          ${lineFilter}
+        `;
+
+        const total = Number(countResult[0].count);
+
+        // Data query sa JOIN
+        const rawData = await this.prisma.$queryRaw<any[]>`
+          SELECT DISTINCT cct.*
+          FROM changes_codes_tours cct
+          INNER JOIN turnus_groups_assign tga ON cct.turnus_id = tga.turnus_id
+          WHERE tga.group_id = ${groupId}
+          ${lineFilter}
+          ORDER BY cct.turnus_id ASC, cct.start_time ASC
+          LIMIT ${limit} OFFSET ${offset}
+        `;
+
+        // Mapiranje snake_case → camelCase za frontend
+        // Konvertujemo BigInt u Number da bi moglo da se serijalizuje u JSON
+        const data = rawData.map((row) => ({
+          id: Number(row.id),
+          turnusId: Number(row.turnus_id),
+          turnusName: row.turnus_name,
+          lineNo: row.line_no,
+          startTime: row.start_time,
+          direction: Number(row.direction),
+          duration: row.duration,
+          centralPoint: row.central_point,
+          changeCode: Number(row.change_code),
+          jobId: Number(row.job_id),
+          newStartTime: row.new_start_time,
+          newDuration: row.new_duration,
+          startStation: Number(row.start_station),
+          endStation: Number(row.end_station),
+          dayNumber: Number(row.day_number),
+          lineTypeId: Number(row.line_type_id),
+          rezijski: row.rezijski,
+          printId: row.print_id,
+          betweenRez: Number(row.between_rez),
+          busNumber: Number(row.bus_number),
+          startStationId: Number(row.start_station_id),
+          endStationId: Number(row.end_station_id),
+          changeTime: row.change_time,
+          changeUser: row.change_user,
+          active: Number(row.active),
+          firstDayDurationPart: row.first_day_duration_part,
+          secondDayDurationPart: row.second_day_duration_part,
+          customId: row.custom_id,
+          transportId: row.transport_id,
+          departureNumber: Number(row.departure_number),
+          shiftNumber: Number(row.shift_number),
+          turageNo: Number(row.turage_no),
+          departureNoInTurage: Number(row.departure_no_in_turage),
+        }));
+
+        return {
+          data,
+          total,
+          page,
+          limit,
+        };
+      } else {
+        // Bez groupId filtera, koristimo standardni Prisma query
+        const where: Prisma.ChangesCodesToursWhereInput = {};
+
+        if (lineNumber) {
+          where.lineNo = lineNumber;
+        }
+
+        const total = await this.prisma.changesCodesTours.count({ where });
+
+        const data = await this.prisma.changesCodesTours.findMany({
+          where,
+          skip: offset,
+          take: limit,
+          orderBy: [{ turnusId: 'asc' }, { startTime: 'asc' }],
         });
 
-        const turnusIds = assignedTurnusi.map((a) => a.turnusId);
-        if (turnusIds.length > 0) {
-          where.turnusId = { in: turnusIds };
-        } else {
-          // Ako nema dodeljenih turnusa za ovu grupu, vrati prazno
-          return { data: [], total: 0, page, limit };
-        }
+        return {
+          data,
+          total,
+          page,
+          limit,
+        };
       }
-
-      // Filter by lineNumber
-      if (lineNumber) {
-        where.lineNo = lineNumber;
-      }
-
-      // Get total count
-      const total = await this.prisma.changesCodesTours.count({ where });
-
-      // Get paginated data
-      const data = await this.prisma.changesCodesTours.findMany({
-        where,
-        skip: offset,
-        take: limit,
-        orderBy: [{ turnusId: 'asc' }, { startTime: 'asc' }],
-      });
-
-      return {
-        data,
-        total,
-        page,
-        limit,
-      };
     } catch (error) {
       console.error('Greška pri učitavanju changes_codes_tours iz naše baze:', error);
       throw new InternalServerErrorException(
