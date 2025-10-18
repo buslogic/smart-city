@@ -1,11 +1,35 @@
 import { api } from './api';
 
 export interface SyncResultDetail {
-  deleted: number;
-  created: number;
+  upserted: number; // Created + Updated (UPSERT approach)
   skipped: number;
   errors: number;
   totalProcessed: number;
+}
+
+export interface TurnusSyncLog {
+  id: number;
+  syncId: string;
+  groupId: number;
+  status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'abandoned';
+  totalRecords: number;
+  processedRecords: number;
+  upsertedRecords: number;
+  errorRecords: number;
+  lastProcessedTurnusId: number | null;
+  lastProcessedBatch: number;
+  startedAt: string;
+  completedAt: string | null;
+  errorMessage: string | null;
+  userId: number;
+  createdAt: string;
+  updatedAt: string;
+  user?: {
+    id: number;
+    email: string;
+    firstName: string;
+    lastName: string;
+  };
 }
 
 export interface PaginatedResponse<T> {
@@ -128,6 +152,18 @@ class TurnusiService {
     return response.data;
   }
 
+  /**
+   * Start sync asynchronously and get syncId immediately for real-time tracking
+   */
+  async syncFromTicketingAsync(
+    groupId: number,
+  ): Promise<{ syncId: string; message: string }> {
+    const response = await api.post('/api/turnusi/sync-ticketing-async', {
+      groupId,
+    });
+    return response.data;
+  }
+
   // ========== GLAVNI SERVER (NAŠA BAZA) ==========
 
   async getAllChangesCodesMain(
@@ -146,6 +182,28 @@ class TurnusiService {
     const response = await api.get('/api/turnusi/main/changes-codes', {
       params,
     });
+    return response.data;
+  }
+
+  // ========== SYNC PROGRESS TRACKING ==========
+
+  /**
+   * Get sync status by syncId for real-time progress monitoring
+   */
+  async getSyncStatus(syncId: string): Promise<TurnusSyncLog> {
+    const response = await api.get(`/api/turnusi/sync-status/${syncId}`);
+    return response.data;
+  }
+
+  /**
+   * Get last incomplete sync for a group (if exists)
+   */
+  async getIncompleteSyncForGroup(
+    groupId: number,
+  ): Promise<TurnusSyncLog | null> {
+    const response = await api.get(
+      `/api/turnusi/sync-status/group/${groupId}/incomplete`,
+    );
     return response.data;
   }
 }

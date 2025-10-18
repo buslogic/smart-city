@@ -62,7 +62,10 @@ export class TurnusiController {
 
   @Post('sync-ticketing')
   @ApiOperation({
-    summary: 'Sinhronizacija Changes Codes Tours sa Tiketing servera',
+    summary:
+      'Sinhronizacija Changes Codes Tours sa Tiketing servera (sa resume capability)',
+    description:
+      'Automatski detektuje nedovršene sync-ove i pokreće novi. UPSERT pristup osigurava konzistentnost podataka.',
   })
   @ApiResponse({
     status: 200,
@@ -70,8 +73,7 @@ export class TurnusiController {
     schema: {
       type: 'object',
       properties: {
-        deleted: { type: 'number' },
-        created: { type: 'number' },
+        upserted: { type: 'number' },
         skipped: { type: 'number' },
         errors: { type: 'number' },
         totalProcessed: { type: 'number' },
@@ -85,7 +87,66 @@ export class TurnusiController {
     @Req() req: Request,
   ) {
     const userId = (req.user as any)?.id || 1;
-    return this.turnusiService.syncChangesCodesFromTicketing(dto.groupId, userId);
+    return this.turnusiService.resumeOrStartSync(dto.groupId, userId);
+  }
+
+  @Post('sync-ticketing-async')
+  @ApiOperation({
+    summary:
+      'Pokreće sinhronizaciju asinhrono i vraća syncId odmah za real-time praćenje',
+    description:
+      'Sync se izvršava u pozadini. Koristi vraćeni syncId za praćenje progresa preko /sync-status/:syncId endpoint-a.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Sync pokrenut, vraćen syncId',
+    schema: {
+      type: 'object',
+      properties: {
+        syncId: { type: 'string' },
+        message: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Legacy baza nije pronađena' })
+  @RequirePermissions('transport.administration.turnusi.ticketing:sync')
+  async syncFromTicketingAsync(
+    @Body() dto: SyncChangesCodesToursDto,
+    @Req() req: Request,
+  ) {
+    const userId = (req.user as any)?.id || 1;
+    return this.turnusiService.startSyncAsync(dto.groupId, userId);
+  }
+
+  @Get('sync-status/:syncId')
+  @ApiOperation({
+    summary: 'Provera statusa sinhronizacije',
+    description:
+      'Dohvata detalje o specifičnom sync-u po syncId. Koristi se za real-time praćenje progresa.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Status sinhronizacije',
+  })
+  @ApiResponse({ status: 404, description: 'Sync log nije pronađen' })
+  @RequirePermissions('transport.administration.turnusi.ticketing:view')
+  getSyncStatus(@Param('syncId') syncId: string) {
+    return this.turnusiService.getSyncStatus(syncId);
+  }
+
+  @Get('sync-status/group/:groupId/incomplete')
+  @ApiOperation({
+    summary: 'Provera nedovršenih sync-ova za grupu',
+    description:
+      'Dohvata poslednji nedovršeni sync za grupu (ako postoji). Koristi se za detekciju prekinutih sync-ova.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Nedovršeni sync ili null',
+  })
+  @RequirePermissions('transport.administration.turnusi.ticketing:view')
+  getIncompleteSyncForGroup(@Param('groupId') groupId: string) {
+    return this.turnusiService.getLastIncompleteSyncForGroup(parseInt(groupId));
   }
 
   // ========== GLAVNI SERVER ENDPOINTS (NAŠA BAZA) ==========

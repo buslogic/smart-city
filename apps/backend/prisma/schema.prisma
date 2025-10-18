@@ -34,6 +34,7 @@ model User {
   dashboardConfig          UserDashboardConfig?
   roles                    UserRole[]
   vehicleSyncLogs          VehicleSyncLog[]
+  turnusSyncLogs           TurnusSyncLog[]            @relation("TurnusSyncLogs")
   driverDefaults           TurnusDefaultPerDriver[]   @relation("DriverDefaults")
   createdDefaults          TurnusDefaultPerDriver[]   @relation("DefaultCreator")
   updatedDefaults          TurnusDefaultPerDriver[]   @relation("DefaultUpdater")
@@ -1492,4 +1493,34 @@ model DateShedule {
   @@index([startDate, tourId], map: "start_date2")
   @@index([lastModified], map: "last_modified")
   @@map("date_shedule")
+}
+
+// ========== TURNUS SYNC TRACKING MODELS ==========
+
+model TurnusSyncLog {
+  id                    Int       @id @default(autoincrement())
+  syncId                String    @unique @map("sync_id") /// Unique identifier: turnus-sync-{groupId}-{timestamp}
+  groupId               Int       @map("group_id") /// Turnus group ID being synced
+  status                String    @default("pending") /// pending, in_progress, completed, failed
+  totalRecords          Int       @default(0) @map("total_records")
+  processedRecords      Int       @default(0) @map("processed_records")
+  upsertedRecords       Int       @default(0) @map("upserted_records")
+  errorRecords          Int       @default(0) @map("error_records")
+  lastProcessedTurnusId Int?      @map("last_processed_turnus_id") /// For resume capability
+  lastProcessedBatch    Int       @default(0) @map("last_processed_batch") /// Last completed batch number
+  startedAt             DateTime  @map("started_at")
+  completedAt           DateTime? @map("completed_at")
+  errorMessage          String?   @map("error_message") @db.Text
+  userId                Int       @map("user_id")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  user User @relation("TurnusSyncLogs", fields: [userId], references: [id])
+
+  @@index([syncId])
+  @@index([groupId])
+  @@index([status])
+  @@index([userId])
+  @@index([startedAt])
+  @@map("turnus_sync_logs")
 }

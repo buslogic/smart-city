@@ -10,18 +10,22 @@ import {
   App,
   Select,
   Spin,
+  Tag,
 } from 'antd';
 import {
   ShoppingOutlined,
   SyncOutlined,
   ExclamationCircleOutlined,
+  WarningOutlined,
 } from '@ant-design/icons';
 import { usePermissions } from '../../../../../hooks/usePermissions';
 import {
   turnusiService,
   SyncResultDetail,
   TurnusGroup,
+  TurnusSyncLog,
 } from '../../../../../services/turnusi.service';
+import SyncProgressTracker from './SyncProgressTracker';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -34,12 +38,22 @@ const TicketingServerTab: React.FC = () => {
   const [selectedGroupId, setSelectedGroupId] = useState<number | undefined>(
     undefined,
   );
+  const [activeSyncId, setActiveSyncId] = useState<string | null>(null);
+  const [incompleteSync, setIncompleteSync] = useState<TurnusSyncLog | null>(null);
   const { hasPermission } = usePermissions();
   const { modal, message } = App.useApp();
 
   useEffect(() => {
     loadGroups();
   }, []);
+
+  useEffect(() => {
+    if (selectedGroupId) {
+      checkForIncompleteSync(selectedGroupId);
+    } else {
+      setIncompleteSync(null);
+    }
+  }, [selectedGroupId]);
 
   const loadGroups = async () => {
     setLoading(true);
@@ -51,6 +65,15 @@ const TicketingServerTab: React.FC = () => {
       message.error('Greška pri učitavanju grupa turnusa');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const checkForIncompleteSync = async (groupId: number) => {
+    try {
+      const incomplete = await turnusiService.getIncompleteSyncForGroup(groupId);
+      setIncompleteSync(incomplete);
+    } catch (error: any) {
+      console.error('Greška pri proveri nedovršenih sync-ova:', error);
     }
   };
 
@@ -78,11 +101,19 @@ const TicketingServerTab: React.FC = () => {
           </p>
           <p>
             <Text type="warning">
-              Napomena: Postojeći podaci za ovu grupu će biti obrisani i
-              zamenjeni novim podacima iz legacy baze (tabela
-              changes_codes_tours).
+              Napomena: UPSERT pristup - postojeći podaci će biti ažurirani sa
+              novim podacima iz legacy baze (tabela changes_codes_tours).
             </Text>
           </p>
+          {incompleteSync && (
+            <Alert
+              message="Nedovršena sinhronizacija pronađena!"
+              description={`Poslednja sinhronizacija je prekinuta na ${Math.round((incompleteSync.processedRecords / incompleteSync.totalRecords) * 100)}% progresa. Nova sinhronizacija će nastaviti sa UPSERT pristupom.`}
+              type="warning"
+              showIcon
+              style={{ marginTop: 12 }}
+            />
+          )}
         </div>
       ),
       okText: 'Da, pokreni sinhronizaciju',
@@ -91,23 +122,43 @@ const TicketingServerTab: React.FC = () => {
       onOk: async () => {
         setSyncing(true);
         setSyncResult(null);
+        setActiveSyncId(null);
         try {
-          const result = await turnusiService.syncFromTicketing(selectedGroupId);
-          setSyncResult(result);
-          message.success(
-            `Sinhronizacija uspešna! Obrisano: ${result.deleted}, Kreirano: ${result.created}`,
-          );
+          const response = await turnusiService.syncFromTicketingAsync(selectedGroupId);
+          setActiveSyncId(response.syncId);
+          message.success('Sinhronizacija pokrenuta! Pratite progres u realnom vremenu...');
         } catch (error: any) {
-          console.error('Greška pri sinhronizaciji:', error);
+          console.error('Greška pri pokretanju sinhronizacije:', error);
           message.error(
             error.response?.data?.message ||
-              'Greška pri sinhronizaciji podataka',
+              'Greška pri pokretanju sinhronizacije',
           );
-        } finally {
           setSyncing(false);
         }
       },
     });
+  };
+
+  const handleSyncComplete = (syncLog: TurnusSyncLog) => {
+    setSyncing(false);
+    setActiveSyncId(null);
+    setSyncResult({
+      upserted: syncLog.upsertedRecords,
+      skipped: 0,
+      errors: syncLog.errorRecords,
+      totalProcessed: syncLog.totalRecords,
+    });
+    message.success(
+      `Sinhronizacija uspešno završena! Upsertovano: ${syncLog.upsertedRecords.toLocaleString()} rekorda`,
+    );
+    checkForIncompleteSync(selectedGroupId!);
+  };
+
+  const handleSyncError = (error: string) => {
+    setSyncing(false);
+    setActiveSyncId(null);
+    message.error(`Greška tokom sinhronizacije: ${error}`);
+    checkForIncompleteSync(selectedGroupId!);
   };
 
   return (
@@ -170,7 +221,46 @@ const TicketingServerTab: React.FC = () => {
         </Row>
       </Card>
 
-      {syncResult && (
+      {incompleteSync && !activeSyncId && (
+        <Card className="mt-4">
+          <Alert
+            message="Nedovršena sinhronizacija pronađena!"
+            description={
+              <div>
+                <p>
+                  Poslednja sinhronizacija za grupu <Text strong>{selectedGroupId}</Text> je prekinuta:
+                </p>
+                <ul style={{ marginTop: 8, marginBottom: 0 }}>
+                  <li>Progres: <Text strong>{Math.round((incompleteSync.processedRecords / incompleteSync.totalRecords) * 100)}%</Text> ({incompleteSync.processedRecords.toLocaleString()} / {incompleteSync.totalRecords.toLocaleString()} rekorda)</li>
+                  <li>Pokrenuto: <Text strong>{new Date(incompleteSync.startedAt).toLocaleString('sr-RS')}</Text></li>
+                </ul>
+                <p style={{ marginTop: 12, marginBottom: 0 }}>
+                  <Text type="warning">
+                    Nova sinhronizacija će koristiti UPSERT pristup i neće izgubiti postojeće podatke.
+                  </Text>
+                </p>
+              </div>
+            }
+            type="warning"
+            icon={<WarningOutlined />}
+            showIcon
+            closable
+            onClose={() => setIncompleteSync(null)}
+          />
+        </Card>
+      )}
+
+      {activeSyncId && (
+        <div className="mt-4">
+          <SyncProgressTracker
+            syncId={activeSyncId}
+            onComplete={handleSyncComplete}
+            onError={handleSyncError}
+          />
+        </div>
+      )}
+
+      {syncResult && !activeSyncId && (
         <Card className="mt-4">
           <Alert
             message="Rezultati sinhronizacije"
@@ -181,12 +271,8 @@ const TicketingServerTab: React.FC = () => {
                   <Text strong>Changes Codes Tours (changes_codes_tours):</Text>
                   <ul style={{ marginTop: 4, marginBottom: 8 }}>
                     <li>
-                      Obrisano starih rekorda:{' '}
-                      <Text strong>{syncResult.deleted}</Text>
-                    </li>
-                    <li>
-                      Kreirano novih rekorda:{' '}
-                      <Text strong>{syncResult.created}</Text>
+                      Upsertovano rekorda (Created + Updated):{' '}
+                      <Text strong>{syncResult.upserted.toLocaleString()}</Text>
                     </li>
                     <li>
                       Preskočeno: <Text strong>{syncResult.skipped}</Text>
@@ -196,7 +282,7 @@ const TicketingServerTab: React.FC = () => {
                     </li>
                     <li>
                       Ukupno obrađeno:{' '}
-                      <Text strong>{syncResult.totalProcessed}</Text>
+                      <Text strong>{syncResult.totalProcessed.toLocaleString()}</Text>
                     </li>
                   </ul>
                 </div>

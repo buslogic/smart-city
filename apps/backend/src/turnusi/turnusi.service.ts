@@ -9,11 +9,15 @@ import { createConnection } from 'mysql2/promise';
 import { Prisma } from '@prisma/client';
 
 export interface SyncResult {
-  deleted: number;
-  created: number;
+  upserted: number; // Created + Updated rekorda (UPSERT pristup)
   skipped: number;
   errors: number;
   totalProcessed: number;
+}
+
+export interface SyncStartResponse {
+  syncId: string;
+  message: string;
 }
 
 @Injectable()
@@ -492,11 +496,11 @@ export class TurnusiService {
     );
     const overallStartTime = Date.now();
 
-    let deleted = 0;
-    let created = 0;
+    let upserted = 0; // Created + Updated rekorda
     let skipped = 0;
     let errors = 0;
     let totalProcessed = 0;
+    let syncId: string | null = null;
 
     try {
       const legacyDb = await this.prisma.legacyDatabase.findFirst({
@@ -529,7 +533,7 @@ export class TurnusiService {
           console.warn(
             '⚠️ Tabela "changes_codes_tours" ne postoji u legacy bazi',
           );
-          return { deleted: 0, created: 0, skipped: 0, errors: 0, totalProcessed: 0 };
+          return { upserted: 0, skipped: 0, errors: 0, totalProcessed: 0 };
         }
 
         // Dobij sve turnus_name vrednosti za odabranu grupu
@@ -549,17 +553,15 @@ export class TurnusiService {
           console.warn(
             `⚠️ Nema turnusa za grupu ${groupId} u changes_codes_tours`,
           );
-          return { deleted: 0, created: 0, skipped: 0, errors: 0, totalProcessed: 0 };
+          return { upserted: 0, skipped: 0, errors: 0, totalProcessed: 0 };
         }
 
         console.log(
           `📋 Found ${turnusNames.length} distinct turnus_name(s) for group ${groupId}`,
         );
 
-        // DELETE postojećih za ovu grupu - BATCH DELETE za bolju performansu
-        console.log('🗑️  Deleting existing records in batches...');
-        deleted = await this.batchDeleteChangesCodes(turnusNames);
-        console.log(`🗑️  Deleted ${deleted} existing record(s)`);
+        // UPSERT pristup - ne brišemo postojeće podatke, nego ažuriramo
+        console.log('🔄 Starting UPSERT sync (safe sync without data loss)...');
 
         // SELECT podataka iz legacy baze
         const placeholders = turnusNames.map(() => '?').join(',');
@@ -571,69 +573,80 @@ export class TurnusiService {
 
         console.log(`📊 Found ${totalProcessed} changes_codes_tours record(s)`);
 
+        // Create sync log entry for progress tracking
+        syncId = await this.createSyncLog(groupId, userId, totalProcessed);
+
         if (legacyRecords.length === 0) {
           console.warn(
             `⚠️ Nema podataka u tabeli changes_codes_tours za odabranu grupu`,
           );
+
+          // Mark sync as completed even though there are no records
+          if (syncId) {
+            await this.updateSyncProgress(syncId, {
+              status: 'completed',
+              processedRecords: 0,
+              upsertedRecords: 0,
+            });
+          }
+
           const totalDuration = ((Date.now() - overallStartTime) / 1000).toFixed(
             2,
           );
           return {
-            deleted,
-            created: 0,
+            upserted: 0,
             skipped: 0,
             errors: 0,
             totalProcessed: 0,
           };
         }
 
-        // Disable indexes for faster bulk insert (except PRIMARY KEY)
-        console.log('🔧 Disabling indexes for faster bulk insert...');
-        await this.prisma.$executeRawUnsafe(
-          'ALTER TABLE changes_codes_tours DISABLE KEYS'
-        );
+        // PARALLEL WORKERS - Optimized for MySQL stability
+        // Smanjeni workers i batch size za stabilnost (850k rekorda)
+        const NUM_WORKERS = 2; // Smanjeno sa 4 → 2
+        const BATCH_SIZE = 500; // Smanjeno sa 2000 → 500
+        const BATCH_DELAY_MS = 200; // Delay između batch-eva za MySQL stabilnost
 
-        try {
-          // PARALLEL WORKERS - Split dataset into chunks for concurrent processing
-          const NUM_WORKERS = 4;
-          const BATCH_SIZE = 2000;
+        const chunkSize = Math.ceil(legacyRecords.length / NUM_WORKERS);
+        console.log(`🚀 Starting ${NUM_WORKERS} parallel workers, ${chunkSize} records per worker`);
 
-          const chunkSize = Math.ceil(legacyRecords.length / NUM_WORKERS);
-          console.log(`🚀 Starting ${NUM_WORKERS} parallel workers, ${chunkSize} records per worker`);
+        // Create worker promises
+        const workerPromises = Array.from({ length: NUM_WORKERS }, (_, workerIndex) => {
+          const start = workerIndex * chunkSize;
+          const end = Math.min(start + chunkSize, legacyRecords.length);
+          const workerRecords = legacyRecords.slice(start, end);
 
-          // Create worker promises
-          const workerPromises = Array.from({ length: NUM_WORKERS }, (_, workerIndex) => {
-            const start = workerIndex * chunkSize;
-            const end = Math.min(start + chunkSize, legacyRecords.length);
-            const workerRecords = legacyRecords.slice(start, end);
+          if (workerRecords.length === 0) return Promise.resolve({ inserted: 0, errors: 0 });
 
-            if (workerRecords.length === 0) return Promise.resolve({ inserted: 0, errors: 0 });
-
-            return this.parallelInsertWorker(
-              workerRecords,
-              workerIndex + 1,
-              BATCH_SIZE,
-              totalProcessed
-            );
-          });
-
-          // Wait for all workers to complete
-          const workerResults = await Promise.all(workerPromises);
-
-          // Aggregate results
-          workerResults.forEach(result => {
-            created += result.inserted;
-            errors += result.errors;
-          });
-
-          console.log(`✅ All ${NUM_WORKERS} workers completed successfully`);
-        } finally {
-          // Re-enable indexes - this will rebuild them
-          console.log('🔧 Re-enabling indexes (rebuilding in background)...');
-          await this.prisma.$executeRawUnsafe(
-            'ALTER TABLE changes_codes_tours ENABLE KEYS'
+          return this.parallelInsertWorker(
+            workerRecords,
+            workerIndex + 1,
+            BATCH_SIZE,
+            BATCH_DELAY_MS, // Prosleđujemo delay
+            totalProcessed,
+            syncId // Prosleđujemo syncId za progress tracking
           );
-          console.log('✅ Indexes re-enabled successfully');
+        });
+
+        // Wait for all workers to complete
+        const workerResults = await Promise.all(workerPromises);
+
+        // Aggregate results
+        workerResults.forEach(result => {
+          upserted += result.inserted; // Changed: created → upserted
+          errors += result.errors;
+        });
+
+        console.log(`✅ All ${NUM_WORKERS} workers completed successfully`);
+
+        // Mark sync as completed
+        if (syncId) {
+          await this.updateSyncProgress(syncId, {
+            status: 'completed',
+            processedRecords: totalProcessed,
+            upsertedRecords: upserted,
+            errorRecords: errors,
+          });
         }
       } finally {
         await connection.end();
@@ -644,12 +657,22 @@ export class TurnusiService {
         `✅ Changes_codes_tours sync completed in ${totalDuration}s`,
       );
       console.log(
-        `   Deleted: ${deleted}, Created: ${created}, Skipped: ${skipped}, Errors: ${errors}`,
+        `   Upserted: ${upserted}, Skipped: ${skipped}, Errors: ${errors}`,
       );
 
-      return { deleted, created, skipped, errors, totalProcessed };
+      return { upserted, skipped, errors, totalProcessed };
     } catch (error) {
       console.error('❌ Changes_codes_tours sync failed:', error);
+
+      // Mark sync as failed
+      if (syncId) {
+        await this.updateSyncProgress(syncId, {
+          status: 'failed',
+          errorMessage: error.message,
+          errorRecords: errors,
+        });
+      }
+
       throw new InternalServerErrorException(
         `Greška pri sinhronizaciji changes_codes_tours: ${error.message}`,
       );
@@ -666,20 +689,39 @@ export class TurnusiService {
     records: any[],
     workerNum: number,
     batchSize: number,
+    batchDelayMs: number, // ✅ NOVO - delay između batch-eva
     totalRecords: number,
+    syncId: string | null, // ✅ NOVO - syncId za progress tracking
   ): Promise<{ inserted: number; errors: number }> {
     let inserted = 0;
     let errors = 0;
+    let batchNumber = 0;
 
     console.log(`👷 Worker ${workerNum}: Starting with ${records.length} records`);
 
     for (let i = 0; i < records.length; i += batchSize) {
       const batchStartTime = Date.now();
       const batch = records.slice(i, i + batchSize);
+      batchNumber++;
 
       try {
-        const result = await this.bulkInsertChangesCodes(batch);
+        // ✅ CHANGED: bulkInsertChangesCodes → upsertChangesCodesBatch
+        const result = await this.upsertChangesCodesBatch(batch);
         inserted += result.inserted;
+
+        // Update progress in database after each batch
+        if (syncId) {
+          const processedSoFar = Math.min(i + batchSize, records.length);
+          const lastTurnusId = batch[batch.length - 1]?.turnus_id;
+
+          await this.updateSyncProgress(syncId, {
+            processedRecords: processedSoFar,
+            upsertedRecords: inserted,
+            errorRecords: errors,
+            lastProcessedTurnusId: lastTurnusId,
+            lastProcessedBatch: batchNumber,
+          });
+        }
 
         const batchDuration = ((Date.now() - batchStartTime) / 1000).toFixed(2);
         const workerProgress = Math.min(i + batchSize, records.length);
@@ -692,69 +734,35 @@ export class TurnusiService {
           `❌ Worker ${workerNum} error at ${i}:`,
           error.message,
         );
+
+        // Update error count even on failure
+        if (syncId) {
+          await this.updateSyncProgress(syncId, {
+            errorRecords: errors,
+          });
+        }
       }
 
-      // Small delay to prevent overwhelming MySQL
-      await new Promise(resolve => setTimeout(resolve, 50));
+      // ✅ CHANGED: Parametrizovan delay umesto hardcoded 50ms
+      if (i + batchSize < records.length) {
+        await new Promise(resolve => setTimeout(resolve, batchDelayMs));
+      }
     }
 
     console.log(`✅ Worker ${workerNum}: Completed - Inserted ${inserted}, Errors ${errors}`);
     return { inserted, errors };
   }
 
-  // ========== BULK DELETE METHOD ==========
-
-  /**
-   * Batch DELETE za velike količine podataka - mnogo brže od pojedinačnog DELETE
-   * Briše u batch-evima od 2500 rekorda sa progress logging i delay-ima
-   */
-  private async batchDeleteChangesCodes(
-    turnusNames: string[],
-  ): Promise<number> {
-    let totalDeleted = 0;
-    const DELETE_BATCH_SIZE = 2500; // Optimized for balance between speed and stability
-    const DELAY_BETWEEN_DELETES_MS = 50; // Small delay to allow MySQL to breathe
-
-    // Pravljenje placeholders za IN klauzulu
-    const placeholders = turnusNames.map(() => '?').join(',');
-
-    // Brišemo u batch-evima dok ima šta da se briše
-    let deletedInBatch = 0;
-    let iteration = 0;
-
-    do {
-      const deleteSQL = `
-        DELETE FROM changes_codes_tours
-        WHERE turnus_name IN (${placeholders})
-        LIMIT ${DELETE_BATCH_SIZE}
-      `;
-
-      deletedInBatch = await this.prisma.$executeRawUnsafe(
-        deleteSQL,
-        ...turnusNames,
-      ) as number;
-
-      totalDeleted += deletedInBatch;
-      iteration++;
-
-      if (deletedInBatch > 0) {
-        console.log(
-          `🗑️  Batch ${iteration}: Deleted ${deletedInBatch} records (total: ${totalDeleted})`,
-        );
-
-        // Add delay between delete batches to prevent overwhelming MySQL
-        if (deletedInBatch === DELETE_BATCH_SIZE) {
-          await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_DELETES_MS));
-        }
-      }
-    } while (deletedInBatch === DELETE_BATCH_SIZE);
-
-    return totalDeleted;
-  }
+  // ========== batchDeleteChangesCodes metoda obrisana ==========
+  // Nije više potrebna jer koristimo UPSERT pristup umesto DELETE + INSERT
 
   // ========== BULK INSERT METHODS ==========
 
-  private async bulkInsertChangesCodes(
+  /**
+   * UPSERT pristup - zamena za bulkInsertChangesCodes
+   * Koristi ON DUPLICATE KEY UPDATE za sigurnu sinhronizaciju bez gubitka podataka
+   */
+  private async upsertChangesCodesBatch(
     records: any[],
   ): Promise<{ inserted: number }> {
     if (records.length === 0) {
@@ -800,7 +808,7 @@ export class TurnusiService {
       })
       .join(',\n');
 
-    const insertSQL = `
+    const upsertSQL = `
       INSERT INTO changes_codes_tours (
         turnus_id, turnus_name, line_no, start_time, direction, duration,
         central_point, change_code, job_id, new_start_time, new_duration,
@@ -810,9 +818,41 @@ export class TurnusiService {
         second_day_duration_part, custom_id, transport_id, departure_number,
         shift_number, turage_no, departure_no_in_turage
       ) VALUES ${values}
+      ON DUPLICATE KEY UPDATE
+        turnus_name = VALUES(turnus_name),
+        line_no = VALUES(line_no),
+        start_time = VALUES(start_time),
+        direction = VALUES(direction),
+        duration = VALUES(duration),
+        central_point = VALUES(central_point),
+        change_code = VALUES(change_code),
+        job_id = VALUES(job_id),
+        new_start_time = VALUES(new_start_time),
+        new_duration = VALUES(new_duration),
+        start_station = VALUES(start_station),
+        end_station = VALUES(end_station),
+        day_number = VALUES(day_number),
+        line_type_id = VALUES(line_type_id),
+        rezijski = VALUES(rezijski),
+        print_id = VALUES(print_id),
+        between_rez = VALUES(between_rez),
+        bus_number = VALUES(bus_number),
+        start_station_id = VALUES(start_station_id),
+        end_station_id = VALUES(end_station_id),
+        change_time = VALUES(change_time),
+        change_user = VALUES(change_user),
+        active = VALUES(active),
+        first_day_duration_part = VALUES(first_day_duration_part),
+        second_day_duration_part = VALUES(second_day_duration_part),
+        custom_id = VALUES(custom_id),
+        transport_id = VALUES(transport_id),
+        departure_number = VALUES(departure_number),
+        shift_number = VALUES(shift_number),
+        turage_no = VALUES(turage_no),
+        departure_no_in_turage = VALUES(departure_no_in_turage)
     `;
 
-    const result = await this.prisma.$executeRawUnsafe(insertSQL);
+    const result = await this.prisma.$executeRawUnsafe(upsertSQL);
     return { inserted: result as number };
   }
 
@@ -891,5 +931,393 @@ export class TurnusiService {
     const minutes = String(d.getMinutes()).padStart(2, '0');
     const seconds = String(d.getSeconds()).padStart(2, '0');
     return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  }
+
+  // ========== SYNC PROGRESS TRACKING METHODS ==========
+
+  /**
+   * Creates a new sync log entry at the start of sync
+   */
+  async createSyncLog(
+    groupId: number,
+    userId: number,
+    totalRecords: number,
+  ): Promise<string> {
+    const syncId = `sync_${groupId}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+    await this.prisma.turnusSyncLog.create({
+      data: {
+        syncId,
+        groupId,
+        userId,
+        status: 'in_progress',
+        totalRecords,
+        processedRecords: 0,
+        upsertedRecords: 0,
+        errorRecords: 0,
+        lastProcessedBatch: 0,
+        startedAt: new Date(),
+      },
+    });
+
+    console.log(`📝 Created sync log: ${syncId}`);
+    return syncId;
+  }
+
+  /**
+   * Updates sync progress in the database
+   */
+  async updateSyncProgress(
+    syncId: string,
+    updates: {
+      totalRecords?: number;
+      processedRecords?: number;
+      upsertedRecords?: number;
+      errorRecords?: number;
+      lastProcessedTurnusId?: number;
+      lastProcessedBatch?: number;
+      status?: string;
+      errorMessage?: string;
+    },
+  ): Promise<void> {
+    const updateData: any = {
+      ...updates,
+      updatedAt: new Date(),
+    };
+
+    // If marking as completed, set completedAt
+    if (updates.status === 'completed') {
+      updateData.completedAt = new Date();
+    }
+
+    await this.prisma.turnusSyncLog.update({
+      where: { syncId },
+      data: updateData,
+    });
+  }
+
+  /**
+   * Gets the current status of a sync log
+   */
+  async getSyncStatus(syncId: string) {
+    return await this.prisma.turnusSyncLog.findUnique({
+      where: { syncId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
+    });
+  }
+
+  /**
+   * Gets the last incomplete sync for a group (for resume capability)
+   */
+  async getLastIncompleteSyncForGroup(groupId: number) {
+    return await this.prisma.turnusSyncLog.findFirst({
+      where: {
+        groupId,
+        status: {
+          in: ['pending', 'in_progress'],
+        },
+      },
+      orderBy: {
+        startedAt: 'desc',
+      },
+    });
+  }
+
+  /**
+   * Resume or start sync - detects incomplete syncs and handles them gracefully
+   * Uses UPSERT approach to ensure data consistency even when resuming
+   */
+  async resumeOrStartSync(groupId: number, userId: number): Promise<SyncResult> {
+    // Check for incomplete sync
+    const incompleteSync = await this.getLastIncompleteSyncForGroup(groupId);
+
+    if (incompleteSync) {
+      console.log(`⚠️ Found incomplete sync: ${incompleteSync.syncId}`);
+      console.log(`   Started: ${incompleteSync.startedAt}`);
+      console.log(
+        `   Progress: ${incompleteSync.processedRecords}/${incompleteSync.totalRecords} (${Math.round((incompleteSync.processedRecords / incompleteSync.totalRecords) * 100)}%)`,
+      );
+
+      // Mark old sync as abandoned
+      await this.updateSyncProgress(incompleteSync.syncId, {
+        status: 'abandoned',
+        errorMessage: 'Sync was interrupted and a new sync was started',
+      });
+
+      console.log(`🔄 Starting new sync to replace abandoned one...`);
+      console.log(`   ✅ UPSERT approach ensures no data loss from interrupted sync`);
+    }
+
+    // Start fresh sync (UPSERT ensures data consistency - won't duplicate or lose data)
+    return await this.syncChangesCodesFromTicketing(groupId, userId);
+  }
+
+  /**
+   * Start sync asynchronously and return syncId immediately for real-time tracking
+   * Sync continues in background
+   */
+  async startSyncAsync(groupId: number, userId: number): Promise<SyncStartResponse> {
+    // Check for incomplete sync
+    const incompleteSync = await this.getLastIncompleteSyncForGroup(groupId);
+
+    if (incompleteSync) {
+      console.log(`⚠️ Found incomplete sync: ${incompleteSync.syncId}`);
+      console.log(`   Started: ${incompleteSync.startedAt}`);
+      console.log(
+        `   Progress: ${incompleteSync.processedRecords}/${incompleteSync.totalRecords} (${Math.round((incompleteSync.processedRecords / incompleteSync.totalRecords) * 100)}%)`,
+      );
+
+      // Mark old sync as abandoned
+      await this.updateSyncProgress(incompleteSync.syncId, {
+        status: 'abandoned',
+        errorMessage: 'Sync was interrupted and a new sync was started',
+      });
+
+      console.log(`🔄 Starting new sync to replace abandoned one...`);
+      console.log(`   ✅ UPSERT approach ensures no data loss from interrupted sync`);
+    }
+
+    // Create a temporary sync log to get syncId (we don't know totalRecords yet, will update in sync method)
+    const syncId = `sync_${groupId}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+    // Create initial sync log (totalRecords will be updated later when we know the count)
+    await this.prisma.turnusSyncLog.create({
+      data: {
+        syncId,
+        groupId,
+        userId,
+        status: 'in_progress',
+        totalRecords: 0, // Will be updated in syncChangesCodesFromTicketing
+        processedRecords: 0,
+        upsertedRecords: 0,
+        errorRecords: 0,
+        lastProcessedBatch: 0,
+        startedAt: new Date(),
+      },
+    });
+
+    // Start sync in background (don't await)
+    setImmediate(() => {
+      this.syncChangesCodesFromTicketingWithExistingLog(groupId, userId, syncId)
+        .then(() => {
+          console.log(`✅ Background sync completed for group ${groupId}`);
+        })
+        .catch((error) => {
+          console.error(`❌ Background sync failed for group ${groupId}:`, error);
+          // Mark sync as failed
+          this.updateSyncProgress(syncId, {
+            status: 'failed',
+            errorMessage: error.message,
+          }).catch(console.error);
+        });
+    });
+
+    return {
+      syncId,
+      message: `Sync started successfully for group ${groupId}. Use syncId to track progress.`,
+    };
+  }
+
+  /**
+   * Internal method - sync with existing log (used by startSyncAsync)
+   */
+  private async syncChangesCodesFromTicketingWithExistingLog(
+    groupId: number,
+    userId: number,
+    existingSyncId: string,
+  ): Promise<SyncResult> {
+    console.log(
+      `🔄 Starting Ticketing Server sync for changes_codes_tours (group_id=${groupId}) with existing syncId=${existingSyncId}...`,
+    );
+    const overallStartTime = Date.now();
+
+    let upserted = 0;
+    let skipped = 0;
+    let errors = 0;
+    let totalProcessed = 0;
+    const syncId = existingSyncId;
+
+    try {
+      const legacyDb = await this.prisma.legacyDatabase.findFirst({
+        where: { subtype: 'main_ticketing_database' },
+      });
+
+      if (!legacyDb) {
+        throw new NotFoundException(
+          'Legacy baza "Glavna Ticketing Baza" nije pronađena',
+        );
+      }
+
+      const decryptedPassword =
+        this.legacyDatabasesService.decryptPassword(legacyDb.password);
+
+      const connection = await createConnection({
+        host: legacyDb.host,
+        port: legacyDb.port,
+        user: legacyDb.username,
+        password: decryptedPassword,
+        database: legacyDb.database,
+      });
+
+      try {
+        const [tables] = await connection.execute(
+          "SHOW TABLES LIKE 'changes_codes_tours'",
+        );
+
+        if ((tables as any[]).length === 0) {
+          console.warn(
+            '⚠️ Tabela "changes_codes_tours" ne postoji u legacy bazi',
+          );
+          await this.updateSyncProgress(syncId, {
+            status: 'completed',
+            processedRecords: 0,
+            upsertedRecords: 0,
+          });
+          return { upserted: 0, skipped: 0, errors: 0, totalProcessed: 0 };
+        }
+
+        // Dobij sve turnus_name vrednosti za odabranu grupu
+        const [groupAssignments] = await connection.execute(
+          `SELECT DISTINCT turnus_name
+           FROM changes_codes_tours cct
+           INNER JOIN turnus_groups_assign tga ON cct.turnus_id = tga.turnus_id
+           WHERE tga.group_id = ?`,
+          [groupId],
+        );
+
+        const turnusNames = (groupAssignments as any[]).map(
+          (r) => r.turnus_name,
+        );
+
+        if (turnusNames.length === 0) {
+          console.warn(
+            `⚠️ Nema turnusa za grupu ${groupId} u changes_codes_tours`,
+          );
+          await this.updateSyncProgress(syncId, {
+            status: 'completed',
+            processedRecords: 0,
+            upsertedRecords: 0,
+          });
+          return { upserted: 0, skipped: 0, errors: 0, totalProcessed: 0 };
+        }
+
+        console.log(
+          `📋 Found ${turnusNames.length} distinct turnus_name(s) for group ${groupId}`,
+        );
+
+        console.log('🔄 Starting UPSERT sync (safe sync without data loss)...');
+
+        // SELECT podataka iz legacy baze
+        const placeholders = turnusNames.map(() => '?').join(',');
+        const query = `SELECT * FROM changes_codes_tours WHERE turnus_name IN (${placeholders}) ORDER BY turnus_id ASC`;
+        const [rows] = await connection.execute(query, turnusNames);
+
+        const legacyRecords = rows as any[];
+        totalProcessed = legacyRecords.length;
+
+        console.log(`📊 Found ${totalProcessed} changes_codes_tours record(s)`);
+
+        // Update sync log with totalRecords now that we know it
+        await this.updateSyncProgress(syncId, {
+          totalRecords: totalProcessed,
+        });
+
+        if (legacyRecords.length === 0) {
+          console.warn(
+            `⚠️ Nema podataka u tabeli changes_codes_tours za odabranu grupu`,
+          );
+          await this.updateSyncProgress(syncId, {
+            status: 'completed',
+            processedRecords: 0,
+            upsertedRecords: 0,
+          });
+          return {
+            upserted: 0,
+            skipped: 0,
+            errors: 0,
+            totalProcessed: 0,
+          };
+        }
+
+        // PARALLEL WORKERS - Optimized for MySQL stability
+        const NUM_WORKERS = 2;
+        const BATCH_SIZE = 500;
+        const BATCH_DELAY_MS = 200;
+
+        const chunkSize = Math.ceil(legacyRecords.length / NUM_WORKERS);
+        console.log(`🚀 Starting ${NUM_WORKERS} parallel workers, ${chunkSize} records per worker`);
+
+        // Create worker promises
+        const workerPromises = Array.from({ length: NUM_WORKERS }, (_, workerIndex) => {
+          const start = workerIndex * chunkSize;
+          const end = Math.min(start + chunkSize, legacyRecords.length);
+          const workerRecords = legacyRecords.slice(start, end);
+
+          if (workerRecords.length === 0) return Promise.resolve({ inserted: 0, errors: 0 });
+
+          return this.parallelInsertWorker(
+            workerRecords,
+            workerIndex + 1,
+            BATCH_SIZE,
+            BATCH_DELAY_MS,
+            totalProcessed,
+            syncId,
+          );
+        });
+
+        // Wait for all workers to complete
+        const workerResults = await Promise.all(workerPromises);
+
+        // Aggregate results
+        workerResults.forEach(result => {
+          upserted += result.inserted;
+          errors += result.errors;
+        });
+
+        console.log(`✅ All ${NUM_WORKERS} workers completed successfully`);
+
+        // Mark sync as completed
+        await this.updateSyncProgress(syncId, {
+          status: 'completed',
+          processedRecords: totalProcessed,
+          upsertedRecords: upserted,
+          errorRecords: errors,
+        });
+      } finally {
+        await connection.end();
+      }
+
+      const totalDuration = ((Date.now() - overallStartTime) / 1000).toFixed(2);
+      console.log(
+        `✅ Changes_codes_tours sync completed in ${totalDuration}s`,
+      );
+      console.log(
+        `   Upserted: ${upserted}, Skipped: ${skipped}, Errors: ${errors}`,
+      );
+
+      return { upserted, skipped, errors, totalProcessed };
+    } catch (error) {
+      console.error('❌ Changes_codes_tours sync failed:', error);
+
+      // Mark sync as failed
+      await this.updateSyncProgress(syncId, {
+        status: 'failed',
+        errorMessage: error.message,
+        errorRecords: errors,
+      });
+
+      throw new InternalServerErrorException(
+        `Greška pri sinhronizaciji changes_codes_tours: ${error.message}`,
+      );
+    }
   }
 }

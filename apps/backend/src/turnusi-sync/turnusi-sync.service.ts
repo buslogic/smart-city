@@ -575,7 +575,7 @@ export class TurnusiSyncService {
           const batch = legacyRecords.slice(i, i + BATCH_SIZE);
 
           try {
-            const result = await this.bulkInsertTurnusDays(batch);
+            const result = await this.upsertTurnusDaysBatch(batch);
             created += result.inserted;
             updated += result.updated;
           } catch (error) {
@@ -682,22 +682,16 @@ export class TurnusiSyncService {
     return { inserted: result as number, updated: 0 };
   }
 
-  private async bulkInsertTurnusDays(
+  /**
+   * UPSERT pristup - zamena za bulkInsertTurnusDays
+   * Koristi ON DUPLICATE KEY UPDATE za sigurnu sinhronizaciju bez gubitka podataka
+   */
+  private async upsertTurnusDaysBatch(
     records: any[],
   ): Promise<{ inserted: number; updated: number }> {
     if (records.length === 0) {
       return { inserted: 0, updated: 0 };
     }
-
-    // Prvo obrišemo sve postojeće rekorde za ove turnus_id-ove da bi izbegli duplikate
-    const turnusIds = [...new Set(records.map((r) => r.turnus_id))];
-    await this.prisma.turnusDays.deleteMany({
-      where: {
-        turnusId: {
-          in: turnusIds,
-        },
-      },
-    });
 
     const values = records
       .map((r) => {
@@ -708,13 +702,15 @@ export class TurnusiSyncService {
       })
       .join(',\n');
 
-    const insertSQL = `
+    const upsertSQL = `
       INSERT INTO turnus_days (
         turnus_id, dayname
       ) VALUES ${values}
+      ON DUPLICATE KEY UPDATE
+        dayname = VALUES(dayname)
     `;
 
-    const result = await this.prisma.$executeRawUnsafe(insertSQL);
+    const result = await this.prisma.$executeRawUnsafe(upsertSQL);
     return { inserted: result as number, updated: 0 };
   }
 
