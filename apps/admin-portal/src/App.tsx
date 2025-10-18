@@ -36,6 +36,8 @@ import Profile from './pages/users/Profile';
 import ChangePassword from './pages/users/ChangePassword';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import TimescaleDB from './pages/transport/maintenance/TimescaleDB';
+import Schedule from './pages/transport/planning/Schedule';
+import TurnusDefaults from './pages/transport/planning/TurnusDefaults';
 import MigrationPage from './pages/migration/MigrationPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 
@@ -395,6 +397,24 @@ function App() {
               element={
                 <PermissionGuard permissions={['maintenance.timescaledb:view']}>
                   <TimescaleDB />
+                </PermissionGuard>
+              }
+            />
+
+            <Route
+              path="transport/planning/schedule"
+              element={
+                <PermissionGuard permissions={['transport.planning.schedule:view']}>
+                  <Schedule />
+                </PermissionGuard>
+              }
+            />
+
+            <Route
+              path="transport/planning/turnus-defaults"
+              element={
+                <PermissionGuard permissions={['transport.planning.turnus_defaults:view']}>
+                  <TurnusDefaults />
                 </PermissionGuard>
               }
             />

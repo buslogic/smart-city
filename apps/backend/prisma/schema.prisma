@@ -34,6 +34,9 @@ model User {
   dashboardConfig          UserDashboardConfig?
   roles                    UserRole[]
   vehicleSyncLogs          VehicleSyncLog[]
+  driverDefaults           TurnusDefaultPerDriver[]   @relation("DriverDefaults")
+  createdDefaults          TurnusDefaultPerDriver[]   @relation("DefaultCreator")
+  updatedDefaults          TurnusDefaultPerDriver[]   @relation("DefaultUpdater")
 
   @@index([email])
   @@index([userGroupId])
@@ -1215,4 +1218,278 @@ model ChangesCodesTours {
   @@index([turnusId, turnusName], map: "turnus_id_2")
   @@index([lineNo, direction, startTime], map: "line_no2")
   @@map("changes_codes_tours")
+}
+
+model DateTravelOrder {
+  id                      Int      @default(autoincrement()) @db.UnsignedInt
+  lineType                String   @map("line_type") @db.VarChar(30)
+  startDate               DateTime @map("start_date") @db.Date
+  driverId                Int      @map("driver_id") @db.UnsignedInt
+  driverName              String   @map("driver_name") @db.VarChar(50)
+  otherIds                Int      @map("other_ids") @db.UnsignedInt
+  otherNames              String   @map("other_names") @db.VarChar(50)
+  otherIds2               Int      @map("other_ids_2") @db.UnsignedInt
+  otherNames2             String   @map("other_names_2") @db.VarChar(50)
+  lineNo                  String   @map("line_no") @db.VarChar(6)
+  lineName                String   @map("line_name") @db.VarChar(80)
+  busName                 String   @map("bus_name") @db.VarChar(50)
+  noOfSeats               Int      @map("no_of_seats") @db.UnsignedSmallInt
+  garageNo                String   @map("garage_no") @db.VarChar(20)
+  registNo                String   @map("regist_no") @db.VarChar(20)
+  registArea              String   @map("regist_area") @db.VarChar(30)
+  bpivDate                DateTime @map("bpiv_date") @db.Date
+  bpivNo                  String   @map("bpiv_no") @db.VarChar(30)
+  startTime               DateTime @map("start_time") @db.Time(0)
+  endTime                 DateTime @map("end_time") @db.Time(0)
+  endDate                 DateTime @map("end_date") @db.Date
+  endTimeFound            DateTime @map("end_time_found") @db.Time(0)
+  endTimeManual           DateTime @map("end_time_manual") @db.Time(0)
+  endDateFound            DateTime @map("end_date_found") @db.Date
+  orderNo                 Int      @map("order_no") @db.UnsignedInt
+  issuedate               DateTime @db.Date
+  planned                 Int      @db.UnsignedTinyInt
+  realised                Int      @db.UnsignedTinyInt
+  comment                 String   @db.Text
+  prepareTime             String   @map("prepare_time") @db.VarChar(5)
+  lineTime                String   @map("line_time") @db.VarChar(5)
+  lineKm                  Decimal  @map("line_km") @db.Decimal(8, 3)
+  speedLimit              Int      @map("speed_limit") @db.TinyInt
+  checkCash               Int      @map("check_cash") @db.TinyInt
+  checkKm                 Int      @map("check_km") @db.TinyInt
+  checkPrepare            Int      @map("check_prepare") @db.TinyInt
+  checkSpeed              Int      @map("check_speed") @db.TinyInt
+  checkStart              Int      @map("check_start") @db.TinyInt
+  checkEnd                Int      @map("check_end") @db.TinyInt
+  checkStations           Int      @map("check_stations") @db.TinyInt
+  checkRoute              Int      @map("check_route") @db.TinyInt
+  checkRpm                Int      @map("check_rpm") @db.TinyInt
+  checkAccBrk             Int      @map("check_acc_brk") @db.TinyInt
+  checkMud                Int      @map("check_mud") @db.UnsignedTinyInt
+  checkFuel               Int      @map("check_fuel") @db.UnsignedTinyInt
+  checkFuelTime           DateTime @map("check_fuel_time") @db.DateTime(0)
+  kmFound                 Decimal  @map("km_found") @db.Decimal(8, 3)
+  prepareFound            String   @map("prepare_found") @db.VarChar(5)
+  speedPeakFound          Int      @map("speed_peak_found") @db.TinyInt
+  speedAverageFound       Decimal  @map("speed_average_found") @db.Decimal(5, 2)
+  speedDurationFound      String   @map("speed_duration_found") @db.VarChar(5)
+  speedAllowedPeak        Int      @map("speed_allowed_peak") @db.TinyInt
+  speedAllowedDuration    String   @map("speed_allowed_duration") @db.VarChar(5)
+  speedregPeakFound       Int      @map("speedreg_peak_found") @db.TinyInt
+  speedregAverageFound    Decimal  @map("speedreg_average_found") @db.Decimal(5, 2)
+  speedregDurationFound   String   @map("speedreg_duration_found") @db.VarChar(5)
+  speedregAllowedPeak     Int      @map("speedreg_allowed_peak") @db.TinyInt
+  speedregAllowedDuration String   @map("speedreg_allowed_duration") @db.VarChar(5)
+  speedredPeakFound       Int      @map("speedred_peak_found") @db.TinyInt
+  speedredAverageFound    Decimal  @map("speedred_average_found") @db.Decimal(5, 2)
+  speedredDurationFound   String   @map("speedred_duration_found") @db.VarChar(5)
+  speedredAllowedPeak     Int      @map("speedred_allowed_peak") @db.TinyInt
+  speedredAllowedDuration String   @map("speedred_allowed_duration") @db.VarChar(5)
+  reductionRoadFound      Int      @map("reduction_road_found") @db.TinyInt
+  reductionKmFound        Decimal  @map("reduction_km_found") @db.Decimal(8, 3)
+  tempAverageFound        Int      @map("temp_average_found") @db.UnsignedTinyInt
+  tempPeakFound           Int      @map("temp_peak_found") @db.UnsignedTinyInt
+  oilAverageFound         Int      @map("oil_average_found") @db.UnsignedSmallInt
+  oilPeakFound            Int      @map("oil_peak_found") @db.UnsignedSmallInt
+  startFound              DateTime @map("start_found") @db.Time(0)
+  startDateFound          DateTime @map("start_date_found") @db.Date
+  startDateManual         DateTime @map("start_date_manual") @db.Date
+  endDateManual           DateTime @map("end_date_manual") @db.Date
+  startManual             DateTime @map("start_manual") @db.Time(0)
+  startReason             Int      @map("start_reason") @db.TinyInt
+  stationsFound           Int      @map("stations_found") @db.TinyInt
+  cashComment             String   @map("cash_comment") @db.Text
+  kmComment               String   @map("km_comment") @db.Text
+  prepareComment          String   @map("prepare_comment") @db.Text
+  speedComment            String   @map("speed_comment") @db.Text
+  startComment            String   @map("start_comment") @db.Text
+  endComment              String   @map("end_comment") @db.Text
+  routeComment            String   @map("route_comment") @db.Text
+  gasFound                String   @map("gas_found") @db.VarChar(11)
+  fiscInfo                String   @map("fisc_info") @db.VarChar(40)
+  tempComment             String   @map("temp_comment") @db.Text
+  oilComment              String   @map("oil_comment") @db.Text
+  editedBy                Int      @map("edited_by")
+  beforeTime              String   @map("before_time") @db.VarChar(5)
+  afterTime               String   @map("after_time") @db.VarChar(5)
+  beforeTimeFound         String   @map("before_time_found") @db.VarChar(8)
+  afterTimeFound          String   @map("after_time_found") @db.VarChar(8)
+  sheduleId               Int      @map("shedule_id")
+  prepareFlag             String   @map("prepare_flag") @db.VarChar(1)
+  beforeFlag              String   @map("before_flag") @db.VarChar(1)
+  durationFlag            String   @map("duration_flag") @db.VarChar(1)
+  afterFlag               String   @map("after_flag") @db.VarChar(1)
+  rpmFound                String   @map("rpm_found") @db.VarChar(30)
+  accBrkFound             String   @map("acc_brk_found") @db.VarChar(30)
+  additOptFound           Int      @map("addit_opt_found") @db.UnsignedMediumInt
+  fuelConsPrep            Decimal  @map("fuel_cons_prep") @db.Decimal(6, 2)
+  fuelConsBefore          Decimal  @map("fuel_cons_before") @db.Decimal(6, 2)
+  fuelConsAfter           Decimal  @map("fuel_cons_after") @db.Decimal(6, 2)
+  fuelConsMain            Decimal  @map("fuel_cons_main") @db.Decimal(6, 2)
+  fuelConsStop            Decimal  @map("fuel_cons_stop") @db.Decimal(6, 2)
+  speedBChk               Int      @map("speed_b_chk") @db.UnsignedTinyInt
+  speedBVal               Decimal  @map("speed_b_val") @db.Decimal(5, 2)
+  rpmBChk                 Int      @map("rpm_b_chk") @db.UnsignedTinyInt
+  rpmBVal                 Decimal  @map("rpm_b_val") @db.Decimal(5, 2)
+  accbrkBChk              Int      @map("accbrk_b_chk") @db.UnsignedTinyInt
+  accbrkBVal              Decimal  @map("accbrk_b_val") @db.Decimal(5, 2)
+  allBChk                 Int      @map("all_b_chk") @db.UnsignedTinyInt
+  allBVal                 Decimal  @map("all_b_val") @db.Decimal(5, 2)
+  modifiedBy              Int      @map("modified_by") @db.UnsignedInt
+  modifiedDate            DateTime @map("modified_date") @db.DateTime(0)
+  createdBy               Int      @map("created_by")
+  createdDate             DateTime @map("created_date") @db.DateTime(0)
+  realisedBy              Int      @map("realised_by")
+  realisedDate            DateTime @map("realised_date") @db.DateTime(0)
+  canceledBy              Int      @map("canceled_by")
+  canceledDate            DateTime @map("canceled_date") @db.DateTime(0)
+  likePlannedBy           Int      @map("like_planned_by")
+  likePlannedDate         DateTime @map("like_planned_date") @db.DateTime(0)
+  missingGpsDataPercent   Int      @default(0) @map("missing_gps_data_percent") @db.UnsignedTinyInt
+  kmFoundByAnalyse        Decimal  @default(0) @map("km_found_by_analyse") @db.Decimal(8, 3)
+  stationsFoundByAnalyse  Int      @default(0) @map("stations_found_by_analyse") @db.UnsignedMediumInt
+  stationsStopped         Int      @default(0) @map("stations_stopped") @db.UnsignedMediumInt
+  vehicleAge              Int      @default(0) @map("vehicle_age") @db.UnsignedTinyInt
+  vehicleAgeMonths        Int      @default(0) @map("vehicle_age_months") @db.UnsignedTinyInt
+  vehicleAgeDays          Int      @default(0) @map("vehicle_age_days") @db.UnsignedTinyInt
+  transportationCost      Int      @default(0) @map("transportation_cost") @db.UnsignedInt
+  first3Last3Departure    Int      @default(0) @map("first_3_last_3_departure") @db.UnsignedTinyInt
+  cpRealised              Int      @default(0) @map("cp_realised") @db.UnsignedSmallInt
+
+  @@id([id, startDate])
+  @@index([garageNo], map: "garage_no")
+  @@index([driverId], map: "driver_id")
+  @@index([orderNo], map: "order_no")
+  @@index([sheduleId], map: "shedule_id")
+  @@index([realisedBy], map: "realised_by")
+  @@index([realisedDate], map: "realised_date")
+  @@map("date_travel_order")
+}
+
+// ========================================
+// Turnus Default Per Driver System
+// ========================================
+
+enum DayOfWeek {
+  Ponedeljak
+  Utorak
+  Sreda
+  Četvrtak
+  Petak
+  Subota
+  Nedelja
+}
+
+model TurnusDefaultPerDriver {
+  id                   Int        @id @default(autoincrement())
+  driverId             Int        @map("driver_id")
+  turnusName           String     @map("turnus_name") @db.VarChar(50)
+  lineNumberForDisplay String?    @map("line_number_for_display") @db.VarChar(10)
+  shiftNumber          Int?       @map("shift_number") @db.TinyInt
+  dayOfWeek            DayOfWeek? @map("day_of_week")
+  priority             Int        @default(100)
+  isActive             Boolean    @default(true) @map("is_active")
+  usageCount           Int        @default(0) @map("usage_count")
+  usagePercentage      Decimal    @default(0.00) @map("usage_percentage") @db.Decimal(5, 2)
+  lastUsedDate         DateTime?  @map("last_used_date") @db.Date
+  autoGenerated        Boolean    @default(false) @map("auto_generated")
+  confidenceScore      Decimal    @default(0.00) @map("confidence_score") @db.Decimal(5, 2)
+  note                 String?    @db.Text
+  createdAt            DateTime   @default(now()) @map("created_at")
+  updatedAt            DateTime   @updatedAt @map("updated_at")
+  createdBy            Int?       @map("created_by")
+  updatedBy            Int?       @map("updated_by")
+
+  // Relations
+  driver  User  @relation("DriverDefaults", fields: [driverId], references: [id], onDelete: Cascade)
+  creator User? @relation("DefaultCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater User? @relation("DefaultUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  // Indexes
+  @@unique([driverId, turnusName, lineNumberForDisplay, shiftNumber, dayOfWeek], map: "unique_driver_turnus_config")
+  @@index([driverId, isActive], map: "tdpd_driver_id_is_active_idx")
+  @@index([turnusName, lineNumberForDisplay], map: "tdpd_turnus_line_idx")
+  @@index([priority], map: "tdpd_priority_idx")
+  @@index([autoGenerated, confidenceScore], map: "tdpd_auto_gen_conf_idx")
+  @@map("turnus_default_per_driver")
+}
+
+// Legacy table imported from BGNaplata server - main ticketing schedule table
+model DateShedule {
+  id                        Int       @default(autoincrement()) @db.UnsignedInt
+  startTime                 DateTime  @map("start_time") @db.Time /// start time from timetable (may not be actual start time if departure is split into 2 or more departures, in that case, actual start time is in field tt_start_time)
+  startStation              String    @map("start_station") @db.VarChar(50) /// start station name
+  endTime                   DateTime  @map("end_time") @db.Time /// end time (may not be end time from timetable if departure is split into two or more departures)
+  endStation                String    @map("end_station") @db.VarChar(50) /// end station name
+  lineNo                    String    @map("line_no") @db.VarChar(6) /// line number
+  lineName                  String    @map("line_name") @db.VarChar(100) /// line name
+  busOperator               String    @map("bus_operator") @db.VarChar(40) /// name of bus operator
+  busNumber                 Int       @map("bus_number") @db.UnsignedSmallInt /// bus number on same departure, same line number, same time, same direction
+  busRegistration           String    @map("bus_registration") @db.VarChar(10) /// vehicle plate number
+  busGarageNo               String    @map("bus_garage_no") @db.VarChar(15) /// vehicle garage number
+  peron                     String    @db.VarChar(4) /// landplace number
+  assignedPersons           String    @map("assigned_persons") @db.VarChar(500) /// assigned persons roles and names imploded using |$| string
+  rBusRegistration          String    @map("r_bus_registration") @db.VarChar(10) /// realised bus registration
+  rBusGarageNo              String    @map("r_bus_garage_no") @db.VarChar(15) /// realised bus garage number
+  rPeron                    String    @map("r_peron") @db.VarChar(4) /// realised landplace
+  rAssignedPersons          String    @map("r_assigned_persons") @db.VarChar(500) /// realised assigned persons roles and names imploded using |$| string
+  rUserIds                  String    @map("r_user_ids") @db.VarChar(500) /// realised user ids and events, for format see user_ids field
+  user1IdRealised           Int       @default(0) @map("user_1_id_realised") @db.UnsignedMediumInt
+  user2IdRealised           Int       @default(0) @map("user_2_id_realised") @db.UnsignedMediumInt
+  user3IdRealised           Int       @default(0) @map("user_3_id_realised") @db.UnsignedMediumInt
+  status                    Int       @map("status") @db.UnsignedSmallInt /// deprecated
+  startDate                 DateTime  @map("start_date") @db.Date /// start date of departure, see start_time
+  userIds                   String    @map("user_ids") @db.VarChar(500) /// Assigned user ids and events, imploded using string |$|. After explode we have one string for each user. This user string is imploded using ||| string. After explode of one user string we end up with array of strings. In this array, first item is user ID, second item is user group ID from user_groups table (driver=2 for example), third item is user events for day 0, fourth item is user events for day 1 (for multi day departures) etc. If there is no fourth item, then there is no day 1. User events string is imploded using |#| string. After explode we have array of events-times pairs strings. Each event-time string is imploded using ### string. After explode of event-time string we have array with two strings, event ID from changes_codes table and event time.
+  user1IdPlanned            Int       @default(0) @map("user_1_id_planned") @db.UnsignedMediumInt
+  user2IdPlanned            Int       @default(0) @map("user_2_id_planned") @db.UnsignedMediumInt
+  user3IdPlanned            Int       @default(0) @map("user_3_id_planned") @db.UnsignedMediumInt
+  busReg2                   String    @map("bus_reg_2") @db.VarChar(10) /// deprecated
+  busGar2                   String    @map("bus_gar_2") @db.VarChar(10) /// deprecated
+  endDate                   DateTime  @map("end_date") @db.Date /// actual end date of departure
+  direction                 Int       @db.UnsignedTinyInt /// line number direction (0=from first to last station direction, 1=from last to first station direction)
+  rideType                  Int       @map("ride_type") @db.UnsignedTinyInt /// 0=normal ride, 1=free ride (slobodna voznja) , 2=extra ride (vanredna voznja) ,9=KM ride (voznja po KM)
+  freeId                    Int       @default(0) @map("free_id") @db.UnsignedMediumInt /// free ride id from date_free_ride table
+  kmPred                    Decimal   @default(0.000) @map("km_pred") @db.Decimal(8, 3) /// predicted KM for line number
+  kmReal                    Decimal   @default(0.000) @map("km_real") @db.Decimal(8, 3) /// deprecated
+  lineType                  String    @default("") @map("line_type") @db.VarChar(40) /// line type string from line_types table
+  tourId                    Int       @default(0) @map("tour_id") @db.UnsignedMediumInt /// id of turnus from changes_codes_tours table in which this departure is assigned
+  centralPoint              Int       @default(0) @map("central_point") @db.UnsignedSmallInt /// central point id from central_points table
+  modified                  Int       @default(0) @db.UnsignedTinyInt /// 0=not split, > 0 = split departure
+  ttStartTime               DateTime  @default(dbgenerated("'00:00:00'")) @map("tt_start_time") @db.Time /// actual start time
+  ttStartDate               DateTime  @map("tt_start_date") @db.Date /// actual start date
+  priceTablesIndexId        Int       @default(0) @map("price_tables_index_id") @db.UnsignedInt
+  departureOpenTime         DateTime  @map("departure_open_time") @db.DateTime(0)
+  departureCloseTime        DateTime  @map("departure_close_time") @db.DateTime(0)
+  startStationUid           Int       @default(0) @map("start_station_uid") @db.UnsignedMediumInt
+  endStationUid             Int       @default(0) @map("end_station_uid") @db.UnsignedMediumInt
+  lastStationUpdateTime     DateTime  @map("last_station_update_time") @db.DateTime(0)
+  lastStationNumber         Int       @default(0) @map("last_station_number") @db.UnsignedSmallInt
+  numberOfStationsFound     Int       @default(0) @map("number_of_stations_found") @db.UnsignedSmallInt
+  numberOfStationsInLine    Int       @default(0) @map("number_of_stations_in_line") @db.UnsignedSmallInt
+  currentRoutePosition      Int       @default(0) @map("current_route_position") @db.UnsignedSmallInt
+  firstStationTime          DateTime  @map("first_station_time") @db.DateTime(0)
+  lastStationTime           DateTime  @map("last_station_time") @db.DateTime(0)
+  androidDepartureId        Int       @default(0) @map("android_departure_id") @db.UnsignedInt
+  androidDepartureIdClose   Int       @default(0) @map("android_departure_id_close") @db.UnsignedInt
+  turnusDepartureNo         Int       @default(0) @map("turnus_departure_no") @db.UnsignedSmallInt
+  turnusVehicleNo           Int       @default(0) @map("turnus_vehicle_no") @db.UnsignedSmallInt
+  nextDepartureTime         DateTime  @default(dbgenerated("'00:00:00'")) @map("next_departure_time") @db.Time
+  departureStatus           Int       @default(0) @map("departure_status") @db.UnsignedTinyInt
+  departureAnalysed         Int       @default(0) @map("departure_analysed") @db.UnsignedTinyInt
+  departureAnalysedDatetime DateTime? @map("departure_analysed_datetime") @db.DateTime(0)
+  vehicleGroupTypesId       Int?      @default(0) @map("vehicle_group_types_id") @db.UnsignedSmallInt
+  vremenaPolaskaStId        Int       @default(0) @map("vremena_polaska_st_id") @db.UnsignedInt
+  plannedBy                 Int       @default(0) @map("planned_by") @db.UnsignedTinyInt /// 0-automatic; 1-dispatcher;
+  lastModified              DateTime  @default(now()) @updatedAt @map("last_modified") @db.DateTime(0)
+
+  // Composite primary key
+  @@id([id, startDate])
+  // Indexes
+  @@index([freeId], map: "free_id")
+  @@index([endDate], map: "end_date")
+  @@index([startDate, startTime], map: "start_date")
+  @@index([androidDepartureId], map: "android_departure_id")
+  @@index([priceTablesIndexId], map: "price_tables_index_id_index")
+  @@index([startDate, tourId], map: "start_date2")
+  @@index([lastModified], map: "last_modified")
+  @@map("date_shedule")
 }

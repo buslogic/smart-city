@@ -36,7 +36,8 @@ import {
   AlertOutlined,
   TagsOutlined,
   BranchesOutlined,
-  CalendarOutlined
+  CalendarOutlined,
+  MailOutlined
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { useAuthStore } from '../../stores/auth.store';
@@ -434,6 +435,29 @@ const ModernMenu: React.FC = () => {
                 label: 'Karton Vozača',
                 permissions: ['dispatcher.driver_card:view'],
               },
+              {
+                key: 'planning',
+                menuOrder: 302050000000,
+                icon: <CalendarOutlined />,
+                label: 'Planiranje',
+                // permissions: ['transport.planning:view'], // ❌ Uklonjeno - hijerarhijska logika
+                children: [
+                  {
+                    key: '/transport/planning/schedule',
+                    menuOrder: 302050010000,
+                    icon: <CalendarOutlined />,
+                    label: 'Raspored',
+                    permissions: ['transport.planning.schedule:view'],
+                  },
+                  {
+                    key: '/transport/planning/turnus-defaults',
+                    menuOrder: 302050020000,
+                    icon: <UserOutlined />,
+                    label: 'Default Turnusa',
+                    permissions: ['transport.planning.turnus_defaults:view'],
+                  },
+                ],
+              },
             ],
           },
           {
@@ -492,11 +516,41 @@ const ModernMenu: React.FC = () => {
         // permissions: ['settings:view'], // ❌ Uklonjeno - hijerarhijska logika će automatski prikazati
         children: [
           {
-            key: '/settings/general',
+            key: 'general',
             menuOrder: 401000000000,
             icon: <SettingOutlined />,
             label: 'Opšta',
-            // Bez permissions - hijerarhijska logika: prikaži ako GeneralSettings komponenta ima vidljive tabove
+            // Folder sa pod-opcijama
+            children: [
+              {
+                key: '/settings/general/company-info',
+                menuOrder: 401010000000,
+                icon: <DatabaseOutlined />,
+                label: 'Informacije o Kompaniji',
+                permissions: ['settings.company_info:read'],
+              },
+              {
+                key: '/settings/general/legacy-databases',
+                menuOrder: 401020000000,
+                icon: <DatabaseOutlined />,
+                label: 'Legacy Baze',
+                permissions: ['legacy_databases:read'],
+              },
+              {
+                key: '/settings/general/legacy-tables',
+                menuOrder: 401030000000,
+                icon: <DatabaseOutlined />,
+                label: 'Legacy Tabele',
+                permissions: ['legacy_tables:read'],
+              },
+              {
+                key: '/settings/general/email-templates',
+                menuOrder: 401040000000,
+                icon: <MailOutlined />,
+                label: 'Email Šabloni',
+                permissions: ['settings.email_templates:view'],
+              },
+            ],
           },
           {
             key: '/settings/api-keys',
@@ -528,9 +582,18 @@ const ModernMenu: React.FC = () => {
       if (path.includes('/dispatcher/')) keys.push('dispatcher');
       if (path.includes('/safety/')) keys.push('safety');
       if (path.includes('/maintenance/')) keys.push('maintenance');
+      if (path.includes('/planning/')) {
+        keys.push('dispatcher'); // Planning je unutar dispatcher-a
+        keys.push('planning');
+      }
       if (path.includes('/turnusi')) keys.push('administration');
     }
-    if (path.includes('/settings/')) keys.push('settings');
+    if (path.includes('/settings/')) {
+      keys.push('settings');
+      if (path.includes('/settings/general/')) {
+        keys.push('general'); // Opšta folder unutar Podešavanja
+      }
+    }
 
     setOpenKeys(keys);
   }, [location.pathname]);
