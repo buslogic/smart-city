@@ -1208,6 +1208,7 @@ model ChangesCodesTours {
   turageNo              Int      @default(0) @map("turage_no") @db.UnsignedSmallInt
   departureNoInTurage   Int      @map("departure_no_in_turage") @db.UnsignedTinyInt
 
+  @@unique([turnusId, startTime, lineNo, departureNumber, shiftNumber])
   @@index([turnusId])
   @@index([lineTypeId])
   @@index([centralPoint])
