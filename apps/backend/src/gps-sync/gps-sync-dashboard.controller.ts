@@ -1574,55 +1574,76 @@ export class GpsSyncDashboardController {
 
       let recoveredCount = 0;
 
-      // Reset zapisa za retry (u batch-evima od 10000 za bezbednost)
+      // Reset zapisa za retry (u batch-evima od 1000 za stabilnost konekcije)
       if (recordsToRetry.length > 0) {
         this.logger.log(`🔄 Resetujem ${recordsToRetry.length} zapisa...`);
 
-        const batchSize = 10000;
+        const batchSize = 1000; // Smanjen batch size sa 10000 na 1000
+        const totalBatches = Math.ceil(recordsToRetry.length / batchSize);
+
         for (let i = 0; i < recordsToRetry.length; i += batchSize) {
           const batch = recordsToRetry.slice(i, i + batchSize);
+          const currentBatch = Math.floor(i / batchSize) + 1;
 
-          const result = await this.prisma.$executeRaw`
-            UPDATE gps_raw_buffer
-            SET process_status = 'pending',
-                retry_count = retry_count + 1,
-                processed_at = NULL,
-                error_message = CONCAT(
-                  COALESCE(error_message, ''),
-                  ' | Bulk Recovery: Reset from stuck processing at ',
-                  NOW()
-                )
-            WHERE id IN (${Prisma.join(batch)})
-          `;
+          try {
+            const result = await this.prisma.$executeRaw`
+              UPDATE gps_raw_buffer
+              SET process_status = 'pending',
+                  retry_count = retry_count + 1,
+                  processed_at = NULL,
+                  error_message = CONCAT(
+                    COALESCE(error_message, ''),
+                    ' | Bulk Recovery: Reset from stuck processing at ',
+                    NOW()
+                  )
+              WHERE id IN (${Prisma.join(batch)})
+            `;
 
-          recoveredCount += result;
-          this.logger.log(
-            `   ✅ Batch ${Math.floor(i / batchSize) + 1}: ${result} zapisa`,
-          );
+            recoveredCount += result;
+            this.logger.log(
+              `   ✅ Batch ${currentBatch}/${totalBatches}: ${result} zapisa`,
+            );
+
+            // Reconnect svakih 10 batch-eva da osvežiš konekciju
+            if (currentBatch % 10 === 0 && currentBatch < totalBatches) {
+              this.logger.log(`   🔄 Reconnecting Prisma (batch ${currentBatch})...`);
+              await this.prisma.$disconnect();
+              await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
+              await this.prisma.$connect();
+            }
+          } catch (error) {
+            this.logger.error(`❌ Greška pri batch ${currentBatch}:`, error.message);
+            throw error; // Re-throw da zaustavi proces
+          }
         }
       }
 
-      // Označi kao trajno failed (takođe u batch-evima)
+      // Označi kao trajno failed (takođe u manjim batch-evima)
       if (recordsToFail.length > 0) {
         this.logger.log(
           `⚠️  Označavam ${recordsToFail.length} zapisa kao failed...`,
         );
 
-        const batchSize = 10000;
+        const batchSize = 1000; // Smanjen batch size
         for (let i = 0; i < recordsToFail.length; i += batchSize) {
           const batch = recordsToFail.slice(i, i + batchSize);
 
-          await this.prisma.$executeRaw`
-            UPDATE gps_raw_buffer
-            SET process_status = 'failed',
-                retry_count = retry_count + 1,
-                error_message = CONCAT(
-                  COALESCE(error_message, ''),
-                  ' | Bulk Recovery: Max retries exceeded at ',
-                  NOW()
-                )
-            WHERE id IN (${Prisma.join(batch)})
-          `;
+          try {
+            await this.prisma.$executeRaw`
+              UPDATE gps_raw_buffer
+              SET process_status = 'failed',
+                  retry_count = retry_count + 1,
+                  error_message = CONCAT(
+                    COALESCE(error_message, ''),
+                    ' | Bulk Recovery: Max retries exceeded at ',
+                    NOW()
+                  )
+              WHERE id IN (${Prisma.join(batch)})
+            `;
+          } catch (error) {
+            this.logger.error(`❌ Greška pri označavanju failed:`, error.message);
+            throw error;
+          }
         }
       }
 
