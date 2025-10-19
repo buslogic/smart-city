@@ -990,20 +990,64 @@ export class TurnusiService {
       errorMessage?: string;
     },
   ): Promise<void> {
-    const updateData: any = {
-      ...updates,
-      updatedAt: new Date(),
-    };
+    // FIX #4: Koristi raw SQL UPDATE umesto Prisma Client update()
+    // Ovo održava konzistentnost sa UPSERT pristupom i sprečava connection loss
 
-    // If marking as completed, set completedAt
-    if (updates.status === 'completed') {
-      updateData.completedAt = new Date();
+    const setClauses: string[] = [];
+    const values: any[] = [];
+
+    // Dinamički build UPDATE SET clause
+    if (updates.totalRecords !== undefined) {
+      setClauses.push('total_records = ?');
+      values.push(updates.totalRecords);
+    }
+    if (updates.processedRecords !== undefined) {
+      setClauses.push('processed_records = ?');
+      values.push(updates.processedRecords);
+    }
+    if (updates.upsertedRecords !== undefined) {
+      setClauses.push('upserted_records = ?');
+      values.push(updates.upsertedRecords);
+    }
+    if (updates.errorRecords !== undefined) {
+      setClauses.push('error_records = ?');
+      values.push(updates.errorRecords);
+    }
+    if (updates.lastProcessedTurnusId !== undefined) {
+      setClauses.push('last_processed_turnus_id = ?');
+      values.push(updates.lastProcessedTurnusId);
+    }
+    if (updates.lastProcessedBatch !== undefined) {
+      setClauses.push('last_processed_batch = ?');
+      values.push(updates.lastProcessedBatch);
+    }
+    if (updates.status !== undefined) {
+      setClauses.push('status = ?');
+      values.push(updates.status);
+
+      // If marking as completed, set completedAt
+      if (updates.status === 'completed') {
+        setClauses.push('completed_at = NOW()');
+      }
+    }
+    if (updates.errorMessage !== undefined) {
+      setClauses.push('error_message = ?');
+      values.push(updates.errorMessage);
     }
 
-    await this.prisma.turnusSyncLog.update({
-      where: { syncId },
-      data: updateData,
-    });
+    // Uvek update-uj updated_at timestamp
+    setClauses.push('updated_at = NOW()');
+
+    // Build final SQL query
+    const sql = `
+      UPDATE turnus_sync_logs
+      SET ${setClauses.join(', ')}
+      WHERE sync_id = ?
+    `;
+    values.push(syncId);
+
+    // Execute raw SQL - koristi istu connection pool strategiju kao UPSERT
+    await this.prisma.$executeRawUnsafe(sql, ...values);
   }
 
   /**
