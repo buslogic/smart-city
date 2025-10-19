@@ -357,13 +357,13 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
       title: 'Turnus ID',
       dataIndex: 'turnusId',
       key: 'turnusId',
-      width: 120,
+      width: 90,
       align: 'center',
       fixed: 'left',
       render: (id: number) => (
-        <Space>
-          <CarOutlined style={{ color: '#1890ff', fontSize: '16px' }} />
-          <Text strong style={{ fontSize: '15px' }}>{id}</Text>
+        <Space size={4}>
+          <CarOutlined style={{ color: '#1890ff', fontSize: '12px' }} />
+          <Text strong style={{ fontSize: '11px' }}>{id}</Text>
         </Space>
       ),
     },
@@ -371,15 +371,15 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
       title: 'Naziv turaže',
       dataIndex: 'turnusName',
       key: 'turnusName',
-      width: 250,
+      width: 180,
       fixed: 'left',
       render: (name: string, record: GroupedTurnus) => (
-        <div>
-          <Text strong style={{ color: '#1890ff', fontSize: '14px', display: 'block' }}>
+        <div style={{ lineHeight: '1.2' }}>
+          <Text strong style={{ color: '#1890ff', fontSize: '11px', display: 'block' }}>
             {name}
           </Text>
           {record.transportId && (
-            <Text type="secondary" style={{ fontSize: '11px' }}>
+            <Text type="secondary" style={{ fontSize: '9px' }}>
               {record.transportId}
             </Text>
           )}
@@ -390,10 +390,10 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
       title: 'Dan',
       dataIndex: 'dayname',
       key: 'dayname',
-      width: 130,
+      width: 100,
       align: 'center',
       render: (dayname: string) => (
-        <Tag color="blue" style={{ fontSize: '13px', padding: '4px 12px' }}>
+        <Tag color="blue" style={{ fontSize: '10px', padding: '1px 6px', margin: 0 }}>
           {dayname || 'N/A'}
         </Tag>
       ),
@@ -401,39 +401,40 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
     {
       title: (
         <Tooltip title="Broj vozača potrebnih za ovu turažu">
-          <Space>
-            <TeamOutlined />
-            Vozači
+          <Space size={2}>
+            <TeamOutlined style={{ fontSize: '11px' }} />
+            <span style={{ fontSize: '11px' }}>Vozači</span>
           </Space>
         </Tooltip>
       ),
       dataIndex: 'driversNeeded',
       key: 'driversNeeded',
-      width: 120,
+      width: 80,
       align: 'center',
       render: (drivers: number, record: GroupedTurnus) => (
         <Tooltip title={`Smene: ${record.shiftNumbers.join(', ')}`}>
           <div style={{
             background: drivers > 1 ? '#fff7e6' : '#f6ffed',
-            padding: '6px 12px',
-            borderRadius: '4px',
-            border: drivers > 1 ? '2px solid #ffa940' : '2px solid #52c41a'
+            padding: '3px 6px',
+            borderRadius: '3px',
+            border: drivers > 1 ? '1px solid #ffa940' : '1px solid #52c41a',
+            lineHeight: '1.2'
           }}>
-            <Space direction="vertical" size={0} style={{ width: '100%' }}>
-              <TeamOutlined style={{
-                fontSize: '20px',
-                color: drivers > 1 ? '#fa8c16' : '#52c41a'
-              }} />
-              <Text strong style={{
-                fontSize: '16px',
-                color: drivers > 1 ? '#fa8c16' : '#52c41a'
-              }}>
-                {drivers} vozač{drivers > 1 ? 'a' : ''}
-              </Text>
-              <Text type="secondary" style={{ fontSize: '11px' }}>
-                {record.shiftsCount} smena
-              </Text>
-            </Space>
+            <TeamOutlined style={{
+              fontSize: '12px',
+              color: drivers > 1 ? '#fa8c16' : '#52c41a',
+              display: 'block'
+            }} />
+            <Text strong style={{
+              fontSize: '11px',
+              color: drivers > 1 ? '#fa8c16' : '#52c41a',
+              display: 'block'
+            }}>
+              {drivers}
+            </Text>
+            <Text type="secondary" style={{ fontSize: '9px', display: 'block' }}>
+              {record.shiftsCount}sm
+            </Text>
           </div>
         </Tooltip>
       ),
@@ -442,21 +443,453 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
       title: 'Broj polazaka',
       dataIndex: 'departureCount',
       key: 'departureCount',
-      width: 130,
+      width: 85,
       align: 'center',
       render: (count: number) => (
-        <Space>
-          <RightOutlined style={{ color: '#52c41a' }} />
-          <Text strong style={{ fontSize: '15px', color: '#52c41a' }}>
+        <Space size={3}>
+          <RightOutlined style={{ color: '#52c41a', fontSize: '10px' }} />
+          <Text strong style={{ fontSize: '12px', color: '#52c41a' }}>
             {count}
           </Text>
         </Space>
       ),
     },
     {
+      title: 'I смена',
+      key: 'firstShiftGroup',
+      align: 'center',
+      onHeaderCell: () => ({
+        style: {
+          background: '#e6f7ff',
+          borderLeft: '3px solid #1890ff',
+          borderRight: '3px solid #1890ff',
+          fontWeight: 'bold',
+        },
+      }),
+      children: [
+        {
+          title: 'Од',
+          key: 'firstShift_od',
+          width: 65,
+          align: 'center',
+          onHeaderCell: () => ({
+            style: {
+              background: '#e6f7ff',
+              borderLeft: '3px solid #1890ff',
+            },
+          }),
+          onCell: () => ({
+            style: {
+              background: '#f0f9ff',
+              borderLeft: '3px solid #1890ff',
+            },
+          }),
+          render: (_: any, record: GroupedTurnus) => {
+            const shift = record.shiftDetails[0];
+            if (!shift) return <Text type="secondary" style={{ fontSize: '9px' }}>-</Text>;
+            return <Text strong style={{ fontFamily: 'monospace', fontSize: '10px' }}>{formatTime(shift.firstDepartureTime)}</Text>;
+          },
+        },
+        {
+          title: 'До',
+          key: 'firstShift_do',
+          width: 65,
+          align: 'center',
+          onHeaderCell: () => ({
+            style: {
+              background: '#e6f7ff',
+            },
+          }),
+          onCell: () => ({
+            style: {
+              background: '#f0f9ff',
+            },
+          }),
+          render: (_: any, record: GroupedTurnus) => {
+            const shift = record.shiftDetails[0];
+            if (!shift) return <Text type="secondary" style={{ fontSize: '9px' }}>-</Text>;
+            return <Text style={{ fontFamily: 'monospace', fontSize: '10px' }}>{formatTime(shift.lastDepartureTime)}</Text>;
+          },
+        },
+        {
+          title: 'Радно време',
+          key: 'firstShift_radnoVreme',
+          width: 70,
+          align: 'center',
+          onHeaderCell: () => ({
+            style: {
+              background: '#e6f7ff',
+            },
+          }),
+          onCell: () => ({
+            style: {
+              background: '#f0f9ff',
+            },
+          }),
+          render: (_: any, record: GroupedTurnus) => {
+            const shift = record.shiftDetails[0];
+            if (!shift) return <Text type="secondary" style={{ fontSize: '9px' }}>-</Text>;
+
+            const startMinutes = dayjs(shift.firstDepartureTime).hour() * 60 + dayjs(shift.firstDepartureTime).minute();
+            const endMinutes = dayjs(shift.lastDepartureTime).hour() * 60 + dayjs(shift.lastDepartureTime).minute();
+            const duration = endMinutes >= startMinutes ? endMinutes - startMinutes : (24 * 60) - startMinutes + endMinutes;
+            const hours = Math.floor(duration / 60);
+            const minutes = duration % 60;
+
+            return (
+              <Tag color="blue" style={{ fontSize: '9px', fontFamily: 'monospace', padding: '0 4px', margin: 0 }}>
+                {String(hours).padStart(2, '0')}:{String(minutes).padStart(2, '0')}
+              </Tag>
+            );
+          },
+        },
+        {
+          title: 'Број обрта',
+          key: 'firstShift_brojObrata',
+          width: 60,
+          align: 'center',
+          onHeaderCell: () => ({
+            style: {
+              background: '#e6f7ff',
+            },
+          }),
+          onCell: () => ({
+            style: {
+              background: '#f0f9ff',
+            },
+          }),
+          render: (_: any, record: GroupedTurnus) => {
+            const shift = record.shiftDetails[0];
+            if (!shift) return <Text type="secondary" style={{ fontSize: '9px' }}>-</Text>;
+            return <Text strong style={{ color: '#52c41a', fontSize: '11px' }}>{shift.departureCount}</Text>;
+          },
+        },
+        {
+          title: 'Терминус',
+          key: 'firstShift_terminus',
+          width: 120,
+          align: 'left',
+          onHeaderCell: () => ({
+            style: {
+              background: '#e6f7ff',
+              borderRight: '3px solid #1890ff',
+            },
+          }),
+          onCell: () => ({
+            style: {
+              background: '#f0f9ff',
+              borderRight: '3px solid #1890ff',
+            },
+          }),
+          render: (_: any, record: GroupedTurnus) => {
+            const shift = record.shiftDetails[0];
+            if (!shift) return <Text type="secondary" style={{ fontSize: '9px' }}>-</Text>;
+
+            // Pronađi poslednji polazak u smeni
+            const shiftDepartures = record.departures.filter(d => d.shiftNumber === shift.shiftNumber);
+            const lastDeparture = shiftDepartures[shiftDepartures.length - 1];
+
+            return (
+              <Text type="secondary" style={{ fontSize: '9px', lineHeight: '1.2' }} ellipsis={{ tooltip: lastDeparture?.lineTitle }}>
+                {lastDeparture?.lineTitle || '-'}
+              </Text>
+            );
+          },
+        },
+      ],
+    },
+    {
+      title: 'II смена',
+      key: 'secondShiftGroup',
+      align: 'center',
+      onHeaderCell: () => ({
+        style: {
+          background: '#f6ffed',
+          borderLeft: '3px solid #52c41a',
+          borderRight: '3px solid #52c41a',
+          fontWeight: 'bold',
+        },
+      }),
+      children: [
+        {
+          title: 'Од',
+          key: 'secondShift_od',
+          width: 65,
+          align: 'center',
+          onHeaderCell: () => ({
+            style: {
+              background: '#f6ffed',
+              borderLeft: '3px solid #52c41a',
+            },
+          }),
+          onCell: () => ({
+            style: {
+              background: '#f9fff6',
+              borderLeft: '3px solid #52c41a',
+            },
+          }),
+          render: (_: any, record: GroupedTurnus) => {
+            const shift = record.shiftDetails[1];
+            if (!shift) return <Text type="secondary" style={{ fontSize: '9px' }}>-</Text>;
+            return <Text strong style={{ fontFamily: 'monospace', fontSize: '10px' }}>{formatTime(shift.firstDepartureTime)}</Text>;
+          },
+        },
+        {
+          title: 'До',
+          key: 'secondShift_do',
+          width: 65,
+          align: 'center',
+          onHeaderCell: () => ({
+            style: {
+              background: '#f6ffed',
+            },
+          }),
+          onCell: () => ({
+            style: {
+              background: '#f9fff6',
+            },
+          }),
+          render: (_: any, record: GroupedTurnus) => {
+            const shift = record.shiftDetails[1];
+            if (!shift) return <Text type="secondary" style={{ fontSize: '9px' }}>-</Text>;
+            return <Text style={{ fontFamily: 'monospace', fontSize: '10px' }}>{formatTime(shift.lastDepartureTime)}</Text>;
+          },
+        },
+        {
+          title: 'Радно време',
+          key: 'secondShift_radnoVreme',
+          width: 70,
+          align: 'center',
+          onHeaderCell: () => ({
+            style: {
+              background: '#f6ffed',
+            },
+          }),
+          onCell: () => ({
+            style: {
+              background: '#f9fff6',
+            },
+          }),
+          render: (_: any, record: GroupedTurnus) => {
+            const shift = record.shiftDetails[1];
+            if (!shift) return <Text type="secondary" style={{ fontSize: '9px' }}>-</Text>;
+
+            const startMinutes = dayjs(shift.firstDepartureTime).hour() * 60 + dayjs(shift.firstDepartureTime).minute();
+            const endMinutes = dayjs(shift.lastDepartureTime).hour() * 60 + dayjs(shift.lastDepartureTime).minute();
+            const duration = endMinutes >= startMinutes ? endMinutes - startMinutes : (24 * 60) - startMinutes + endMinutes;
+            const hours = Math.floor(duration / 60);
+            const minutes = duration % 60;
+
+            return (
+              <Tag color="green" style={{ fontSize: '9px', fontFamily: 'monospace', padding: '0 4px', margin: 0 }}>
+                {String(hours).padStart(2, '0')}:{String(minutes).padStart(2, '0')}
+              </Tag>
+            );
+          },
+        },
+        {
+          title: 'Број обрта',
+          key: 'secondShift_brojObrata',
+          width: 60,
+          align: 'center',
+          onHeaderCell: () => ({
+            style: {
+              background: '#f6ffed',
+            },
+          }),
+          onCell: () => ({
+            style: {
+              background: '#f9fff6',
+            },
+          }),
+          render: (_: any, record: GroupedTurnus) => {
+            const shift = record.shiftDetails[1];
+            if (!shift) return <Text type="secondary" style={{ fontSize: '9px' }}>-</Text>;
+            return <Text strong style={{ color: '#52c41a', fontSize: '11px' }}>{shift.departureCount}</Text>;
+          },
+        },
+        {
+          title: 'Терминус',
+          key: 'secondShift_terminus',
+          width: 120,
+          align: 'left',
+          onHeaderCell: () => ({
+            style: {
+              background: '#f6ffed',
+              borderRight: '3px solid #52c41a',
+            },
+          }),
+          onCell: () => ({
+            style: {
+              background: '#f9fff6',
+              borderRight: '3px solid #52c41a',
+            },
+          }),
+          render: (_: any, record: GroupedTurnus) => {
+            const shift = record.shiftDetails[1];
+            if (!shift) return <Text type="secondary" style={{ fontSize: '9px' }}>-</Text>;
+
+            // Pronađi poslednji polazak u smeni
+            const shiftDepartures = record.departures.filter(d => d.shiftNumber === shift.shiftNumber);
+            const lastDeparture = shiftDepartures[shiftDepartures.length - 1];
+
+            return (
+              <Text type="secondary" style={{ fontSize: '9px', lineHeight: '1.2' }} ellipsis={{ tooltip: lastDeparture?.lineTitle }}>
+                {lastDeparture?.lineTitle || '-'}
+              </Text>
+            );
+          },
+        },
+      ],
+    },
+    {
+      title: 'III смена',
+      key: 'thirdShiftGroup',
+      align: 'center',
+      onHeaderCell: () => ({
+        style: {
+          background: '#fff7e6',
+          borderLeft: '3px solid #fa8c16',
+          borderRight: '3px solid #fa8c16',
+          fontWeight: 'bold',
+        },
+      }),
+      children: [
+        {
+          title: 'Од',
+          key: 'thirdShift_od',
+          width: 65,
+          align: 'center',
+          onHeaderCell: () => ({
+            style: {
+              background: '#fff7e6',
+              borderLeft: '3px solid #fa8c16',
+            },
+          }),
+          onCell: () => ({
+            style: {
+              background: '#fffbf0',
+              borderLeft: '3px solid #fa8c16',
+            },
+          }),
+          render: (_: any, record: GroupedTurnus) => {
+            const shift = record.shiftDetails[2];
+            if (!shift) return <Text type="secondary" style={{ fontSize: '9px' }}>-</Text>;
+            return <Text strong style={{ fontFamily: 'monospace', fontSize: '10px' }}>{formatTime(shift.firstDepartureTime)}</Text>;
+          },
+        },
+        {
+          title: 'До',
+          key: 'thirdShift_do',
+          width: 65,
+          align: 'center',
+          onHeaderCell: () => ({
+            style: {
+              background: '#fff7e6',
+            },
+          }),
+          onCell: () => ({
+            style: {
+              background: '#fffbf0',
+            },
+          }),
+          render: (_: any, record: GroupedTurnus) => {
+            const shift = record.shiftDetails[2];
+            if (!shift) return <Text type="secondary" style={{ fontSize: '9px' }}>-</Text>;
+            return <Text style={{ fontFamily: 'monospace', fontSize: '10px' }}>{formatTime(shift.lastDepartureTime)}</Text>;
+          },
+        },
+        {
+          title: 'Радно време',
+          key: 'thirdShift_radnoVreme',
+          width: 70,
+          align: 'center',
+          onHeaderCell: () => ({
+            style: {
+              background: '#fff7e6',
+            },
+          }),
+          onCell: () => ({
+            style: {
+              background: '#fffbf0',
+            },
+          }),
+          render: (_: any, record: GroupedTurnus) => {
+            const shift = record.shiftDetails[2];
+            if (!shift) return <Text type="secondary" style={{ fontSize: '9px' }}>-</Text>;
+
+            const startMinutes = dayjs(shift.firstDepartureTime).hour() * 60 + dayjs(shift.firstDepartureTime).minute();
+            const endMinutes = dayjs(shift.lastDepartureTime).hour() * 60 + dayjs(shift.lastDepartureTime).minute();
+            const duration = endMinutes >= startMinutes ? endMinutes - startMinutes : (24 * 60) - startMinutes + endMinutes;
+            const hours = Math.floor(duration / 60);
+            const minutes = duration % 60;
+
+            return (
+              <Tag color="orange" style={{ fontSize: '9px', fontFamily: 'monospace', padding: '0 4px', margin: 0 }}>
+                {String(hours).padStart(2, '0')}:{String(minutes).padStart(2, '0')}
+              </Tag>
+            );
+          },
+        },
+        {
+          title: 'Број обрта',
+          key: 'thirdShift_brojObrata',
+          width: 60,
+          align: 'center',
+          onHeaderCell: () => ({
+            style: {
+              background: '#fff7e6',
+            },
+          }),
+          onCell: () => ({
+            style: {
+              background: '#fffbf0',
+            },
+          }),
+          render: (_: any, record: GroupedTurnus) => {
+            const shift = record.shiftDetails[2];
+            if (!shift) return <Text type="secondary" style={{ fontSize: '9px' }}>-</Text>;
+            return <Text strong style={{ color: '#52c41a', fontSize: '11px' }}>{shift.departureCount}</Text>;
+          },
+        },
+        {
+          title: 'Терминус',
+          key: 'thirdShift_terminus',
+          width: 120,
+          align: 'left',
+          onHeaderCell: () => ({
+            style: {
+              background: '#fff7e6',
+              borderRight: '3px solid #fa8c16',
+            },
+          }),
+          onCell: () => ({
+            style: {
+              background: '#fffbf0',
+              borderRight: '3px solid #fa8c16',
+            },
+          }),
+          render: (_: any, record: GroupedTurnus) => {
+            const shift = record.shiftDetails[2];
+            if (!shift) return <Text type="secondary" style={{ fontSize: '9px' }}>-</Text>;
+
+            // Pronađi poslednji polazak u smeni
+            const shiftDepartures = record.departures.filter(d => d.shiftNumber === shift.shiftNumber);
+            const lastDeparture = shiftDepartures[shiftDepartures.length - 1];
+
+            return (
+              <Text type="secondary" style={{ fontSize: '9px', lineHeight: '1.2' }} ellipsis={{ tooltip: lastDeparture?.lineTitle }}>
+                {lastDeparture?.lineTitle || '-'}
+              </Text>
+            );
+          },
+        },
+      ],
+    },
+    {
       title: 'Linije i smerovi',
       key: 'linesServed',
-      width: 250,
+      width: 180,
       align: 'center',
       render: (_: any, record: GroupedTurnus) => {
         // Extract unique line info from departures
@@ -482,7 +915,7 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
 
         return (
           <div>
-            <Space wrap size={[4, 4]}>
+            <Space wrap size={[2, 2]}>
               {sortedLines.map((lineInfo) => {
                 // Check if line has direction suffix (A, B, etc.)
                 const hasDirectionSuffix = /[A-Z]$/.test(lineInfo.lineNo);
@@ -490,7 +923,7 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
 
                 return (
                   <Tooltip key={lineInfo.lineNo} title={lineInfo.title || lineInfo.lineNo}>
-                    <Tag color={dirColor} style={{ fontSize: '12px', fontWeight: 'bold' }}>
+                    <Tag color={dirColor} style={{ fontSize: '9px', fontWeight: 'bold', padding: '0 4px', margin: 0 }}>
                       {lineInfo.display}
                     </Tag>
                   </Tooltip>
@@ -504,7 +937,7 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
     {
       title: 'Vremenski opseg - 24h prikaz',
       key: 'timeRange',
-      width: 400,
+      width: 320,
       render: (_: any, record: GroupedTurnus) => {
         const DAY_MINUTES = 24 * 60; // Total minutes in a day
 
@@ -516,29 +949,43 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
         const totalMins = totalMinutes % 60;
 
         return (
-          <div style={{ width: '100%', paddingBottom: '20px' }}>
-            {/* Header with times */}
-            <Space style={{ marginBottom: 6, width: '100%', justifyContent: 'space-between' }}>
-              <div>
-                <FieldTimeOutlined style={{ color: '#1890ff', marginRight: 4 }} />
-                <Text strong style={{ fontFamily: 'monospace', fontSize: '12px' }}>
+          <div style={{ width: '100%', paddingBottom: '6px' }}>
+            {/* Header with times and legend combined */}
+            <div style={{ marginBottom: 3, width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <FieldTimeOutlined style={{ color: '#1890ff', fontSize: '9px' }} />
+                <Text strong style={{ fontFamily: 'monospace', fontSize: '8px' }}>
                   {formatTime(record.firstDepartureTime)} - {formatTime(record.lastDepartureTime)}
                 </Text>
+                <Text type="secondary" style={{ fontSize: '7px' }}>
+                  ({totalHours}h {totalMins}min)
+                </Text>
+                {/* Legend inline */}
+                <Space size={1}>
+                  {record.shiftDetails.map((shift: ShiftDetail, index: number) => (
+                    <Tag
+                      key={shift.shiftNumber}
+                      color={shiftColors[index % shiftColors.length]}
+                      style={{ fontSize: '7px', padding: '0px 3px', margin: 0, lineHeight: '12px' }}
+                    >
+                      S{shift.shiftNumber}:{shift.departureCount}
+                    </Tag>
+                  ))}
+                </Space>
               </div>
-              <Text type="secondary" style={{ fontSize: '11px' }}>
-                {totalHours}h {totalMins}min
+              <Text type="secondary" style={{ fontSize: '7px' }}>
+                {Math.round((totalMinutes / DAY_MINUTES) * 100)}%
               </Text>
-            </Space>
+            </div>
 
             {/* 24-hour visualization bar */}
             <div style={{
               position: 'relative',
               width: '100%',
-              height: '32px',
+              height: '20px',
               background: '#f0f0f0',
-              borderRadius: '4px',
+              borderRadius: '3px',
               border: '1px solid #d9d9d9',
-              marginBottom: 6,
               overflow: 'hidden'
             }}>
               {/* Time markers (00:00, 06:00, 12:00, 18:00, 24:00) */}
@@ -565,9 +1012,9 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
                     <Text
                       style={{
                         position: 'absolute',
-                        bottom: '-18px',
-                        left: '-8px',
-                        fontSize: '9px',
+                        bottom: '-12px',
+                        left: '-5px',
+                        fontSize: '6px',
                         color: '#8c8c8c'
                       }}
                     >
@@ -608,7 +1055,7 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
                         alignItems: 'center',
                         justifyContent: 'center',
                         color: 'white',
-                        fontSize: '10px',
+                        fontSize: '8px',
                         fontWeight: 'bold',
                         cursor: 'pointer',
                         transition: 'opacity 0.2s',
@@ -617,29 +1064,11 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
                       onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
                       onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
                     >
-                      {widthPercent > 8 && `S${shift.shiftNumber} - ${durationText}`}
+                      {widthPercent > 8 && `S${shift.shiftNumber} ${durationText}`}
                     </div>
                   </Tooltip>
                 );
               })}
-            </div>
-
-            {/* Legend with coverage percentage */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Space size={4} wrap>
-                {record.shiftDetails.map((shift: ShiftDetail, index: number) => (
-                  <Tag
-                    key={shift.shiftNumber}
-                    color={shiftColors[index % shiftColors.length]}
-                    style={{ fontSize: '10px', padding: '0px 6px', margin: 0 }}
-                  >
-                    S{shift.shiftNumber}: {shift.departureCount}
-                  </Tag>
-                ))}
-              </Space>
-              <Text type="secondary" style={{ fontSize: '10px' }}>
-                Pokrivenost: {Math.round((totalMinutes / DAY_MINUTES) * 100)}%
-              </Text>
             </div>
           </div>
         );
@@ -649,17 +1078,17 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
       title: 'Status',
       dataIndex: 'active',
       key: 'active',
-      width: 110,
+      width: 85,
       align: 'center',
       fixed: 'right',
       render: (active: number) => (
         <Tooltip title={active === 1 ? 'Turaža je aktivna' : 'Turaža je neaktivna'}>
           {active === 1 ? (
-            <Tag color="success" icon={<CheckCircleOutlined />} style={{ fontSize: '13px', padding: '4px 12px' }}>
+            <Tag color="success" icon={<CheckCircleOutlined style={{ fontSize: '9px' }} />} style={{ fontSize: '9px', padding: '1px 6px', margin: 0 }}>
               Aktivan
             </Tag>
           ) : (
-            <Tag color="error" icon={<CloseCircleOutlined />} style={{ fontSize: '13px', padding: '4px 12px' }}>
+            <Tag color="error" icon={<CloseCircleOutlined style={{ fontSize: '9px' }} />} style={{ fontSize: '9px', padding: '1px 6px', margin: 0 }}>
               Neaktivan
             </Tag>
           )}
@@ -672,8 +1101,8 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
     <Modal
       title={
         <Space>
-          <TeamOutlined style={{ fontSize: '24px', color: '#1890ff' }} />
-          <span style={{ fontSize: '18px' }}>
+          <TeamOutlined style={{ fontSize: '20px', color: '#1890ff' }} />
+          <span style={{ fontSize: '16px' }}>
             Turaže - Linija {lineNumberForDisplay || lineNumber || ''}
           </span>
         </Space>
@@ -681,25 +1110,25 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
       open={visible}
       onCancel={onClose}
       footer={null}
-      width="95%"
-      style={{ top: 20, maxWidth: '1800px' }}
+      width="98%"
+      style={{ top: 10, maxWidth: 'none', paddingBottom: 10 }}
     >
       <Spin spinning={loading}>
         {data ? (
           <div>
             {/* Info header */}
-            <div className="mb-4">
+            <div className="mb-3">
               <Descriptions bordered size="small" column={3}>
-                <Descriptions.Item label="Linija broj">
-                  <Text strong>{data.lineNumber}</Text>
+                <Descriptions.Item label={<Text style={{ fontSize: '11px' }}>Linija broj</Text>}>
+                  <Text strong style={{ fontSize: '12px' }}>{data.lineNumber}</Text>
                 </Descriptions.Item>
-                <Descriptions.Item label="Ukupno turaža">
-                  <Tag color="blue" style={{ fontSize: '14px', padding: '4px 12px' }}>
+                <Descriptions.Item label={<Text style={{ fontSize: '11px' }}>Ukupno turaža</Text>}>
+                  <Tag color="blue" style={{ fontSize: '11px', padding: '2px 8px' }}>
                     {data.total}
                   </Tag>
                 </Descriptions.Item>
-                <Descriptions.Item label="Napomena">
-                  <Text type="secondary" style={{ fontSize: '12px' }}>
+                <Descriptions.Item label={<Text style={{ fontSize: '11px' }}>Napomena</Text>}>
+                  <Text type="secondary" style={{ fontSize: '10px' }}>
                     Kliknite na red za detalje polazaka
                   </Text>
                 </Descriptions.Item>
@@ -710,11 +1139,11 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
             <Card
               size="small"
               title={
-                <Space>
-                  <FilterOutlined style={{ color: '#1890ff' }} />
-                  <Text strong>Filteri</Text>
+                <Space size="small">
+                  <FilterOutlined style={{ color: '#1890ff', fontSize: '12px' }} />
+                  <Text strong style={{ fontSize: '12px' }}>Filteri</Text>
                   {(selectedDays.length > 0 || searchTurnusId || searchTurnusName) && (
-                    <Tag color="blue">
+                    <Tag color="blue" style={{ fontSize: '10px', padding: '1px 6px' }}>
                       {selectedDays.length + (searchTurnusId ? 1 : 0) + (searchTurnusName ? 1 : 0)} aktivan
                     </Tag>
                   )}
@@ -723,20 +1152,21 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
               extra={
                 <Button
                   size="small"
-                  icon={<ClearOutlined />}
+                  icon={<ClearOutlined style={{ fontSize: '11px' }} />}
                   onClick={handleResetFilters}
                   disabled={selectedDays.length === 0 && !searchTurnusId && !searchTurnusName}
+                  style={{ fontSize: '11px', padding: '2px 8px', height: '26px' }}
                 >
                   Resetuj filtere
                 </Button>
               }
-              style={{ marginBottom: 16 }}
+              style={{ marginBottom: 12 }}
             >
-              <Row gutter={[16, 16]}>
+              <Row gutter={[12, 8]}>
                 {/* Day selection */}
                 <Col span={24}>
                   <div>
-                    <Text strong style={{ marginBottom: 8, display: 'block' }}>
+                    <Text strong style={{ marginBottom: 6, display: 'block', fontSize: '11px' }}>
                       Dani u opticaju:
                     </Text>
                     <Checkbox.Group
@@ -744,9 +1174,9 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
                       onChange={(checkedValues) => setSelectedDays(checkedValues as string[])}
                       style={{ width: '100%' }}
                     >
-                      <Space wrap size={[8, 8]}>
+                      <Space wrap size={[6, 4]}>
                         {availableDays.map((day) => (
-                          <Checkbox key={day} value={day}>
+                          <Checkbox key={day} value={day} style={{ fontSize: '11px' }}>
                             {day}
                           </Checkbox>
                         ))}
@@ -758,15 +1188,17 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
                 {/* Search by Turnus ID */}
                 <Col xs={24} sm={12} md={8}>
                   <div>
-                    <Text strong style={{ marginBottom: 8, display: 'block' }}>
+                    <Text strong style={{ marginBottom: 6, display: 'block', fontSize: '11px' }}>
                       Turnus ID:
                     </Text>
                     <Input
+                      size="small"
                       placeholder="Pretraži po ID-u"
-                      prefix={<SearchOutlined />}
+                      prefix={<SearchOutlined style={{ fontSize: '11px' }} />}
                       value={searchTurnusId}
                       onChange={(e) => setSearchTurnusId(e.target.value)}
                       allowClear
+                      style={{ fontSize: '11px' }}
                     />
                   </div>
                 </Col>
@@ -774,23 +1206,54 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
                 {/* Search by Turnus Name */}
                 <Col xs={24} sm={12} md={8}>
                   <div>
-                    <Text strong style={{ marginBottom: 8, display: 'block' }}>
+                    <Text strong style={{ marginBottom: 6, display: 'block', fontSize: '11px' }}>
                       Naziv turaže:
                     </Text>
                     <Input
+                      size="small"
                       placeholder="Pretraži po nazivu"
-                      prefix={<SearchOutlined />}
+                      prefix={<SearchOutlined style={{ fontSize: '11px' }} />}
                       value={searchTurnusName}
                       onChange={(e) => setSearchTurnusName(e.target.value)}
                       allowClear
+                      style={{ fontSize: '11px' }}
                     />
                   </div>
                 </Col>
               </Row>
             </Card>
 
-            {/* Expandable Table */}
-            <Table
+            {/* Dual Horizontal Scroll Wrapper */}
+            <div style={{ position: 'relative' }}>
+              {/* Top scroll bar */}
+              <div
+                style={{
+                  overflowX: 'auto',
+                  overflowY: 'hidden',
+                  marginBottom: '8px',
+                }}
+                onScroll={(e) => {
+                  const bottomScroll = document.querySelector('.table-scroll-wrapper') as HTMLElement;
+                  if (bottomScroll) {
+                    bottomScroll.scrollLeft = e.currentTarget.scrollLeft;
+                  }
+                }}
+              >
+                <div style={{ width: '2200px', height: '1px' }}></div>
+              </div>
+
+              {/* Table wrapper with bottom scroll */}
+              <div
+                className="table-scroll-wrapper"
+                style={{ overflowX: 'auto' }}
+                onScroll={(e) => {
+                  const topScroll = e.currentTarget.previousElementSibling as HTMLElement;
+                  if (topScroll) {
+                    topScroll.scrollLeft = e.currentTarget.scrollLeft;
+                  }
+                }}
+              >
+                <Table
               columns={masterColumns}
               dataSource={filteredData?.grouped || []}
               rowKey={(record) => `${record.turnusId}-${record.dayname}`}
@@ -804,7 +1267,7 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
                       onClick={(e) => onExpand(record, e)}
                       style={{
                         color: '#1890ff',
-                        fontSize: '14px',
+                        fontSize: '11px',
                         cursor: 'pointer',
                         transition: 'transform 0.3s',
                       }}
@@ -813,19 +1276,23 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
                 ),
               }}
               pagination={{
-                pageSize: 10,
+                pageSize: 15,
                 showSizeChanger: true,
                 showTotal: (total, range) =>
                   `${range[0]}-${range[1]} od ${total} turaža`,
-                pageSizeOptions: ['10', '20', '50'],
+                pageSizeOptions: ['10', '15', '20', '30', '50'],
+                size: 'small',
+                style: { fontSize: '11px' }
               }}
-              size="middle"
+              size="small"
               bordered
               locale={{
                 emptyText: 'Nema turaža za ovu liniju',
               }}
-              scroll={{ x: 1750 }}
+              scroll={{ x: 2200 }}
             />
+              </div>
+            </div>
           </div>
         ) : (
           !loading && <Empty description="Nema podataka o turažama" />

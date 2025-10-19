@@ -1578,7 +1578,7 @@ export class GpsSyncDashboardController {
       if (recordsToRetry.length > 0) {
         this.logger.log(`🔄 Resetujem ${recordsToRetry.length} zapisa...`);
 
-        const batchSize = 1000; // Smanjen batch size sa 10000 na 1000
+        const batchSize = 1000; // Batch size optimizovan za connection stability
         const totalBatches = Math.ceil(recordsToRetry.length / batchSize);
 
         for (let i = 0; i < recordsToRetry.length; i += batchSize) {
@@ -1586,31 +1586,30 @@ export class GpsSyncDashboardController {
           const currentBatch = Math.floor(i / batchSize) + 1;
 
           try {
-            const result = await this.prisma.$executeRaw`
-              UPDATE gps_raw_buffer
-              SET process_status = 'pending',
-                  retry_count = retry_count + 1,
-                  processed_at = NULL,
-                  error_message = CONCAT(
-                    COALESCE(error_message, ''),
-                    ' | Bulk Recovery: Reset from stuck processing at ',
-                    NOW()
-                  )
-              WHERE id IN (${Prisma.join(batch)})
-            `;
+            // Koristi transaction za garantovanu connection stability
+            const result = await this.prisma.$transaction(async (tx) => {
+              return await tx.$executeRaw`
+                UPDATE gps_raw_buffer
+                SET process_status = 'pending',
+                    retry_count = retry_count + 1,
+                    processed_at = NULL,
+                    error_message = CONCAT(
+                      COALESCE(error_message, ''),
+                      ' | Bulk Recovery: Reset from stuck processing at ',
+                      NOW()
+                    )
+                WHERE id IN (${Prisma.join(batch)})
+              `;
+            }, {
+              maxWait: 10000, // Max wait 10s za transaction lock
+              timeout: 30000, // Timeout 30s za transaction execution
+              isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+            });
 
             recoveredCount += result;
             this.logger.log(
               `   ✅ Batch ${currentBatch}/${totalBatches}: ${result} zapisa`,
             );
-
-            // Reconnect svakih 10 batch-eva da osvežiš konekciju
-            if (currentBatch % 10 === 0 && currentBatch < totalBatches) {
-              this.logger.log(`   🔄 Reconnecting Prisma (batch ${currentBatch})...`);
-              await this.prisma.$disconnect();
-              await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
-              await this.prisma.$connect();
-            }
           } catch (error) {
             this.logger.error(`❌ Greška pri batch ${currentBatch}:`, error.message);
             throw error; // Re-throw da zaustavi proces
@@ -1618,30 +1617,43 @@ export class GpsSyncDashboardController {
         }
       }
 
-      // Označi kao trajno failed (takođe u manjim batch-evima)
+      // Označi kao trajno failed (takođe u transaction batch-evima)
       if (recordsToFail.length > 0) {
         this.logger.log(
           `⚠️  Označavam ${recordsToFail.length} zapisa kao failed...`,
         );
 
-        const batchSize = 1000; // Smanjen batch size
+        const batchSize = 1000;
+        const totalBatches = Math.ceil(recordsToFail.length / batchSize);
+
         for (let i = 0; i < recordsToFail.length; i += batchSize) {
           const batch = recordsToFail.slice(i, i + batchSize);
+          const currentBatch = Math.floor(i / batchSize) + 1;
 
           try {
-            await this.prisma.$executeRaw`
-              UPDATE gps_raw_buffer
-              SET process_status = 'failed',
-                  retry_count = retry_count + 1,
-                  error_message = CONCAT(
-                    COALESCE(error_message, ''),
-                    ' | Bulk Recovery: Max retries exceeded at ',
-                    NOW()
-                  )
-              WHERE id IN (${Prisma.join(batch)})
-            `;
+            await this.prisma.$transaction(async (tx) => {
+              return await tx.$executeRaw`
+                UPDATE gps_raw_buffer
+                SET process_status = 'failed',
+                    retry_count = retry_count + 1,
+                    error_message = CONCAT(
+                      COALESCE(error_message, ''),
+                      ' | Bulk Recovery: Max retries exceeded at ',
+                      NOW()
+                    )
+                WHERE id IN (${Prisma.join(batch)})
+              `;
+            }, {
+              maxWait: 10000,
+              timeout: 30000,
+              isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+            });
+
+            this.logger.log(
+              `   ✅ Failed batch ${currentBatch}/${totalBatches}`,
+            );
           } catch (error) {
-            this.logger.error(`❌ Greška pri označavanju failed:`, error.message);
+            this.logger.error(`❌ Greška pri označavanju failed (batch ${currentBatch}):`, error.message);
             throw error;
           }
         }
