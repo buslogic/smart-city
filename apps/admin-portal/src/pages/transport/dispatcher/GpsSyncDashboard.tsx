@@ -268,10 +268,11 @@ const GpsSyncDashboard: React.FC = () => {
     }
   }, [refetchCron]);
 
-  const handleBulkRecovery = useCallback(async (resetAll: boolean = false) => {
+  const handleBulkRecovery = useCallback(async (resetAll: boolean = false, customLimit?: number) => {
     setRecoveryLoading(true);
     try {
-      const payload = resetAll ? { resetAll: true } : { limit: recoveryLimit };
+      const limitToUse = customLimit || recoveryLimit;
+      const payload = resetAll ? { resetAll: true } : { limit: limitToUse };
       const response = await api.post('/api/gps-sync-dashboard/bulk-recovery-stuck', payload);
 
       if (response.data.success) {
@@ -1830,8 +1831,7 @@ const GpsSyncDashboard: React.FC = () => {
             icon={<RedoOutlined />}
             loading={recoveryLoading}
             onClick={() => {
-              setRecoveryLimit(100000);
-              handleBulkRecovery(false);
+              handleBulkRecovery(false, 100000);
             }}
           >
             Recovery 100,000 slogova
