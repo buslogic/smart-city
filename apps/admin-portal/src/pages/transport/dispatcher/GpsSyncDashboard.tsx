@@ -51,6 +51,8 @@ interface BufferStatus {
   totalProcessedLastHour: number;
   averageTimescaleInsertTime: number;
   processingPercent: number;
+  stuckProcessingRecords: number; // Broj stuck processing slogova
+  stuckProcessingOldest: string | null; // Najstariji stuck slog
   timestamp: string;
 }
 
@@ -484,12 +486,18 @@ const GpsSyncDashboard: React.FC = () => {
         </Col>
         <Col xs={24} sm={12} md={6}>
           <Card>
-            <Statistic
-              title="Greške"
-              value={bufferStatus?.errorRecords || 0}
-              prefix={<ExclamationCircleOutlined />}
-              valueStyle={{ color: bufferStatus?.errorRecords ? '#ff4d4f' : '#999' }}
-            />
+            <Tooltip title={
+              bufferStatus?.stuckProcessingRecords
+                ? `Greške: ${bufferStatus.errorRecords || 0} (${bufferStatus.stuckProcessingRecords} stuck processing, ${(bufferStatus.errorRecords || 0) - (bufferStatus.stuckProcessingRecords || 0)} failed)`
+                : 'Broj failed slogova u buffer-u'
+            }>
+              <Statistic
+                title="Greške"
+                value={bufferStatus?.errorRecords || 0}
+                prefix={<ExclamationCircleOutlined />}
+                valueStyle={{ color: bufferStatus?.errorRecords ? '#ff4d4f' : '#999' }}
+              />
+            </Tooltip>
           </Card>
         </Col>
       </Row>
@@ -545,6 +553,30 @@ const GpsSyncDashboard: React.FC = () => {
             message={`Najstariji neprocesirani slog: ${dayjs(bufferStatus.oldestRecord).fromNow()}`}
             type={dayjs().diff(dayjs(bufferStatus.oldestRecord), 'minute') > 10 ? 'warning' : 'info'}
             icon={<WarningOutlined />}
+            style={{ marginTop: 16 }}
+          />
+        )}
+
+        {/* Stuck Processing Alert */}
+        {bufferStatus?.stuckProcessingRecords && bufferStatus.stuckProcessingRecords > 1000 && (
+          <Alert
+            message={`⚠️ Detektovano ${bufferStatus.stuckProcessingRecords.toLocaleString()} stuck processing slogova!`}
+            description={
+              <div>
+                <p>
+                  Ovi slogovi su zaglavljeni u statusu "processing" duže od 10 minuta i verovatno neće biti
+                  automatski obrađeni. {bufferStatus.stuckProcessingOldest && (
+                    <>Najstariji stuck slog: <strong>{dayjs(bufferStatus.stuckProcessingOldest).fromNow()}</strong>.</>
+                  )}
+                </p>
+                <p style={{ marginTop: 8, marginBottom: 0 }}>
+                  <strong>Preporučena akcija:</strong> Kontaktirajte sistem administratora da pokrene bulk recovery skriptu.
+                </p>
+              </div>
+            }
+            type="error"
+            icon={<ExclamationCircleOutlined />}
+            showIcon
             style={{ marginTop: 16 }}
           />
         )}
@@ -772,6 +804,17 @@ const GpsSyncDashboard: React.FC = () => {
                     {status.toUpperCase()}
                   </Tag>
                   <Statistic value={count} />
+                  {/* Prikaži stuck processing badge */}
+                  {status === 'processing' && bufferStatus.stuckProcessingRecords > 0 && (
+                    <Badge
+                      count={`${bufferStatus.stuckProcessingRecords.toLocaleString()} stuck`}
+                      style={{
+                        backgroundColor: '#ff4d4f',
+                        fontSize: 11,
+                        padding: '2px 6px',
+                      }}
+                    />
+                  )}
                 </Space>
               </Col>
             ))}

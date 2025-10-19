@@ -101,6 +101,16 @@ export class GpsSyncDashboardController {
           type: 'number',
           description: 'Prosečno vreme procesiranja (ms)',
         },
+        stuckProcessingRecords: {
+          type: 'number',
+          description: 'Broj processing slogova koji su stuck (stariji od 10 min)',
+        },
+        stuckProcessingOldest: {
+          type: 'string',
+          format: 'date-time',
+          nullable: true,
+          description: 'Datum najstarijeg stuck processing sloga',
+        },
       },
     },
   })
@@ -167,8 +177,17 @@ export class GpsSyncDashboardController {
     // Računaj ukupan broj iz statusCounts
     let totalRecords = 0;
     statusCounts.forEach((status) => {
-      recordsByStatus[status.process_status] = Number(status.count);
-      totalRecords += Number(status.count);
+      const statusKey = status.process_status;
+      const count = Number(status.count);
+
+      // Mapiraj 'failed' status u 'error' za frontend
+      if (statusKey === 'failed') {
+        recordsByStatus.error += count;
+      } else if (recordsByStatus[statusKey] !== undefined) {
+        recordsByStatus[statusKey] += count;
+      }
+
+      totalRecords += count;
     });
 
     // OPTIMIZOVANO: Prosečno vreme - samo poslednji 100 zapisa za brzinu
@@ -216,6 +235,29 @@ export class GpsSyncDashboardController {
     const totalProcessedHour = Number(hourStats[0]?.total_processed || 0);
     const avgTimescaleTime = Math.round(hourStats[0]?.avg_timescale_time || 0);
 
+    // Detektuj stuck processing slogove (starije od 10 minuta)
+    const stuckThresholdMinutes = 10;
+    const stuckThreshold = new Date(
+      new Date().getTime() - stuckThresholdMinutes * 60 * 1000,
+    );
+
+    const stuckProcessing = await this.prisma.$queryRaw<
+      { count: bigint; oldest: Date | null }[]
+    >`
+      SELECT
+        COUNT(*) as count,
+        MIN(processed_at) as oldest
+      FROM gps_raw_buffer
+      WHERE process_status = 'processing'
+        AND processed_at < ${stuckThreshold}
+    `;
+
+    const stuckProcessingRecords = Number(stuckProcessing[0]?.count || 0);
+    const stuckProcessingOldest = stuckProcessing[0]?.oldest || null;
+
+    // Dodaj stuck processing u error count
+    const totalErrorRecords = recordsByStatus.error + stuckProcessingRecords;
+
     // Računaj procenat procesiranja (pendingRecords vs processed u zadnjem satu)
     let processingPercent = 0;
     if (totalRecords > 0) {
@@ -234,7 +276,7 @@ export class GpsSyncDashboardController {
       totalRecords: totalRecords,
       pendingRecords: recordsByStatus.pending,
       processedRecords: recordsByStatus.processed,
-      errorRecords: recordsByStatus.error,
+      errorRecords: totalErrorRecords, // Uključuje failed + stuck processing
       oldestRecord: oldestRecord[0]?.received_at || null,
       newestRecord: newestRecord[0]?.received_at || null,
       lastProcessedAt: lastProcessed[0]?.processed_at || null,
@@ -244,6 +286,8 @@ export class GpsSyncDashboardController {
       totalProcessedLastHour: totalProcessedHour,
       averageTimescaleInsertTime: avgTimescaleTime,
       processingPercent: processingPercent,
+      stuckProcessingRecords, // Novi field
+      stuckProcessingOldest, // Novi field
       timestamp: new Date(),
     };
   }
