@@ -501,6 +501,7 @@ export class TurnusiService {
     let errors = 0;
     let totalProcessed = 0;
     let syncId: string | null = null;
+    let legacyRecords: any[] = []; // Declare outside try block
 
     try {
       const legacyDb = await this.prisma.legacyDatabase.findFirst({
@@ -568,44 +569,52 @@ export class TurnusiService {
         const query = `SELECT * FROM changes_codes_tours WHERE turnus_name IN (${placeholders}) ORDER BY turnus_id ASC`;
         const [rows] = await connection.execute(query, turnusNames);
 
-        const legacyRecords = rows as any[];
+        legacyRecords = rows as any[]; // Assign to outer variable
         totalProcessed = legacyRecords.length;
 
         console.log(`📊 Found ${totalProcessed} changes_codes_tours record(s)`);
 
-        // Create sync log entry for progress tracking
-        syncId = await this.createSyncLog(groupId, userId, totalProcessed);
+      } finally {
+        // FIX #1: Zatvori Legacy konekciju ODMAH nakon SELECT-a
+        // Legacy konekcija se više ne koristi - workeri koriste samo Prisma
+        await connection.end();
+        console.log('✅ Legacy MySQL connection closed after SELECT');
+      }
 
-        if (legacyRecords.length === 0) {
-          console.warn(
-            `⚠️ Nema podataka u tabeli changes_codes_tours za odabranu grupu`,
-          );
+      // Create sync log entry for progress tracking
+      syncId = await this.createSyncLog(groupId, userId, totalProcessed);
 
-          // Mark sync as completed even though there are no records
-          if (syncId) {
-            await this.updateSyncProgress(syncId, {
-              status: 'completed',
-              processedRecords: 0,
-              upsertedRecords: 0,
-            });
-          }
+      if (legacyRecords.length === 0) {
+        console.warn(
+          `⚠️ Nema podataka u tabeli changes_codes_tours za odabranu grupu`,
+        );
 
-          const totalDuration = ((Date.now() - overallStartTime) / 1000).toFixed(
-            2,
-          );
-          return {
-            upserted: 0,
-            skipped: 0,
-            errors: 0,
-            totalProcessed: 0,
-          };
+        // Mark sync as completed even though there are no records
+        if (syncId) {
+          await this.updateSyncProgress(syncId, {
+            status: 'completed',
+            processedRecords: 0,
+            upsertedRecords: 0,
+          });
         }
 
-        // PARALLEL WORKERS - Optimized for MySQL stability
-        // Smanjeni workers i batch size za stabilnost (850k rekorda)
-        const NUM_WORKERS = 2; // Smanjeno sa 4 → 2
-        const BATCH_SIZE = 500; // Smanjeno sa 2000 → 500
-        const BATCH_DELAY_MS = 200; // Delay između batch-eva za MySQL stabilnost
+        const totalDuration = ((Date.now() - overallStartTime) / 1000).toFixed(
+          2,
+        );
+        return {
+          upserted: 0,
+          skipped: 0,
+          errors: 0,
+          totalProcessed: 0,
+        };
+      }
+
+      // FIX #2: Optimized worker configuration
+      // 1 worker umesto 2 = manje Prisma connection pool konkurencije
+      // Batch 1000 umesto 500 = manje SQL query-ja (827k / 1000 = ~827 batches)
+      const NUM_WORKERS = 1; // Smanjeno sa 2 → 1 za stabilnost Prisma pool-a
+      const BATCH_SIZE = 1000; // Povećano sa 500 → 1000 za efikasnost
+      const BATCH_DELAY_MS = 100; // Smanjeno sa 200ms → 100ms za brži sync
 
         const chunkSize = Math.ceil(legacyRecords.length / NUM_WORKERS);
         console.log(`🚀 Starting ${NUM_WORKERS} parallel workers, ${chunkSize} records per worker`);
@@ -637,19 +646,16 @@ export class TurnusiService {
           errors += result.errors;
         });
 
-        console.log(`✅ All ${NUM_WORKERS} workers completed successfully`);
+      console.log(`✅ All ${NUM_WORKERS} workers completed successfully`);
 
-        // Mark sync as completed
-        if (syncId) {
-          await this.updateSyncProgress(syncId, {
-            status: 'completed',
-            processedRecords: totalProcessed,
-            upsertedRecords: upserted,
-            errorRecords: errors,
-          });
-        }
-      } finally {
-        await connection.end();
+      // Mark sync as completed
+      if (syncId) {
+        await this.updateSyncProgress(syncId, {
+          status: 'completed',
+          processedRecords: totalProcessed,
+          upsertedRecords: upserted,
+          errorRecords: errors,
+        });
       }
 
       const totalDuration = ((Date.now() - overallStartTime) / 1000).toFixed(2);
@@ -1145,6 +1151,7 @@ export class TurnusiService {
     let errors = 0;
     let totalProcessed = 0;
     const syncId = existingSyncId;
+    let legacyRecords: any[] = []; // Declare outside try block
 
     try {
       const legacyDb = await this.prisma.legacyDatabase.findFirst({
@@ -1221,37 +1228,46 @@ export class TurnusiService {
         const query = `SELECT * FROM changes_codes_tours WHERE turnus_name IN (${placeholders}) ORDER BY turnus_id ASC`;
         const [rows] = await connection.execute(query, turnusNames);
 
-        const legacyRecords = rows as any[];
+        legacyRecords = rows as any[]; // Assign to outer variable
         totalProcessed = legacyRecords.length;
 
         console.log(`📊 Found ${totalProcessed} changes_codes_tours record(s)`);
 
-        // Update sync log with totalRecords now that we know it
+      } finally {
+        // FIX #1: Zatvori Legacy konekciju ODMAH nakon SELECT-a
+        // Legacy konekcija se više ne koristi - workeri koriste samo Prisma
+        await connection.end();
+        console.log('✅ Legacy MySQL connection closed after SELECT');
+      }
+
+      // Update sync log with totalRecords now that we know it
+      await this.updateSyncProgress(syncId, {
+        totalRecords: totalProcessed,
+      });
+
+      if (legacyRecords.length === 0) {
+        console.warn(
+          `⚠️ Nema podataka u tabeli changes_codes_tours za odabranu grupu`,
+        );
         await this.updateSyncProgress(syncId, {
-          totalRecords: totalProcessed,
+          status: 'completed',
+          processedRecords: 0,
+          upsertedRecords: 0,
         });
+        return {
+          upserted: 0,
+          skipped: 0,
+          errors: 0,
+          totalProcessed: 0,
+        };
+      }
 
-        if (legacyRecords.length === 0) {
-          console.warn(
-            `⚠️ Nema podataka u tabeli changes_codes_tours za odabranu grupu`,
-          );
-          await this.updateSyncProgress(syncId, {
-            status: 'completed',
-            processedRecords: 0,
-            upsertedRecords: 0,
-          });
-          return {
-            upserted: 0,
-            skipped: 0,
-            errors: 0,
-            totalProcessed: 0,
-          };
-        }
-
-        // PARALLEL WORKERS - Optimized for MySQL stability
-        const NUM_WORKERS = 2;
-        const BATCH_SIZE = 500;
-        const BATCH_DELAY_MS = 200;
+      // FIX #2: Optimized worker configuration
+      // 1 worker umesto 2 = manje Prisma connection pool konkurencije
+      // Batch 1000 umesto 500 = manje SQL query-ja (827k / 1000 = ~827 batches)
+      const NUM_WORKERS = 1; // Smanjeno sa 2 → 1 za stabilnost Prisma pool-a
+      const BATCH_SIZE = 1000; // Povećano sa 500 → 1000 za efikasnost
+      const BATCH_DELAY_MS = 100; // Smanjeno sa 200ms → 100ms za brži sync
 
         const chunkSize = Math.ceil(legacyRecords.length / NUM_WORKERS);
         console.log(`🚀 Starting ${NUM_WORKERS} parallel workers, ${chunkSize} records per worker`);
@@ -1283,18 +1299,15 @@ export class TurnusiService {
           errors += result.errors;
         });
 
-        console.log(`✅ All ${NUM_WORKERS} workers completed successfully`);
+      console.log(`✅ All ${NUM_WORKERS} workers completed successfully`);
 
-        // Mark sync as completed
-        await this.updateSyncProgress(syncId, {
-          status: 'completed',
-          processedRecords: totalProcessed,
-          upsertedRecords: upserted,
-          errorRecords: errors,
-        });
-      } finally {
-        await connection.end();
-      }
+      // Mark sync as completed
+      await this.updateSyncProgress(syncId, {
+        status: 'completed',
+        processedRecords: totalProcessed,
+        upsertedRecords: upserted,
+        errorRecords: errors,
+      });
 
       const totalDuration = ((Date.now() - overallStartTime) / 1000).toFixed(2);
       console.log(
