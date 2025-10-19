@@ -1073,17 +1073,19 @@ export class TurnusiService {
    * Gets the last incomplete sync for a group (for resume capability)
    */
   async getLastIncompleteSyncForGroup(groupId: number) {
-    return await this.prisma.turnusSyncLog.findFirst({
-      where: {
-        groupId,
-        status: {
-          in: ['pending', 'in_progress'],
-        },
-      },
-      orderBy: {
-        startedAt: 'desc',
-      },
-    });
+    // FIX #5: Koristi raw SQL umesto Prisma findFirst() da izbegneš connection loss
+    const result = await this.prisma.$queryRawUnsafe<any[]>(
+      `
+      SELECT * FROM turnus_sync_logs
+      WHERE group_id = ?
+        AND status IN ('pending', 'in_progress')
+      ORDER BY started_at DESC
+      LIMIT 1
+      `,
+      groupId
+    );
+
+    return result.length > 0 ? result[0] : null;
   }
 
   /**
