@@ -15,7 +15,6 @@ CREATE TABLE IF NOT EXISTS `timetable_dates` (
   UNIQUE KEY `unique_date_valid_from` (`date_valid_from`),
   UNIQUE KEY `timetable_dates_legacy_ticketing_id_key` (`legacy_ticketing_id`),
   UNIQUE KEY `timetable_dates_legacy_city_id_key` (`legacy_city_id`),
-  KEY `idx_date_valid_from` (`date_valid_from`),
   KEY `idx_status` (`status`),
   KEY `idx_synchro_status` (`synchro_status`),
   KEY `idx_legacy_ticketing_id` (`legacy_ticketing_id`),

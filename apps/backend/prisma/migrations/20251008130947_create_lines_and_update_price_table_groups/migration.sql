@@ -2,6 +2,10 @@
 ALTER TABLE `price_table_groups`
   MODIFY COLUMN `date_valid_from` VARCHAR(30) NOT NULL;
 
+-- Add UNIQUE constraint to price_table_groups.date_valid_from (required for FK reference)
+-- Note: UNIQUE constraint automatically creates an index, so we don't need idx_date_valid_from
+ALTER TABLE `price_table_groups` ADD CONSTRAINT `unique_date_valid_from` UNIQUE (`date_valid_from`);
+
 -- CreateEnum DirectionType
 -- CreateEnum OnlineDiscountType
 
