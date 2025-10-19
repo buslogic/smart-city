@@ -9,6 +9,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 import { PrismaService } from '../prisma/prisma.service';
+import { Prisma } from '@prisma/client';
 import * as child_process from 'child_process';
 import { promisify } from 'util';
 import axios from 'axios';
@@ -1480,6 +1481,180 @@ export class GpsSyncDashboardController {
       return {
         success: false,
         message: 'Greška pri recovery-ju',
+        error: error.message,
+        timestamp: new Date(),
+      };
+    }
+  }
+
+  @Post('bulk-recovery-stuck')
+  @RequirePermissions('dispatcher.manage_cron')
+  @ApiOperation({
+    summary: 'Bulk recovery stuck processing slogova',
+    description:
+      'Reset-uje stuck processing slogove (starije od 10min) u pending status. Podržava batch processing.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Recovery proces pokrenut',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+        recovered: { type: 'number' },
+        remaining: { type: 'number' },
+        timestamp: { type: 'string', format: 'date-time' },
+      },
+    },
+  })
+  async bulkRecoveryStuck(
+    @Body() dto: { limit?: number; resetAll?: boolean },
+  ) {
+    try {
+      const stuckThresholdMinutes = 10;
+      const maxRetries = 3;
+      const limit = dto.resetAll ? null : dto.limit || 10000;
+
+      const stuckThreshold = new Date(
+        new Date().getTime() - stuckThresholdMinutes * 60 * 1000,
+      );
+
+      this.logger.log(
+        `🔧 Bulk Recovery: limit=${limit || 'ALL'}, threshold=${stuckThresholdMinutes}min`,
+      );
+
+      // Dohvati stuck zapise
+      const stuckRecordsQuery = limit
+        ? this.prisma.$queryRaw<
+            { id: bigint; retry_count: number }[]
+          >`
+            SELECT id, retry_count
+            FROM gps_raw_buffer
+            WHERE process_status = 'processing'
+              AND processed_at < ${stuckThreshold}
+            ORDER BY processed_at ASC
+            LIMIT ${limit}
+          `
+        : this.prisma.$queryRaw<
+            { id: bigint; retry_count: number }[]
+          >`
+            SELECT id, retry_count
+            FROM gps_raw_buffer
+            WHERE process_status = 'processing'
+              AND processed_at < ${stuckThreshold}
+            ORDER BY processed_at ASC
+          `;
+
+      const stuckRecords = await stuckRecordsQuery;
+
+      if (stuckRecords.length === 0) {
+        return {
+          success: true,
+          message: 'Nema stuck zapisa za recovery',
+          recovered: 0,
+          remaining: 0,
+          timestamp: new Date(),
+        };
+      }
+
+      this.logger.log(`📊 Pronađeno ${stuckRecords.length} stuck zapisa`);
+
+      // Podeli na one koje treba retry-ovati i one koje treba failovati
+      const recordsToRetry: bigint[] = [];
+      const recordsToFail: bigint[] = [];
+
+      stuckRecords.forEach((record) => {
+        if (record.retry_count >= maxRetries - 1) {
+          recordsToFail.push(record.id);
+        } else {
+          recordsToRetry.push(record.id);
+        }
+      });
+
+      let recoveredCount = 0;
+
+      // Reset zapisa za retry (u batch-evima od 10000 za bezbednost)
+      if (recordsToRetry.length > 0) {
+        this.logger.log(`🔄 Resetujem ${recordsToRetry.length} zapisa...`);
+
+        const batchSize = 10000;
+        for (let i = 0; i < recordsToRetry.length; i += batchSize) {
+          const batch = recordsToRetry.slice(i, i + batchSize);
+
+          const result = await this.prisma.$executeRaw`
+            UPDATE gps_raw_buffer
+            SET process_status = 'pending',
+                retry_count = retry_count + 1,
+                processed_at = NULL,
+                error_message = CONCAT(
+                  COALESCE(error_message, ''),
+                  ' | Bulk Recovery: Reset from stuck processing at ',
+                  NOW()
+                )
+            WHERE id IN (${Prisma.join(batch)})
+          `;
+
+          recoveredCount += result;
+          this.logger.log(
+            `   ✅ Batch ${Math.floor(i / batchSize) + 1}: ${result} zapisa`,
+          );
+        }
+      }
+
+      // Označi kao trajno failed (takođe u batch-evima)
+      if (recordsToFail.length > 0) {
+        this.logger.log(
+          `⚠️  Označavam ${recordsToFail.length} zapisa kao failed...`,
+        );
+
+        const batchSize = 10000;
+        for (let i = 0; i < recordsToFail.length; i += batchSize) {
+          const batch = recordsToFail.slice(i, i + batchSize);
+
+          await this.prisma.$executeRaw`
+            UPDATE gps_raw_buffer
+            SET process_status = 'failed',
+                retry_count = retry_count + 1,
+                error_message = CONCAT(
+                  COALESCE(error_message, ''),
+                  ' | Bulk Recovery: Max retries exceeded at ',
+                  NOW()
+                )
+            WHERE id IN (${Prisma.join(batch)})
+          `;
+        }
+      }
+
+      // Proveri koliko još stuck zapisa ima
+      const remainingStuck = await this.prisma.$queryRaw<
+        { count: bigint }[]
+      >`
+        SELECT COUNT(*) as count
+        FROM gps_raw_buffer
+        WHERE process_status = 'processing'
+          AND processed_at < ${stuckThreshold}
+      `;
+
+      const remaining = Number(remainingStuck[0]?.count || 0);
+
+      this.logger.log(
+        `✅ Recovery završen: ${recoveredCount} recovered, ${remaining} preostalo`,
+      );
+
+      return {
+        success: true,
+        message: `Resetovano ${recoveredCount} stuck zapisa u pending status`,
+        recovered: recoveredCount,
+        failed: recordsToFail.length,
+        remaining: remaining,
+        timestamp: new Date(),
+      };
+    } catch (error) {
+      this.logger.error('Greška pri bulk recovery-ju:', error);
+      return {
+        success: false,
+        message: 'Greška pri bulk recovery-ju',
         error: error.message,
         timestamp: new Date(),
       };

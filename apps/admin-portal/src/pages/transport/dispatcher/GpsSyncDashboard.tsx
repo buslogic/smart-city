@@ -121,6 +121,11 @@ const GpsSyncDashboard: React.FC = () => {
   const [currentSettings, setCurrentSettings] = useState<any>(null);
   const [form] = Form.useForm();
 
+  // Recovery modal state
+  const [recoveryModalOpen, setRecoveryModalOpen] = useState(false);
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+  const [recoveryLimit, setRecoveryLimit] = useState<number>(10000);
+
   // Fetch buffer status
   const { data: bufferStatus, refetch: refetchBuffer, isLoading: isLoadingBuffer } = useQuery<BufferStatus>({
     queryKey: ['gps-buffer-status'],
@@ -239,20 +244,20 @@ const GpsSyncDashboard: React.FC = () => {
   const handleCronProcessControl = useCallback(async (action: 'start' | 'stop' | 'run', instance: number) => {
     setControllingCron(`teltonika${instance}-cron-${action}`);
     try {
-      await api.post('/api/gps-sync-dashboard/cron-process-control', { 
-        action, 
-        instance 
+      await api.post('/api/gps-sync-dashboard/cron-process-control', {
+        action,
+        instance
       });
-      
+
       let successMessage = '';
       if (action === 'run') {
         successMessage = `Smart City processor za teltonika${instance} je ručno pokrenut`;
       } else {
         successMessage = `Smart City processor za teltonika${instance} je ${action === 'start' ? 'startovan' : 'zaustavljen'}`;
       }
-      
+
       message.success(successMessage);
-      
+
       // Sačekaj malo da se status ažurira
       await new Promise(resolve => setTimeout(resolve, 1000));
       await refetchCron();
@@ -262,6 +267,44 @@ const GpsSyncDashboard: React.FC = () => {
       setControllingCron(null);
     }
   }, [refetchCron]);
+
+  const handleBulkRecovery = useCallback(async (resetAll: boolean = false) => {
+    setRecoveryLoading(true);
+    try {
+      const payload = resetAll ? { resetAll: true } : { limit: recoveryLimit };
+      const response = await api.post('/api/gps-sync-dashboard/bulk-recovery-stuck', payload);
+
+      if (response.data.success) {
+        const { recovered, failed, remaining } = response.data;
+
+        let msg = `✅ Recovery uspešan!\n`;
+        msg += `• Resetovano: ${recovered.toLocaleString()} slogova\n`;
+        if (failed > 0) {
+          msg += `• Označeno kao failed (max retries): ${failed.toLocaleString()}\n`;
+        }
+        if (remaining > 0) {
+          msg += `• Preostalo stuck slogova: ${remaining.toLocaleString()}`;
+        } else {
+          msg += `• Svi stuck slogovi su obrađeni!`;
+        }
+
+        message.success(msg, 8);
+
+        // Zatvori modal i refresh status
+        setRecoveryModalOpen(false);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        await refetchBuffer();
+      } else {
+        message.error('Recovery nije uspeo');
+      }
+    } catch (error: any) {
+      console.error('Recovery error:', error);
+      const errorMsg = error.response?.data?.message || 'Greška pri recovery-u stuck slogova';
+      message.error(errorMsg);
+    } finally {
+      setRecoveryLoading(false);
+    }
+  }, [recoveryLimit, refetchBuffer]);
 
   const loadSettings = useCallback(async () => {
     setSettingsLoading(true);
@@ -569,9 +612,19 @@ const GpsSyncDashboard: React.FC = () => {
                     <>Najstariji stuck slog: <strong>{dayjs(bufferStatus.stuckProcessingOldest).fromNow()}</strong>.</>
                   )}
                 </p>
-                <p style={{ marginTop: 8, marginBottom: 0 }}>
-                  <strong>Preporučena akcija:</strong> Kontaktirajte sistem administratora da pokrene bulk recovery skriptu.
-                </p>
+                <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+                  <Button
+                    type="primary"
+                    danger
+                    icon={<RedoOutlined />}
+                    onClick={() => setRecoveryModalOpen(true)}
+                  >
+                    Recovery
+                  </Button>
+                  <Text type="secondary" style={{ alignSelf: 'center', fontSize: 12 }}>
+                    Resetujte stuck slogove nazad u "pending" status
+                  </Text>
+                </div>
               </div>
             }
             type="error"
@@ -1724,6 +1777,106 @@ const GpsSyncDashboard: React.FC = () => {
             )}
           </div>
         )}
+      </Modal>
+
+      {/* Recovery Modal */}
+      <Modal
+        title="🔄 Bulk Recovery - Stuck Processing Slogova"
+        open={recoveryModalOpen}
+        onCancel={() => setRecoveryModalOpen(false)}
+        footer={null}
+        width={600}
+      >
+        <Alert
+          message="⚠️ Bulk Recovery Operacija"
+          description={
+            <div>
+              <p>
+                Ova operacija će resetovati stuck processing slogove nazad u "pending" status kako bi bili ponovo
+                obrađeni. Slogovi koji su već prošli kroz maksimalan broj pokušaja (retry_count ≥ 5) biće označeni
+                kao "failed".
+              </p>
+              <p style={{ marginBottom: 0 }}>
+                <strong>Trenutno stuck slogova:</strong> {bufferStatus?.stuckProcessingRecords?.toLocaleString() || 0}
+              </p>
+            </div>
+          }
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+
+        <Divider>Izaberite broj slogova za recovery</Divider>
+
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <Button
+            type="default"
+            size="large"
+            block
+            icon={<RedoOutlined />}
+            loading={recoveryLoading}
+            onClick={() => {
+              setRecoveryLimit(10000);
+              handleBulkRecovery(false);
+            }}
+          >
+            Recovery 10,000 slogova
+          </Button>
+
+          <Button
+            type="default"
+            size="large"
+            block
+            icon={<RedoOutlined />}
+            loading={recoveryLoading}
+            onClick={() => {
+              setRecoveryLimit(100000);
+              handleBulkRecovery(false);
+            }}
+          >
+            Recovery 100,000 slogova
+          </Button>
+
+          <Popconfirm
+            title="⚠️ Recovery SVIH stuck slogova?"
+            description={
+              <div style={{ maxWidth: 300 }}>
+                <p>
+                  Ova operacija će resetovati <strong>SVE stuck slogove</strong> ({bufferStatus?.stuckProcessingRecords?.toLocaleString() || 0}) nazad u pending status.
+                </p>
+                <p style={{ marginBottom: 0 }}>
+                  Operacija može potrajati nekoliko minuta. Da li ste sigurni?
+                </p>
+              </div>
+            }
+            onConfirm={() => handleBulkRecovery(true)}
+            okText="Da, resetuj SVE"
+            cancelText="Odustani"
+            okButtonProps={{ danger: true }}
+          >
+            <Button
+              type="primary"
+              danger
+              size="large"
+              block
+              icon={<ThunderboltOutlined />}
+              loading={recoveryLoading}
+            >
+              Recovery SVIH slogova ({bufferStatus?.stuckProcessingRecords?.toLocaleString() || 0})
+            </Button>
+          </Popconfirm>
+        </Space>
+
+        <Divider />
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            💡 Tip: Započnite sa manjim brojem slogova i pratite rezultate
+          </Text>
+          <Button onClick={() => setRecoveryModalOpen(false)} disabled={recoveryLoading}>
+            Zatvori
+          </Button>
+        </div>
       </Modal>
     </div>
   );
