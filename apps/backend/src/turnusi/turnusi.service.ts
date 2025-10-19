@@ -715,8 +715,11 @@ export class TurnusiService {
         const result = await this.upsertChangesCodesBatch(batch);
         inserted += result.inserted;
 
-        // Update progress in database after each batch
-        if (syncId) {
+        // FIX #3: Update progress svakih 10 batch-eva umesto nakon svakog batch-a
+        // Smanjuje broj Prisma query-ja sa 827 na 83 (10x manje!)
+        const shouldUpdateProgress = batchNumber % 10 === 0 || i + batchSize >= records.length;
+
+        if (syncId && shouldUpdateProgress) {
           const processedSoFar = Math.min(i + batchSize, records.length);
           const lastTurnusId = batch[batch.length - 1]?.turnus_id;
 
@@ -741,8 +744,9 @@ export class TurnusiService {
           error.message,
         );
 
-        // Update error count even on failure
-        if (syncId) {
+        // Update error count even on failure (ali i dalje throttle-uj)
+        const shouldUpdateProgress = batchNumber % 10 === 0;
+        if (syncId && shouldUpdateProgress) {
           await this.updateSyncProgress(syncId, {
             errorRecords: errors,
           });
