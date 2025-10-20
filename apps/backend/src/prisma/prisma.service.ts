@@ -28,11 +28,11 @@ export class PrismaService
     url.searchParams.delete('pool_timeout');
     url.searchParams.delete('connect_timeout');
 
-    // Dodaj Prisma-specifične pool parametre
-    // connection_limit: maksimalan broj konekcija u pool-u (smanjeno sa 10 na 5)
-    // pool_timeout: timeout za dobijanje konekcije iz pool-a (60s)
-    url.searchParams.set('connection_limit', '5');
-    url.searchParams.set('pool_timeout', '60');
+    // FIX #10: Povećan connection pool za velike batch operacije
+    // connection_limit: maksimalan broj konekcija u pool-u (povećano na 15)
+    // pool_timeout: timeout za dobijanje konekcije iz pool-a (120s za velike batch-eve)
+    url.searchParams.set('connection_limit', '15');
+    url.searchParams.set('pool_timeout', '120');
 
     super({
       datasources: {
@@ -44,7 +44,7 @@ export class PrismaService
       errorFormat: 'minimal',
     });
 
-    this.logger.log(`🔧 Prisma connection pool configured: connection_limit=5, pool_timeout=60s`);
+    this.logger.log(`🔧 Prisma connection pool configured: connection_limit=15, pool_timeout=120s`);
   }
 
   async onModuleInit() {

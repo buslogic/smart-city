@@ -636,12 +636,11 @@ export class TurnusiService {
         };
       }
 
-      // FIX #2: Optimized worker configuration
-      // 1 worker umesto 2 = manje Prisma connection pool konkurencije
-      // Batch 1000 umesto 500 = manje SQL query-ja (827k / 1000 = ~827 batches)
-      const NUM_WORKERS = 1; // Smanjeno sa 2 → 1 za stabilnost Prisma pool-a
-      const BATCH_SIZE = 1000; // Povećano sa 500 → 1000 za efikasnost
-      const BATCH_DELAY_MS = 100; // Smanjeno sa 200ms → 100ms za brži sync
+      // FIX #10: DRASTIČNA optimizacija - maximum batch size, minimum overhead
+      // 827k / 50k = samo ~17 batches!
+      const NUM_WORKERS = 1; // Single worker = jedna Prisma konekcija
+      const BATCH_SIZE = 50000; // DRASTIČNO povećano: 50k rekorda po batch-u
+      const BATCH_DELAY_MS = 0; // BEZ delay-a = maksimalna brzina
 
         const chunkSize = Math.ceil(legacyRecords.length / NUM_WORKERS);
         console.log(`🚀 Starting ${NUM_WORKERS} parallel workers, ${chunkSize} records per worker`);
@@ -733,55 +732,33 @@ export class TurnusiService {
     console.log(`👷 Worker ${workerNum}: Starting with ${records.length} records`);
 
     for (let i = 0; i < records.length; i += batchSize) {
-      const batchStartTime = Date.now();
       const batch = records.slice(i, i + batchSize);
       batchNumber++;
 
       try {
-        // ✅ CHANGED: bulkInsertChangesCodes → upsertChangesCodesBatch
         const result = await this.upsertChangesCodesBatch(batch);
         inserted += result.inserted;
 
-        // FIX #3: Update progress svakih 10 batch-eva umesto nakon svakog batch-a
-        // Smanjuje broj Prisma query-ja sa 827 na 83 (10x manje!)
-        const shouldUpdateProgress = batchNumber % 10 === 0 || i + batchSize >= records.length;
-
-        if (syncId && shouldUpdateProgress) {
-          const processedSoFar = Math.min(i + batchSize, records.length);
+        // FIX #10: Progress tracking SAMO na kraju poslednjeg batch-a
+        // Eliminiše sve međusobne DB upite za progress tracking!
+        if (syncId && (i + batchSize >= records.length)) {
           const lastTurnusId = batch[batch.length - 1]?.turnus_id;
 
           await this.updateSyncProgress(syncId, {
-            processedRecords: processedSoFar,
+            processedRecords: records.length,
             upsertedRecords: inserted,
             errorRecords: errors,
             lastProcessedTurnusId: lastTurnusId,
             lastProcessedBatch: batchNumber,
           });
         }
-
-        const batchDuration = ((Date.now() - batchStartTime) / 1000).toFixed(2);
-        const workerProgress = Math.min(i + batchSize, records.length);
-        console.log(
-          `👷 Worker ${workerNum}: ${workerProgress}/${records.length} (${Math.round((workerProgress / records.length) * 100)}%) - Batch took ${batchDuration}s`,
-        );
       } catch (error) {
         errors += batch.length;
-        console.error(
-          `❌ Worker ${workerNum} error at ${i}:`,
-          error.message,
-        );
-
-        // Update error count even on failure (ali i dalje throttle-uj)
-        const shouldUpdateProgress = batchNumber % 10 === 0;
-        if (syncId && shouldUpdateProgress) {
-          await this.updateSyncProgress(syncId, {
-            errorRecords: errors,
-          });
-        }
+        // FIX #10: BEZ logovanja u loop-u - samo ukupan error count
       }
 
-      // ✅ CHANGED: Parametrizovan delay umesto hardcoded 50ms
-      if (i + batchSize < records.length) {
+      // FIX #10: BEZ delay-a između batch-eva (BATCH_DELAY_MS = 0)
+      if (batchDelayMs > 0 && i + batchSize < records.length) {
         await new Promise(resolve => setTimeout(resolve, batchDelayMs));
       }
     }
@@ -1382,12 +1359,11 @@ export class TurnusiService {
         };
       }
 
-      // FIX #2: Optimized worker configuration
-      // 1 worker umesto 2 = manje Prisma connection pool konkurencije
-      // Batch 1000 umesto 500 = manje SQL query-ja (827k / 1000 = ~827 batches)
-      const NUM_WORKERS = 1; // Smanjeno sa 2 → 1 za stabilnost Prisma pool-a
-      const BATCH_SIZE = 1000; // Povećano sa 500 → 1000 za efikasnost
-      const BATCH_DELAY_MS = 100; // Smanjeno sa 200ms → 100ms za brži sync
+      // FIX #10: DRASTIČNA optimizacija - maximum batch size, minimum overhead
+      // 827k / 50k = samo ~17 batches!
+      const NUM_WORKERS = 1; // Single worker = jedna Prisma konekcija
+      const BATCH_SIZE = 50000; // DRASTIČNO povećano: 50k rekorda po batch-u
+      const BATCH_DELAY_MS = 0; // BEZ delay-a = maksimalna brzina
 
         const chunkSize = Math.ceil(legacyRecords.length / NUM_WORKERS);
         console.log(`🚀 Starting ${NUM_WORKERS} parallel workers, ${chunkSize} records per worker`);
