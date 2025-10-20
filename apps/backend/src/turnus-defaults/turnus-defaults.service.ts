@@ -23,6 +23,7 @@ export interface HistoryAnalysisResult {
   driverName: string;
   turnusName: string;
   lineNumber: string | null;
+  lineNumberForDisplay: string | null;
   shiftNumber: number | null;
   dayOfWeek: DayOfWeek | null;
   usageCount: number;
@@ -459,6 +460,22 @@ export class TurnusDefaultsService {
   }
 
   /**
+   * Vraća listu svih jedinstvenih brojeva linija za prikaz iz lines tabele
+   * Filtrira samo aktivne linije (status = 'A')
+   */
+  async getLinesForDisplay(): Promise<string[]> {
+    const lines = await this.prisma.$queryRaw<Array<{ lineNumberForDisplay: string }>>`
+      SELECT DISTINCT line_number_for_display as lineNumberForDisplay
+      FROM \`lines\`
+      WHERE status = 'A'
+        AND line_number_for_display IS NOT NULL
+      ORDER BY line_number_for_display
+    `;
+
+    return lines.map((l) => l.lineNumberForDisplay);
+  }
+
+  /**
    * Analizira istoriju vožnji iz obe baze i vraća preporuke za defaults
    */
   async analyzeHistory(dto: AnalyzeHistoryDto, userId: number): Promise<HistoryAnalysisResult[]> {
@@ -499,6 +516,7 @@ export class TurnusDefaultsService {
         CONCAT(u.first_name, ' ', u.last_name) as driverName,
         SUBSTRING_INDEX(SUBSTRING_INDEX(dto.comment, 'Turnus: ', -1), ',', 1) as turnusName,
         dto.line_no as lineNumber,
+        COALESCE(l.line_number_for_display, dto.line_no) as lineNumberForDisplay,
         CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(dto.comment, 'Smena: ', -1), ',', 1) AS UNSIGNED) as shiftNumber,
         CASE DAYOFWEEK(dto.start_date)
           WHEN 1 THEN 'Nedelja'
@@ -512,13 +530,14 @@ export class TurnusDefaultsService {
         COUNT(*) as usageCount
       FROM date_travel_order dto
       INNER JOIN users u ON dto.driver_id = u.id
+      LEFT JOIN \`lines\` l ON dto.line_no = l.line_number_for_display AND l.status = 'A'
       WHERE dto.start_date BETWEEN ? AND ?
         AND dto.realised = 1
         ${driverFilter}
         ${lineFilter}
         AND dto.comment LIKE '%Turnus:%'
         AND dto.comment LIKE '%Smena:%'
-      GROUP BY dto.driver_id, turnusName, dto.line_no, shiftNumber, dayOfWeek
+      GROUP BY dto.driver_id, turnusName, dto.line_no, lineNumberForDisplay, shiftNumber, dayOfWeek
       HAVING usageCount >= ${minUsageCount}
     `;
 
@@ -559,6 +578,7 @@ export class TurnusDefaultsService {
           driverName: row.driverName,
           turnusName: row.turnusName,
           lineNumber: row.lineNumber,
+          lineNumberForDisplay: row.lineNumberForDisplay,
           shiftNumber: row.shiftNumber ? parseInt(row.shiftNumber) : null,
           dayOfWeek: row.dayOfWeek as DayOfWeek,
           usageCount: row.usageCount,
@@ -957,6 +977,20 @@ export class TurnusDefaultsService {
 
       this.logger.log(`Pronađeno ${(rows as any[]).length} rezultata iz legacy baze nakon GROUP BY`);
 
+      // Kreiraj lookup mapu za mapiranje line_number -> line_number_for_display iz naše baze
+      const lineNumberMap = new Map<string, string>();
+      const linesFromOurDb = await this.prisma.$queryRaw<Array<{ lineNumber: string; lineNumberForDisplay: string }>>`
+        SELECT DISTINCT line_number as lineNumber, line_number_for_display as lineNumberForDisplay
+        FROM \`lines\`
+        WHERE status = 'A'
+      `;
+      linesFromOurDb.forEach(line => {
+        lineNumberMap.set(line.lineNumber, line.lineNumberForDisplay);
+        // Dodaj i obrnuto mapiranje (lineNumberForDisplay -> lineNumberForDisplay) za slučajeve
+        // kada legacy baza već koristi broj za prikaz umesto sistemskog broja
+        lineNumberMap.set(line.lineNumberForDisplay, line.lineNumberForDisplay);
+      });
+
       // Izračunaj statistiku i confidence score za svaki rezultat
       const analysis: HistoryAnalysisResult[] = [];
 
@@ -982,11 +1016,15 @@ export class TurnusDefaultsService {
         const confidenceScore = Math.round(usageScore + percentageScore);
 
         if (confidenceScore >= minConfidenceScore) {
+          // Mapiranje lineNumber -> lineNumberForDisplay iz naše baze
+          const lineNumberForDisplay = lineNumberMap.get(row.lineNumber) || row.lineNumber;
+
           analysis.push({
             driverId: row.driverId,
             driverName: row.driverName,
             turnusName: row.turnusName,
             lineNumber: row.lineNumber,
+            lineNumberForDisplay: lineNumberForDisplay,
             shiftNumber: row.shiftNumber ? parseInt(row.shiftNumber) : null,
             dayOfWeek: row.dayOfWeek as DayOfWeek,
             usageCount: row.usageCount,
@@ -1110,7 +1148,7 @@ export class TurnusDefaultsService {
           where: {
             driverId: actualDriverId,
             turnusName: item.turnusName,
-            lineNumberForDisplay: item.lineNumber,
+            lineNumberForDisplay: item.lineNumberForDisplay,
             shiftNumber: item.shiftNumber,
             dayOfWeek: item.dayOfWeek,
           },
@@ -1132,7 +1170,7 @@ export class TurnusDefaultsService {
           {
             driverId: actualDriverId,
             turnusName: item.turnusName,
-            lineNumberForDisplay: item.lineNumber ?? undefined,
+            lineNumberForDisplay: item.lineNumberForDisplay ?? undefined,
             shiftNumber: item.shiftNumber ?? undefined,
             dayOfWeek: item.dayOfWeek ?? undefined,
           },

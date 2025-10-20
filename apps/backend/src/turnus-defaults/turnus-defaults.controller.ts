@@ -93,6 +93,20 @@ export class TurnusDefaultsController {
     return this.turnusDefaultsService.getLines();
   }
 
+  @Get('lines-for-display')
+  @RequirePermissions('transport.planning.turnus_defaults:view')
+  @ApiOperation({
+    summary: 'Vraća listu brojeva linija za prikaz',
+    description: 'Vraća listu svih jedinstvenih brojeva linija za prikaz iz lines tabele (samo aktivne linije)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista brojeva linija za prikaz',
+  })
+  getLinesForDisplay() {
+    return this.turnusDefaultsService.getLinesForDisplay();
+  }
+
   @Get('driver/:driverId/best-match')
   @RequirePermissions('transport.planning.turnus_defaults:view')
   @ApiOperation({

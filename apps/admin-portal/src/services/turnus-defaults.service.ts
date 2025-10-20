@@ -119,6 +119,7 @@ export interface HistoryAnalysisResult {
   driverName: string;
   turnusName: string;
   lineNumber: string | null;
+  lineNumberForDisplay: string | null;
   shiftNumber: number | null;
   dayOfWeek: DayOfWeek | null;
   usageCount: number;
@@ -225,7 +226,7 @@ class TurnusDefaultsService {
   }
 
   async getLines(): Promise<string[]> {
-    const response = await axios.get<string[]>(`${BASE_URL}/lines`, {
+    const response = await axios.get<string[]>(`${BASE_URL}/lines-for-display`, {
       headers: this.getAuthHeaders(),
     });
     return response.data;
