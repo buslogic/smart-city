@@ -27,6 +27,33 @@ export class TurnusiService {
     private legacyDatabasesService: LegacyDatabasesService,
   ) {}
 
+  /**
+   * FIX #8: Helper za konverziju BigInt vrednosti iz Prisma raw SQL upita
+   * Prisma $queryRawUnsafe vraća BigInt objekte za MySQL BIGINT kolone
+   * koji ne mogu biti serijalizovani u JSON i izazivaju 500 greške
+   */
+  private convertBigIntsToNumbers(obj: any): any {
+    if (obj === null || obj === undefined) return obj;
+
+    if (typeof obj === 'bigint') {
+      return Number(obj);
+    }
+
+    if (Array.isArray(obj)) {
+      return obj.map((item) => this.convertBigIntsToNumbers(item));
+    }
+
+    if (typeof obj === 'object') {
+      const converted: any = {};
+      for (const key in obj) {
+        converted[key] = this.convertBigIntsToNumbers(obj[key]);
+      }
+      return converted;
+    }
+
+    return obj;
+  }
+
   // ========== TIKETING SERVER (LEGACY BAZA) ==========
 
   async getAllGroupsTicketing() {
@@ -1093,7 +1120,8 @@ export class TurnusiService {
       row.user = JSON.parse(row.user);
     }
 
-    return row;
+    // FIX #8: Konvertuj BigInt vrednosti u Numbers pre JSON serijalizacije
+    return this.convertBigIntsToNumbers(row);
   }
 
   /**
@@ -1127,7 +1155,9 @@ export class TurnusiService {
       groupId
     );
 
-    return result.length > 0 ? result[0] : null;
+    // FIX #8: Konvertuj BigInt vrednosti u Numbers pre JSON serijalizacije
+    const row = result.length > 0 ? result[0] : null;
+    return row ? this.convertBigIntsToNumbers(row) : null;
   }
 
   /**
