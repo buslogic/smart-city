@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Card, Progress, Typography, Row, Col, Statistic, Space, Tag } from 'antd';
+import { Card, Progress, Typography, Row, Col, Statistic, Space, Tag, Button, Alert } from 'antd';
 import {
   ClockCircleOutlined,
   ThunderboltOutlined,
   CheckCircleOutlined,
   ExclamationCircleOutlined,
   LoadingOutlined,
+  ReloadOutlined,
+  WarningOutlined,
 } from '@ant-design/icons';
 import { turnusiService, TurnusSyncLog } from '../../../../../services/turnusi.service';
 
@@ -25,9 +27,13 @@ const SyncProgressTracker: React.FC<SyncProgressTrackerProps> = ({
   const [syncLog, setSyncLog] = useState<TurnusSyncLog | null>(null);
   const [speed, setSpeed] = useState<number>(0);
   const [estimatedTimeLeft, setEstimatedTimeLeft] = useState<string>('Izračunavanje...');
+  const [connectionWarning, setConnectionWarning] = useState<boolean>(false);
+  const [consecutiveErrors, setConsecutiveErrors] = useState<number>(0);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastProcessedRef = useRef<number>(0);
   const lastTimestampRef = useRef<number>(Date.now());
+  const lastSuccessfulFetchRef = useRef<number>(Date.now());
 
   useEffect(() => {
     // Start polling for sync status
@@ -41,10 +47,19 @@ const SyncProgressTracker: React.FC<SyncProgressTrackerProps> = ({
     };
   }, [syncId]);
 
-  const fetchSyncStatus = async () => {
+  const fetchSyncStatus = async (isManualRefresh = false) => {
     try {
+      if (isManualRefresh) {
+        setIsRefreshing(true);
+      }
+
       const log = await turnusiService.getSyncStatus(syncId);
       setSyncLog(log);
+
+      // Reset error counters on successful fetch
+      setConsecutiveErrors(0);
+      setConnectionWarning(false);
+      lastSuccessfulFetchRef.current = Date.now();
 
       // Calculate speed (records per second)
       const now = Date.now();
@@ -80,11 +95,32 @@ const SyncProgressTracker: React.FC<SyncProgressTrackerProps> = ({
       }
     } catch (error: any) {
       console.error('Error fetching sync status:', error);
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
+
+      // Increment error counter
+      setConsecutiveErrors(prev => prev + 1);
+
+      // Show warning after 3 consecutive errors
+      if (consecutiveErrors >= 2) {
+        setConnectionWarning(true);
       }
-      onError('Failed to fetch sync status');
+
+      // Only stop polling after 10 consecutive errors (20 seconds of failures)
+      // This prevents false positives from temporary network issues
+      if (consecutiveErrors >= 9) {
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+        }
+        onError('Ne mogu da dohvatim status sinhronizacije. Molimo proverite da li je backend server dostupan.');
+      }
+    } finally {
+      if (isManualRefresh) {
+        setIsRefreshing(false);
+      }
     }
+  };
+
+  const handleManualRefresh = () => {
+    fetchSyncStatus(true);
   };
 
   const formatTime = (seconds: number): string => {
@@ -148,6 +184,29 @@ const SyncProgressTracker: React.FC<SyncProgressTrackerProps> = ({
   return (
     <Card>
       <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        {/* Connection Warning */}
+        {connectionWarning && (
+          <Alert
+            message="Problem sa konekcijom"
+            description={
+              <div>
+                <p>Povremeno gubim konekciju sa serverom, ali sinhronizacija možda još uvek traje.</p>
+                <p><strong>Šta da uradim?</strong></p>
+                <ul style={{ marginBottom: 0, paddingLeft: 20 }}>
+                  <li>Sačekajte još malo - dugačke sinhronizacije (10+ minuta) mogu imati povremene timeout-e</li>
+                  <li>Osvežite status ručno klikom na dugme ispod</li>
+                  <li>Ako se progres ne menja 2+ minuta, sinhronizacija je možda zaglavljenja</li>
+                </ul>
+              </div>
+            }
+            type="warning"
+            icon={<WarningOutlined />}
+            showIcon
+            closable
+            onClose={() => setConnectionWarning(false)}
+          />
+        )}
+
         {/* Header */}
         <Row justify="space-between" align="middle">
           <Col>
@@ -155,7 +214,19 @@ const SyncProgressTracker: React.FC<SyncProgressTrackerProps> = ({
               Sinhronizacija u toku
             </Title>
           </Col>
-          <Col>{getStatusTag()}</Col>
+          <Col>
+            <Space>
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={handleManualRefresh}
+                loading={isRefreshing}
+                size="small"
+              >
+                Osveži status
+              </Button>
+              {getStatusTag()}
+            </Space>
+          </Col>
         </Row>
 
         {/* Progress Bar */}
