@@ -201,19 +201,87 @@ export class TurnusiService {
 
   async getTurnusiGroupedByLineNumber(lineNumber: string) {
     try {
-      // Fetch all turnusi for the line and all its direction variants (e.g., 5135, 5135A, 5135B)
-      const turnusi = await this.prisma.changesCodesTours.findMany({
-        where: {
-          lineNo: {
-            startsWith: lineNumber,
-          },
-        },
-        orderBy: [
-          { turnusId: 'asc' },
-          { shiftNumber: 'asc' },
-          { departureNoInTurage: 'asc' },
-        ],
-      });
+      // FIX: Fetch turnusi WITH turnus_groups_assign validation
+      // Only include turnusi that are valid for current date (CURDATE() BETWEEN date_from AND date_to)
+      // This prevents showing duplicate/expired turnusi that are no longer active for any group
+      const rawTurnusi = await this.prisma.$queryRaw<any[]>`
+        SELECT DISTINCT
+          cct.id,
+          cct.turnus_id,
+          cct.turnus_name,
+          cct.line_no,
+          cct.start_time,
+          cct.direction,
+          cct.duration,
+          cct.central_point,
+          cct.change_code,
+          cct.job_id,
+          cct.new_start_time,
+          cct.new_duration,
+          cct.start_station,
+          cct.end_station,
+          cct.day_number,
+          cct.line_type_id,
+          cct.rezijski,
+          cct.print_id,
+          cct.between_rez,
+          cct.bus_number,
+          cct.start_station_id,
+          cct.end_station_id,
+          cct.change_time,
+          cct.change_user,
+          cct.active,
+          cct.first_day_duration_part,
+          cct.second_day_duration_part,
+          cct.custom_id,
+          cct.transport_id,
+          cct.departure_number,
+          cct.shift_number,
+          cct.turage_no,
+          cct.departure_no_in_turage
+        FROM changes_codes_tours cct
+        INNER JOIN turnus_groups_assign tga ON cct.turnus_id = tga.turnus_id
+        WHERE cct.line_no LIKE ${lineNumber + '%'}
+          AND CURDATE() BETWEEN tga.date_from AND tga.date_to
+        ORDER BY cct.turnus_id ASC, cct.shift_number ASC, cct.departure_no_in_turage ASC
+      `;
+
+      // Map snake_case columns to camelCase objects (expected by rest of the code)
+      const turnusi = rawTurnusi.map((row) => ({
+        id: Number(row.id),
+        turnusId: Number(row.turnus_id),
+        turnusName: row.turnus_name,
+        lineNo: row.line_no,
+        startTime: row.start_time,
+        direction: Number(row.direction),
+        duration: row.duration,
+        centralPoint: row.central_point,
+        changeCode: Number(row.change_code),
+        jobId: Number(row.job_id),
+        newStartTime: row.new_start_time,
+        newDuration: row.new_duration,
+        startStation: Number(row.start_station),
+        endStation: Number(row.end_station),
+        dayNumber: Number(row.day_number),
+        lineTypeId: Number(row.line_type_id),
+        rezijski: row.rezijski,
+        printId: row.print_id,
+        betweenRez: Number(row.between_rez),
+        busNumber: Number(row.bus_number),
+        startStationId: Number(row.start_station_id),
+        endStationId: Number(row.end_station_id),
+        changeTime: row.change_time,
+        changeUser: row.change_user,
+        active: Number(row.active),
+        firstDayDurationPart: row.first_day_duration_part,
+        secondDayDurationPart: row.second_day_duration_part,
+        customId: row.custom_id,
+        transportId: row.transport_id,
+        departureNumber: Number(row.departure_number),
+        shiftNumber: Number(row.shift_number),
+        turageNo: Number(row.turage_no),
+        departureNoInTurage: Number(row.departure_no_in_turage),
+      }));
 
       if (turnusi.length === 0) {
         return {
