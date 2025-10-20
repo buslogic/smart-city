@@ -1054,19 +1054,46 @@ export class TurnusiService {
    * Gets the current status of a sync log
    */
   async getSyncStatus(syncId: string) {
-    return await this.prisma.turnusSyncLog.findUnique({
-      where: { syncId },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-      },
-    });
+    // FIX #7: Koristi raw SQL umesto Prisma findUnique() da izbegneš connection loss
+    const result = await this.prisma.$queryRawUnsafe<any[]>(
+      `
+      SELECT
+        tsl.sync_id as syncId,
+        tsl.group_id as groupId,
+        tsl.user_id as userId,
+        tsl.status,
+        tsl.total_records as totalRecords,
+        tsl.processed_records as processedRecords,
+        tsl.upserted_records as upsertedRecords,
+        tsl.error_records as errorRecords,
+        tsl.last_processed_turnus_id as lastProcessedTurnusId,
+        tsl.last_processed_batch as lastProcessedBatch,
+        tsl.started_at as startedAt,
+        tsl.completed_at as completedAt,
+        tsl.updated_at as updatedAt,
+        tsl.error_message as errorMessage,
+        JSON_OBJECT(
+          'id', u.id,
+          'email', u.email,
+          'firstName', u.first_name,
+          'lastName', u.last_name
+        ) as user
+      FROM turnus_sync_logs tsl
+      LEFT JOIN users u ON tsl.user_id = u.id
+      WHERE tsl.sync_id = ?
+      `,
+      syncId
+    );
+
+    if (result.length === 0) return null;
+
+    // Parse JSON user object
+    const row = result[0];
+    if (row.user && typeof row.user === 'string') {
+      row.user = JSON.parse(row.user);
+    }
+
+    return row;
   }
 
   /**
@@ -1076,7 +1103,22 @@ export class TurnusiService {
     // FIX #5: Koristi raw SQL umesto Prisma findFirst() da izbegneš connection loss
     const result = await this.prisma.$queryRawUnsafe<any[]>(
       `
-      SELECT * FROM turnus_sync_logs
+      SELECT
+        sync_id as syncId,
+        group_id as groupId,
+        user_id as userId,
+        status,
+        total_records as totalRecords,
+        processed_records as processedRecords,
+        upserted_records as upsertedRecords,
+        error_records as errorRecords,
+        last_processed_turnus_id as lastProcessedTurnusId,
+        last_processed_batch as lastProcessedBatch,
+        started_at as startedAt,
+        completed_at as completedAt,
+        updated_at as updatedAt,
+        error_message as errorMessage
+      FROM turnus_sync_logs
       WHERE group_id = ?
         AND status IN ('pending', 'in_progress')
       ORDER BY started_at DESC
