@@ -955,20 +955,20 @@ export class TurnusiService {
   ): Promise<string> {
     const syncId = `sync_${groupId}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
-    await this.prisma.turnusSyncLog.create({
-      data: {
-        syncId,
-        groupId,
-        userId,
-        status: 'in_progress',
-        totalRecords,
-        processedRecords: 0,
-        upsertedRecords: 0,
-        errorRecords: 0,
-        lastProcessedBatch: 0,
-        startedAt: new Date(),
-      },
-    });
+    // FIX #6: Koristi raw SQL INSERT umesto Prisma create() da izbegneš connection loss
+    await this.prisma.$executeRawUnsafe(
+      `
+      INSERT INTO turnus_sync_logs (
+        sync_id, group_id, user_id, status, total_records,
+        processed_records, upserted_records, error_records,
+        last_processed_batch, started_at, updated_at
+      ) VALUES (?, ?, ?, 'in_progress', ?, 0, 0, 0, 0, NOW(), NOW())
+      `,
+      syncId,
+      groupId,
+      userId,
+      totalRecords
+    );
 
     console.log(`📝 Created sync log: ${syncId}`);
     return syncId;
@@ -1145,21 +1145,19 @@ export class TurnusiService {
     // Create a temporary sync log to get syncId (we don't know totalRecords yet, will update in sync method)
     const syncId = `sync_${groupId}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
-    // Create initial sync log (totalRecords will be updated later when we know the count)
-    await this.prisma.turnusSyncLog.create({
-      data: {
-        syncId,
-        groupId,
-        userId,
-        status: 'in_progress',
-        totalRecords: 0, // Will be updated in syncChangesCodesFromTicketing
-        processedRecords: 0,
-        upsertedRecords: 0,
-        errorRecords: 0,
-        lastProcessedBatch: 0,
-        startedAt: new Date(),
-      },
-    });
+    // FIX #6: Create initial sync log using raw SQL (totalRecords will be updated later when we know the count)
+    await this.prisma.$executeRawUnsafe(
+      `
+      INSERT INTO turnus_sync_logs (
+        sync_id, group_id, user_id, status, total_records,
+        processed_records, upserted_records, error_records,
+        last_processed_batch, started_at, updated_at
+      ) VALUES (?, ?, ?, 'in_progress', 0, 0, 0, 0, 0, NOW(), NOW())
+      `,
+      syncId,
+      groupId,
+      userId
+    );
 
     // Start sync in background (don't await)
     setImmediate(() => {
