@@ -942,17 +942,9 @@ export class TurnusiService {
           `retrying in ${backoffDelay}ms (attempt ${retryCount + 1}/3)...`
         );
 
-        // Wait exponential backoff
+        // FIX #26: Uklonjen disconnect/reconnect jer ruši NestJS Prisma singleton
+        // Samo wait backoff i retry - Prisma će sam reconnectovati
         await new Promise(resolve => setTimeout(resolve, backoffDelay));
-
-        // Reconnect Prisma
-        try {
-          await this.prisma.$disconnect();
-          await this.prisma.$connect();
-          console.log(`🔄 Prisma reconnected, retrying batch...`);
-        } catch (reconnectError) {
-          console.error(`❌ Prisma reconnect failed:`, reconnectError);
-        }
 
         // Retry batch insert
         return this.upsertChangesCodesBatch(records, retryCount + 1);
