@@ -1,0 +1,31 @@
+{
+  "timestamp": "2025-10-19T19:41:17.437Z",
+  "checks": {
+    "migrationsVsSchema": {
+      "passed": false,
+      "message": "Failed to validate migrations: Command failed: npx prisma migrate deploy\nCommand failed: npx prisma migrate deploy\nwarn The configuration property `package.json#prisma` is deprecated and will be removed in Prisma 7. Please migrate to a Prisma config file (e.g., `prisma.config.ts`).\nFor more information, see: https://pris.ly/prisma-config\n\nEnvironment variables loaded from .env\nError: P3018\n\nA migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20251008130947_create_lines_and_update_price_table_groups\n\nDatabase error code: 1064\n\nDatabase error:\nYou have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'IF EXISTS `idx_date_valid_from`;\nALTER TABLE `price_table_groups` ADD CONSTRAINT' at line 3\n\nPlease check the query number 2 from the migration file.\n\n\n",
+      "details": {
+        "error": "Command failed: npx prisma migrate deploy\nCommand failed: npx prisma migrate deploy\nwarn The configuration property `package.json#prisma` is deprecated and will be removed in Prisma 7. Please migrate to a Prisma config file (e.g., `prisma.config.ts`).\nFor more information, see: https://pris.ly/prisma-config\n\nEnvironment variables loaded from .env\nError: P3018\n\nA migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20251008130947_create_lines_and_update_price_table_groups\n\nDatabase error code: 1064\n\nDatabase error:\nYou have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'IF EXISTS `idx_date_valid_from`;\nALTER TABLE `price_table_groups` ADD CONSTRAINT' at line 3\n\nPlease check the query number 2 from the migration file.\n\n\n"
+      }
+    },
+    "schemaVsDatabase": {
+      "passed": false,
+      "message": "Schema drift detected",
+      "details": {
+        "drift": "Command failed: npx prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --exit-code\nCommand failed: npx prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --exit-code\nwarn The configuration property `package.json#prisma` is deprecated and will be removed in Prisma 7. Please migrate to a Prisma config file (e.g., `prisma.config.ts`).\nFor more information, see: https://pris.ly/prisma-config\n\nError: P1003\n\nDatabase `prisma_validation_1760902877436` does not exist",
+        "ignoredTables": []
+      }
+    },
+    "migrationHistory": {
+      "passed": false,
+      "message": "Failed to check migration history: Command failed: npx prisma migrate status\nCommand failed: npx prisma migrate status\nwarn The configuration property `package.json#prisma` is deprecated and will be removed in Prisma 7. Please migrate to a Prisma config file (e.g., `prisma.config.ts`).\nFor more information, see: https://pris.ly/prisma-config\n\nEnvironment variables loaded from .env\nError: P1003: Database `prisma_validation_1760902877436` does not exist\n",
+      "details": {
+        "error": "Command failed: npx prisma migrate status\nCommand failed: npx prisma migrate status\nwarn The configuration property `package.json#prisma` is deprecated and will be removed in Prisma 7. Please migrate to a Prisma config file (e.g., `prisma.config.ts`).\nFor more information, see: https://pris.ly/prisma-config\n\nEnvironment variables loaded from .env\nError: P1003: Database `prisma_validation_1760902877436` does not exist\n"
+      }
+    }
+  },
+  "summary": {
+    "allPassed": false,
+    "recommendation": "⚠️  Issues detected. Recommended actions:\n   - Fix migration history issues first\n   - Create a new migration to sync schema with migrations\n   - Run prisma migrate dev to sync database"
+  }
+}

@@ -15,10 +15,36 @@ export class PrismaService
   private healthCheckInterval: any;
 
   constructor() {
+    // FIX #9: Eksplicitno konfiguriši Prisma connection pool da spreči exhaustion
+    // Prisma po defaultu koristi 10 konekcija što je dovoljno za normalne operacije,
+    // ali Turnusi sync sa 827k rekorda troši sve konekcije zbog paralelnih raw SQL upita
+    const databaseUrl = process.env.DATABASE_URL || '';
+
+    // Parsuj postojeći URL i dodaj connection_limit parametar
+    const url = new URL(databaseUrl);
+
+    // Ukloni postojeće pool parametre (koji ne rade sa mysql2)
+    url.searchParams.delete('connection_limit');
+    url.searchParams.delete('pool_timeout');
+    url.searchParams.delete('connect_timeout');
+
+    // Dodaj Prisma-specifične pool parametre
+    // connection_limit: maksimalan broj konekcija u pool-u (smanjeno sa 10 na 5)
+    // pool_timeout: timeout za dobijanje konekcije iz pool-a (60s)
+    url.searchParams.set('connection_limit', '5');
+    url.searchParams.set('pool_timeout', '60');
+
     super({
+      datasources: {
+        db: {
+          url: url.toString(),
+        },
+      },
       log: ['warn', 'error'],
       errorFormat: 'minimal',
     });
+
+    this.logger.log(`🔧 Prisma connection pool configured: connection_limit=5, pool_timeout=60s`);
   }
 
   async onModuleInit() {
