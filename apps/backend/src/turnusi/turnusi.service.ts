@@ -636,10 +636,10 @@ export class TurnusiService {
         };
       }
 
-      // FIX #10: DRASTIČNA optimizacija - maximum batch size, minimum overhead
-      // 827k / 50k = samo ~17 batches!
+      // FIX #22: Konzervativni batch size za stabilnost
+      // Smanjen sa 50k na 1k zbog MySQL net_read_timeout=30s i stabilnosti
       const NUM_WORKERS = 1; // Single worker = jedna Prisma konekcija
-      const BATCH_SIZE = 50000; // DRASTIČNO povećano: 50k rekorda po batch-u
+      const BATCH_SIZE = 1000; // 1k rekorda = ~100KB SQL, završi za ~2-3s
       const BATCH_DELAY_MS = 0; // BEZ delay-a = maksimalna brzina
 
         const chunkSize = Math.ceil(legacyRecords.length / NUM_WORKERS);
@@ -739,22 +739,68 @@ export class TurnusiService {
         const result = await this.upsertChangesCodesBatch(batch);
         inserted += result.inserted;
 
-        // FIX #10: Progress tracking SAMO na kraju poslednjeg batch-a
-        // Eliminiše sve međusobne DB upite za progress tracking!
-        if (syncId && (i + batchSize >= records.length)) {
+        // FIX #24: Progress tracking svakih 5 batches za bolji UX
+        if (syncId && (batchNumber % 5 === 0 || i + batchSize >= records.length)) {
+          const processed = Math.min(i + batch.length, records.length);
           const lastTurnusId = batch[batch.length - 1]?.turnus_id;
 
           await this.updateSyncProgress(syncId, {
-            processedRecords: records.length,
+            processedRecords: processed, // STVARNI progress
             upsertedRecords: inserted,
             errorRecords: errors,
             lastProcessedTurnusId: lastTurnusId,
             lastProcessedBatch: batchNumber,
           });
+
+          console.log(`📊 Worker ${workerNum} Progress: ${processed}/${totalRecords} (${Math.round((processed / totalRecords) * 100)}%) - Batch ${batchNumber}`);
         }
       } catch (error) {
         errors += batch.length;
-        // FIX #10: BEZ logovanja u loop-u - samo ukupan error count
+
+        // FIX #23: Detaljno logovanje greške za debugging
+        console.error(`❌ Worker ${workerNum} Batch ${batchNumber} FAILED at ${i}/${records.length}:`, {
+          message: error.message,
+          code: error.code,
+          errno: error.errno,
+          sqlState: error.sqlState,
+        });
+
+        // Proveri da li je timeout ili connection error
+        const isTimeoutError =
+          error.message?.includes('timeout') ||
+          error.message?.includes('Timeout') ||
+          error.code === 'ETIMEDOUT' ||
+          error.code === 'PROTOCOL_SEQUENCE_TIMEOUT';
+
+        const isConnectionError =
+          error.message?.includes('Lost connection') ||
+          error.message?.includes('Connection lost') ||
+          error.message?.includes('ECONNRESET') ||
+          error.errno === 2013 || // MySQL: Lost connection during query
+          error.errno === 2006;   // MySQL: Server has gone away
+
+        if (isTimeoutError || isConnectionError) {
+          const errorType = isTimeoutError ? 'TIMEOUT' : 'CONNECTION LOST';
+          console.error(`🔴 MYSQL ${errorType} ERROR - STOPPING SYNC`);
+
+          // Update sync log sa detaljima greške
+          if (syncId) {
+            await this.updateSyncProgress(syncId, {
+              status: 'failed',
+              errorMessage: `${errorType} at batch ${batchNumber} (${i}/${records.length}): ${error.message}`,
+              processedRecords: i,
+              errorRecords: errors,
+            }).catch(err => console.error('Failed to update sync progress:', err));
+          }
+
+          // STOP sync - ne nastavljaj sa pogrešnim podacima
+          throw new InternalServerErrorException(
+            `Sync failed due to ${errorType} error at batch ${batchNumber}: ${error.message}`
+          );
+        }
+
+        // Za ostale greške, samo loguj i nastavi
+        console.warn(`⚠️  Batch ${batchNumber} failed but continuing: ${error.message}`);
       }
 
       // FIX #10: BEZ delay-a između batch-eva (BATCH_DELAY_MS = 0)
@@ -1359,10 +1405,10 @@ export class TurnusiService {
         };
       }
 
-      // FIX #10: DRASTIČNA optimizacija - maximum batch size, minimum overhead
-      // 827k / 50k = samo ~17 batches!
+      // FIX #22: Konzervativni batch size za stabilnost
+      // Smanjen sa 50k na 1k zbog MySQL net_read_timeout=30s i stabilnosti
       const NUM_WORKERS = 1; // Single worker = jedna Prisma konekcija
-      const BATCH_SIZE = 50000; // DRASTIČNO povećano: 50k rekorda po batch-u
+      const BATCH_SIZE = 1000; // 1k rekorda = ~100KB SQL, završi za ~2-3s
       const BATCH_DELAY_MS = 0; // BEZ delay-a = maksimalna brzina
 
         const chunkSize = Math.ceil(legacyRecords.length / NUM_WORKERS);
