@@ -639,9 +639,10 @@ export class TurnusiService {
       // FIX #22: Konzervativni batch size za stabilnost
       // FIX #25: Session timeout override (DigitalOcean net_read_timeout=30s)
       // FIX #27: Smanjen na 500 zbog MySQL replication hook error (Code 3100)
+      // FIX #28: Dodat delay 200ms da MySQL stigne da commit-uje (replication lag)
       const NUM_WORKERS = 1; // Single worker = jedna Prisma konekcija
-      const BATCH_SIZE = 500; // 500 rekorda = ~50KB SQL, ispod replication hook limita
-      const BATCH_DELAY_MS = 0; // BEZ delay-a = maksimalna brzina
+      const BATCH_SIZE = 500; // 500 rekorda = ~50KB SQL
+      const BATCH_DELAY_MS = 200; // 200ms delay između batch-eva za replication
 
         const chunkSize = Math.ceil(legacyRecords.length / NUM_WORKERS);
         console.log(`🚀 Starting ${NUM_WORKERS} parallel workers, ${chunkSize} records per worker`);
@@ -1448,9 +1449,10 @@ export class TurnusiService {
       // FIX #22: Konzervativni batch size za stabilnost
       // FIX #25: Session timeout override (DigitalOcean net_read_timeout=30s)
       // FIX #27: Smanjen na 500 zbog MySQL replication hook error (Code 3100)
+      // FIX #28: Dodat delay 200ms da MySQL stigne da commit-uje (replication lag)
       const NUM_WORKERS = 1; // Single worker = jedna Prisma konekcija
-      const BATCH_SIZE = 500; // 500 rekorda = ~50KB SQL, ispod replication hook limita
-      const BATCH_DELAY_MS = 0; // BEZ delay-a = maksimalna brzina
+      const BATCH_SIZE = 500; // 500 rekorda = ~50KB SQL
+      const BATCH_DELAY_MS = 200; // 200ms delay između batch-eva za replication
 
         const chunkSize = Math.ceil(legacyRecords.length / NUM_WORKERS);
         console.log(`🚀 Starting ${NUM_WORKERS} parallel workers, ${chunkSize} records per worker`);
