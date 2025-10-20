@@ -637,9 +637,9 @@ export class TurnusiService {
       }
 
       // FIX #22: Konzervativni batch size za stabilnost
-      // Smanjen sa 50k na 1k zbog MySQL net_read_timeout=30s i stabilnosti
+      // FIX #25: Smanjen na 800 + dodati session timeout override (DigitalOcean net_read_timeout=30s)
       const NUM_WORKERS = 1; // Single worker = jedna Prisma konekcija
-      const BATCH_SIZE = 1000; // 1k rekorda = ~100KB SQL, završi za ~2-3s
+      const BATCH_SIZE = 800; // 800 rekorda = ~80KB SQL, sigurno ispod 30s timeout-a
       const BATCH_DELAY_MS = 0; // BEZ delay-a = maksimalna brzina
 
         const chunkSize = Math.ceil(legacyRecords.length / NUM_WORKERS);
@@ -821,99 +821,146 @@ export class TurnusiService {
   /**
    * UPSERT pristup - zamena za bulkInsertChangesCodes
    * Koristi ON DUPLICATE KEY UPDATE za sigurnu sinhronizaciju bez gubitka podataka
+   * FIX #25: Dodati session timeout override i retry logika za DigitalOcean MySQL
    */
   private async upsertChangesCodesBatch(
     records: any[],
+    retryCount = 0,
   ): Promise<{ inserted: number }> {
     if (records.length === 0) {
       return { inserted: 0 };
     }
 
-    const values = records
-      .map((r) => {
-        return `(
-          ${r.turnus_id},
-          ${this.escapeSQLValue(r.turnus_name)},
-          ${this.escapeSQLValue(r.line_no)},
-          ${this.escapeSQLValue(this.formatTimeForSQL(r.start_time))},
-          ${r.direction},
-          ${this.escapeSQLValue(this.formatTimeForSQL(r.duration))},
-          ${this.escapeSQLValue(r.central_point)},
-          ${r.change_code},
-          ${r.job_id},
-          ${this.escapeSQLValue(this.formatTimeForSQL(r.new_start_time))},
-          ${this.escapeSQLValue(this.formatTimeForSQL(r.new_duration))},
-          ${r.start_station},
-          ${r.end_station},
-          ${r.day_number},
-          ${r.line_type_id},
-          ${this.escapeSQLValue(r.rezijski)},
-          ${this.escapeSQLValue(r.print_id)},
-          ${r.between_rez},
-          ${r.bus_number},
-          ${r.start_station_id},
-          ${r.end_station_id},
-          ${this.escapeSQLValue(this.formatDateTimeForSQL(r.change_time))},
-          ${this.escapeSQLValue(r.change_user)},
-          ${r.active},
-          ${this.escapeSQLValue(this.formatTimeForSQL(r.first_day_duration_part))},
-          ${this.escapeSQLValue(this.formatTimeForSQL(r.second_day_duration_part))},
-          ${this.escapeSQLValue(r.custom_id)},
-          ${this.escapeSQLValue(r.transport_id)},
-          ${r.departure_number},
-          ${r.shift_number},
-          ${r.turage_no},
-          ${r.departure_no_in_turage}
-        )`;
-      })
-      .join(',\n');
+    try {
+      // FIX #25: Session timeout override za large batch operations
+      // DigitalOcean Managed MySQL ima net_read_timeout=30s default
+      // Postavljamo na 300s (5 minuta) samo za ovu sesiju
+      await this.prisma.$executeRawUnsafe(`
+        SET SESSION net_read_timeout = 300,
+                    net_write_timeout = 300,
+                    max_execution_time = 300000
+      `);
 
-    const upsertSQL = `
-      INSERT INTO changes_codes_tours (
-        turnus_id, turnus_name, line_no, start_time, direction, duration,
-        central_point, change_code, job_id, new_start_time, new_duration,
-        start_station, end_station, day_number, line_type_id, rezijski,
-        print_id, between_rez, bus_number, start_station_id, end_station_id,
-        change_time, change_user, active, first_day_duration_part,
-        second_day_duration_part, custom_id, transport_id, departure_number,
-        shift_number, turage_no, departure_no_in_turage
-      ) VALUES ${values}
-      ON DUPLICATE KEY UPDATE
-        turnus_name = VALUES(turnus_name),
-        line_no = VALUES(line_no),
-        start_time = VALUES(start_time),
-        direction = VALUES(direction),
-        duration = VALUES(duration),
-        central_point = VALUES(central_point),
-        change_code = VALUES(change_code),
-        job_id = VALUES(job_id),
-        new_start_time = VALUES(new_start_time),
-        new_duration = VALUES(new_duration),
-        start_station = VALUES(start_station),
-        end_station = VALUES(end_station),
-        day_number = VALUES(day_number),
-        line_type_id = VALUES(line_type_id),
-        rezijski = VALUES(rezijski),
-        print_id = VALUES(print_id),
-        between_rez = VALUES(between_rez),
-        bus_number = VALUES(bus_number),
-        start_station_id = VALUES(start_station_id),
-        end_station_id = VALUES(end_station_id),
-        change_time = VALUES(change_time),
-        change_user = VALUES(change_user),
-        active = VALUES(active),
-        first_day_duration_part = VALUES(first_day_duration_part),
-        second_day_duration_part = VALUES(second_day_duration_part),
-        custom_id = VALUES(custom_id),
-        transport_id = VALUES(transport_id),
-        departure_number = VALUES(departure_number),
-        shift_number = VALUES(shift_number),
-        turage_no = VALUES(turage_no),
-        departure_no_in_turage = VALUES(departure_no_in_turage)
-    `;
+      const values = records
+        .map((r) => {
+          return `(
+            ${r.turnus_id},
+            ${this.escapeSQLValue(r.turnus_name)},
+            ${this.escapeSQLValue(r.line_no)},
+            ${this.escapeSQLValue(this.formatTimeForSQL(r.start_time))},
+            ${r.direction},
+            ${this.escapeSQLValue(this.formatTimeForSQL(r.duration))},
+            ${this.escapeSQLValue(r.central_point)},
+            ${r.change_code},
+            ${r.job_id},
+            ${this.escapeSQLValue(this.formatTimeForSQL(r.new_start_time))},
+            ${this.escapeSQLValue(this.formatTimeForSQL(r.new_duration))},
+            ${r.start_station},
+            ${r.end_station},
+            ${r.day_number},
+            ${r.line_type_id},
+            ${this.escapeSQLValue(r.rezijski)},
+            ${this.escapeSQLValue(r.print_id)},
+            ${r.between_rez},
+            ${r.bus_number},
+            ${r.start_station_id},
+            ${r.end_station_id},
+            ${this.escapeSQLValue(this.formatDateTimeForSQL(r.change_time))},
+            ${this.escapeSQLValue(r.change_user)},
+            ${r.active},
+            ${this.escapeSQLValue(this.formatTimeForSQL(r.first_day_duration_part))},
+            ${this.escapeSQLValue(this.formatTimeForSQL(r.second_day_duration_part))},
+            ${this.escapeSQLValue(r.custom_id)},
+            ${this.escapeSQLValue(r.transport_id)},
+            ${r.departure_number},
+            ${r.shift_number},
+            ${r.turage_no},
+            ${r.departure_no_in_turage}
+          )`;
+        })
+        .join(',\n');
 
-    const result = await this.prisma.$executeRawUnsafe(upsertSQL);
-    return { inserted: result as number };
+      const upsertSQL = `
+        INSERT INTO changes_codes_tours (
+          turnus_id, turnus_name, line_no, start_time, direction, duration,
+          central_point, change_code, job_id, new_start_time, new_duration,
+          start_station, end_station, day_number, line_type_id, rezijski,
+          print_id, between_rez, bus_number, start_station_id, end_station_id,
+          change_time, change_user, active, first_day_duration_part,
+          second_day_duration_part, custom_id, transport_id, departure_number,
+          shift_number, turage_no, departure_no_in_turage
+        ) VALUES ${values}
+        ON DUPLICATE KEY UPDATE
+          turnus_name = VALUES(turnus_name),
+          line_no = VALUES(line_no),
+          start_time = VALUES(start_time),
+          direction = VALUES(direction),
+          duration = VALUES(duration),
+          central_point = VALUES(central_point),
+          change_code = VALUES(change_code),
+          job_id = VALUES(job_id),
+          new_start_time = VALUES(new_start_time),
+          new_duration = VALUES(new_duration),
+          start_station = VALUES(start_station),
+          end_station = VALUES(end_station),
+          day_number = VALUES(day_number),
+          line_type_id = VALUES(line_type_id),
+          rezijski = VALUES(rezijski),
+          print_id = VALUES(print_id),
+          between_rez = VALUES(between_rez),
+          bus_number = VALUES(bus_number),
+          start_station_id = VALUES(start_station_id),
+          end_station_id = VALUES(end_station_id),
+          change_time = VALUES(change_time),
+          change_user = VALUES(change_user),
+          active = VALUES(active),
+          first_day_duration_part = VALUES(first_day_duration_part),
+          second_day_duration_part = VALUES(second_day_duration_part),
+          custom_id = VALUES(custom_id),
+          transport_id = VALUES(transport_id),
+          departure_number = VALUES(departure_number),
+          shift_number = VALUES(shift_number),
+          turage_no = VALUES(turage_no),
+          departure_no_in_turage = VALUES(departure_no_in_turage)
+      `;
+
+      const result = await this.prisma.$executeRawUnsafe(upsertSQL);
+      return { inserted: result as number };
+
+    } catch (error) {
+      // FIX #25: Exponential backoff retry na connection loss
+      const isConnectionError =
+        error.code === 'P1001' || // Prisma: Can't reach database
+        error.message?.includes('Lost connection') ||
+        error.message?.includes('Connection lost') ||
+        error.message?.includes('ECONNRESET');
+
+      if (isConnectionError && retryCount < 3) {
+        const backoffDelay = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
+        console.warn(
+          `⚠️  MySQL connection lost (batch ${records.length} records), ` +
+          `retrying in ${backoffDelay}ms (attempt ${retryCount + 1}/3)...`
+        );
+
+        // Wait exponential backoff
+        await new Promise(resolve => setTimeout(resolve, backoffDelay));
+
+        // Reconnect Prisma
+        try {
+          await this.prisma.$disconnect();
+          await this.prisma.$connect();
+          console.log(`🔄 Prisma reconnected, retrying batch...`);
+        } catch (reconnectError) {
+          console.error(`❌ Prisma reconnect failed:`, reconnectError);
+        }
+
+        // Retry batch insert
+        return this.upsertChangesCodesBatch(records, retryCount + 1);
+      }
+
+      // Re-throw error if not connection error or max retries reached
+      throw error;
+    }
   }
 
   // ========== HELPER METHODS ==========
@@ -1406,9 +1453,9 @@ export class TurnusiService {
       }
 
       // FIX #22: Konzervativni batch size za stabilnost
-      // Smanjen sa 50k na 1k zbog MySQL net_read_timeout=30s i stabilnosti
+      // FIX #25: Smanjen na 800 + dodati session timeout override (DigitalOcean net_read_timeout=30s)
       const NUM_WORKERS = 1; // Single worker = jedna Prisma konekcija
-      const BATCH_SIZE = 1000; // 1k rekorda = ~100KB SQL, završi za ~2-3s
+      const BATCH_SIZE = 800; // 800 rekorda = ~80KB SQL, sigurno ispod 30s timeout-a
       const BATCH_DELAY_MS = 0; // BEZ delay-a = maksimalna brzina
 
         const chunkSize = Math.ceil(legacyRecords.length / NUM_WORKERS);
