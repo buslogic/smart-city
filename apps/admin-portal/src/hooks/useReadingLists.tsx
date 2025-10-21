@@ -1,11 +1,12 @@
 import { SearchList } from '@/components/ui/SearchList';
 import { ReadingLists } from '@/types/billing-campaign';
-import { fetchPostData } from '@/utils/fetchUtil';
+import { fetchAPI } from '@/utils/fetchUtil';
 import { Typography } from '@mui/material';
 import { MRT_ColumnDef } from 'material-react-table';
 import { useCallback, useMemo, useState } from 'react';
 
-const CONTROLLER = '../ReadingListsController';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3010';
+const CONTROLLER = `${API_BASE}/api/reading-lists`;
 
 const useReadingLists = () => {
     const [readingLists, setReadingLists] = useState<ReadingLists[]>([]);
@@ -31,6 +32,7 @@ const useReadingLists = () => {
                             value={value}
                             disabled={!isCreating && !isEditing}
                             endpoint={CONTROLLER + '/getSubCampaignForSL'}
+                            fetchOnRender={true}
                             multiple={false}
                             onChange={(newValue) => {
                                 row._valuesCache[column.id] = newValue;
@@ -54,7 +56,8 @@ const useReadingLists = () => {
                             label="Ulica"
                             value={value}
                             disabled={!isCreating && !isEditing}
-                            endpoint="../MeasuringPointsController/getAdress"
+                            endpoint={`${API_BASE}/api/water-system-streets/search-list`}
+                            fetchOnRender={true}
                             multiple={false}
                             onChange={(newValue) => {
                                 row._valuesCache[column.id] = newValue;
@@ -79,6 +82,7 @@ const useReadingLists = () => {
                             value={value}
                             disabled={!isCreating && !isEditing}
                             endpoint={CONTROLLER + '/getStatusForSL'}
+                            fetchOnRender={true}
                             multiple={false}
                             onChange={(newValue) => {
                                 row._valuesCache[column.id] = newValue;
@@ -93,14 +97,22 @@ const useReadingLists = () => {
 
     const fetchData = useCallback(async () => {
         setIsFetching(true);
-        const data = await fetchPostData(CONTROLLER + '/getRows');
+        const data = await fetchAPI<ReadingLists[]>(CONTROLLER + '/getRows', {
+            method: 'POST',
+        });
         setIsFetching(false);
         setReadingLists(data);
     }, []);
 
     const createRow = useCallback(async (row: ReadingLists): Promise<void> => {
         setIsCreating(true);
-        const res = await fetchPostData(CONTROLLER + '/addRow', row);
+        const res = await fetchAPI<{ success: boolean; error?: string; data: ReadingLists }>(
+            CONTROLLER + '/addRow',
+            {
+                method: 'POST',
+                data: row,
+            }
+        );
         setIsCreating(false);
         if (!res.success) {
             throw new Error(res.error);
@@ -110,7 +122,13 @@ const useReadingLists = () => {
 
     const updateRow = useCallback(async (row: ReadingLists) => {
         setIsUpdating(true);
-        const res = await fetchPostData(CONTROLLER + '/editRow', row);
+        const res = await fetchAPI<{ success: boolean; error?: string; data: ReadingLists }>(
+            CONTROLLER + '/editRow',
+            {
+                method: 'POST',
+                data: row,
+            }
+        );
         setIsUpdating(false);
         if (!res.success) {
             throw new Error(res.error);
@@ -120,14 +138,20 @@ const useReadingLists = () => {
 
     const deleteRow = useCallback(async (id: number) => {
         setIsDeleting(true);
-        await fetchPostData(CONTROLLER + '/deleteRow', { id });
+        await fetchAPI(CONTROLLER + '/deleteRow', {
+            method: 'POST',
+            data: { id },
+        });
         setIsDeleting(false);
         setReadingLists((state) => state.filter((x) => x.id !== id));
     }, []);
 
     const archiveRow = useCallback(async (id: number) => {
         setIsDeleting(true);
-        await fetchPostData(CONTROLLER + '/archiveRow', { id });
+        await fetchAPI(CONTROLLER + '/archiveRow', {
+            method: 'POST',
+            data: { id },
+        });
         setIsDeleting(false);
         setReadingLists((state) => state.filter((x) => x.id !== id));
     }, []);

@@ -1,11 +1,12 @@
 import { SearchList } from '@/components/ui/SearchList';
 import { SubCampaign } from '@/types/billing-campaign';
-import { fetchPostData } from '@/utils/fetchUtil';
+import { fetchAPI } from '@/utils/fetchUtil';
 import { Autocomplete, TextField, Typography } from '@mui/material';
 import { MRT_ColumnDef } from 'material-react-table';
 import { useCallback, useMemo, useState } from 'react';
 
-const CONTROLLER = '../SubCampaignController';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3010';
+const CONTROLLER = `${API_BASE}/api/sub-campaigns`;
 
 const useSubCampaign = () => {
     const [subCampaign, setSubCampaign] = useState<SubCampaign[]>([]);
@@ -40,7 +41,7 @@ const useSubCampaign = () => {
                             label="Kampanja"
                             value={value}
                             disabled={!isCreating && !isEditing}
-                            endpoint={CONTROLLER + '/getCampaignForSL'}
+                            endpoint={`${CONTROLLER}/getCampaignForSL`}
                             multiple={false}
                             onChange={(newValue) => {
                                 row._valuesCache[column.id] = newValue;
@@ -173,7 +174,7 @@ const useSubCampaign = () => {
                             label="Rejon"
                             value={value}
                             disabled={!isCreating && !isEditing}
-                            endpoint={CONTROLLER + '/getRegionForSL'}
+                            endpoint={`${CONTROLLER}/getRegionForSL`}
                             multiple={false}
                             onChange={(newValue) => {
                                 row._valuesCache[column.id] = newValue;
@@ -197,7 +198,7 @@ const useSubCampaign = () => {
                             label="Čitač"
                             value={value}
                             disabled={!isCreating && !isEditing}
-                            endpoint={CONTROLLER + '/getCitacForSL'}
+                            endpoint={`${CONTROLLER}/getCitacForSL`}
                             multiple={false}
                             onChange={(newValue) => {
                                 row._valuesCache[column.id] = newValue;
@@ -221,7 +222,7 @@ const useSubCampaign = () => {
                             label="Status"
                             value={value}
                             disabled={!isCreating && !isEditing}
-                            endpoint={CONTROLLER + '/getStatusForSL'}
+                            endpoint={`${CONTROLLER}/getStatusForSL`}
                             multiple={false}
                             onChange={(newValue) => {
                                 row._valuesCache[column.id] = newValue;
@@ -236,7 +237,7 @@ const useSubCampaign = () => {
 
     const fetchData = useCallback(async () => {
         setIsFetching(true);
-        const data = await fetchPostData(CONTROLLER + '/getRows');
+        const data = await fetchAPI<SubCampaign[]>(`${CONTROLLER}/getRows`, { method: 'POST' });
         setIsFetching(false);
         setSubCampaign(data);
     }, []);
@@ -252,7 +253,16 @@ const useSubCampaign = () => {
         }
         setIsCreating(true);
         try {
-            const res = await fetchPostData(CONTROLLER + '/addRow', row);
+            // Konvertuj vreme_od i vreme_do u brojeve
+            const dataToSend = {
+                ...row,
+                vreme_od: vremeOd,
+                vreme_do: vremeDo
+            };
+            const res = await fetchAPI<{ success: boolean; error?: string; data: SubCampaign }>(
+                `${CONTROLLER}/addRow`,
+                { method: 'POST', data: dataToSend }
+            );
             if (!res.success) {
                 return { success: false, error: res.error || "Greška prilikom čuvanja." };
             }
@@ -275,7 +285,16 @@ const useSubCampaign = () => {
             return { success: false, error: "Vrednosti 'Vreme od' i 'Vreme do' moraju biti brojevi između 0 i 24." };
         }
         setIsUpdating(true);
-        const res = await fetchPostData(CONTROLLER + '/editRow', row);
+        // Konvertuj vreme_od i vreme_do u brojeve
+        const dataToSend = {
+            ...row,
+            vreme_od: vremeOd,
+            vreme_do: vremeDo
+        };
+        const res = await fetchAPI<{ success: boolean; error?: string; data: SubCampaign }>(
+            `${CONTROLLER}/editRow`,
+            { method: 'POST', data: dataToSend }
+        );
         setIsUpdating(false);
         if (!res.success) {
             throw new Error(res.error);
@@ -286,7 +305,7 @@ const useSubCampaign = () => {
 
     const deleteRow = useCallback(async (id: number) => {
         setIsDeleting(true);
-        await fetchPostData(CONTROLLER + '/deleteRow', { id });
+        await fetchAPI(`${CONTROLLER}/deleteRow`, { method: 'POST', data: { id } });
         setIsDeleting(false);
         setSubCampaign((state) => state.filter((x) => x.id !== id));
     }, []);

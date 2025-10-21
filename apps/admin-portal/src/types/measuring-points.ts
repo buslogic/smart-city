@@ -1,28 +1,20 @@
 export type MeasuringPoints = {
   IDMM: number;
-  datum_ugradnje?: string | null;
-  adresa: string;
-  ulaz: string;
-  broj: string;
-  prosekPS: number;
-  napomena: string;
-  broj_clanova_KS: number;
-  broj_potrosaca_KS: number;
-  korektivno: number;
-  virtuelno: number;
-  kontrolno: number;
-  prosekU: number;
-  primMM: string;
-  redosledMM: number;
-  naselje: string;
-  IDU: number;
-  broj2: number;
-  checkLL: string;
-  latitude: number;
-  longtitude: number;
-  KS: number;
-  _NapomenaMM: string;
-  prosekO: number;
-  status: number;
-  type_id: number;
+  IDU?: number;
+  zoneId?: number;
+  streetId?: number;
+  houseNumber?: string;
+  typeId?: number;
+  status?: number;
+  aktivan?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  tip?: string; // CONCAT(Id, ' | ', tip)
+  kucniSavet?: string; // CONCAT(id, ' | ', address_name)
+  mpsStatus?: string; // CONCAT(id, ' | ', status)
+  IDV?: string; // idv iz vodovod_water_meter
+  adresa?: string; // CONCAT(id, ' | ', address_name)
+  naselje?: string; // CONCAT(id, ' | ', cities_name)
+  brojClanovaKs?: number;
+  brojPotrosacaKs?: number;
 };

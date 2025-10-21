@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { WaterMeterAvailabilityService } from './water-meter-availability.service';
 import { CreateWaterMeterAvailabilityDto } from './dto/create-water-meter-availability.dto';
 import { UpdateWaterMeterAvailabilityDto } from './dto/update-water-meter-availability.dto';
+import { SearchAvailabilityDto } from './dto/search-availability.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
@@ -55,5 +56,17 @@ export class WaterMeterAvailabilityController {
   @RequirePermissions('water_meter_availability:delete')
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.service.remove(id);
+  }
+
+  @Post('search')
+  @ApiOperation({ summary: 'Pretraži dostupnosti za SearchList komponentu' })
+  @ApiResponse({ status: 200, description: 'Lista dostupnosti za dropdown' })
+  @RequirePermissions('water_meter_availability:view')
+  searchForList(@Body() searchDto: SearchAvailabilityDto) {
+    return this.service.searchForList(
+      searchDto.query,
+      searchDto.pageNumber,
+      searchDto.limit,
+    );
   }
 }

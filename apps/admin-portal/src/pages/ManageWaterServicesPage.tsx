@@ -281,7 +281,7 @@ export const ManageWaterServicesPage = ({ title }: { title: string }) => {
       <Box sx={{ width: '500px', marginBottom: '12px' }}>
         <SearchList
           label="Korisnik"
-          endpoint={`../UserAccountController/getUserAccountsForSL`}
+          endpoint={`/api/user-accounts/search/for-sl`}
           multiple={false}
           onChange={handleFilterChange}
           textFieldProps={{

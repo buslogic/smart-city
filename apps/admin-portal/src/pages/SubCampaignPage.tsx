@@ -3,13 +3,15 @@ import useSubCampaign from '@/hooks/useSubCampaign';
 import { SubCampaign } from '@/types/billing-campaign';
 import { globalTableProps } from '@/utils/globalTableProps';
 import { Add, Delete, Edit } from '@mui/icons-material';
-import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Grid, Tooltip } from '@mui/material';
+import { Box, Button, DialogActions, DialogContent, DialogTitle, Tooltip } from '@mui/material';
 import { MaterialReactTable, MRT_EditActionButtons, MRT_Row, MRT_TableOptions, useMaterialReactTable } from 'material-react-table';
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { toast } from 'react-toastify';
+import { useAuthStore } from '@/stores/auth.store';
 
 export const SubCampaignPage = ({ title }: { title: string }) => {
     const { fetchData, createRow, deleteRow, updateRow, isCreating, subCampaign, columns, isDeleting, isFetching, isUpdating } = useSubCampaign();
+    const user = useAuthStore((state) => state.user);
 
     useEffect(() => {
         fetchData();
@@ -28,6 +30,8 @@ export const SubCampaignPage = ({ title }: { title: string }) => {
     const handleUpdate: MRT_TableOptions<SubCampaign>['onEditingRowSave'] = async ({ values, row, table }) => {
         try {
             values['id'] = row.original.id;
+            values['changed_by'] = user?.id;
+            values['edit_datetime'] = new Date().toISOString();
             const result = await updateRow(values);
             if (result.success) {
                 toast.success('Uspešna izmena podataka');
@@ -79,33 +83,18 @@ export const SubCampaignPage = ({ title }: { title: string }) => {
             </Box>
         ),
         renderEditRowDialogContent: ({ table, row, internalEditComponents }) => {
-
             return (
-                <Dialog open={true} maxWidth="lg" fullWidth>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <DialogTitle variant="h5" sx={{ textDecoration: 'underline' }}>
                         Izmena (ID: {row.original.id})
                     </DialogTitle>
-                    <DialogContent
-                        sx={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '1.5rem',
-                            padding: '24px',
-                            overflow: 'scroll',
-                        }}
-                    >
-                        <Grid container spacing={3}>
-                            {React.Children.map(internalEditComponents, (child, index) => (
-                                <Grid item xs={4} key={index}>
-                                    {child}
-                                </Grid>
-                            ))}
-                        </Grid>
+                    <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        {internalEditComponents}
                     </DialogContent>
                     <DialogActions>
                         <MRT_EditActionButtons variant="text" table={table} row={row} />
                     </DialogActions>
-                </Dialog>
+                </Box>
             );
         },
         renderRowActions: ({ row, table }) => {

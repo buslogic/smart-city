@@ -212,7 +212,7 @@ export const WaterServicesPricelistPage = ({ title }: { title: string }) => {
       <Box sx={{ width: '500px', marginBottom: '12px' }}>
         <SearchList
           label="Kategorija usluga"
-          endpoint={`../WaterServicesPricelistController/getCategoriesForSL`}
+          endpoint="/api/water-service-prices/search-categories"
           multiple={false}
           onChange={handleFilterChange}
           textFieldProps={{

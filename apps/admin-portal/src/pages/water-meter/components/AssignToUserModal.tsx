@@ -3,7 +3,7 @@ import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconBut
 import CloseIcon from '@mui/icons-material/Close';
 import { toast } from 'react-toastify';
 import { SearchList } from '@/components/ui/SearchList';
-import { fetchPostData } from '@/utils/fetchUtil';
+import { fetchAPI } from '@/utils/fetchUtil';
 
 const AssignWaterMeterToUserModal = ({ rowID, open, close }: { rowID: number; open: boolean; close: () => void }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -11,8 +11,12 @@ const AssignWaterMeterToUserModal = ({ rowID, open, close }: { rowID: number; op
   const [selectedValue, setSelectedValue] = useState<string>('');
 
   async function fetchUserID() {
-    const { data } = await fetchPostData('../WaterMeterController/getAssignedUser', { id: rowID });
-    setUserID(data.id ?? 0);
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3010';
+    const response = await fetchAPI<{ success: boolean; data: any }>(`${apiUrl}/api/water-meters/assigned-user`, {
+      method: 'POST',
+      data: { id: rowID },
+    });
+    setUserID(response?.data?.id ?? 0);
   }
 
   useEffect(() => {
@@ -59,7 +63,11 @@ const AssignWaterMeterToUserModal = ({ rowID, open, close }: { rowID: number; op
       }
 
       setIsSubmitting(true);
-      const res = await fetchPostData('../WaterMeterController/assignWaterMeterToUser', { id: rowID, sifra_potrosaca, sifra_kupca });
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3010';
+      const res = await fetchAPI<{ success: boolean }>(`${apiUrl}/api/water-meters/assign-to-user`, {
+        method: 'POST',
+        data: { id: rowID, sifra_potrosaca, sifra_kupca },
+      });
       res.success ? toast.success('Uspešno dodeljivanje') : toast.error('Neuspešno dodeljivanje');
       setIsSubmitting(false);
       close();
@@ -81,7 +89,7 @@ const AssignWaterMeterToUserModal = ({ rowID, open, close }: { rowID: number; op
           <SearchList
             label="Korisnik"
             value={selectedValue}
-            endpoint={'../UserAccountController/getUserAccountsForSL'}
+            endpoint={'/api/user-accounts/search/for-sl'}
             multiple={false}
             onChange={(newValue) => setSelectedValue(newValue)}
             fetchOnRender={typeof userID === 'number' && userID > 0}

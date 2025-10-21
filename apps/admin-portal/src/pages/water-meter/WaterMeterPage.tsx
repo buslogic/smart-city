@@ -8,7 +8,7 @@ import AddIcon from '@mui/icons-material/Add';
 import ChangeHistoryIcon from '@mui/icons-material/ChangeHistory';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
-import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Grid, Tooltip } from '@mui/material';
+import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Tooltip } from '@mui/material';
 import { MaterialReactTable, MRT_EditActionButtons, MRT_Row, MRT_TableInstance, MRT_TableOptions, useMaterialReactTable } from 'material-react-table';
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -61,12 +61,39 @@ export const WaterMeterPage = ({ title }: { title: string }) => {
 
   const handleCreate: MRT_TableOptions<WaterMeter>['onCreatingRowSave'] = async ({ values, table }) => {
     try {
-      const parts = values['measuring_point'].split(' | ');
-      if (parts.length > 0) {
-        const [id] = parts;
-        values['idmm'] = id;
+      const parts = values['measuring_point']?.split(' | ');
+      if (parts && parts.length > 0) {
+        const [idmmStr] = parts;
 
-        await createItem(values);
+        // Transformiši podatke u format koji očekuje backend DTO
+        const payload: any = {
+          idmm: parseInt(idmmStr),
+          counter: values['counter'] ? parseInt(values['counter']) : undefined,
+          idv: values['idv'] || undefined,
+          serialNumber: values['serial_number'] || undefined,
+          module: values['module'] || undefined,
+          calibratedFrom: values['calibrated_from'] ? `${values['calibrated_from']}T00:00:00.000Z` : undefined,
+          calibratedTo: values['calibrated_to'] ? `${values['calibrated_to']}T00:00:00.000Z` : undefined,
+          aktivan: true,
+        };
+
+        // Parsiraj ID-eve iz search list vrednosti (format: "ID | Naziv")
+        if (values['availability_id']) {
+          const availParts = values['availability_id'].split(' | ');
+          payload.availabilityId = availParts[0] ? parseInt(availParts[0]) : undefined;
+        }
+
+        if (values['type_id']) {
+          const typeParts = values['type_id'].split(' | ');
+          payload.typeId = typeParts[0] ? parseInt(typeParts[0]) : undefined;
+        }
+
+        if (values['manufacturer_id']) {
+          const manuParts = values['manufacturer_id'].split(' | ');
+          payload.manufacturerId = manuParts[0] ? parseInt(manuParts[0]) : undefined;
+        }
+
+        await createItem(payload);
 
         toast.success('Uspešno unošenje podataka');
         table.setCreatingRow(null);
@@ -80,24 +107,63 @@ export const WaterMeterPage = ({ title }: { title: string }) => {
     try {
       const { id } = row.original;
 
-      values['id'] = id;
-      let newIdMM = null;
-      if (values['measuring_point']) {
-        const parts = values['measuring_point'].split(' | ');
-        if (parts.length > 1) newIdMM = parts[0].trim();
-      }
-
-      values['idmm'] = newIdMM;
-      values['old_idv'] = idvName;
-
+      // Ako je zamenski vodomer, koristi stari format
       if (isChecked) {
+        values['id'] = id;
+        let newIdMM = null;
+        if (values['measuring_point']) {
+          const parts = values['measuring_point'].split(' | ');
+          if (parts.length > 1) newIdMM = parts[0].trim();
+        }
+        values['idmm'] = newIdMM;
+        values['old_idv'] = idvName;
+
         await insertReplacementWaterMeter(values);
         toast.success('Uspešno unet zamenski vodomer');
       } else {
-        await updateItem(values);
+        // Transformiši podatke u format koji očekuje backend DTO
+        const payload: any = {
+          counter: values['counter'] ? parseInt(values['counter']) : undefined,
+          idv: values['idv'] || undefined,
+          serialNumber: values['serial_number'] || undefined,
+          module: values['module'] || undefined,
+          calibratedFrom: values['calibrated_from']
+            ? (values['calibrated_from'].includes('T') ? values['calibrated_from'] : `${values['calibrated_from']}T00:00:00.000Z`)
+            : undefined,
+          calibratedTo: values['calibrated_to']
+            ? (values['calibrated_to'].includes('T') ? values['calibrated_to'] : `${values['calibrated_to']}T00:00:00.000Z`)
+            : undefined,
+          aktivan: true,
+        };
+
+        // Parsiraj IDMM iz measuring_point
+        if (values['measuring_point']) {
+          const parts = values['measuring_point'].split(' | ');
+          if (parts.length > 0) {
+            payload.idmm = parseInt(parts[0]);
+          }
+        }
+
+        // Parsiraj ID-eve iz search list vrednosti (format: "ID | Naziv")
+        if (values['availability_id']) {
+          const availParts = values['availability_id'].split(' | ');
+          payload.availabilityId = availParts[0] ? parseInt(availParts[0]) : undefined;
+        }
+
+        if (values['type_id']) {
+          const typeParts = values['type_id'].split(' | ');
+          payload.typeId = typeParts[0] ? parseInt(typeParts[0]) : undefined;
+        }
+
+        if (values['manufacturer_id']) {
+          const manuParts = values['manufacturer_id'].split(' | ');
+          payload.manufacturerId = manuParts[0] ? parseInt(manuParts[0]) : undefined;
+        }
+
+        await updateItem(id, payload);
         toast.success('Uspešna izmena podataka');
       }
-      row.original.idmm = values['idmm'];
+
       table.setEditingRow(null);
     } catch (err: any) {
       toast.error(err.message);
@@ -154,20 +220,19 @@ export const WaterMeterPage = ({ title }: { title: string }) => {
         </DialogTitle>
         <DialogContent
           sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '1.5rem',
             padding: '24px',
             overflow: 'scroll',
           }}
         >
-          <Grid container spacing={3}>
-            {React.Children.map(internalEditComponents, (child, index) => (
-              <Grid item xs={6} key={index}>
-                {child}
-              </Grid>
-            ))}
-          </Grid>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: '1.5rem',
+            }}
+          >
+            {internalEditComponents}
+          </Box>
         </DialogContent>
         <DialogActions>
           <MRT_EditActionButtons variant="text" table={table} row={row} />
@@ -264,15 +329,15 @@ export const WaterMeterPage = ({ title }: { title: string }) => {
       {changeHistoryID > 0 && <ChangeHistoryModal rowID={changeHistoryID} open={true} close={() => setChangeHistoryID(0)} columns={historyColumns} />}
       {!!formModalIDMM && (
         <FormModal
-          url="../WaterMeterController/getMeasuingPointByIDMM"
+          url={`${import.meta.env.VITE_API_URL || 'http://localhost:3010'}/api/water-meters/measuring-point`}
           dataBody={{ idmm: formModalIDMM }}
           title="Prikaz mernog mesta"
           columns={measuringPointsColumns}
-          navigateURL={`/MeasuringPointsController/?idmm=${formModalIDMM}`}
+          navigateURL={`/vodovod/merna-mesta?idmm=${formModalIDMM}`}
           navigatePageTitle="Merna mesta"
           readOnly
           handleClose={() => {
-            setFormModalIDMM('');
+            setFormModalIDMM(null);
           }}
         />
       )}

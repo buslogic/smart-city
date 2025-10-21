@@ -221,19 +221,25 @@ const PermissionsManagement: React.FC = () => {
               
               {dropdownOpen && (
                 <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                  {roles.map(role => (
-                    <button
-                      key={role.id}
-                      onClick={() => handleRoleChange(role.id)}
-                      className="w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
-                    >
-                      <div className="flex items-center gap-4">
-                        <span className="font-medium text-blue-600 min-w-[3rem]">ID: {role.id}</span>
-                        <span className="font-semibold text-gray-900 min-w-[10rem]">{role.name}</span>
-                        <span className="text-sm text-gray-500 flex-1">{role.description}</span>
-                      </div>
-                    </button>
-                  ))}
+                  {roles.length === 0 ? (
+                    <div className="px-4 py-3 text-gray-500 text-sm text-center">
+                      Nema dostupnih rola
+                    </div>
+                  ) : (
+                    roles.map(role => (
+                      <button
+                        key={role.id}
+                        onClick={() => handleRoleChange(role.id)}
+                        className="w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                      >
+                        <div className="flex items-center gap-4">
+                          <span className="font-medium text-blue-600 min-w-[3rem]">ID: {role.id}</span>
+                          <span className="font-semibold text-gray-900 min-w-[10rem]">{role.name}</span>
+                          <span className="text-sm text-gray-500 flex-1">{role.description}</span>
+                        </div>
+                      </button>
+                    ))
+                  )}
                 </div>
               )}
             </div>

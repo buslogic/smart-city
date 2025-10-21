@@ -399,3 +399,41 @@ input[type="checkbox"]:focus {
     padding-top: 0.75rem !important;
   }
 }
+
+/* Input styles from old project - remove outline and border */
+input {
+  outline: none !important;
+  border: none !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+}
+
+/* MUI TextField and Autocomplete - remove outline */
+.MuiOutlinedInput-notchedOutline {
+  border: none !important;
+}
+
+.MuiOutlinedInput-root {
+  outline: none !important;
+}
+
+.MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline {
+  border: none !important;
+}
+
+.MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline {
+  border: none !important;
+  outline: none !important;
+}
+
+/* Force full width on all inputs in edit dialog */
+.MuiDialog-paper .MuiTextField-root,
+.MuiDialog-paper .MuiAutocomplete-root {
+  width: 100% !important;
+}
+
+/* Remove left padding from input fields */
+.MuiInputBase-input {
+  padding-left: 0 !important;
+}
+

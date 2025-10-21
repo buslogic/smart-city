@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { MaterialReactTable, MRT_ColumnDef, MRT_Row, MRT_TableInstance, MRT_TableOptions, useMaterialReactTable } from 'material-react-table';
+import { useEffect } from 'react';
+import { MaterialReactTable, MRT_Row, MRT_TableInstance, MRT_TableOptions, useMaterialReactTable } from 'material-react-table';
 import { Box, Button, Tooltip } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -8,89 +8,46 @@ import { NoteCategory } from '@/types/notes';
 import { toast } from 'react-toastify';
 import { globalTableProps, muiTableBodyCellPropsRowEditStyles } from '@/utils/globalTableProps';
 import Main from '@/components/ui/Main';
-import { fetchPostData } from '@/utils/fetchUtil';
-
-const CONTROLLER = '../NoteCategoriesController';
+import useNoteCategories from '@/hooks/useNoteCategories';
 
 export const NoteCategoriesPage = ({ title }: { title: string }) => {
-  const [isFetching, setIsFetching] = useState(true);
-  const [categories, setCategories] = useState<NoteCategory[]>([]);
-  const [isSaving, setIsSaving] = useState(false);
-
-  const columns = useMemo<MRT_ColumnDef<NoteCategory>[]>(
-    () => [
-      {
-        accessorKey: 'name',
-        header: 'Kategorija',
-        size: 100,
-      },
-    ],
-    []
-  );
-
-  const fetchCategories = async () => {
-    try {
-      setIsFetching(true);
-      const data = await fetchPostData(CONTROLLER + '/getAll');
-      setCategories(data);
-    } catch (err) {
-      console.log(err);
-    } finally {
-      setIsFetching(false);
-    }
-  };
+  const { fetchData, createRow, deleteRow, updateRow, isCreating, noteCategories, columns, isDeleting, isFetching, isUpdating } = useNoteCategories();
 
   useEffect(() => {
-    fetchCategories();
+    fetchData();
   }, []);
 
   const handleCreate: MRT_TableOptions<NoteCategory>['onCreatingRowSave'] = async ({ values, table }) => {
     try {
-      setIsSaving(true);
-      const res = await fetchPostData(CONTROLLER + '/addRow', values);
-      if (!res.success) {
-        throw new Error('Neuspešan unos podataka');
-      }
-      setCategories((prev) => [res.data, ...prev]);
+      await createRow(values as NoteCategory);
       toast.success('Uspešno unošenje podataka');
       table.setCreatingRow(null);
     } catch (err: any) {
-      toast.error(err.message);
-    } finally {
-      setIsSaving(false);
+      console.log(err);
+      toast.error('Došlo je do greške!');
     }
   };
 
   const handleSave: MRT_TableOptions<NoteCategory>['onEditingRowSave'] = async ({ values, row, table }) => {
     try {
-      setIsSaving(true);
       values['id'] = row.original.id;
-      const res = await fetchPostData(CONTROLLER + '/editRow', values);
-      if (!res.success) {
-        throw new Error(res.error || 'Neuspešna izmena podataka');
-      }
-      setCategories((prev) => prev.map((x) => (x.id === row.original.id ? res.data : x)));
+      await updateRow(values as NoteCategory);
       table.setEditingRow(null);
       toast.success('Uspešna izmena podataka');
     } catch (err: any) {
-      toast.error(err.message);
-    } finally {
-      setIsSaving(false);
+      console.log(err);
+      toast.error('Došlo je do greške!');
     }
   };
 
   const handleDelete = async (row: MRT_Row<NoteCategory>) => {
     if (window.confirm('Da li potvrdjujete brisanje?')) {
       try {
-        setIsSaving(true);
-        await fetchPostData(CONTROLLER + '/deleteRow', { id: row.original.id });
-        setCategories((state) => state.filter((x) => x.id !== row.original.id));
+        await deleteRow(row.original.id);
         toast.success('Uspešno brisanje podataka');
       } catch (err) {
         console.log(err);
         toast.error('Došlo je do greške');
-      } finally {
-        setIsSaving(false);
       }
     }
   };
@@ -102,7 +59,7 @@ export const NoteCategoriesPage = ({ title }: { title: string }) => {
   const table = useMaterialReactTable({
     ...globalTableProps,
     columns,
-    data: categories,
+    data: noteCategories,
     createDisplayMode: 'row',
     editDisplayMode: 'row',
     muiTableBodyCellProps: muiTableBodyCellPropsRowEditStyles,
@@ -155,7 +112,7 @@ export const NoteCategoriesPage = ({ title }: { title: string }) => {
     ),
     state: {
       isLoading: isFetching,
-      isSaving: isSaving,
+      isSaving: isCreating || isUpdating || isDeleting,
       showProgressBars: isFetching,
     },
   });

@@ -1,23 +1,29 @@
 import { SearchList } from '@/components/ui/SearchList';
-import { Notes } from '@/types/notes';
-import { fetchPostData } from '@/utils/fetchUtil';
-import { Checkbox, FormControlLabel, Typography } from '@mui/material';
+import { WaterSupplyNote } from '@/types/notes';
+import { fetchAPI } from '@/utils/fetchUtil';
+import { Checkbox, FormControlLabel, TextField } from '@mui/material';
 import { MRT_ColumnDef } from 'material-react-table';
 import { useCallback, useMemo, useState } from 'react';
 
-const CONTROLLER = '../WaterSupplyNotesController';
+const API_ENDPOINT = '/api/water-supply-notes';
 
 const useWaterSupplyNotes = () => {
-    const [waterSupplyNotes, setWaterSupplyNotes] = useState<Notes[]>([]);
+    const [waterSupplyNotes, setWaterSupplyNotes] = useState<WaterSupplyNote[]>([]);
     const [isFetching, setIsFetching] = useState(true);
     const [isCreating, setIsCreating] = useState(false);
     const [isUpdating, setIsUpdating] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
 
-    const columns = useMemo<MRT_ColumnDef<Notes>[]>(() => {
+    const columns = useMemo<MRT_ColumnDef<WaterSupplyNote>[]>(() => {
         return [
             {
-                accessorKey: 'category_id',
+                accessorKey: 'id',
+                header: 'ID',
+                size: 80,
+                enableEditing: false,
+            },
+            {
+                accessorKey: 'categoryId',
                 header: 'Kategorija',
                 size: 250,
                 enableEditing: true,
@@ -30,7 +36,7 @@ const useWaterSupplyNotes = () => {
                             label="Kategorija"
                             value={value}
                             disabled={!isCreating && !isEditing}
-                            endpoint={CONTROLLER + '/getCategoryForSL'}
+                            endpoint={API_ENDPOINT + '/categories/search'}
                             multiple={false}
                             onChange={(newValue) => {
                                 row._valuesCache[column.id] = newValue;
@@ -38,20 +44,47 @@ const useWaterSupplyNotes = () => {
                         />
                     );
                 },
-                Cell: ({ cell }) => <Typography>{cell.getValue() as string}</Typography>,
             },
             {
                 accessorKey: 'title',
                 header: 'Naslov',
-                size: 150,
+                size: 200,
+                Edit: ({ cell, row, column }) => {
+                    const value = (cell.getValue() as string) || '';
+                    return (
+                        <TextField
+                            label="Naslov"
+                            defaultValue={value}
+                            fullWidth
+                            onChange={(e) => {
+                                row._valuesCache[column.id] = e.target.value;
+                            }}
+                        />
+                    );
+                },
             },
             {
                 accessorKey: 'body',
                 header: 'Tekst',
-                size: 150,
+                size: 300,
+                Edit: ({ cell, row, column }) => {
+                    const value = (cell.getValue() as string) || '';
+                    return (
+                        <TextField
+                            label="Tekst"
+                            defaultValue={value}
+                            multiline
+                            rows={4}
+                            fullWidth
+                            onChange={(e) => {
+                                row._valuesCache[column.id] = e.target.value;
+                            }}
+                        />
+                    );
+                },
             },
             {
-                accessorKey: 'is_pinned',
+                accessorKey: 'isPinned',
                 header: 'Zakačeno',
                 size: 100,
                 Cell: ({ cell }) => {
@@ -82,7 +115,7 @@ const useWaterSupplyNotes = () => {
                 },
             },
             {
-                accessorKey: 'is_private',
+                accessorKey: 'isPrivate',
                 header: 'Privatno',
                 size: 100,
                 Cell: ({ cell }) => {
@@ -113,40 +146,73 @@ const useWaterSupplyNotes = () => {
                 },
             },
         ];
-    }, [waterSupplyNotes]);
+    }, []);
 
     const fetchData = useCallback(async () => {
         setIsFetching(true);
-        const data = await fetchPostData(CONTROLLER + '/getRows');
-        setIsFetching(false);
-        setWaterSupplyNotes(data);
+        try {
+            const data = await fetchAPI<WaterSupplyNote[]>(API_ENDPOINT, {
+                method: 'GET',
+            });
+            setWaterSupplyNotes(data);
+        } catch (error) {
+            console.error('Greška pri učitavanju beleški:', error);
+        } finally {
+            setIsFetching(false);
+        }
     }, []);
 
-    const createRow = useCallback(async (row: Notes): Promise<void> => {
+    const createRow = useCallback(async (row: WaterSupplyNote): Promise<void> => {
         setIsCreating(true);
-        const res = await fetchPostData(CONTROLLER + '/addRow', row);
-        setIsCreating(false);
-        if (!res.success) {
-            throw new Error(res.error);
+        try {
+            const defaultValues = {
+                isPinned: 0,
+                isPrivate: 0,
+                ...row,
+            };
+            const newRow = await fetchAPI<WaterSupplyNote>(API_ENDPOINT, {
+                method: 'POST',
+                data: defaultValues,
+            });
+            setWaterSupplyNotes((prev) => [newRow, ...prev]);
+        } catch (error) {
+            console.error('Greška pri kreiranju beleške:', error);
+            throw error;
+        } finally {
+            setIsCreating(false);
         }
-        setWaterSupplyNotes((prev) => [res.data, ...prev]);
     }, []);
 
-    const updateRow = useCallback(async (row: Notes) => {
+    const updateRow = useCallback(async (row: WaterSupplyNote) => {
         setIsUpdating(true);
-        const res = await fetchPostData(CONTROLLER + '/editRow', row);
-        setIsUpdating(false);
-        if (!res.success) {
-            throw new Error(res.error);
+        try {
+            const { id, ...updateData } = row;
+            const updatedRow = await fetchAPI<WaterSupplyNote>(`${API_ENDPOINT}/${id}`, {
+                method: 'PATCH',
+                data: updateData,
+            });
+            setWaterSupplyNotes((prev) => prev.map((x) => (x.id === id ? updatedRow : x)));
+        } catch (error) {
+            console.error('Greška pri ažuriranju beleške:', error);
+            throw error;
+        } finally {
+            setIsUpdating(false);
         }
-        setWaterSupplyNotes((prev) => prev.map((x) => (x.id === row.id ? res.data : x)));
     }, []);
 
     const deleteRow = useCallback(async (id: number) => {
         setIsDeleting(true);
-        await fetchPostData(CONTROLLER + '/deleteRow', { id });
-        setIsDeleting(false);
-        setWaterSupplyNotes((state) => state.filter((x) => x.id !== id));
+        try {
+            await fetchAPI(`${API_ENDPOINT}/${id}`, {
+                method: 'DELETE',
+            });
+            setWaterSupplyNotes((state) => state.filter((x) => x.id !== id));
+        } catch (error) {
+            console.error('Greška pri brisanju beleške:', error);
+            throw error;
+        } finally {
+            setIsDeleting(false);
+        }
     }, []);
 
     return {

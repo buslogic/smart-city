@@ -1,9 +1,9 @@
 import { Complaint } from '@/types/complaints';
-import { fetchPostData } from '@/utils/fetchUtil';
+import { fetchAPI } from '@/utils/fetchUtil';
 import { useCallback, useState } from 'react';
 import { toast } from 'react-toastify';
 
-const CONTROLLER = '../ComplaintController';
+const API_ENDPOINT = '/api/complaints';
 
 export type PotrosacPDF = {
     naziv?: string;
@@ -18,7 +18,7 @@ export type PotrosacPDF = {
     email?: string;
 }
 
-const useSubsidies = () => {
+const useComplaint = () => {
     const [complaints, setComplaint] = useState<Complaint[]>([]);
     const [isFetching, setIsFetching] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
@@ -29,36 +29,41 @@ const useSubsidies = () => {
     const fetchActiveRows = async () => {
         try {
             setIsFetching(true);
-            const data = await fetchPostData('../ComplaintController/getData', {});
-            setIsFetching(false);
+            const data = await fetchAPI<Complaint[]>(API_ENDPOINT, {
+                method: 'GET',
+            });
             setComplaint(data);
         } catch (err) {
             toast.error('Došlo je do greške');
             console.log(err);
+        } finally {
+            setIsFetching(false);
         }
     };
 
     const fetchInactiveRows = async () => {
         try {
             setIsFetching(true);
-            const data = await fetchPostData('../ComplaintController/getInactiveData', {});
-            setIsFetching(false);
+            const data = await fetchAPI<Complaint[]>(`${API_ENDPOINT}/inactive`, {
+                method: 'GET',
+            });
             setComplaint(data);
         } catch (err) {
             toast.error('Došlo je do greške');
             console.log(err);
+        } finally {
+            setIsFetching(false);
         }
     };
 
     const createRow = useCallback(async (row: Complaint): Promise<void> => {
         setIsCreating(true);
         try {
-            const res = await fetchPostData(CONTROLLER + '/addRow', row);
-
-            if (!res.success) {
-                throw new Error(res.error);
-            }
-            setComplaint((prev) => [res.data, ...prev]);
+            const newRow = await fetchAPI<Complaint>(API_ENDPOINT, {
+                method: 'POST',
+                data: row,
+            });
+            setComplaint((prev) => [newRow, ...prev]);
         } catch (error) {
             console.error('Error in createRow:', error);
             throw error;
@@ -69,27 +74,44 @@ const useSubsidies = () => {
 
     const updateRow = useCallback(async (row: Complaint) => {
         setIsUpdating(true);
-        const res = await fetchPostData(CONTROLLER + '/editRow', row);
-        setIsUpdating(false);
-        if (!res.success) {
-            throw new Error(res.error);
+        try {
+            const { id, ...updateData } = row;
+            const updatedRow = await fetchAPI<Complaint>(`${API_ENDPOINT}/${id}`, {
+                method: 'PATCH',
+                data: updateData,
+            });
+            setComplaint((prev) => prev.map((x) => (x.id === id ? updatedRow : x)));
+        } catch (error) {
+            console.error('Error in updateRow:', error);
+            throw error;
+        } finally {
+            setIsUpdating(false);
         }
-        setComplaint((prev) => prev.map((x) => (x.id === row.id ? res.data : x)));
     }, []);
 
     const deleteRow = useCallback(async (id: number) => {
         setIsDeleting(true);
-        await fetchPostData(CONTROLLER + '/deleteRow', { id });
-        setIsDeleting(false);
-        setComplaint((state) => state.filter((x) => x.id !== id));
+        try {
+            await fetchAPI(`${API_ENDPOINT}/${id}`, {
+                method: 'DELETE',
+            });
+            setComplaint((state) => state.filter((x) => x.id !== id));
+        } catch (error) {
+            console.error('Error in deleteRow:', error);
+            throw error;
+        } finally {
+            setIsDeleting(false);
+        }
     }, []);
 
     const getPotrosacByID = async (complaintID: number | null): Promise<PotrosacPDF | null> => {
         try {
             if (!complaintID) return null;
-            const data = await fetchPostData(CONTROLLER + '/getKorisnikByID', { id: complaintID });
-            SetComplaintID(data)
-            return data as PotrosacPDF;
+            const data = await fetchAPI<PotrosacPDF>(`${API_ENDPOINT}/${complaintID}/korisnik`, {
+                method: 'GET',
+            });
+            SetComplaintID(data);
+            return data;
         } catch (err) {
             console.error('Error fetching row by ID:', err);
             return null;
@@ -118,4 +140,4 @@ const useSubsidies = () => {
     };
 };
 
-export default useSubsidies;
+export default useComplaint;

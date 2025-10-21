@@ -13,7 +13,7 @@ import {
 } from 'material-react-table';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
-import { fetchPostData } from '@/utils/fetchUtil';
+import { fetchAPI } from '@/utils/fetchUtil';
 import { SearchList } from '@/components/ui/SearchList';
 
 type Cashier = {
@@ -69,7 +69,7 @@ export const CashiersPage = ({ title }: { title: string }) => {
 
       setIsSaving(true);
 
-      const { success, data }: { success: boolean; data: Cashier } = await fetchPostData('../CashiersController/addRow', body);
+      const { success, data }: { success: boolean; data: Cashier } = await fetchAPI('/api/cashiers/addRow', { method: 'POST', data: body });
       if (success) {
         setData((prev) => [data, ...prev]);
         toast.success('Uspešno unošenje podataka');
@@ -98,7 +98,7 @@ export const CashiersPage = ({ title }: { title: string }) => {
 
       console.log(bodyData);
 
-      const { success, data } = await fetchPostData('../CashiersController/editRow', bodyData);
+      const { success, data } = await fetchAPI('/api/cashiers/editRow', { method: 'POST', data: bodyData });
       if (success) {
         setData((prev) => prev.map((x) => (x.id == data.id ? data : x)));
         toast.success('Uspešna izmena podataka');
@@ -118,8 +118,9 @@ export const CashiersPage = ({ title }: { title: string }) => {
     if (window.confirm('Da li potvrdjujete brisanje?')) {
       try {
         setIsSaving(true);
-        const { success }: { success: boolean; data: Cashier } = await fetchPostData('../CashiersController/deleteRow', {
-          id: row.original.id,
+        const { success }: { success: boolean; data: Cashier } = await fetchAPI('/api/cashiers/deleteRow', {
+          method: 'POST',
+          data: { id: row.original.id },
         });
 
         if (success) {
@@ -161,7 +162,7 @@ export const CashiersPage = ({ title }: { title: string }) => {
           return (
             <SearchList
               label="Fizičko lice"
-              endpoint={'../UserAccountController/getUnusedCashierCrmContactsForSL'}
+              endpoint={'/api/cashiers/getUnusedCashierCrmContactsForSL'}
               multiple={false}
               onChange={(newValue) => {
                 row._valuesCache[column.id] = newValue;
@@ -181,7 +182,7 @@ export const CashiersPage = ({ title }: { title: string }) => {
             <SearchList
               label="Kasa"
               value={cell.getValue() as string}
-              endpoint={'../CashRegisterController/getCashRegisterForSL'}
+              endpoint={'/api/cash-register/get-cash-register-for-sl'}
               multiple={false}
               onChange={(newValue) => {
                 row._valuesCache[column.id] = newValue;
@@ -262,7 +263,7 @@ export const CashiersPage = ({ title }: { title: string }) => {
 
   const fetchCashiers = async () => {
     try {
-      const data = await fetchPostData('../CashiersController/getAll');
+      const data = await fetchAPI('/api/cashiers/getAll', { method: 'POST' });
       console.log(data);
       setIsFetching(false);
       setData(data);

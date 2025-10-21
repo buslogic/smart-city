@@ -1,9 +1,7 @@
 import { WaterService } from '@/types/finance';
-import { fetchPostData } from '@/utils/fetchUtil';
+import { api } from '@/services/api';
 import { MRT_ColumnDef } from 'material-react-table';
 import { useCallback, useMemo, useState } from 'react';
-
-const CONTROLLER = '../WaterServicesController';
 
 const useWaterServices = () => {
   const [service, setServices] = useState<WaterService[]>([]);
@@ -45,40 +43,45 @@ const useWaterServices = () => {
   const fetchData = useCallback(async () => {
     try {
       setIsFetching(true);
-      const data = await fetchPostData(CONTROLLER + '/getRows');
-      setIsFetching(false);
+      const { data } = await api.get<WaterService[]>('/api/water-services');
       setServices(data);
     } catch (err) {
       console.log(err);
+    } finally {
+      setIsFetching(false);
     }
   }, []);
 
   const createRow = useCallback(async (row: WaterService): Promise<void> => {
-    setIsCreating(true);
-    const res = await fetchPostData(CONTROLLER + '/addRow', row);
-    console.log('Inserted: ', res);
-    setIsCreating(false);
-    if (!res.success) {
-      throw new Error(res.error);
+    try {
+      setIsCreating(true);
+      const { data } = await api.post<WaterService>('/api/water-services', row);
+      console.log('Inserted: ', data);
+      setServices((prev) => [data, ...prev]);
+    } finally {
+      setIsCreating(false);
     }
-    setServices((prev) => [res.data, ...prev]);
   }, []);
 
   const updateRow = useCallback(async (row: WaterService) => {
-    setIsUpdating(true);
-    const res = await fetchPostData(CONTROLLER + '/editRow', row);
-    if (!res.success) {
-      throw new Error(res.error);
+    try {
+      setIsUpdating(true);
+      const { id, ...updateData } = row;
+      const { data } = await api.patch<WaterService>(`/api/water-services/${id}`, updateData);
+      setServices((prev) => prev.map((x) => (x.id === id ? data : x)));
+    } finally {
+      setIsUpdating(false);
     }
-    setServices((prev) => prev.map((x) => (x.id === row.id ? res.data : x)));
-    setIsUpdating(false);
   }, []);
 
   const deleteRow = useCallback(async (id: number) => {
-    setIsDeleting(true);
-    await fetchPostData(CONTROLLER + '/deleteRow', { id });
-    setIsDeleting(false);
-    setServices((state) => state.filter((x) => x.id !== id));
+    try {
+      setIsDeleting(true);
+      await api.delete(`/api/water-services/${id}`);
+      setServices((state) => state.filter((x) => x.id !== id));
+    } finally {
+      setIsDeleting(false);
+    }
   }, []);
 
   return {

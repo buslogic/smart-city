@@ -45,6 +45,7 @@ export const globalTableProps = {
   },
   // density: 'compact' as const,
   initialState: {},
+  enableColumnOrdering: false,
   muiTableContainerProps: {
     sx: {
       borderRadius: 3,

@@ -90,7 +90,11 @@ export async function fetchAPI<T = any>(
       fetchOptions.body = JSON.stringify(data);
     }
 
-    const response = await fetch(url, fetchOptions);
+    // Dodaj baseURL ako URL počinje sa /
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3010';
+    const fullUrl = url.startsWith('/') ? `${API_URL}${url}` : url;
+
+    const response = await fetch(fullUrl, fetchOptions);
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));

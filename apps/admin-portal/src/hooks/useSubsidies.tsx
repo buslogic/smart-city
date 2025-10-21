@@ -1,14 +1,15 @@
 import { SearchList } from '@/components/ui/SearchList';
 import { Subsidy } from '@/types/subsidies';
 import { HistoryRow } from '@/types/water-meter';
-import { fetchPostData } from '@/utils/fetchUtil';
+import { fetchAPI } from '@/utils/fetchUtil';
 import { Checkbox, FormControlLabel, Typography } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers';
 import dayjs from 'dayjs';
 import { MRT_ColumnDef } from 'material-react-table';
 import { useCallback, useMemo, useState } from 'react';
 
-const CONTROLLER = '../SubsidiesController';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3010';
+const CONTROLLER = `${API_BASE}/api/subsidies`;
 
 const useSubsidies = () => {
     const [subsidies, setSubsidies] = useState<Subsidy[]>([]);
@@ -65,13 +66,14 @@ const useSubsidies = () => {
                 enableEditing: true,
                 Edit: ({ row, cell }) => {
                     const initialValue = cell.getValue() ? dayjs(cell.getValue() as string) : null;
+                    const [value, setValue] = useState(initialValue);
                     return (
                         <DatePicker
-                            value={initialValue}
+                            value={value}
                             label={'Datum od'}
                             sx={{ width: '100%' }}
-                            format="DD.MM.YYYY"
                             onChange={(newDate) => {
+                                setValue(newDate);
                                 row._valuesCache['datum_od'] = newDate?.format('YYYY-MM-DD');
                             }}
                         />
@@ -89,13 +91,14 @@ const useSubsidies = () => {
                 enableEditing: true,
                 Edit: ({ row, cell }) => {
                     const initialValue = cell.getValue() ? dayjs(cell.getValue() as string) : null;
+                    const [value, setValue] = useState(initialValue);
                     return (
                         <DatePicker
-                            value={initialValue}
+                            value={value}
                             label={'Datum do'}
                             sx={{ width: '100%' }}
-                            format="DD.MM.YYYY"
                             onChange={(newDate) => {
+                                setValue(newDate);
                                 row._valuesCache['datum_do'] = newDate?.format('YYYY-MM-DD');
                             }}
                         />
@@ -110,6 +113,30 @@ const useSubsidies = () => {
                 accessorKey: 'limit',
                 header: 'Limit',
                 size: 150,
+            },
+            {
+                accessorKey: 'status',
+                header: 'Status',
+                size: 200,
+                enableEditing: true,
+                Edit: ({ cell, table, column, row }) => {
+                    const { creatingRow: isCreating, editingRow: isEditing } = table.getState();
+                    const value = cell.getValue() as string;
+
+                    return (
+                        <SearchList
+                            label="Status"
+                            value={value}
+                            disabled={!isCreating && !isEditing}
+                            endpoint={CONTROLLER + '/getStatusForSL'}
+                            multiple={false}
+                            onChange={(newValue) => {
+                                row._valuesCache[column.id] = newValue;
+                            }}
+                        />
+                    );
+                },
+                Cell: ({ cell }) => <Typography>{cell.getValue() as string}</Typography>,
             },
             {
                 accessorKey: 'fiksni_deo',
@@ -173,30 +200,6 @@ const useSubsidies = () => {
                     );
                 },
             },
-            {
-                accessorKey: 'status',
-                header: 'Status',
-                size: 200,
-                enableEditing: true,
-                Edit: ({ cell, table, column, row }) => {
-                    const { creatingRow: isCreating, editingRow: isEditing } = table.getState();
-                    const value = cell.getValue() as string;
-
-                    return (
-                        <SearchList
-                            label="Status"
-                            value={value}
-                            disabled={!isCreating && !isEditing}
-                            endpoint={CONTROLLER + '/getStatusForSL'}
-                            multiple={false}
-                            onChange={(newValue) => {
-                                row._valuesCache[column.id] = newValue;
-                            }}
-                        />
-                    );
-                },
-                Cell: ({ cell }) => <Typography>{cell.getValue() as string}</Typography>,
-            },
         ];
     }, [subsidies]);
 
@@ -238,14 +241,14 @@ const useSubsidies = () => {
 
     const fetchData = useCallback(async () => {
         setIsFetching(true);
-        const data = await fetchPostData(CONTROLLER + '/getRows');
+        const response = await fetchAPI(CONTROLLER + '/getRows', { method: 'POST' });
         setIsFetching(false);
-        setSubsidies(data);
+        setSubsidies(response.data || []);
     }, []);
 
     const createRow = useCallback(async (row: Subsidy): Promise<void> => {
         setIsCreating(true);
-        const res = await fetchPostData(CONTROLLER + '/addRow', row);
+        const res = await fetchAPI(CONTROLLER + '/addRow', { method: 'POST', data: row });
         setIsCreating(false);
         if (!res.success) {
             throw new Error(res.error);
@@ -255,7 +258,7 @@ const useSubsidies = () => {
 
     const updateRow = useCallback(async (row: Subsidy) => {
         setIsUpdating(true);
-        const res = await fetchPostData(CONTROLLER + '/editRow', row);
+        const res = await fetchAPI(CONTROLLER + '/editRow', { method: 'POST', data: row });
         setIsUpdating(false);
         if (!res.success) {
             throw new Error(res.error);
@@ -265,7 +268,7 @@ const useSubsidies = () => {
 
     const deleteRow = useCallback(async (id: number) => {
         setIsDeleting(true);
-        await fetchPostData(CONTROLLER + '/deleteRow', { id });
+        await fetchAPI(CONTROLLER + '/deleteRow', { method: 'POST', data: { id } });
         setIsDeleting(false);
         setSubsidies((state) => state.filter((x) => x.id !== id));
     }, []);

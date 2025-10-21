@@ -4,6 +4,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
+import { PrismaLegacyModule } from './prisma-legacy/prisma-legacy.module';
 import { UsersModule } from './users/users.module';
 import { RolesModule } from './roles/roles.module';
 import { PermissionsModule } from './permissions/permissions.module';
@@ -38,6 +39,32 @@ import { WaterMeterManufacturersModule } from './water-meter-manufacturers/water
 import { WaterMeterRemarksModule } from './water-meter-remarks/water-meter-remarks.module';
 import { WaterMeterModule } from './water-meter/water-meter.module';
 import { ReplacementWaterMetersModule } from './replacement-water-meters/replacement-water-meters.module';
+import { MeasuringPointsModule } from './measuring-points/measuring-points.module';
+import { WaterSystemRegionsModule } from './water-system-regions/water-system-regions.module';
+import { WaterSystemStreetsModule } from './water-system-streets/water-system-streets.module';
+import { WaterSystemCitiesModule } from './water-system-cities/water-system-cities.module';
+import { WaterSystemZonesModule } from './water-system-zones/water-system-zones.module';
+import { WaterServicesModule } from './water-services/water-services.module';
+import { WaterServicePricesModule } from './water-service-prices/water-service-prices.module';
+import { ReadingsModule } from './readings/readings.module';
+import { ReadingListsModule } from './reading-lists/reading-lists.module';
+import { ReadingListsPrintModule } from './reading-lists-print/reading-lists-print.module';
+import { WaterReadersModule } from './water-readers/water-readers.module';
+import { ReadingAnomaliesModule } from './reading-anomalies/reading-anomalies.module';
+import { CampaignsModule } from './campaigns/campaigns.module';
+import { SubCampaignsModule } from './sub-campaigns/sub-campaigns.module';
+import { WaterMeterCalculationModule } from './water-meter-calculation/water-meter-calculation.module';
+import { BillingCampaignsModule } from './billing-campaigns/billing-campaigns.module';
+import { SubsidiesModule } from './subsidies/subsidies.module';
+import { SubsidiesUserAssignmentModule } from './subsidies-user-assignment/subsidies-user-assignment.module';
+import { WaterSupplyNotesModule } from './water-supply-notes/water-supply-notes.module';
+import { NoteCategoriesModule } from './note-categories/note-categories.module';
+import { ComplaintsModule } from './complaints/complaints.module';
+import { UserAccountsModule } from './user-accounts/user-accounts.module';
+import { PaymentsModule } from './payments/payments.module';
+import { CashRegisterModule } from './cash-register/cash-register.module';
+import { CashiersModule } from './cashiers/cashiers.module';
+import { CashiersSessionModule } from './cashiers-session/cashiers-session.module';
 
 @Module({
   imports: [
@@ -46,6 +73,7 @@ import { ReplacementWaterMetersModule } from './replacement-water-meters/replace
     }),
     ScheduleModule.forRoot(),
     PrismaModule,
+    PrismaLegacyModule,
     AuthModule,
     UsersModule,
     UserGroupsModule,
@@ -78,6 +106,32 @@ import { ReplacementWaterMetersModule } from './replacement-water-meters/replace
     WaterMeterRemarksModule,
     WaterMeterModule,
     ReplacementWaterMetersModule,
+    MeasuringPointsModule,
+    WaterSystemRegionsModule,
+    WaterSystemStreetsModule,
+    WaterSystemCitiesModule,
+    WaterSystemZonesModule,
+    WaterServicesModule,
+    WaterServicePricesModule,
+    ReadingsModule,
+    ReadingListsModule,
+    ReadingListsPrintModule,
+    WaterReadersModule,
+    ReadingAnomaliesModule,
+    CampaignsModule,
+    SubCampaignsModule,
+    WaterMeterCalculationModule,
+    BillingCampaignsModule,
+    SubsidiesModule,
+    SubsidiesUserAssignmentModule,
+    WaterSupplyNotesModule,
+    NoteCategoriesModule,
+    ComplaintsModule,
+    UserAccountsModule,
+    PaymentsModule,
+    CashRegisterModule,
+    CashiersModule,
+    CashiersSessionModule,
   ],
   controllers: [AppController],
   providers: [

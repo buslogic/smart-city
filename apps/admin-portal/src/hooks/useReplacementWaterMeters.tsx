@@ -1,13 +1,13 @@
 import { SearchList } from '@/components/ui/SearchList';
 import { WaterMeter } from '@/types/water-meter';
-import { fetchPostData } from '@/utils/fetchUtil';
+import { fetchAPI } from '@/utils/fetchUtil';
 import { Typography } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers';
 import dayjs from 'dayjs';
 import { MRT_ColumnDef } from 'material-react-table';
 import { useCallback, useMemo, useState } from 'react';
 
-const CONTROLLER = '../ReplacementWaterMetersController';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3010';
 
 const useReplacementWaterMeters = () => {
     const [replacementWaterMeters, setReplacementWaterMeters] = useState<WaterMeter[]>([]);
@@ -24,7 +24,7 @@ const useReplacementWaterMeters = () => {
                 enableEditing: true,
             },
             {
-                accessorKey: 'measuring_point',
+                accessorKey: 'measuringPoint',
                 header: 'Merno mesto',
                 size: 250,
                 enableEditing: true,
@@ -49,7 +49,7 @@ const useReplacementWaterMeters = () => {
                 size: 150,
             },
             {
-                accessorKey: 'availability_id',
+                accessorKey: 'availabilityId',
                 header: 'Dostupnost',
                 size: 200,
                 enableEditing: true,
@@ -73,7 +73,7 @@ const useReplacementWaterMeters = () => {
                 Cell: ({ cell }) => <Typography>{cell.getValue() as string}</Typography>,
             },
             {
-                accessorKey: 'type_id',
+                accessorKey: 'typeId',
                 header: 'Tip',
                 size: 150,
                 enableEditing: true,
@@ -97,7 +97,7 @@ const useReplacementWaterMeters = () => {
                 Cell: ({ cell }) => <Typography>{cell.getValue() as string}</Typography>,
             },
             {
-                accessorKey: 'manufacturer_id',
+                accessorKey: 'manufacturerId',
                 header: 'Proizvođač',
                 size: 150,
                 enableEditing: true,
@@ -121,7 +121,7 @@ const useReplacementWaterMeters = () => {
                 Cell: ({ cell }) => <Typography>{cell.getValue() as string}</Typography>,
             },
             {
-                accessorKey: 'serial_number',
+                accessorKey: 'serialNumber',
                 header: 'Fabrički broj',
                 size: 150,
                 enableEditing: true,
@@ -133,7 +133,7 @@ const useReplacementWaterMeters = () => {
                 enableEditing: true,
             },
             {
-                accessorKey: 'calibrated_from',
+                accessorKey: 'calibratedFrom',
                 header: 'Baždaren od',
                 size: 150,
                 enableEditing: true,
@@ -153,14 +153,14 @@ const useReplacementWaterMeters = () => {
                                 },
                             }}
                             onChange={(newDate) => {
-                                row._valuesCache['calibrated_from'] = newDate?.format('YYYY-MM-DD');
+                                row._valuesCache['calibratedFrom'] = newDate?.format('YYYY-MM-DD');
                             }}
                         />
                     );
                 },
             },
             {
-                accessorKey: 'calibrated_to',
+                accessorKey: 'calibratedTo',
                 header: 'Baždaren do',
                 size: 150,
                 enableEditing: true,
@@ -180,14 +180,14 @@ const useReplacementWaterMeters = () => {
                                 },
                             }}
                             onChange={(newDate) => {
-                                row._valuesCache['calibrated_to'] = newDate?.format('YYYY-MM-DD');
+                                row._valuesCache['calibratedTo'] = newDate?.format('YYYY-MM-DD');
                             }}
                         />
                     );
                 },
             },
             {
-                accessorKey: 'old_idv',
+                accessorKey: 'oldIdv',
                 header: 'Zamenjen vodomer',
                 size: 150,
                 enableEditing: false,
@@ -196,30 +196,45 @@ const useReplacementWaterMeters = () => {
     }, [replacementWaterMeters]);
 
     const fetchData = useCallback(async () => {
-        setIsFetching(true);
-        const data = await fetchPostData(CONTROLLER + '/getRows');
-        setIsFetching(false);
-        setReplacementWaterMeters(data);
+        try {
+            setIsFetching(true);
+            const data = await fetchAPI<WaterMeter[]>(`${API_BASE}/api/replacement-water-meters`, {
+                method: 'GET',
+            });
+            setReplacementWaterMeters(data);
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setIsFetching(false);
+        }
     }, []);
 
     const updateRow = useCallback(async (row: WaterMeter) => {
         setIsUpdating(true);
-        const res = await fetchPostData(CONTROLLER + '/editRow', row);
-        console.log("RESSS: ", res);
-        setIsUpdating(false);
-        if (!res.success) {
-            console.log("uslo");
-            throw new Error(res.error);
+        try {
+            const res = await fetchAPI<WaterMeter>(`${API_BASE}/api/replacement-water-meters/${row.id}`, {
+                method: 'PATCH',
+                data: row,
+            });
+            setReplacementWaterMeters((prev) => prev.map((x) => (x.id === row.id ? res : x)));
+        } catch (err: any) {
+            console.error(err);
+            throw new Error(err.message || 'Greška prilikom izmene');
+        } finally {
+            setIsUpdating(false);
         }
-        console.log(res);
-        setReplacementWaterMeters((prev) => prev.map((x) => (x.id === row.id ? res.data : x)));
     }, []);
 
     const deleteRow = useCallback(async (id: number) => {
         setIsDeleting(true);
-        await fetchPostData(CONTROLLER + '/deleteRow', { id });
-        setIsDeleting(false);
-        setReplacementWaterMeters((state) => state.filter((x) => x.id !== id));
+        try {
+            await fetchAPI(`${API_BASE}/api/replacement-water-meters/${id}`, {
+                method: 'DELETE',
+            });
+            setReplacementWaterMeters((state) => state.filter((x) => x.id !== id));
+        } finally {
+            setIsDeleting(false);
+        }
     }, []);
 
     return {

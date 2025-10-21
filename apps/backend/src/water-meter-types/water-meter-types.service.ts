@@ -3,41 +3,43 @@ import {
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaLegacyService } from '../prisma-legacy/prisma-legacy.service';
 import { CreateWaterMeterTypeDto } from './dto/create-water-meter-type.dto';
 import { UpdateWaterMeterTypeDto } from './dto/update-water-meter-type.dto';
 
 @Injectable()
 export class WaterMeterTypesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private legacyDb: PrismaLegacyService) {}
 
   async findAll() {
-    return this.prisma.waterMeterType.findMany({
-      orderBy: {
-        id: 'asc',
-      },
-    });
+    const result = await this.legacyDb.$queryRawUnsafe<Array<{ id: number; type: string }>>(
+      `SELECT id, type FROM vodovod_water_meter_type ORDER BY id DESC`
+    );
+    return result;
   }
 
   async findOne(id: number) {
-    const waterMeterType = await this.prisma.waterMeterType.findUnique({
-      where: { id },
-    });
+    const result = await this.legacyDb.$queryRawUnsafe<Array<{ id: number; type: string }>>(
+      `SELECT id, type FROM vodovod_water_meter_type WHERE id = ?`,
+      id
+    );
 
-    if (!waterMeterType) {
+    if (!result || result.length === 0) {
       throw new NotFoundException(`Tip vodomera sa ID ${id} nije pronađen`);
     }
 
-    return waterMeterType;
+    return result[0];
   }
 
   async create(createWaterMeterTypeDto: CreateWaterMeterTypeDto) {
     try {
-      return await this.prisma.waterMeterType.create({
-        data: createWaterMeterTypeDto,
-      });
+      await this.legacyDb.$executeRawUnsafe(
+        `INSERT INTO vodovod_water_meter_type (type) VALUES (?)`,
+        createWaterMeterTypeDto.type
+      );
+      return this.findAll();
     } catch (error) {
-      if (error.code === 'P2002') {
+      if (error.code === 'ER_DUP_ENTRY') {
         throw new ConflictException('Tip vodomera već postoji');
       }
       throw error;
@@ -48,12 +50,14 @@ export class WaterMeterTypesService {
     await this.findOne(id);
 
     try {
-      return await this.prisma.waterMeterType.update({
-        where: { id },
-        data: updateWaterMeterTypeDto,
-      });
+      await this.legacyDb.$executeRawUnsafe(
+        `UPDATE vodovod_water_meter_type SET type = ? WHERE id = ?`,
+        updateWaterMeterTypeDto.type,
+        id
+      );
+      return this.findOne(id);
     } catch (error) {
-      if (error.code === 'P2002') {
+      if (error.code === 'ER_DUP_ENTRY') {
         throw new ConflictException('Tip vodomera već postoji');
       }
       throw error;
@@ -62,9 +66,44 @@ export class WaterMeterTypesService {
 
   async remove(id: number) {
     await this.findOne(id);
+    await this.legacyDb.$executeRawUnsafe(
+      `DELETE FROM vodovod_water_meter_type WHERE id = ?`,
+      id
+    );
+    return { success: true };
+  }
 
-    return this.prisma.waterMeterType.delete({
-      where: { id },
-    });
+  async searchForList(query: string = '', pageNumber: number = 0, limit: number = 50) {
+    const offset = pageNumber * limit;
+    const searchQuery = `%${query}%`;
+
+    const [data, total] = await Promise.all([
+      this.legacyDb.$queryRawUnsafe<Array<{ id: number; type: string }>>(
+        `SELECT id, TRIM(type) AS type
+         FROM vodovod_water_meter_type
+         WHERE type LIKE ? OR CAST(id AS CHAR) LIKE ?
+         ORDER BY id
+         LIMIT ? OFFSET ?`,
+        searchQuery,
+        searchQuery,
+        limit,
+        offset,
+      ),
+      this.legacyDb.$queryRawUnsafe<Array<{ total: bigint }>>(
+        `SELECT COUNT(*) as total
+         FROM vodovod_water_meter_type
+         WHERE type LIKE ? OR CAST(id AS CHAR) LIKE ?`,
+        searchQuery,
+        searchQuery,
+      ),
+    ]);
+
+    const totalRows = Number(total[0]?.total ?? 0);
+    const hasMore = offset + limit < totalRows;
+
+    return {
+      data: data.map((row) => `${row.id} | ${row.type}`),
+      hasMore,
+    };
   }
 }

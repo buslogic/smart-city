@@ -84,7 +84,7 @@ const useWaterMeter = () => {
                 label="Merno mesto"
                 value={cell.getValue() as string}
                 disabled={isChecked}
-                endpoint={`${API_BASE}/api/measuring-points/search`}
+                endpoint={`${API_BASE}/api/water-meters/search/measuring-points`}
                 multiple={false}
                 onChange={(newValue) => {
                   row._valuesCache[column.id] = newValue;
@@ -130,7 +130,7 @@ const useWaterMeter = () => {
                 label="Dostupnost"
                 value={value}
                 disabled={!isCreating && !isEditing}
-                endpoint={`${API_BASE}/api/water-meter-availability`}
+                endpoint={`${API_BASE}/api/water-meter-availability/search`}
                 multiple={false}
                 onChange={(newValue) => {
                   row._valuesCache[column.id] = newValue;
@@ -143,7 +143,7 @@ const useWaterMeter = () => {
         {
           accessorKey: 'type_id',
           header: 'Tip',
-          size: 150,
+          size: 350,
           enableEditing: true,
           Edit: ({ cell, table, column, row }) => {
             const { creatingRow: isCreating, editingRow: isEditing } = table.getState();
@@ -220,11 +220,15 @@ const useWaterMeter = () => {
           Cell: ({ cell }) => {
             return cell.getValue() ? dayjs(cell.getValue() as string).format('DD.MM.YYYY') : '';
           },
-          Edit: ({ row, cell }) => {
-            const initialDate = isChecked ? null : cell.getValue() ? dayjs(cell.getValue() as string) : null;
+          Edit: ({ row, cell, column }) => {
+            const initialValue = isChecked ? null : cell.getValue();
+            const [selectedDate, setSelectedDate] = useState<dayjs.Dayjs | null>(
+              initialValue ? dayjs(initialValue as string) : null
+            );
+
             return (
               <DatePicker
-                value={initialDate}
+                value={selectedDate}
                 label={'Baždaren od'}
                 sx={{ width: '100%' }}
                 slotProps={{
@@ -233,7 +237,8 @@ const useWaterMeter = () => {
                   },
                 }}
                 onChange={(newDate) => {
-                  row._valuesCache['calibrated_from'] = newDate?.format('YYYY-MM-DD');
+                  setSelectedDate(newDate);
+                  row._valuesCache[column.id] = newDate?.format('YYYY-MM-DD') ?? null;
                 }}
               />
             );
@@ -247,12 +252,16 @@ const useWaterMeter = () => {
           Cell: ({ cell }) => {
             return cell.getValue() ? dayjs(cell.getValue() as string).format('DD.MM.YYYY') : '';
           },
-          Edit: ({ row, cell }) => {
-            const initialDate = isChecked ? null : cell.getValue() ? dayjs(cell.getValue() as string) : null;
+          Edit: ({ row, cell, column }) => {
+            const initialValue = isChecked ? null : cell.getValue();
+            const [selectedDate, setSelectedDate] = useState<dayjs.Dayjs | null>(
+              initialValue ? dayjs(initialValue as string) : null
+            );
+
             return (
               <DatePicker
                 label="Baždaren do"
-                value={initialDate}
+                value={selectedDate}
                 sx={{ width: '100%' }}
                 slotProps={{
                   textField: {
@@ -260,7 +269,8 @@ const useWaterMeter = () => {
                   },
                 }}
                 onChange={(newDate) => {
-                  row._valuesCache['calibrated_to'] = newDate?.format('YYYY-MM-DD');
+                  setSelectedDate(newDate);
+                  row._valuesCache[column.id] = newDate?.format('YYYY-MM-DD') ?? null;
                 }}
               />
             );
@@ -325,34 +335,36 @@ const useWaterMeter = () => {
   const createItem = useCallback(async (row: WaterMeter): Promise<void> => {
     setIsCreating(true);
     try {
-      const res = await fetchAPI<WaterMeter>(`${API_BASE}/api/water-meters`, {
+      const res = await fetchAPI<WaterMeter[]>(`${API_BASE}/api/water-meters`, {
         method: 'POST',
         data: row,
       });
 
-      if (!res || !res.id) {
+      if (!res || !Array.isArray(res)) {
         throw new Error('Neuspešan unos podataka');
       }
 
-      setWaterMeters((prev) => [res, ...prev]);
+      // Backend vraća kompletnu ažuriranu listu vodomera sortiranu po ID DESC
+      setWaterMeters(res);
     } finally {
       setIsCreating(false);
     }
   }, []);
 
-  const updateItem = useCallback(async (row: WaterMeter) => {
+  const updateItem = useCallback(async (id: number, data: any) => {
     setIsUpdating(true);
     try {
-      const res = await fetchAPI<WaterMeter>(`${API_BASE}/api/water-meters/${row.id}`, {
+      const res = await fetchAPI<WaterMeter[]>(`${API_BASE}/api/water-meters/${id}`, {
         method: 'PATCH',
-        data: row,
+        data: data,
       });
 
-      if (!res || !res.id) {
+      if (!res || !Array.isArray(res)) {
         throw new Error('Neuspešno ažuriranje');
       }
 
-      setWaterMeters((prev) => prev.map((wm) => (wm.id === row.id ? res : wm)));
+      // Backend vraća kompletnu ažuriranu listu vodomera sortiranu po ID DESC
+      setWaterMeters(res);
     } finally {
       setIsUpdating(false);
     }

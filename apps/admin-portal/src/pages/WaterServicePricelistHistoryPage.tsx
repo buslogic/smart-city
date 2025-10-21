@@ -4,9 +4,9 @@ import { Box, Checkbox, Button } from '@mui/material';
 import { globalTableProps } from '@/utils/globalTableProps';
 import Main from '@/components/ui/Main';
 import { SearchList } from '@/components/ui/SearchList';
-import { fetchPostData } from '@/utils/fetchUtil';
 import { toast } from 'react-toastify';
 import { WaterServicesPricelistHistory } from '@/types/finance';
+import { api } from '@/services/api';
 import jsPDF from 'jspdf';
 import { ROBOTO_BOLD, ROBOTO_REGULAR } from '@/constants/base64/fonts';
 import { VODOVOD_LOGO_PNG } from '@/constants/base64/logo';
@@ -40,16 +40,17 @@ export const WaterServicePricelistHistoryPage = ({ title }: { title: string }) =
   const fetchPricelistHistoryRows = async (id: number, startDate: Dayjs | null, endDate: Dayjs | null) => {
     try {
       setIsFetching(true);
-      const data = await fetchPostData('../WaterServicesPricelistController/getPricelistHistoryByPricelistID', {
+      const { data } = await api.post<WaterServicesPricelistHistory[]>('/api/water-service-prices/history', {
         pricelist_id: id,
-        start_date: startDate ? startDate.format('YYYY-MM-DD') : null,
-        end_date: endDate ? endDate.format('YYYY-MM-DD') : null,
+        start_date: startDate ? startDate.format('YYYY-MM-DD') : undefined,
+        end_date: endDate ? endDate.format('YYYY-MM-DD') : undefined,
       });
-      setIsFetching(false);
       setData(data);
     } catch (err) {
       toast.error('Došlo je do greške');
-      console.log(err);
+      console.error(err);
+    } finally {
+      setIsFetching(false);
     }
   };
 
@@ -278,7 +279,7 @@ export const WaterServicePricelistHistoryPage = ({ title }: { title: string }) =
         <Box sx={{ width: '400px', marginRight: '12px' }}>
           <SearchList
             label="Cenovnik usluga"
-            endpoint={`../WaterServicesPricelistController/getPricelistServicesForSL`}
+            endpoint="/api/water-service-prices/search-pricelist-services"
             multiple={false}
             onChange={handleFilterChange}
             textFieldProps={{ variant: 'standard' }}

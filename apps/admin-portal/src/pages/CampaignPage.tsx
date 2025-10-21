@@ -8,9 +8,11 @@ import dayjs from 'dayjs';
 import { MaterialReactTable, MRT_EditActionButtons, MRT_Row, MRT_TableOptions, useMaterialReactTable } from 'material-react-table';
 import React, { useEffect } from 'react';
 import { toast } from 'react-toastify';
+import { useAuthStore } from '@/stores/auth.store';
 
 export const CampaignPage = ({ title }: { title: string }) => {
     const { fetchData, createRow, deleteRow, updateRow, isCreating, campaign, columns, isDeleting, isFetching, isUpdating, isPeriodExists, isPeriodLocked } = useCampaign();
+    const user = useAuthStore((state) => state.user);
 
     useEffect(() => {
         fetchData();
@@ -43,6 +45,17 @@ export const CampaignPage = ({ title }: { title: string }) => {
     };
 
     const handleUpdate: MRT_TableOptions<Campaign>['onEditingRowSave'] = async ({ values, row, table }) => {
+        // Ako godina i mesec nisu u values, uzmi ih iz originalnog reda
+        if (!values.godina) {
+            values.godina = row.original.godina;
+        }
+        if (!values.mesec) {
+            values.mesec = row.original.mesec;
+        }
+        if (!values.period) {
+            values.period = row.original.period;
+        }
+
         if (!values.godina || !values.mesec) {
             toast.error('Polje Period kampanje je obavezno');
             return;
@@ -50,6 +63,8 @@ export const CampaignPage = ({ title }: { title: string }) => {
 
         try {
             values['id'] = row.original.id;
+            values['changed_by'] = user?.id;
+            values['edit_datetime'] = new Date().toISOString();
             await updateRow(values);
             table.setEditingRow(null);
             toast.success('Uspešna izmena podataka');

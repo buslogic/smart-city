@@ -1,7 +1,7 @@
 export type Subsidy = {
   id: number;
   naziv: string;
-  tip: number;
+  tip: string;
   procenat: number;
   iznos: number;
   datum_od?: string | null;
@@ -9,7 +9,7 @@ export type Subsidy = {
   limit: number;
   fiksni_deo: number;
   varijabilni_deo: number;
-  status: number;
+  status: string;
 };
 
 export type SubsidyAssignment = {

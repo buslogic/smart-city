@@ -20,12 +20,13 @@ export type BillingCampaign = {
 export type SubCampaign = {
     id: number;
     kampanja_id: number;
+    kampanja?: string; // Format: "ID | YYYY-MM"
     dan: string;
     vreme_od: number;
     vreme_do: number;
-    region_id: number;
-    citac_id: number;
-    status_id: number;
+    region_id: string; // Format: "ID | Name"
+    citac_id: string; // Format: "ID | FirstName LastName"
+    status_id: string; // Format: "ID | Name"
 }
 
 export type Campaign = {

@@ -4,7 +4,7 @@ import { ROBOTO_BOLD, ROBOTO_REGULAR } from '@/constants/base64/fonts';
 import { VODOVOD_LOGO_PNG } from '@/constants/base64/logo';
 import useComplaint from '@/hooks/useComplaint';
 import { Complaint } from '@/types/complaints';
-import { fetchPostData } from '@/utils/fetchUtil';
+import { fetchAPI } from '@/utils/fetchUtil';
 import { globalTableProps } from '@/utils/globalTableProps';
 import { Add, Delete, Edit, PictureAsPdf } from '@mui/icons-material';
 import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
@@ -35,7 +35,7 @@ export const ComplaintPage = ({ title }: { title: string }) => {
   } = useComplaint();
   const [loggedUserId, setLoggedUserId] = useState<string>('');
   const [loggedUserName, setLoggedUserName] = useState<string>('');
-  const [isShiftOpen, setIsShiftOpen] = useState<number>(0);
+  const [isShiftOpen, setIsShiftOpen] = useState<number>(1); // TODO: Implement shift status check
   const [isPDFGenerating, setIsPDFGenerating] = useState(false);
   const [showAllComplaints, setShowAllComplaints] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -53,7 +53,9 @@ export const ComplaintPage = ({ title }: { title: string }) => {
     setStatusID(row.original.status_id || '');
 
     try {
-      const data = await fetchPostData('../ComplaintController/getExecutorForComplaint', { complaintId: row.original.id });
+      const data = await fetchAPI<{ executorId: string; row?: Complaint }>(`/api/complaints/${row.original.id}/executor`, {
+        method: 'GET',
+      });
       if (data && data.executorId) {
         setExecutorId(data.executorId);
       } else {
@@ -83,20 +85,8 @@ export const ComplaintPage = ({ title }: { title: string }) => {
   };
 
   useEffect(() => {
-    const getLoggedUser = async () => {
-      const data = await fetchPostData('../UserAccountController/getLoggedUser', {});
-      if (data) {
-        setLoggedUserId(data.id);
-        setLoggedUserName(data.name);
-      }
-    };
-
-    const getShiftStatus = async () => {
-      const data = await fetchPostData('../CashiersSessionController/isSessionOpen', {});
-      if (data) {
-        setIsShiftOpen(data);
-      }
-    };
+    // TODO: Implement getLoggedUser from auth context
+    // TODO: Implement getShiftStatus check
 
     const fetchRows = async () => {
       if (showAllComplaints) {
@@ -107,9 +97,6 @@ export const ComplaintPage = ({ title }: { title: string }) => {
     };
 
     fetchRows();
-
-    getLoggedUser();
-    getShiftStatus();
   }, [showAllComplaints]);
 
   const columns = useMemo<MRT_ColumnDef<Complaint>[]>(() => {
@@ -128,7 +115,7 @@ export const ComplaintPage = ({ title }: { title: string }) => {
               label="Tip"
               value={value}
               disabled={!isCreating && !isEditing}
-              endpoint={'../ComplaintController/getComplaintTypeForSL'}
+              endpoint={'/api/complaints/types/search'}
               multiple={false}
               onChange={(newValue) => {
                 row._valuesCache[column.id] = newValue;
@@ -152,7 +139,7 @@ export const ComplaintPage = ({ title }: { title: string }) => {
               label="Kategorija"
               value={value}
               disabled={!isCreating && !isEditing}
-              endpoint={'../ComplaintController/getComplaintCategoryForSL'}
+              endpoint={'/api/complaints/categories/search'}
               multiple={false}
               onChange={(newValue) => {
                 row._valuesCache[column.id] = newValue;
@@ -176,7 +163,7 @@ export const ComplaintPage = ({ title }: { title: string }) => {
               label="Prioritet"
               value={value}
               disabled={!isCreating && !isEditing}
-              endpoint={'../ComplaintController/getComplaintPriorityForSL'}
+              endpoint={'/api/complaints/priorities/search'}
               multiple={false}
               onChange={(newValue) => {
                 row._valuesCache[column.id] = newValue;
@@ -200,7 +187,7 @@ export const ComplaintPage = ({ title }: { title: string }) => {
               label="Status"
               value={value}
               disabled={!isCreating && !isEditing}
-              endpoint={'../ComplaintController/getComplaintStatusForSL'}
+              endpoint={'/api/complaints/statuses/search'}
               multiple={false}
               onChange={(newValue) => {
                 row._valuesCache[column.id] = newValue;
@@ -236,7 +223,7 @@ export const ComplaintPage = ({ title }: { title: string }) => {
               label="Korisnik"
               value={value}
               disabled={!isCreating && !isEditing}
-              endpoint={'../UserAccountController/getUserAccountsForSL'}
+              endpoint={'/api/user-accounts/search/for-sl'}
               multiple={false}
               onChange={(newValue) => {
                 row._valuesCache[column.id] = newValue;
@@ -254,7 +241,7 @@ export const ComplaintPage = ({ title }: { title: string }) => {
           <SearchList
             label="Merno mesto"
             value={cell.getValue() as string}
-            endpoint={'../WaterMeterController/getMeasuringPointsForSL'}
+            endpoint={'/api/water-meters/measuring-points/search-list'}
             multiple={false}
             onChange={(newValue) => {
               row._valuesCache[column.id] = newValue;
@@ -282,13 +269,15 @@ export const ComplaintPage = ({ title }: { title: string }) => {
         enableEditing: true,
         Edit: ({ row, cell }) => {
           const initialValue = cell.getValue() ? dayjs(cell.getValue() as string) : null;
+          const [value, setValue] = useState(initialValue);
+
           return (
             <DatePicker
-              value={initialValue}
+              value={value}
               label={'Datum kreiranja'}
               sx={{ width: '100%' }}
-              format="DD.MM.YYYY"
               onChange={(newDate) => {
+                setValue(newDate);
                 row._valuesCache['kreirano'] = newDate?.format('YYYY-MM-DD');
               }}
             />
@@ -296,7 +285,9 @@ export const ComplaintPage = ({ title }: { title: string }) => {
         },
         Cell: ({ cell }) => {
           const date = cell.getValue();
-          return date ? dayjs(date as string).format('DD.MM.YYYY') : '';
+          if (!date) return '';
+          const parsed = dayjs(date as string);
+          return parsed.isValid() ? parsed.format('DD.MM.YYYY') : '';
         },
       },
       {
@@ -307,14 +298,15 @@ export const ComplaintPage = ({ title }: { title: string }) => {
         Edit: ({ row, cell }) => {
           const rawValue = cell.getValue() as string | null;
           const initialValue = rawValue && rawValue !== '0000-00-00 00:00:00' ? dayjs(rawValue) : null;
+          const [value, setValue] = useState(initialValue);
 
           return (
             <DatePicker
-              value={initialValue}
+              value={value}
               label={'Datum zatvaranja'}
               sx={{ width: '100%' }}
-              format="DD.MM.YYYY"
               onChange={(newDate) => {
+                setValue(newDate);
                 row._valuesCache['zatvoreno'] = newDate ? newDate.format('YYYY-MM-DD') : '';
               }}
             />
@@ -323,7 +315,8 @@ export const ComplaintPage = ({ title }: { title: string }) => {
         Cell: ({ cell }) => {
           const date = cell.getValue();
           if (!date || date === '0000-00-00 00:00:00') return '';
-          return dayjs(date as string).format('DD.MM.YYYY');
+          const parsed = dayjs(date as string);
+          return parsed.isValid() ? parsed.format('DD.MM.YYYY') : '';
         },
       },
       {
@@ -389,8 +382,11 @@ export const ComplaintPage = ({ title }: { title: string }) => {
     ];
   }, []);
 
-  const assignExecutor = async (complaintId: number, executorId: string, status_id: string) => {
-    const response = await fetchPostData('../ComplaintController/assignExecutor', { complaintId, executorId, status_id });
+  const assignExecutor = async (complaintId: number, executorId: string, statusId: string) => {
+    const response = await fetchAPI<{ success: boolean; message?: string }>('/api/complaints/assign-executor', {
+      method: 'POST',
+      data: { complaintId, executorId, statusId },
+    });
     if (!response.success) {
       throw new Error(response.message || 'Failed to assign executor');
     }
@@ -413,7 +409,22 @@ export const ComplaintPage = ({ title }: { title: string }) => {
 
   const handleCreate: MRT_TableOptions<Complaint>['onCreatingRowSave'] = async ({ values, table }) => {
     try {
-      await createRow(values);
+      // Očisti polja koja ne treba slati backendu
+      const cleanedValues = { ...values };
+      delete cleanedValues.status; // Backend ne očekuje 'status', samo 'status_id'
+      delete cleanedValues.odgovorno_lice_id; // Ovo polje nije u DTO-u
+
+      // Pretvori prazne stringove u null za datume i opciona polja
+      if (cleanedValues.zatvoreno === '' || cleanedValues.zatvoreno === undefined) {
+        cleanedValues.zatvoreno = null;
+      }
+
+      // Ako je kreirao_id prazan (samo separator " | "), ne šalji ga
+      if (cleanedValues.kreirao_id && cleanedValues.kreirao_id.trim() === '|') {
+        delete cleanedValues.kreirao_id;
+      }
+
+      await createRow(cleanedValues);
       toast.success('Uspešno unošenje podataka');
       table.setCreatingRow(null);
     } catch (err: any) {
@@ -425,7 +436,23 @@ export const ComplaintPage = ({ title }: { title: string }) => {
   const handleUpdate: MRT_TableOptions<Complaint>['onEditingRowSave'] = async ({ values, row, table }) => {
     try {
       values['id'] = row.original.id;
-      await updateRow(values);
+
+      // Očisti polja koja ne treba slati backendu
+      const cleanedValues = { ...values };
+      delete cleanedValues.status; // Backend ne očekuje 'status', samo 'status_id'
+      delete cleanedValues.odgovorno_lice_id; // Ovo polje se šalje samo preko posebnog endpointa
+
+      // Pretvori prazne stringove u null za datume i opciona polja
+      if (cleanedValues.zatvoreno === '' || cleanedValues.zatvoreno === undefined) {
+        cleanedValues.zatvoreno = null;
+      }
+
+      // Ako je kreirao_id prazan (samo separator " | "), ne šalji ga
+      if (cleanedValues.kreirao_id && cleanedValues.kreirao_id.trim() === '|') {
+        delete cleanedValues.kreirao_id;
+      }
+
+      await updateRow(cleanedValues);
       table.setEditingRow(null);
       toast.success('Uspešna izmena podataka');
     } catch (err: any) {
@@ -762,7 +789,7 @@ export const ComplaintPage = ({ title }: { title: string }) => {
       }
 
       return (
-        <Dialog open={true} maxWidth="lg" fullWidth>
+        <Dialog open={true} maxWidth="sm" fullWidth>
           <DialogTitle variant="h5" sx={{ textDecoration: 'underline' }}>
             Unos
           </DialogTitle>
@@ -775,13 +802,11 @@ export const ComplaintPage = ({ title }: { title: string }) => {
               overflow: 'scroll',
             }}
           >
-            <Grid container spacing={3}>
-              {React.Children.map(internalEditComponents, (child, index) => (
-                <Grid item xs={4} key={index}>
-                  {child}
-                </Grid>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {React.Children.map(internalEditComponents, (child) => (
+                <Box sx={{ width: '100%' }}>{child}</Box>
               ))}
-            </Grid>
+            </Box>
           </DialogContent>
           <DialogActions>
             <MRT_EditActionButtons variant="text" table={table} row={row} />
@@ -791,7 +816,7 @@ export const ComplaintPage = ({ title }: { title: string }) => {
     },
     renderEditRowDialogContent: ({ table, row, internalEditComponents }) => {
       return (
-        <Dialog open={true} maxWidth="lg" fullWidth>
+        <Dialog open={true} maxWidth="sm" fullWidth>
           <DialogTitle variant="h5" sx={{ textDecoration: 'underline' }}>
             Izmena (ID: {row.original.id})
           </DialogTitle>
@@ -804,13 +829,11 @@ export const ComplaintPage = ({ title }: { title: string }) => {
               overflow: 'scroll',
             }}
           >
-            <Grid container spacing={3}>
-              {React.Children.map(internalEditComponents, (child, index) => (
-                <Grid item xs={4} key={index}>
-                  {child}
-                </Grid>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {React.Children.map(internalEditComponents, (child) => (
+                <Box sx={{ width: '100%' }}>{child}</Box>
               ))}
-            </Grid>
+            </Box>
           </DialogContent>
           <DialogActions>
             <MRT_EditActionButtons variant="text" table={table} row={row} />
@@ -921,7 +944,7 @@ export const ComplaintPage = ({ title }: { title: string }) => {
           <SearchList
             label="Izvršilac"
             value={executorId}
-            endpoint={'../UserAccountController/getUserAccountsForSL'}
+            endpoint={'/api/user-accounts/search/for-sl'}
             multiple={false}
             onChange={(newValue) => setExecutorId(newValue)}
           />

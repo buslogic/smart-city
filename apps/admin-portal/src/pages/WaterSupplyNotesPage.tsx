@@ -1,6 +1,6 @@
 import Main from '@/components/ui/Main';
 import useWaterSupplyNotes from '@/hooks/useWaterSupplyNotes';
-import { Notes } from '@/types/notes';
+import { WaterSupplyNote } from '@/types/notes';
 import { globalTableProps } from '@/utils/globalTableProps';
 import { Add, Delete, Edit } from '@mui/icons-material';
 import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Grid, Tooltip } from '@mui/material';
@@ -15,9 +15,14 @@ export const WaterSupplyNotesPage = ({ title }: { title: string }) => {
         fetchData();
     }, []);
 
-    const handleCreate: MRT_TableOptions<Notes>['onCreatingRowSave'] = async ({ values, table }) => {
+    const handleCreate: MRT_TableOptions<WaterSupplyNote>['onCreatingRowSave'] = async ({ values, table }) => {
         try {
-            await createRow(values);
+            const defaultValues = {
+                isPinned: 0,
+                isPrivate: 0,
+                ...values,
+            };
+            await createRow(defaultValues as WaterSupplyNote);
             toast.success('Uspešno unošenje podataka');
             table.setCreatingRow(null);
         } catch (err: any) {
@@ -26,10 +31,10 @@ export const WaterSupplyNotesPage = ({ title }: { title: string }) => {
         }
     };
 
-    const handleUpdate: MRT_TableOptions<Notes>['onEditingRowSave'] = async ({ values, row, table }) => {
+    const handleUpdate: MRT_TableOptions<WaterSupplyNote>['onEditingRowSave'] = async ({ values, row, table }) => {
         try {
             values['id'] = row.original.id;
-            await updateRow(values);
+            await updateRow(values as WaterSupplyNote);
             table.setEditingRow(null);
             toast.success('Uspešna izmena podataka');
         } catch (err: any) {
@@ -38,7 +43,7 @@ export const WaterSupplyNotesPage = ({ title }: { title: string }) => {
         }
     };
 
-    const handleDelete = async (row: MRT_Row<Notes>) => {
+    const handleDelete = async (row: MRT_Row<WaterSupplyNote>) => {
         if (window.confirm('Da li potvrdjujete brisanje?')) {
             try {
                 await deleteRow(row.original.id);
@@ -69,22 +74,24 @@ export const WaterSupplyNotesPage = ({ title }: { title: string }) => {
                 <DialogTitle variant="h5" sx={{ textDecoration: 'underline' }}>
                     Unos
                 </DialogTitle>
-                <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>{internalEditComponents}</DialogContent>
+                <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {React.Children.toArray(internalEditComponents).slice(1)}
+                </DialogContent>
                 <DialogActions>
                     <MRT_EditActionButtons variant="text" table={table} row={row} />
                 </DialogActions>
             </Box>
         ),
         renderEditRowDialogContent: ({ table, row, internalEditComponents }) => {
-            const reader = waterSupplyNotes.find((reader) => reader.id === row.original.id);
-            if (!reader) {
+            const note = waterSupplyNotes.find((note) => note.id === row.original.id);
+            if (!note) {
                 return <Box>Došlo je do greške!</Box>;
             }
 
             return (
                 <Dialog open={true} maxWidth="lg" fullWidth>
                     <DialogTitle variant="h5" sx={{ textDecoration: 'underline' }}>
-                        Izmena (ID: {row.original.id})
+                        Izmena
                     </DialogTitle>
                     <DialogContent
                         sx={{
@@ -92,16 +99,9 @@ export const WaterSupplyNotesPage = ({ title }: { title: string }) => {
                             flexDirection: 'column',
                             gap: '1.5rem',
                             padding: '24px',
-                            overflow: 'scroll',
                         }}
                     >
-                        <Grid container spacing={3}>
-                            {React.Children.map(internalEditComponents, (child, index) => (
-                                <Grid item xs={4} key={index}>
-                                    {child}
-                                </Grid>
-                            ))}
-                        </Grid>
+                        {React.Children.toArray(internalEditComponents).slice(1)}
                     </DialogContent>
                     <DialogActions>
                         <MRT_EditActionButtons variant="text" table={table} row={row} />

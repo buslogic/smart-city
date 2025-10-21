@@ -17,7 +17,7 @@ import {
 import CloseIcon from '@mui/icons-material/Close';
 import ArrowForward from '@mui/icons-material/ArrowForward';
 import { MRT_ColumnDef } from 'material-react-table';
-import { fetchPostData } from '@/utils/fetchUtil';
+import { fetchAPI } from '@/utils/fetchUtil';
 import Input from './Input';
 
 type FormModalProps<T extends Record<string, any>> = {
@@ -75,7 +75,10 @@ export const FormModal = <T extends Record<string, any>>({
       setIsLoading(true);
       setError(null);
 
-      const data = await fetchPostData(url, dataBody);
+      const data = await fetchAPI(url, {
+        method: 'POST',
+        data: dataBody,
+      });
 
       if (data && typeof data === 'object') {
         setRow(data as T);
@@ -236,9 +239,15 @@ export const FormModal = <T extends Record<string, any>>({
             {error}
           </Box>
         ) : row ? (
-          <Grid container spacing={2}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: '1.5rem',
+            }}
+          >
             {columns.map((column, index) => (
-              <Grid item xs={12} sm={6} md={6} key={`${column.accessorKey || index}`}>
+              <Box key={`${column.accessorKey || index}`}>
                 {column.Edit ? (
                   renderEditComponent(column, row)
                 ) : column.editVariant === 'select' ? (
@@ -253,9 +262,9 @@ export const FormModal = <T extends Record<string, any>>({
                     onChange={(e) => handleValueChange(column.accessorKey as string, e.target.value)}
                   />
                 )}
-              </Grid>
+              </Box>
             ))}
-          </Grid>
+          </Box>
         ) : (
           <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>No data available</Box>
         )}

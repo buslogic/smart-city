@@ -1,10 +1,10 @@
 import Main from '@/components/ui/Main';
 import { SearchList } from '@/components/ui/SearchList';
-import { fetchPostData } from '@/utils/fetchUtil';
+import { api } from '@/services/api';
 import { globalTableProps } from '@/utils/globalTableProps';
 import { Box } from '@mui/material';
 import { MaterialReactTable, MRT_ColumnDef, useMaterialReactTable } from 'material-react-table';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
 
 type WaterPricelistReview = {
@@ -16,27 +16,22 @@ type WaterPricelistReview = {
 
 export default function WaterServicesReviewPage({ title }: { title: string }) {
   const [isFetching, setIsFetching] = useState<boolean>(false);
-  const [filterIDMM, setFilterIDMM] = useState('');
   const [rows, setRows] = useState<WaterPricelistReview[]>([]);
-
-  useEffect(() => {
-    console.log(filterIDMM);
-  }, []);
 
   async function handleFilterChange(newValue: string) {
     try {
       setIsFetching(true);
 
       const parts = newValue.split('|');
-      const idmm = parts[0].trim();
-      const data: WaterPricelistReview[] = await fetchPostData('../WaterServicesPricelistController/getPricelistsByIDMM', { idmm });
+      const idmm = Number(parts[0].trim());
 
+      const { data } = await api.get<WaterPricelistReview[]>(`/api/water-service-prices/by-measuring-point/${idmm}`);
       setRows(data);
-      setFilterIDMM(idmm);
-      setIsFetching(false);
     } catch (err) {
-      console.log(err);
+      console.error(err);
       toast.error('Došlo je do interne greške');
+    } finally {
+      setIsFetching(false);
     }
   }
 
@@ -84,7 +79,7 @@ export default function WaterServicesReviewPage({ title }: { title: string }) {
       <Box sx={{ width: '500px', marginBottom: '12px' }}>
         <SearchList
           label="Merno mesto"
-          endpoint={`../WaterMeterController/getMeasuringPointsForSL`}
+          endpoint="/api/water-meters/measuring-points/search-list"
           multiple={false}
           textFieldProps={{
             variant: 'standard',

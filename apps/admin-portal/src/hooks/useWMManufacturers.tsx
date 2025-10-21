@@ -33,11 +33,14 @@ const useWMManufacturers = () => {
   const createRow = useCallback(async (row: WMManufacturer): Promise<void> => {
     setIsCreating(true);
     try {
-      const res = await fetchAPI<WMManufacturer>(`${API_BASE}/api/water-meter-manufacturers`, {
+      const res = await fetchAPI<WMManufacturer[]>(`${API_BASE}/api/water-meter-manufacturers`, {
         method: 'POST',
         data: row,
       });
-      setManufacturers((prev) => [res, ...prev]);
+      // Backend vraća kompletnu listu sortiranu po ID DESC (najnoviji prvi)
+      if (Array.isArray(res)) {
+        setManufacturers(res);
+      }
     } catch (err) {
       console.log(err);
       throw err;
@@ -49,11 +52,14 @@ const useWMManufacturers = () => {
   const updateRow = useCallback(async (row: WMManufacturer) => {
     setIsUpdating(true);
     try {
-      const res = await fetchAPI<WMManufacturer>(`${API_BASE}/api/water-meter-manufacturers/${row.id}`, {
+      const res = await fetchAPI<WMManufacturer[]>(`${API_BASE}/api/water-meter-manufacturers/${row.id}`, {
         method: 'PATCH',
         data: row,
       });
-      setManufacturers((prev) => prev.map((x) => (x.id === row.id ? res : x)));
+      // Backend vraća kompletnu listu sortiranu po ID DESC
+      if (Array.isArray(res)) {
+        setManufacturers(res);
+      }
     } catch (err) {
       console.log(err);
       throw err;

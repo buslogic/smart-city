@@ -33,11 +33,14 @@ const useWMTypes = () => {
   const createItem = useCallback(async (row: WMType): Promise<void> => {
     setIsCreating(true);
     try {
-      const res = await fetchAPI<WMType>(`${API_BASE}/api/water-meter-types`, {
+      const res = await fetchAPI<WMType[]>(`${API_BASE}/api/water-meter-types`, {
         method: 'POST',
         data: row,
       });
-      setWmTypes((prev) => [res, ...prev]);
+      // Backend vraća kompletnu listu sortiranu po ID DESC (najnoviji prvi)
+      if (Array.isArray(res)) {
+        setWmTypes(res);
+      }
     } catch (err) {
       console.log(err);
       throw new Error('Neuspešan unos podataka');
@@ -53,7 +56,10 @@ const useWMTypes = () => {
         method: 'PATCH',
         data: row,
       });
-      setWmTypes((prev) => prev.map((x) => (x.id === row.id ? res : x)));
+      // Ako je response objekat (jedan tip), ažuriraj samo taj red
+      if (res && !Array.isArray(res)) {
+        setWmTypes((prev) => prev.map((x) => (x.id === row.id ? res : x)));
+      }
     } catch (err) {
       console.log(err);
       throw err;

@@ -39,19 +39,19 @@ export class PermissionsGuard implements CanActivate {
       throw new ForbiddenException('Korisnik nije autentifikovan');
     }
 
-    // Debug logovi - zakomentarisani da ne zagušuju konzolu
-    // console.log('PermissionsGuard - Required:', requiredPermissions);
-    // console.log('PermissionsGuard - User permissions:', user.permissions);
+    // Debug logovi - privremeno aktivirani
+    console.log('PermissionsGuard - Required:', requiredPermissions);
+    console.log('PermissionsGuard - User permissions:', user.permissions);
 
     const hasPermission = requiredPermissions.some((permission) =>
       user.permissions?.includes(permission),
     );
 
     if (!hasPermission) {
-      // Debug log zakomentarisan da ne zagušuje konzolu
-      // console.error(
-      //   `PermissionsGuard: Korisnik ${user.email} nema permisiju. Potrebno: ${requiredPermissions.join(', ')}, Ima: ${user.permissions?.join(', ') || 'none'}`,
-      // );
+      // Debug log privremeno aktivan
+      console.error(
+        `PermissionsGuard: Korisnik ${user.email} nema permisiju. Potrebno: ${requiredPermissions.join(', ')}, Ima: ${user.permissions?.join(', ') || 'none'}`,
+      );
       throw new ForbiddenException(
         `Nemate dozvolu za pristup ovom resursu. Potrebne permisije: ${requiredPermissions.join(', ')}`,
       );

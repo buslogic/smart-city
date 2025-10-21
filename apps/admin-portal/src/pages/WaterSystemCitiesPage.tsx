@@ -9,7 +9,7 @@ import { exportCSV, importCSV } from '@/utils/csv';
 import { FileDownload, FileUpload } from '@mui/icons-material';
 import { globalTableProps } from '@/utils/globalTableProps';
 import Main from '@/components/ui/Main';
-import { fetchPostData } from '@/utils/fetchUtil';
+import { api } from '@/services/api';
 
 type SystemCity = {
   id: number;
@@ -29,14 +29,13 @@ export const WaterSystemCitiesPage = ({ title }: { title: string }) => {
   const fetchData = async () => {
     try {
       setIsFetching(true);
-      const data = await fetchPostData('../WaterSystemCitiesController/getRows');
-      console.log(data);
-      setIsFetching(false);
-      setData(data);
-      console.log(data);
+      const response = await api.get('/api/water-system-cities');
+      setData(response.data);
     } catch (err: any) {
-      console.log(err);
-      toast.error('Doslo je do greske');
+      console.error(err);
+      toast.error('Došlo je do greške');
+    } finally {
+      setIsFetching(false);
     }
   };
 
@@ -47,8 +46,9 @@ export const WaterSystemCitiesPage = ({ title }: { title: string }) => {
   const handleCreate: MRT_TableOptions<SystemCity>['onCreatingRowSave'] = async ({ values, table }) => {
     try {
       setIsSaving(true);
-      const { success, data } = await fetchPostData('../WaterSystemCitiesController/create', values);
-      setIsSaving(false);
+      const { id, ...createData } = values;
+      const response = await api.post('/api/water-system-cities', createData);
+      const { success, data } = response.data;
       if (success) {
         setData((x) => [data, ...x]);
         toast.success('Uspešno unošenje podataka');
@@ -58,66 +58,78 @@ export const WaterSystemCitiesPage = ({ title }: { title: string }) => {
       table.setCreatingRow(null);
     } catch (err: any) {
       toast.error(err.message);
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const handleUpdate: MRT_TableOptions<SystemCity>['onEditingRowSave'] = async ({ values, row, table }) => {
     try {
-      values['id'] = row.original.id;
       setIsSaving(true);
-      const { success, data } = await fetchPostData('../WaterSystemCitiesController/update', values);
-      console.log(data);
+      const id = row.original.id;
+      const { id: _, edit_datetime, edit_user_Id, ...updateData } = values;
+      const response = await api.put(`/api/water-system-cities/${id}`, updateData);
+      const { success, data } = response.data;
       table.setEditingRow(null);
-      setIsSaving(false);
       if (success) {
-        setData((p) => p.map((x) => (x.id === values.id ? data : x)));
+        setData((p) => p.map((x) => (x.id === id ? data : x)));
         toast.success('Uspešna izmena podataka');
       } else {
         toast.error('Neuspešna izmena podataka');
       }
     } catch (err: any) {
       toast.error(err.message);
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const handleDelete = async (row: MRT_Row<SystemCity>) => {
-    if (window.confirm('Da li potvrdjujete brisanje?')) {
+    if (window.confirm('Da li potvrđujete brisanje?')) {
       try {
         setIsSaving(true);
-        const res = await fetchPostData('../WaterSystemCitiesController/delete', { id: row.original.id });
-        if (res) {
-          setIsSaving(false);
-          setData((x) => x.filter((x) => x.id !== row.original.id));
-          toast.success('Uspešno brisanje podataka');
-        }
+        await api.delete(`/api/water-system-cities/${row.original.id}`);
+        setData((x) => x.filter((x) => x.id !== row.original.id));
+        toast.success('Uspešno brisanje podataka');
       } catch (err) {
-        console.log(err);
-        toast('Došlo je do greške');
+        console.error(err);
+        toast.error('Došlo je do greške');
+      } finally {
+        setIsSaving(false);
       }
     }
   };
 
   const handleImportCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
     setIsImportCSVLoading(true);
-    const res = await importCSV(e, '../WaterSystemCitiesController/importCSV');
-    setIsImportCSVLoading(false);
-    if (res?.success) {
-      fetchData();
-      toast.success('Uspešan uvoz');
-    } else {
-      toast.error('Došlo je do greške');
+    try {
+      const res = await importCSV(e, '/api/water-system-cities/import-csv');
+      if (res?.success) {
+        fetchData();
+        toast.success('Uspešan uvoz');
+      } else {
+        toast.error(res?.error || 'Došlo je do greške');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Došlo je do greške prilikom uvoza');
+    } finally {
+      setTimeout(() => {
+        setIsImportCSVLoading(false);
+      }, 1000);
     }
   };
 
   const handleExportCSV = async () => {
     try {
       setIsExportCSVLoading(true);
-      await exportCSV('../WaterSystemCitiesController/exportCSV', 'Gradovi.csv');
+      await exportCSV('/api/water-system-cities/export-csv', 'Gradovi.csv');
       toast.success('Uspešan izvoz');
-      setIsExportCSVLoading(false);
     } catch (err) {
-      console.log(err);
+      console.error(err);
       toast.error('Došlo je do greške prilikom izvoza');
+    } finally {
+      setIsExportCSVLoading(false);
     }
   };
 
@@ -224,11 +236,11 @@ export const WaterSystemCitiesPage = ({ title }: { title: string }) => {
         >
           Dodaj
         </Button>
-        <Button variant="contained" color="success" startIcon={<FileUpload />} component="label" loading={isImportCSVLoading}>
+        <Button variant="contained" color="success" startIcon={<FileUpload />} component="label" disabled={isImportCSVLoading}>
           Uvoz iz CSV
           <input accept=".csv" type="file" hidden onChange={handleImportCSV} />
         </Button>
-        <Button variant="contained" color="warning" startIcon={<FileDownload />} onClick={handleExportCSV} loading={isExportCSVLoading}>
+        <Button variant="contained" color="warning" startIcon={<FileDownload />} onClick={handleExportCSV} disabled={isExportCSVLoading}>
           Izvoz u CSV
         </Button>
       </Box>

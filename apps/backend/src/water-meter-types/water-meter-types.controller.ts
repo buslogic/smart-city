@@ -13,6 +13,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { WaterMeterTypesService } from './water-meter-types.service';
 import { CreateWaterMeterTypeDto } from './dto/create-water-meter-type.dto';
 import { UpdateWaterMeterTypeDto } from './dto/update-water-meter-type.dto';
+import { SearchTypeDto } from './dto/search-type.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
@@ -62,5 +63,16 @@ export class WaterMeterTypesController {
   @ApiOperation({ summary: 'Briše tip vodomera' })
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.waterMeterTypesService.remove(id);
+  }
+
+  @Post('search')
+  @RequirePermissions('water_meter_types:view')
+  @ApiOperation({ summary: 'Pretraži tipove za SearchList komponentu' })
+  searchForList(@Body() searchDto: SearchTypeDto) {
+    return this.waterMeterTypesService.searchForList(
+      searchDto.query,
+      searchDto.pageNumber,
+      searchDto.limit,
+    );
   }
 }

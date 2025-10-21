@@ -393,7 +393,7 @@ const ModernMenu: React.FC = () => {
               {
                 key: '/vodovod/regioni',
                 menuOrder: 511000000000,
-                label: 'Regioni',
+                label: 'Rejoni',
                 permissions: ['water_system.regions:view'],
               },
               {
@@ -406,13 +406,13 @@ const ModernMenu: React.FC = () => {
                 key: '/vodovod/zone',
                 menuOrder: 513000000000,
                 label: 'Zone',
-                permissions: ['water_system.zones:view'],
+                permissions: ['water_system_zones:view'],
               },
               {
                 key: '/vodovod/ulice',
                 menuOrder: 514000000000,
                 label: 'Ulice',
-                permissions: ['water_system.streets:view'],
+                permissions: ['water_system_streets:view'],
               },
             ],
           },
@@ -467,27 +467,27 @@ const ModernMenu: React.FC = () => {
               },
             ],
           },
-          // Merilna mesta
+          // Merna mesta
           {
-            key: 'merilnaMesta',
+            key: 'mernaMesta',
             menuOrder: 530000000000,
             icon: <EnvironmentOutlined />,
-            label: 'Merilna mesta',
+            label: 'Merna mesta',
             children: [
               {
-                key: '/vodovod/merilna-mesta',
+                key: '/vodovod/merna-mesta',
                 menuOrder: 531000000000,
-                label: 'Pregled merilnih mesta',
+                label: 'Pregled mernih mesta',
                 permissions: ['measuring_points:view'],
               },
               {
-                key: '/vodovod/merilna-mesta-po-adresi',
+                key: '/vodovod/merna-mesta-po-adresi',
                 menuOrder: 532000000000,
-                label: 'Merilna mesta po adresi',
+                label: 'Merna mesta po adresi',
                 permissions: ['measuring_points_by_address:view'],
               },
               {
-                key: '/vodovod/potrosnja-merilnih-mesta',
+                key: '/vodovod/potrosnja-mernih-mesta',
                 menuOrder: 533000000000,
                 label: 'Potrošnja',
                 permissions: ['measuring_points_consumption:view'],
@@ -512,12 +512,6 @@ const ModernMenu: React.FC = () => {
                 menuOrder: 542000000000,
                 label: 'Liste očitavanja',
                 permissions: ['reading_lists:view'],
-              },
-              {
-                key: '/vodovod/unos-ocitavanja',
-                menuOrder: 543000000000,
-                label: 'Unos podataka',
-                permissions: ['reading_data_entry:view'],
               },
               {
                 key: '/vodovod/stampa-lista',
@@ -586,9 +580,9 @@ const ModernMenu: React.FC = () => {
             label: 'Obračun',
             children: [
               {
-                key: '/vodovod/kalkulacija-vodomera',
+                key: '/vodovod/obracuni-vodomera',
                 menuOrder: 561000000000,
-                label: 'Kalkulacija vodomera',
+                label: 'Obračuni vodomera',
                 permissions: ['water_meter_calculation:view'],
               },
               {
@@ -724,9 +718,9 @@ const ModernMenu: React.FC = () => {
                 permissions: ['complaints:view'],
               },
               {
-                key: '/vodovod/reklamacije-po-zaduzenom',
+                key: '/vodovod/reklamacije-za-odgovorno-lice',
                 menuOrder: 602000000000,
-                label: 'Po zaduženom',
+                label: 'Za odgovorno lice',
                 permissions: ['complaints_by_assignee:view'],
               },
               {
@@ -745,15 +739,15 @@ const ModernMenu: React.FC = () => {
             label: 'Napomene',
             children: [
               {
-                key: '/vodovod/napomene-vodosnabdevanja',
+                key: '/vodovod/beleske',
                 menuOrder: 611000000000,
-                label: 'Napomene vodosnabdevanja',
+                label: 'Beleške',
                 permissions: ['water_supply_notes:view'],
               },
               {
-                key: '/vodovod/kategorije-napomena',
+                key: '/vodovod/kategorije-beleski',
                 menuOrder: 612000000000,
-                label: 'Kategorije napomena',
+                label: 'Kategorije beleški',
                 permissions: ['note_categories:view'],
               },
             ],
@@ -795,11 +789,11 @@ const ModernMenu: React.FC = () => {
           path.includes('/vodovod/pregled-izmenjenih')) {
         keys.push('vodomeri');
       }
-      if (path.includes('/vodovod/merilna-mesta')) {
-        keys.push('merilnaMesta');
+      if (path.includes('/vodovod/merna-mesta')) {
+        keys.push('mernaMesta');
       }
       if (path.includes('/vodovod/ocitavanja') || path.includes('/vodovod/liste-ocitavanja') ||
-          path.includes('/vodovod/unos-ocitavanja') || path.includes('/vodovod/stampa-lista') ||
+          path.includes('/vodovod/stampa-lista') ||
           path.includes('/vodovod/anomalije') || path.includes('/vodovod/ocitaci')) {
         keys.push('ocitavanja');
       }

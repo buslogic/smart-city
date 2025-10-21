@@ -9,6 +9,9 @@ build/
 .env
 .env.local
 
+# Seed scripts sa kredencijalima
+apps/backend/prisma/seeds/
+
 # Personal configuration
 claude-personal.md
 claude-tips.md

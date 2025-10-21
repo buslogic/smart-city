@@ -1,19 +1,16 @@
 import { SearchList } from '@/components/ui/SearchList';
 import { StatusHistory } from '@/types/complaints';
-import { fetchPostData } from '@/utils/fetchUtil';
+import { fetchAPI } from '@/utils/fetchUtil';
 import { TextField, Typography } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers';
 import dayjs from 'dayjs';
 import { MRT_ColumnDef } from 'material-react-table';
 import { useCallback, useMemo, useState } from 'react';
 
-const CONTROLLER = '../ComplaintsByAssigneController';
-
 const useComplaintsByAssigne = () => {
     const [complaints, setSubsidies] = useState<StatusHistory[]>([]);
     const [isFetching, setIsFetching] = useState(true);
     const [isUpdating, setIsUpdating] = useState(false);
-    const [isDeleting, setIsDeleting] = useState(false);
 
     const columns = useMemo<MRT_ColumnDef<StatusHistory>[]>(() => {
         return [
@@ -37,7 +34,7 @@ const useComplaintsByAssigne = () => {
                             label="Status"
                             value={value}
                             disabled={!isCreating && !isEditing}
-                            endpoint={'../ComplaintController/getComplaintStatusForSL'}
+                            endpoint={'/api/complaints/statuses/search'}
                             multiple={false}
                             onChange={(newValue) => {
                                 row._valuesCache[column.id] = newValue;
@@ -55,14 +52,15 @@ const useComplaintsByAssigne = () => {
                 Edit: ({ row, cell }) => {
                     const rawValue = cell.getValue() as string | null;
                     const initialValue = rawValue && rawValue !== '0000-00-00 00:00:00' ? dayjs(rawValue) : null;
+                    const [value, setValue] = useState(initialValue);
 
                     return (
                         <DatePicker
-                            value={initialValue}
+                            value={value}
                             label={'Datum promene'}
                             sx={{ width: '100%' }}
-                            format="DD.MM.YYYY"
                             onChange={(newDate) => {
+                                setValue(newDate);
                                 row._valuesCache['datum_promene'] = newDate ? newDate.format('YYYY-MM-DD') : '';
                             }}
                         />
@@ -137,26 +135,25 @@ const useComplaintsByAssigne = () => {
 
     const fetchData = useCallback(async () => {
         setIsFetching(true);
-        const data = await fetchPostData(CONTROLLER + '/getRows');
+        const data = await fetchAPI<StatusHistory[]>('/api/complaints/by-assignee', { method: 'GET' });
         setIsFetching(false);
         setSubsidies(data);
     }, []);
 
     const updateRow = useCallback(async (row: StatusHistory) => {
         setIsUpdating(true);
-        const res = await fetchPostData(CONTROLLER + '/editRow', row);
+        await fetchAPI('/api/complaints/status-history', {
+            method: 'POST',
+            data: {
+                reklamacija_id: row.reklamacija_id,
+                status_id: row.status_id,
+                napomena: row.napomena,
+                datum_promene: row.datum_promene
+            }
+        });
+        const data = await fetchAPI<StatusHistory[]>('/api/complaints/by-assignee', { method: 'GET' });
+        setSubsidies(data);
         setIsUpdating(false);
-        if (!res.success) {
-            throw new Error(res.error);
-        }
-        setSubsidies((prev) => prev.map((x) => (x.id === row.id ? res.data : x)));
-    }, []);
-
-    const deleteRow = useCallback(async (id: number) => {
-        setIsDeleting(true);
-        await fetchPostData(CONTROLLER + '/deleteRow', { id });
-        setIsDeleting(false);
-        setSubsidies((state) => state.filter((x) => x.id !== id));
     }, []);
 
     return {
@@ -164,10 +161,8 @@ const useComplaintsByAssigne = () => {
         complaints,
         isFetching,
         isUpdating,
-        isDeleting,
         fetchData,
         updateRow,
-        deleteRow,
         historyColumns
     };
 };

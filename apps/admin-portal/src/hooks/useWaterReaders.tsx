@@ -1,9 +1,10 @@
-import { fetchPostData } from '@/utils/fetchUtil';
+import { fetchAPI } from '@/utils/fetchUtil';
 import { MRT_ColumnDef } from 'material-react-table';
 import { useCallback, useMemo, useState } from 'react';
 import { SearchList } from '@/components/ui/SearchList';
 
-const CONTROLLER = '../WaterReadersController';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3010';
+const CONTROLLER = `${API_BASE}/api/water-readers`;
 
 export type RegionReader = {
   id: number;
@@ -19,13 +20,13 @@ export type AddressReader = {
 
 export type WaterReader = {
   id: number;
-  firstName: string;
-  lastName: string;
-  employee_code: string;
+  first_name: string;
+  last_name: string;
+  employee_code: number;
   regions: RegionReader[];
   addresses: AddressReader[];
-  // region_ids: string[];
-  // address_ids: string[];
+  region_ids?: number[];
+  address_ids?: number[];
 };
 
 const useWaterReaders = () => {
@@ -63,11 +64,12 @@ const useWaterReaders = () => {
               label="Rejon"
               value={cell.getValue() as string[]}
               endpoint={CONTROLLER + '/getRegionsForSL'}
+              fetchOnRender={true}
               multiple={true}
               onChange={(value) => {
                 row._valuesCache['region_ids'] = value.map((x) => {
                   const parsed = x.split(' | ');
-                  return parsed[0];
+                  return parseInt(parsed[0]);
                 });
               }}
             />
@@ -85,11 +87,12 @@ const useWaterReaders = () => {
               label="Ulica"
               value={cell.getValue() as string[]}
               endpoint={CONTROLLER + '/getAddressesForSL'}
+              fetchOnRender={true}
               multiple={true}
               onChange={(value) => {
                 row._valuesCache['address_ids'] = value.map((x) => {
                   const parsed = x.split(' | ');
-                  return parsed[0];
+                  return parseInt(parsed[0]);
                 });
               }}
             />
@@ -102,8 +105,11 @@ const useWaterReaders = () => {
   const getRowByID = async (readerId: number | null): Promise<WaterReader | null> => {
     try {
       if (!readerId) return null;
-      const data = await fetchPostData(CONTROLLER + '/getRowByID', { id: readerId });
-      return data as WaterReader;
+      const data = await fetchAPI<WaterReader>(CONTROLLER + '/getrowbyid', {
+        method: 'POST',
+        data: { id: readerId },
+      });
+      return data;
     } catch (err) {
       return null;
     }
@@ -111,7 +117,13 @@ const useWaterReaders = () => {
 
   const assignReaderRegion = useCallback(
     async (row: RegionReader): Promise<void> => {
-      const res = await fetchPostData(CONTROLLER + '/assignReaderRegion', row);
+      const res = await fetchAPI<{ success: boolean; error?: string }>(
+        CONTROLLER + '/assignReaderRegion',
+        {
+          method: 'POST',
+          data: row,
+        }
+      );
       if (!res.success) {
         throw new Error(res.error);
       }
@@ -126,7 +138,13 @@ const useWaterReaders = () => {
 
   const assignReaderAddress = useCallback(
     async (row: AddressReader): Promise<void> => {
-      const res = await fetchPostData(CONTROLLER + '/assignReaderAddress', row);
+      const res = await fetchAPI<{ success: boolean; error?: string }>(
+        CONTROLLER + '/assignReaderAddress',
+        {
+          method: 'POST',
+          data: row,
+        }
+      );
       if (!res.success) {
         throw new Error(res.error);
       }
@@ -141,7 +159,13 @@ const useWaterReaders = () => {
 
   const removeReaderRegion = useCallback(
     async (row: RegionReader): Promise<void> => {
-      const res = await fetchPostData(CONTROLLER + '/removeReaderRegion', row);
+      const res = await fetchAPI<{ success: boolean; error?: string }>(
+        CONTROLLER + '/removeReaderRegion',
+        {
+          method: 'POST',
+          data: row,
+        }
+      );
       if (!res.success) {
         throw new Error(res.error);
       }
@@ -156,7 +180,13 @@ const useWaterReaders = () => {
 
   const removeReaderAddress = useCallback(
     async (row: AddressReader): Promise<void> => {
-      const res = await fetchPostData(CONTROLLER + '/removeReaderAddress', row);
+      const res = await fetchAPI<{ success: boolean; error?: string }>(
+        CONTROLLER + '/removeReaderAddress',
+        {
+          method: 'POST',
+          data: row,
+        }
+      );
       if (!res.success) {
         throw new Error(res.error);
       }
@@ -182,11 +212,12 @@ const useWaterReaders = () => {
               label="Rejon"
               value={cell.getValue() as string[]}
               endpoint={CONTROLLER + '/getRegionsForSL'}
+              fetchOnRender={true}
               multiple={true}
               onChange={(value) => {
                 row._valuesCache['region_ids'] = value.map((x) => {
                   const parsed = x.split(' | ');
-                  return parsed[0];
+                  return parseInt(parsed[0]);
                 });
               }}
             />
@@ -209,11 +240,12 @@ const useWaterReaders = () => {
               label="Ulica"
               value={cell.getValue() as string[]}
               endpoint={CONTROLLER + '/getAddressesForSL'}
+              fetchOnRender={true}
               multiple={true}
               onChange={(value) => {
                 row._valuesCache['address_ids'] = value.map((x) => {
                   const parsed = x.split(' | ');
-                  return parsed[0];
+                  return parseInt(parsed[0]);
                 });
               }}
             />
@@ -225,14 +257,22 @@ const useWaterReaders = () => {
 
   const fetchData = useCallback(async () => {
     setIsFetching(true);
-    const data = await fetchPostData(CONTROLLER + '/getRows');
+    const data = await fetchAPI<WaterReader[]>(CONTROLLER + '/getRows', {
+      method: 'POST',
+    });
     setIsFetching(false);
     setReaders(data);
   }, []);
 
   const createRow = useCallback(async (row: WaterReader): Promise<void> => {
     setIsCreating(true);
-    const res = await fetchPostData(CONTROLLER + '/addRow', row);
+    const res = await fetchAPI<{ success: boolean; error?: string; data: WaterReader }>(
+      CONTROLLER + '/addRow',
+      {
+        method: 'POST',
+        data: row,
+      }
+    );
     setIsCreating(false);
     if (!res.success) {
       throw new Error(res.error);
@@ -242,7 +282,13 @@ const useWaterReaders = () => {
 
   const updateRow = useCallback(async (row: WaterReader) => {
     setIsUpdating(true);
-    const res = await fetchPostData(CONTROLLER + '/editRow', row);
+    const res = await fetchAPI<{ success: boolean; error?: string; data: WaterReader }>(
+      CONTROLLER + '/editRow',
+      {
+        method: 'POST',
+        data: row,
+      }
+    );
     setIsUpdating(false);
     if (!res.success) {
       throw new Error(res.error);
@@ -252,7 +298,10 @@ const useWaterReaders = () => {
 
   const deleteRow = useCallback(async (id: number) => {
     setIsDeleting(true);
-    await fetchPostData(CONTROLLER + '/deleteRow', { id });
+    await fetchAPI(CONTROLLER + '/deleteRow', {
+      method: 'POST',
+      data: { id },
+    });
     setIsDeleting(false);
     setReaders((state) => state.filter((x) => x.id !== id));
   }, []);

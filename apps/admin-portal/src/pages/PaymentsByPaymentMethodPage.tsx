@@ -2,7 +2,7 @@ import Main from '@/components/ui/Main';
 import { ROBOTO_BOLD, ROBOTO_REGULAR } from '@/constants/base64/fonts';
 import { VODOVOD_LOGO_PNG } from '@/constants/base64/logo';
 import { PaymentsByPaymentMethod } from '@/types/cashRegister';
-import { fetchPostData } from '@/utils/fetchUtil';
+import { fetchAPI } from '@/utils/fetchUtil';
 import { globalTableProps } from '@/utils/globalTableProps';
 import { saveAs } from '@/utils/utils';
 import { Box, Button, MenuItem, TextField, Typography } from '@mui/material';
@@ -30,7 +30,7 @@ export const PaymentsByPaymentMethodPage = ({ title }: { title: string }) => {
 
     useEffect(() => {
         const getShiftStatus = async () => {
-            const data = await fetchPostData('../CashiersSessionController/isSessionOpen', {});
+            const data = await fetchAPI('/api/cashiers-session/isSessionOpen', { method: 'POST' });
             if (data) {
                 setIsShiftOpen(data);
             }
@@ -43,8 +43,11 @@ export const PaymentsByPaymentMethodPage = ({ title }: { title: string }) => {
         console.log('Fetching payments by payment method for ID:', id);
         try {
             setIsFetching(true);
-            const data = await fetchPostData('../PaymentsByPaymentMethodController/getPaymentsByPaymentMethod', {
-                id: id || null,
+            const data = await fetchAPI('/api/cash-register/getPaymentsByPaymentMethod', {
+                method: 'POST',
+                data: {
+                    id: id || null,
+                },
             });
             setIsFetching(false);
             setData(data);

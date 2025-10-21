@@ -1,13 +1,14 @@
 import { SearchList } from '@/components/ui/SearchList';
 import { Readings } from '@/types/billing-campaign';
-import { fetchPostData } from '@/utils/fetchUtil';
+import { fetchAPI } from '@/utils/fetchUtil';
 import { Typography } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers';
 import dayjs from 'dayjs';
 import { MRT_ColumnDef } from 'material-react-table';
 import { useCallback, useMemo, useState } from 'react';
 
-const CONTROLLER = '../ReadingsController';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3010';
+const CONTROLLER = `${API_BASE}/api/readings`;
 
 const useReadings = () => {
     const [readings, setReadings] = useState<Readings[]>([]);
@@ -33,7 +34,8 @@ const useReadings = () => {
                             label="Pod kampanja"
                             value={value}
                             disabled={!isCreating && !isEditing}
-                            endpoint={'../ReadingListsController/getSubCampaignForSL'}
+                            endpoint={CONTROLLER + '/getSubCampaignForSL'}
+                            fetchOnRender={true}
                             multiple={false}
                             onChange={(newValue) => {
                                 row._valuesCache[column.id] = newValue;
@@ -59,7 +61,8 @@ const useReadings = () => {
                             label="Merno mesto"
                             value={value}
                             disabled={!isCreating && !isEditing}
-                            endpoint={`../ReadingsController/getMeasuringPoints?campaignId=${campaingId}`}
+                            endpoint={`${CONTROLLER}/getMeasuringPoints?campaignId=${campaingId}`}
+                            fetchOnRender={true}
                             multiple={false}
                             onChange={(newValue) => {
                                 row._valuesCache[column.id] = newValue;
@@ -89,7 +92,8 @@ const useReadings = () => {
                             label="Vodomer"
                             value={value}
                             disabled={!isCreating && !isEditing}
-                            endpoint={`../ReadingsController/getWaterMeter?idmm=${idmm}`}
+                            endpoint={`${CONTROLLER}/getWaterMeter?idmm=${idmm}`}
+                            fetchOnRender={true}
                             multiple={false}
                             filterValues={addedWaterMeters}
                             onChange={(newValue) => {
@@ -160,6 +164,7 @@ const useReadings = () => {
                             value={value}
                             disabled={!isCreating && !isEditing}
                             endpoint={CONTROLLER + '/getReadingSourceForSL'}
+                            fetchOnRender={true}
                             multiple={false}
                             onChange={(newValue) => {
                                 row._valuesCache[column.id] = newValue;
@@ -190,6 +195,7 @@ const useReadings = () => {
                             value={value}
                             disabled={!isCreating && !isEditing}
                             endpoint={CONTROLLER + '/getStatusForSL'}
+                            fetchOnRender={true}
                             multiple={false}
                             onChange={(newValue) => {
                                 row._valuesCache[column.id] = newValue;
@@ -214,6 +220,7 @@ const useReadings = () => {
                             value={value}
                             disabled={!isCreating && !isEditing}
                             endpoint={CONTROLLER + '/getReaderForSL'}
+                            fetchOnRender={true}
                             multiple={false}
                             onChange={(newValue) => {
                                 row._valuesCache[column.id] = newValue;
@@ -228,14 +235,22 @@ const useReadings = () => {
 
     const fetchData = useCallback(async () => {
         setIsFetching(true);
-        const data = await fetchPostData(CONTROLLER + '/getRows');
+        const data = await fetchAPI<Readings[]>(CONTROLLER + '/getRows', {
+            method: 'POST',
+        });
         setIsFetching(false);
         setReadings(data);
     }, []);
 
     const createRow = useCallback(async (row: Readings): Promise<void> => {
         setIsCreating(true);
-        const res = await fetchPostData(CONTROLLER + '/addRow', row);
+        const res = await fetchAPI<{ success: boolean; error?: string; data: Readings }>(
+            CONTROLLER + '/addRow',
+            {
+                method: 'POST',
+                data: row,
+            }
+        );
         setIsCreating(false);
         if (!res.success) {
             throw new Error(res.error);
@@ -245,7 +260,13 @@ const useReadings = () => {
 
     const updateRow = useCallback(async (row: Readings) => {
         setIsUpdating(true);
-        const res = await fetchPostData(CONTROLLER + '/editRow', row);
+        const res = await fetchAPI<{ success: boolean; error?: string; data: Readings }>(
+            CONTROLLER + '/editRow',
+            {
+                method: 'POST',
+                data: row,
+            }
+        );
         setIsUpdating(false);
         if (!res.success) {
             throw new Error(res.error);
@@ -255,7 +276,10 @@ const useReadings = () => {
 
     const deleteRow = useCallback(async (id: number) => {
         setIsDeleting(true);
-        await fetchPostData(CONTROLLER + '/deleteRow', { id });
+        await fetchAPI(CONTROLLER + '/deleteRow', {
+            method: 'POST',
+            data: { id },
+        });
         setIsDeleting(false);
         setReadings((state) => state.filter((x) => x.id !== id));
     }, []);

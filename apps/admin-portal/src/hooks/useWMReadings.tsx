@@ -15,7 +15,7 @@ const useWMReadings = () => {
   const columns = useMemo<MRT_ColumnDef<WaterMeterReading>[]>(
     () => [
       {
-        accessorKey: 'meter_reading',
+        accessorKey: 'meterReading',
         header: 'Stanje',
         size: 100,
       },

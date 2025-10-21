@@ -1,11 +1,11 @@
 import { SearchList } from '@/components/ui/SearchList';
 import { CashRegister } from '@/types/cashRegister';
-import { fetchPostData } from '@/utils/fetchUtil';
+import { fetchAPI } from '@/utils/fetchUtil';
 import { Typography } from '@mui/material';
 import { MRT_ColumnDef } from 'material-react-table';
 import { useCallback, useMemo, useState } from 'react';
 
-const CONTROLLER = '../CashRegisterController';
+const CONTROLLER = '/api/cash-register';
 
 const useCashRegister = () => {
     const [cashRegister, setCashRegister] = useState<CashRegister[]>([]);
@@ -35,7 +35,7 @@ const useCashRegister = () => {
                             label="Adresa"
                             value={value}
                             disabled={!isCreating && !isEditing}
-                            endpoint={'../WaterReadersController/getAddressesForSL'}
+                            endpoint={'/api/water-readers/getAddressesForSL'}
                             multiple={false}
                             onChange={(newValue) => {
                                 row._valuesCache[column.id] = newValue;
@@ -59,7 +59,7 @@ const useCashRegister = () => {
                             label="Fiskalni uređaj"
                             value={value}
                             disabled={!isCreating && !isEditing}
-                            endpoint={CONTROLLER + '/getFiscalDeviceForSL'}
+                            endpoint={CONTROLLER + '/get-fiscal-device-for-sl'}
                             multiple={false}
                             onChange={(newValue) => {
                                 row._valuesCache[column.id] = newValue;
@@ -83,7 +83,7 @@ const useCashRegister = () => {
                             label="Status"
                             value={value}
                             disabled={!isCreating && !isEditing}
-                            endpoint={CONTROLLER + '/getStatusForSL'}
+                            endpoint={CONTROLLER + '/get-status-for-sl'}
                             multiple={false}
                             onChange={(newValue) => {
                                 row._valuesCache[column.id] = newValue;
@@ -98,14 +98,14 @@ const useCashRegister = () => {
 
     const fetchData = useCallback(async () => {
         setIsFetching(true);
-        const data = await fetchPostData(CONTROLLER + '/getRows');
+        const data = await fetchAPI(CONTROLLER + '/get-rows', { method: 'POST' });
         setIsFetching(false);
         setCashRegister(data);
     }, []);
 
     const createRow = useCallback(async (row: CashRegister): Promise<void> => {
         setIsCreating(true);
-        const res = await fetchPostData(CONTROLLER + '/addRow', row);
+        const res = await fetchAPI(CONTROLLER + '/add-row', { method: 'POST', data: row });
         setIsCreating(false);
         if (!res.success) {
             throw new Error(res.error);
@@ -115,7 +115,7 @@ const useCashRegister = () => {
 
     const updateRow = useCallback(async (row: CashRegister) => {
         setIsUpdating(true);
-        const res = await fetchPostData(CONTROLLER + '/editRow', row);
+        const res = await fetchAPI(CONTROLLER + '/edit-row', { method: 'POST', data: row });
         setIsUpdating(false);
         if (!res.success) {
             throw new Error(res.error);
@@ -125,7 +125,7 @@ const useCashRegister = () => {
 
     const deleteRow = useCallback(async (id: number) => {
         setIsDeleting(true);
-        await fetchPostData(CONTROLLER + '/deleteRow', { id });
+        await fetchAPI(CONTROLLER + '/delete-row', { method: 'POST', data: { id } });
         setIsDeleting(false);
         setCashRegister((state) => state.filter((x) => x.id !== id));
     }, []);

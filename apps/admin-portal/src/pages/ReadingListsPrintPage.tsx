@@ -2,7 +2,7 @@ import Main from '@/components/ui/Main';
 import { SearchList } from '@/components/ui/SearchList';
 import { ROBOTO_BOLD, ROBOTO_REGULAR } from '@/constants/base64/fonts';
 import { VODOVOD_LOGO_PNG } from '@/constants/base64/logo';
-import { fetchPostData } from '@/utils/fetchUtil';
+import { fetchAPI } from '@/utils/fetchUtil';
 import { AllInclusive, LocationOn, MapsHomeWork, Person } from '@mui/icons-material';
 import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers';
@@ -21,7 +21,8 @@ type TypeMapKey = {
   endpoint: string;
 };
 
-const CONTROLLER = ' ../ReadingListsPrintController';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3010';
+const CONTROLLER = `${API_BASE}/api/reading-lists-print`;
 
 const typeMap: Record<modalType, TypeMapKey> = {
   region: { title: 'štampa po rejonu', description: 'po rejonu', label: 'Izaberite rejon', endpoint: CONTROLLER + '/getRegionsForSL' },
@@ -41,7 +42,7 @@ const ReadingListModal = ({ type, onClose, onSubmit }: readingListModalProps) =>
         <DialogTitle>{title}</DialogTitle>
         <DialogContent>
           <Box>
-            <SearchList label={label} endpoint={endpoint} multiple={false} onChange={(value) => setSelected(value)} />
+            <SearchList label={label} endpoint={endpoint} fetchOnRender={true} multiple={false} onChange={(value) => setSelected(value)} />
           </Box>
         </DialogContent>
         <DialogActions>
@@ -125,7 +126,10 @@ const ReadingListsPrintPage = ({ title }: { title: string }) => {
       const url = CONTROLLER + '/getRows';
       const yyyyMMDate = date?.format('YYYY-MM');
 
-      const tableData: response[] = await fetchPostData(url, { id, type, date: yyyyMMDate });
+      const tableData: response[] = await fetchAPI(url, {
+        method: 'POST',
+        data: { id, type, date: yyyyMMDate }
+      });
       const formattedDate = dayjs().format('DD.MM.YYYY');
 
       if (!tableData || tableData.length === 0) {

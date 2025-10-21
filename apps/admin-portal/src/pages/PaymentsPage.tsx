@@ -2,7 +2,7 @@ import Main from '@/components/ui/Main';
 import { SearchList } from '@/components/ui/SearchList';
 import usePayments from '@/hooks/usePayments';
 import { Payments } from '@/types/cashRegister';
-import { fetchPostData } from '@/utils/fetchUtil';
+import { fetchAPI } from '@/utils/fetchUtil';
 import { globalTableProps } from '@/utils/globalTableProps';
 import { Add, Remove } from '@mui/icons-material';
 import { Autocomplete, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Grid, TextField, Tooltip, Typography } from '@mui/material';
@@ -29,7 +29,7 @@ export const PaymentsPage = ({ title }: { title: string }) => {
 
     useEffect(() => {
         const getLoggedUser = async () => {
-            const data = await fetchPostData('../UserAccountController/getLoggedUser', {});
+            const data = await fetchAPI('/api/user-accounts/getLoggedUser', { method: 'POST' });
             if (data) {
                 setLoggedUserId(data.id);
                 setLoggedUserName(data.name);
@@ -37,17 +37,20 @@ export const PaymentsPage = ({ title }: { title: string }) => {
         };
 
         const getShiftStatus = async () => {
-            const data = await fetchPostData('../CashiersSessionController/isSessionOpen', {});
+            const data = await fetchAPI('/api/cashiers-session/isSessionOpen', { method: 'POST' });
             if (data) {
                 setIsShiftOpen(data);
             }
         };
 
         const getCashRegister = async () => {
-            const data = await fetchPostData('../PaymentsController/gdetCashRegister', {});
-            if (data) {
-                setCashRegisterId(data.id);
-                setCashRegisterName(data.name);
+            const data = await fetchAPI('/api/payments/get-cash-register', { method: 'POST' });
+            if (data && !data.error && data.id && data.name) {
+                setCashRegisterId(String(data.id));
+                setCashRegisterName(data.name || '');
+            } else {
+                console.warn('Korisnik nema dodeljenu kasu u sistemu. Korisnik neće moći da unosi uplate.');
+                // Ne postavljamo ID i ime - ostaju prazni stringovi
             }
         };
 
@@ -79,8 +82,7 @@ export const PaymentsPage = ({ title }: { title: string }) => {
         return s.includes(" | ") ? s.split(" | ")[1].trim() : s;
     };
 
-    const columns = useMemo<MRT_ColumnDef<Payments>[]>(() => {
-        return [
+    const columns = useMemo<MRT_ColumnDef<Payments>[]>(() => [
             {
                 accessorKey: 'uplatilac_id',
                 header: 'Ime uplatioca',
@@ -95,7 +97,7 @@ export const PaymentsPage = ({ title }: { title: string }) => {
                             label="Ime uplatioca"
                             value={value}
                             disabled={!isCreating && !isEditing}
-                            endpoint={'../UserAccountController/getUserAccountsForSL'}
+                            endpoint={'/api/user-accounts/search/for-sl'}
                             multiple={false}
                             onChange={(newValue) => {
                                 row._valuesCache[column.id] = newValue;
@@ -157,7 +159,9 @@ export const PaymentsPage = ({ title }: { title: string }) => {
                 enableEditing: true,
                 Edit: ({ row }) => {
                     const rowKey = (row.original as Payments).id?.toString() ?? row.id;
-                    const methods = selectedPayments[rowKey] || [parseMethod(row.original.nacin_placanja_id)];
+                    const methods = selectedPayments[rowKey] || [];
+                    const isDisabled = methods.length === 0 || !methods.includes('Keš');
+
                     return (
                         <TextField
                             key={`got-${rowKey}-${methods.join(",")}`}
@@ -166,7 +170,7 @@ export const PaymentsPage = ({ title }: { title: string }) => {
                             label="Iznos gotovina"
                             size="small"
                             fullWidth
-                            disabled={!methods.includes('Keš')}
+                            disabled={isDisabled}
                             onChange={(e) => {
                                 row._valuesCache['iznos_gotovina'] = e.target.value;
                                 setUseGotovina(parseFloat(e.target.value) || 0);
@@ -188,16 +192,18 @@ export const PaymentsPage = ({ title }: { title: string }) => {
                 enableEditing: true,
                 Edit: ({ row }) => {
                     const rowKey = (row.original as Payments).id?.toString() ?? row.id;
-                    const methods = selectedPayments[rowKey] || [parseMethod(row.original.nacin_placanja_id)];
+                    const methods = selectedPayments[rowKey] || [];
+                    const isDisabled = methods.length === 0 || !methods.includes('Kartica');
+
                     return (
                         <TextField
-                            key={`got-${rowKey}-${methods.join(",")}`}
+                            key={`kar-${rowKey}-${methods.join(",")}`}
                             type="number"
                             defaultValue={row.original.iznos_kartica}
                             label="Iznos kartica"
                             size="small"
                             fullWidth
-                            disabled={!methods.includes('Kartica')}
+                            disabled={isDisabled}
                             onChange={(e) => {
                                 row._valuesCache['iznos_kartica'] = e.target.value;
                                 setUseKartica(parseFloat(e.target.value) || 0);
@@ -219,16 +225,18 @@ export const PaymentsPage = ({ title }: { title: string }) => {
                 enableEditing: true,
                 Edit: ({ row }) => {
                     const rowKey = (row.original as Payments).id?.toString() ?? row.id;
-                    const methods = selectedPayments[rowKey] || [parseMethod(row.original.nacin_placanja_id)];
+                    const methods = selectedPayments[rowKey] || [];
+                    const isDisabled = methods.length === 0 || !methods.includes('Ček');
+
                     return (
                         <TextField
-                            key={`got-${rowKey}-${methods.join(",")}`}
+                            key={`cek-${rowKey}-${methods.join(",")}`}
                             type="number"
                             defaultValue={row.original.iznos_cek}
                             label="Iznos ček"
                             size="small"
                             fullWidth
-                            disabled={!methods.includes('Ček')}
+                            disabled={isDisabled}
                             onChange={(e) => {
                                 row._valuesCache['iznos_cek'] = e.target.value;
                                 setUseCek(parseFloat(e.target.value) || 0);
@@ -250,16 +258,18 @@ export const PaymentsPage = ({ title }: { title: string }) => {
                 enableEditing: true,
                 Edit: ({ row }) => {
                     const rowKey = (row.original as Payments).id?.toString() ?? row.id;
-                    const methods = selectedPayments[rowKey] || [parseMethod(row.original.nacin_placanja_id)];
+                    const methods = selectedPayments[rowKey] || [];
+                    const isDisabled = methods.length === 0 || !methods.includes('Vaučer');
+
                     return (
                         <TextField
-                            key={`got-${rowKey}-${methods.join(",")}`}
+                            key={`vau-${rowKey}-${methods.join(",")}`}
                             type="number"
                             defaultValue={row.original.iznos_vaucer}
                             label="Iznos vaučer"
                             size="small"
                             fullWidth
-                            disabled={!methods.includes('Vaučer')}
+                            disabled={isDisabled}
                             onChange={(e) => {
                                 row._valuesCache['iznos_vaucer'] = e.target.value;
                                 setUseVaucer(parseFloat(e.target.value) || 0);
@@ -312,7 +322,7 @@ export const PaymentsPage = ({ title }: { title: string }) => {
                             label="Valuta"
                             value={value}
                             disabled={!isCreating && !isEditing}
-                            endpoint={'../PaymentsController/getCurrencyForSL'}
+                            endpoint={'/api/payments/get-currency-for-sl'}
                             multiple={false}
                             onChange={(newValue) => {
                                 row._valuesCache[column.id] = newValue;
@@ -321,30 +331,6 @@ export const PaymentsPage = ({ title }: { title: string }) => {
                     );
                 },
                 Cell: ({ cell }) => <Typography>{cell.getValue() as string}</Typography>,
-            },
-            {
-                accessorKey: 'datum_kreiranja',
-                header: 'Datum kreiranja',
-                size: 150,
-                enableEditing: true,
-                Edit: ({ row, cell }) => {
-                    const initialValue = cell.getValue() ? dayjs(cell.getValue() as string) : null;
-                    return (
-                        <DatePicker
-                            value={initialValue}
-                            label={'Datum kreiranja'}
-                            sx={{ width: '100%' }}
-                            format="DD.MM.YYYY"
-                            onChange={(newDate) => {
-                                row._valuesCache['datum_kreiranja'] = newDate?.format('YYYY-MM-DD');
-                            }}
-                        />
-                    );
-                },
-                Cell: ({ cell }) => {
-                    const date = cell.getValue();
-                    return date ? dayjs(date as string).format('DD.MM.YYYY') : '';
-                },
             },
             {
                 accessorKey: 'broj_fiskalnog_racuna',
@@ -377,14 +363,18 @@ export const PaymentsPage = ({ title }: { title: string }) => {
                 enableEditing: true,
                 Edit: ({ cell, table, column, row }) => {
                     const { creatingRow: isCreating, editingRow: isEditing } = table.getState();
-                    const value = cell.getValue() as string;
+                    const cellValue = cell.getValue() as string;
+                    // Ako je vrednost " | " ili "undefined | undefined", tretiramo kao prazan string
+                    const value = (cellValue && cellValue.trim() !== '|' && !cellValue.includes('undefined'))
+                        ? cellValue
+                        : '';
 
                     return (
                         <SearchList
                             label="Broj kase"
                             value={value}
                             disabled={!isCreating && !isEditing}
-                            endpoint={'../CashRegisterController/getCashRegisterForSL'}
+                            endpoint={'/api/cash-register/get-cash-register-for-sl'}
                             multiple={false}
                             onChange={(newValue) => {
                                 row._valuesCache[column.id] = newValue;
@@ -408,7 +398,7 @@ export const PaymentsPage = ({ title }: { title: string }) => {
                             label="Status"
                             value={value}
                             disabled={!isCreating && !isEditing}
-                            endpoint={'../CashRegisterController/getStatusForSL'}
+                            endpoint={'/api/cash-register/get-status-for-sl'}
                             multiple={false}
                             onChange={(newValue) => {
                                 row._valuesCache[column.id] = newValue;
@@ -418,8 +408,7 @@ export const PaymentsPage = ({ title }: { title: string }) => {
                 },
                 Cell: ({ cell }) => <Typography>{cell.getValue() as string}</Typography>,
             },
-        ];
-    }, [selectedPayments, useGotovina, useKartica, useCek, useVaucer]);
+    ], [selectedPayments]); // Re-kreiraj columns kada se promene selectedPayments
 
     const handleCreate: MRT_TableOptions<Payments>['onCreatingRowSave'] = async ({ values, table }) => {
         try {
@@ -431,7 +420,27 @@ export const PaymentsPage = ({ title }: { title: string }) => {
                 toast.error('Niste uneli nijedan način plaćanja');
                 return;
             }
-            await createRow(values);
+            if (!values['kasa_id'] || !values['kasa_id'].trim() || values['kasa_id'].trim() === '|') {
+                toast.error('Kasa nije pronađena. Molimo vas da se ponovo prijavite.');
+                return;
+            }
+
+            // Transformiši podatke za backend
+            const payload = {
+                ...values,
+                id_fakture: values['id_fakture'] ? Number(values['id_fakture']) : undefined,
+                iznos_gotovina: values['iznos_gotovina'] ? Number(values['iznos_gotovina']) : 0,
+                iznos_kartica: values['iznos_kartica'] ? Number(values['iznos_kartica']) : 0,
+                iznos_cek: values['iznos_cek'] ? Number(values['iznos_cek']) : 0,
+                iznos_vaucer: values['iznos_vaucer'] ? Number(values['iznos_vaucer']) : 0,
+                iznos_ukupno: values['iznos_ukupno'] ? Number(values['iznos_ukupno']) : 0,
+            };
+
+            // Ukloni polja koja backend sam određuje
+            delete payload['kreirao_id']; // Backend sam određuje kreatora iz JWT tokena
+            delete payload['datum_kreiranja']; // MySQL automatski popunjava CURRENT_TIMESTAMP
+
+            await createRow(payload);
             toast.success('Uspešno unošenje podataka');
             table.setCreatingRow(null);
         } catch (err: any) {
@@ -483,16 +492,13 @@ export const PaymentsPage = ({ title }: { title: string }) => {
             if (!row._valuesCache['kreirao_id']) {
                 row._valuesCache['kreirao_id'] = `${loggedUserId} | ${loggedUserName}`;
             }
-            if (!row._valuesCache['datum_kreiranja']) {
-                row._valuesCache['datum_kreiranja'] = dayjs().format('YYYY-MM-DD');
-            }
             if (!row._valuesCache['valuta']) {
                 row._valuesCache['valuta'] = `1 | RSD`;
             }
             if (!row._valuesCache['status']) {
                 row._valuesCache['status'] = `1 | Aktivan`;
             }
-            if (!row._valuesCache['kasa_id']) {
+            if (!row._valuesCache['kasa_id'] && useCashRegisterId && useCashRegisterName) {
                 row._valuesCache['kasa_id'] = `${useCashRegisterId} | ${useCashRegisterName}`;
             }
 
@@ -636,7 +642,7 @@ export const PaymentsPage = ({ title }: { title: string }) => {
                     )}
                     <SearchList
                         label="Odaberi korisnika"
-                        endpoint={`../UserAccountController/getUserAccountsForSL`}
+                        endpoint={`/api/user-accounts/search/for-sl`}
                         multiple={false}
                         onChange={handleFilterChange}
                         textFieldProps={{ variant: 'standard' }}

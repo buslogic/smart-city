@@ -42,6 +42,26 @@ export type WaterMeterReading = {
   censusSelect: boolean;
 };
 
+export type WaterMeterRemark = {
+  id?: number;
+  meterReading: string;
+  faulty: number;
+  unreadable: number;
+  notFoundOnSite: number;
+  noMeter: number;
+  negativeConsumption: number;
+  transferToNextCl: number;
+  billPrintout: number;
+  note?: string;
+  userAccount?: string;
+  canceled: number;
+  priority: number;
+  average: number;
+  meterReaderOnly: number;
+  disconnected: number;
+  censusSelect: number;
+};
+
 export type WMType = {
   id: number;
   type: string;

@@ -1,4 +1,4 @@
-import { fetchPostData } from '@/utils/fetchUtil';
+import { fetchAPI } from '@/utils/fetchUtil';
 import { Autocomplete, Box, CircularProgress, TextField, TextFieldProps } from '@mui/material';
 import { useEffect, useState } from 'react';
 
@@ -70,7 +70,10 @@ export const SearchList = ({
     try {
       setLoading(true);
       const body = { query: searchQuery, pageNumber: pageNumber };
-      const res = await fetchPostData(endpoint, body);
+      const res = await fetchAPI<{ data: string[]; hasMore: boolean }>(endpoint, {
+        method: 'POST',
+        data: body,
+      });
       return res;
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -90,7 +93,10 @@ export const SearchList = ({
           if (!res) return;
           const { data, hasMore } = res;
           setHasMore(hasMore);
-          setOptions((prevOptions) => [...prevOptions, ...data]);
+          setOptions((prevOptions) => {
+            const combined = [...prevOptions, ...data];
+            return Array.from(new Set(combined));
+          });
           setLoading(false);
         });
 

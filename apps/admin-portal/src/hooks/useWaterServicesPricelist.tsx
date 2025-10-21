@@ -1,14 +1,12 @@
 import { SearchList } from '@/components/ui/SearchList';
 import { WaterServicesPricelist } from '@/types/finance';
-import { fetchPostData } from '@/utils/fetchUtil';
+import { api } from '@/services/api';
 import { getHideColumnProps } from '@/utils/props';
 import { Button, Checkbox, FormControl, FormControlLabel, Typography } from '@mui/material';
 import { MRT_ColumnDef } from 'material-react-table';
 import { useCallback, useMemo, useState } from 'react';
 import { saveAs } from '@/utils/utils';
 import { toast } from 'react-toastify';
-
-const CONTROLLER = '../WaterServicesPricelistController';
 
 const useWaterServicesPricelist = () => {
   const [service, setServices] = useState<WaterServicesPricelist[]>([]);
@@ -19,12 +17,15 @@ const useWaterServicesPricelist = () => {
   const [documentFile, setDocumentFile] = useState<File | null>(null);
 
   const downloadDocument = async (filename: string) => {
-    const res = await fetchPostData(CONTROLLER + '/downloadDocument', { filename }, 'blob', { Accept: 'application/octet-stream' });
-    if (!res) {
+    try {
+      const { data } = await api.post('/api/water-service-prices/download',
+        { filename },
+        { responseType: 'blob' }
+      );
+      saveAs(data, filename);
+    } catch (error) {
       toast.error('Došlo je do greške prilikom preuzimanja fajla.');
-      return;
     }
-    saveAs(res, filename);
   };
 
   const columns = useMemo<MRT_ColumnDef<WaterServicesPricelist>[]>(() => {
@@ -49,7 +50,7 @@ const useWaterServicesPricelist = () => {
               label="Usluga"
               value={value}
               disabled={!isCreating && !isEditing}
-              endpoint="../WaterServicesController/getServicesForSL"
+              endpoint="/api/water-services/search"
               multiple={false}
               onChange={(newValue) => {
                 row._valuesCache[column.id] = newValue;
@@ -191,11 +192,15 @@ const useWaterServicesPricelist = () => {
   const fetchData = useCallback(async (category_id: string) => {
     try {
       setIsFetching(true);
-      const data = await fetchPostData(CONTROLLER + '/getRows', { category_id });
-      setIsFetching(false);
+      const { data } = await api.get<WaterServicesPricelist[]>(`/api/water-service-prices`, {
+        params: { category_id }
+      });
       setServices(data);
     } catch (err) {
-      console.log(err);
+      console.error(err);
+      toast.error('Greška pri učitavanju cenovnika.');
+    } finally {
+      setIsFetching(false);
     }
   }, []);
 
@@ -213,28 +218,70 @@ const useWaterServicesPricelist = () => {
   };
 
   const createRow = useCallback(async (row: WaterServicesPricelist): Promise<void> => {
-    const formData = buildFormData(row);
-    setIsCreating(true);
-    const { success, data } = await fetchPostData(CONTROLLER + '/addRow', formData, 'json');
-    setIsCreating(false);
-    if (!success) throw new Error(data);
-    setServices((prev) => [data, ...prev]);
+    try {
+      setIsCreating(true);
+
+      const payload = {
+        service_id: parseInt(row.service_id as any) || undefined,
+        category_id: parseInt(row.category_id as any) || undefined,
+        fixed_charge: row.fixed_charge ? parseInt(String(row.fixed_charge)) : 0,
+        price: parseFloat(String(row.price)),
+        usage_fee_from: row.usage_fee_from ? parseFloat(String(row.usage_fee_from)) : 0,
+        usage_fee_to: row.usage_fee_to ? parseFloat(String(row.usage_fee_to)) : 0,
+        VAT_rate: row.VAT_rate ? parseFloat(String(row.VAT_rate)) : 0,
+        assign_by_default: Boolean(row.assign_by_default),
+        document_name: row.document_name || '',
+      };
+
+      const { data } = await api.post<WaterServicesPricelist>('/api/water-service-prices', payload);
+      setServices((prev) => [data, ...prev]);
+    } catch (error) {
+      toast.error('Greška pri kreiranju stavke cenovnika.');
+      throw error;
+    } finally {
+      setIsCreating(false);
+    }
   }, []);
 
   const updateRow = useCallback(async (row: WaterServicesPricelist) => {
-    const formData = buildFormData(row);
-    setIsUpdating(true);
-    const res = await fetchPostData(CONTROLLER + '/editRow', formData, 'json');
-    if (!res.success) throw new Error(res.error);
-    setServices((prev) => prev.map((x) => (x.id === row.id ? res.data : x)));
-    setIsUpdating(false);
+    try {
+      setIsUpdating(true);
+
+      const { id, service, category, ...rest } = row;
+
+      const payload = {
+        service_id: parseInt(row.service_id as any) || undefined,
+        category_id: parseInt(row.category_id as any) || undefined,
+        fixed_charge: row.fixed_charge ? parseInt(String(row.fixed_charge)) : 0,
+        price: parseFloat(String(row.price)),
+        usage_fee_from: row.usage_fee_from ? parseFloat(String(row.usage_fee_from)) : 0,
+        usage_fee_to: row.usage_fee_to ? parseFloat(String(row.usage_fee_to)) : 0,
+        VAT_rate: row.VAT_rate ? parseFloat(String(row.VAT_rate)) : 0,
+        assign_by_default: Boolean(row.assign_by_default),
+        document_name: row.document_name || '',
+      };
+
+      const { data } = await api.patch<WaterServicesPricelist>(`/api/water-service-prices/${id}`, payload);
+      setServices((prev) => prev.map((x) => (x.id === id ? data : x)));
+    } catch (error) {
+      toast.error('Greška pri ažuriranju stavke cenovnika.');
+      throw error;
+    } finally {
+      setIsUpdating(false);
+    }
   }, []);
 
   const deleteRow = useCallback(async (id: number) => {
-    setIsDeleting(true);
-    await fetchPostData(CONTROLLER + '/deleteRow', { id });
-    setIsDeleting(false);
-    setServices((state) => state.filter((x) => x.id !== id));
+    try {
+      setIsDeleting(true);
+      await api.delete(`/api/water-service-prices/${id}`);
+      setServices((state) => state.filter((x) => x.id !== id));
+    } catch (error) {
+      toast.error('Greška pri brisanju stavke cenovnika.');
+      throw error;
+    } finally {
+      setIsDeleting(false);
+    }
   }, []);
 
   return {

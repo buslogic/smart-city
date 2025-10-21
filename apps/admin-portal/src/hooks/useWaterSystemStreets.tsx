@@ -1,37 +1,36 @@
-import { SearchList } from '@/components/ui/SearchList';
-import { fetchPostData } from '@/utils/fetchUtil';
-import { Checkbox, FormControlLabel } from '@mui/material';
-import { MRT_ColumnDef } from 'material-react-table';
 import { useCallback, useMemo, useState } from 'react';
+import { MRT_ColumnDef } from 'material-react-table';
+import { api } from '@/services/api';
+import { SearchList } from '@/components/ui/SearchList';
+import { Checkbox, FormControlLabel } from '@mui/material';
 
-export type SystemStreet = {
+export type Street = {
   id: number;
-  cityId: number;
-  cityName: string;
-  addressId: string;
-  addressName: string;
-  addressNumber: number | null;
-  officialAddressCode: number | null;
-  regionId: number | null;
-  active: boolean;
-  reader_id: number | null;
+  city_id: number;
+  address_name: string;
+  address_number: string | null;
+  official_address_code: string | null;
+  region_id: number | null;
+  active: number;
+  edit_user_id?: number | null;
+  edit_datetime?: string | null;
+  cities_name?: string;
+  region_name?: string;
 };
 
-const CONTROLLER = '../WaterSystemStreetsController';
-
 const useWaterSystemStreets = () => {
-  const [systemStreets, setSystemStreets] = useState<SystemStreet[]>([]);
+  const [streets, setStreets] = useState<Street[]>([]);
   const [isFetching, setIsFetching] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const columns = useMemo<MRT_ColumnDef<SystemStreet>[]>(() => {
+  const columns = useMemo<MRT_ColumnDef<Street>[]>(() => {
     return [
       {
         accessorKey: 'address_name',
-        header: 'Adresa',
-        size: 100,
+        header: 'Naziv ulice',
+        size: 200,
       },
       {
         accessorKey: 'address_number',
@@ -40,57 +39,58 @@ const useWaterSystemStreets = () => {
       },
       {
         accessorKey: 'official_address_code',
-        header: 'Zvanična šifra adrese',
-        size: 100,
+        header: 'Zvanična šifra',
+        size: 150,
       },
       {
         accessorKey: 'cities_name',
         header: 'Grad',
+        size: 150,
         Edit: ({ cell, column, row }) => (
           <SearchList
             label="Grad"
             value={cell.getValue() as string}
-            endpoint={CONTROLLER + '/getCitiesForSL'}
+            endpoint="/api/water-system-streets/cities/search-list"
             multiple={false}
+            fetchOnRender={true}
             onChange={(newValue) => {
               const parsed = newValue?.split(' | ');
               if (parsed && parsed.length > 0) {
-                row._valuesCache['city_id'] = parsed[0];
+                row._valuesCache['city_id'] = Number(parsed[0]);
               }
               row._valuesCache[column.id] = newValue;
             }}
           />
         ),
-        size: 100,
       },
       {
         accessorKey: 'region_name',
         header: 'Rejon',
+        size: 150,
         Edit: ({ cell, column, row }) => (
           <SearchList
             label="Rejon"
             value={cell.getValue() as string}
-            endpoint={CONTROLLER + '/getRegionsForSL'}
+            endpoint="/api/water-system-regions/search-list"
             multiple={false}
+            fetchOnRender={true}
             onChange={(newValue) => {
               const parsed = newValue?.split(' | ');
               if (parsed && parsed.length > 0) {
-                row._valuesCache['region_id'] = parsed[0];
+                row._valuesCache['region_id'] = Number(parsed[0]);
+              } else {
+                row._valuesCache['region_id'] = null;
               }
               row._valuesCache[column.id] = newValue;
             }}
           />
         ),
-        size: 100,
       },
       {
         accessorKey: 'active',
         header: 'Status',
         size: 100,
-        Cell: ({ cell }) => {
-          const value = Number(cell.getValue());
-          return value === 1 ? 'Aktivan' : 'Neaktivan';
-        },
+        Cell: ({ cell }) => (Number(cell.getValue()) === 1 ? 'Aktivan' : 'Neaktivan'),
         Edit: ({ cell, row, column }) => {
           const value = Number(cell.getValue());
           const initial = value === 1;
@@ -111,7 +111,6 @@ const useWaterSystemStreets = () => {
             />
           );
         },
-        enableEditing: true,
       },
     ];
   }, []);
@@ -119,44 +118,56 @@ const useWaterSystemStreets = () => {
   const fetchData = useCallback(async () => {
     try {
       setIsFetching(true);
-      const data = await fetchPostData(CONTROLLER + '/getRows');
-      setIsFetching(false);
-      setSystemStreets(data);
+      const response = await api.get('/api/water-system-streets');
+      setStreets(response.data);
     } catch (err) {
-      console.log(err);
+      console.error('Error fetching streets:', err);
+    } finally {
+      setIsFetching(false);
     }
   }, []);
 
-  const createRow = useCallback(async (row: SystemStreet): Promise<void> => {
+  const createRow = useCallback(async (row: Partial<Street>): Promise<void> => {
     setIsCreating(true);
-    const res = await fetchPostData(CONTROLLER + '/addRow', row);
-    setIsCreating(false);
-    if (!res.success) {
-      throw new Error(res.error);
+    try {
+      const { id, cities_name, region_name, ...data } = row;
+      const response = await api.post('/api/water-system-streets', data);
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Failed to create');
+      }
+      setStreets((prev) => [response.data.data, ...prev]);
+    } finally {
+      setIsCreating(false);
     }
-    setSystemStreets((prev) => [res.data, ...prev]);
   }, []);
 
-  const updateRow = useCallback(async (row: SystemStreet) => {
+  const updateRow = useCallback(async (row: Street) => {
     setIsUpdating(true);
-    const res = await fetchPostData(CONTROLLER + '/editRow', row);
-    setIsUpdating(false);
-    if (!res.success) {
-      throw new Error(res.error);
+    try {
+      const { id, cities_name, region_name, edit_user_id, edit_datetime, ...data } = row;
+      const response = await api.put(`/api/water-system-streets/${id}`, data);
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Failed to update');
+      }
+      setStreets((prev) => prev.map((x) => (x.id === id ? response.data.data : x)));
+    } finally {
+      setIsUpdating(false);
     }
-    setSystemStreets((prev) => prev.map((x) => (x.id === row.id ? res.data : x)));
   }, []);
 
   const deleteRow = useCallback(async (id: number) => {
     setIsDeleting(true);
-    await fetchPostData(CONTROLLER + '/deleteRow', { id });
-    setIsDeleting(false);
-    setSystemStreets((state) => state.filter((x) => x.id !== id));
+    try {
+      await api.delete(`/api/water-system-streets/${id}`);
+      setStreets((state) => state.filter((x) => x.id !== id));
+    } finally {
+      setIsDeleting(false);
+    }
   }, []);
 
   return {
     columns,
-    systemStreets,
+    streets,
     fetchData,
     isFetching,
     isCreating,

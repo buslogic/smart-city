@@ -7,8 +7,14 @@ import EditIcon from '@mui/icons-material/Edit';
 import { toast } from 'react-toastify';
 import useWMTypes from '../../hooks/useWMTypes';
 import { WMType } from '../../types/water-meter';
+import Main from '../../components/ui/Main';
+import { globalTableProps, muiTableBodyCellPropsRowEditStyles } from '@/utils/globalTableProps';
 
-export const WaterMeterTypesPage = () => {
+type Props = {
+  title: string;
+};
+
+export const WaterMeterTypesPage = ({ title }: Props) => {
   const { columns, fetchWMTypes, types, isDeleting, createItem, deleteItem, isCreating, isFetching, isUpdating, updateItem } = useWMTypes();
 
   useEffect(() => {
@@ -27,8 +33,8 @@ export const WaterMeterTypesPage = () => {
 
   const handleSave: MRT_TableOptions<WMType>['onEditingRowSave'] = async ({ values, row, table }) => {
     try {
-      values['id'] = row.original.id;
-      await updateItem(values);
+      // ID se šalje u URL-u, ne u body-ju
+      await updateItem({ id: row.original.id, type: values.type });
       table.setEditingRow(null);
       toast.success('Uspešna izmena podataka');
     } catch (err: any) {
@@ -53,14 +59,12 @@ export const WaterMeterTypesPage = () => {
   };
 
   const table = useMaterialReactTable({
+    ...globalTableProps,
     columns,
     data: types,
     createDisplayMode: 'row',
     editDisplayMode: 'row',
-    initialState: {
-      showColumnFilters: false,
-      columnVisibility: { _id: false },
-    },
+    muiTableBodyCellProps: muiTableBodyCellPropsRowEditStyles,
     enableEditing: true,
     getRowId: (row) => String(row.id),
     onCreatingRowSave: handleCreate,
@@ -112,11 +116,11 @@ export const WaterMeterTypesPage = () => {
   });
 
   return (
-    <Box sx={{ padding: 3 }}>
+    <Main title={title}>
       <Box sx={{ maxWidth: '720px', margin: 'auto' }}>
         <MaterialReactTable table={table} />
       </Box>
-    </Box>
+    </Main>
   );
 };
 

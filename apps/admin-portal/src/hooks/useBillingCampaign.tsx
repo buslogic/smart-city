@@ -2,6 +2,7 @@ import Input from '@/components/ui/Input';
 import { SearchList } from '@/components/ui/SearchList';
 import { BillingCampaign } from '@/types/billing-campaign';
 import { globalTableProps } from '@/utils/globalTableProps';
+import { fetchAPI } from '@/utils/fetchUtil';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import LockIcon from '@mui/icons-material/Lock';
@@ -12,6 +13,9 @@ import dayjs from 'dayjs';
 import { MaterialReactTable, MRT_ColumnDef, MRT_EditActionButtons, MRT_TableOptions, useMaterialReactTable } from 'material-react-table';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'react-toastify';
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3010';
+const CONTROLLER = `${API_BASE}/api/billing-campaigns`;
 
 const useBillingCampaign = () => {
   const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
@@ -63,7 +67,7 @@ const useBillingCampaign = () => {
             <SearchList
               label="ID mernog mesta"
               value={cell.getValue() as string}
-              endpoint="../BillingCampaignController/getMeasuringPoints"
+              endpoint={`${CONTROLLER}/getMeasuringPoints`}
               multiple={false}
               onChange={(newValue) => {
                 row._valuesCache[column.id] = newValue;
@@ -83,7 +87,7 @@ const useBillingCampaign = () => {
             <SearchList
               label="ID vodomera"
               value={cell.getValue() as string}
-              endpoint="../BillingCampaignController/getWaterMeters"
+              endpoint={`${CONTROLLER}/getWaterMeters`}
               multiple={false}
               onChange={(newValue) => {
                 row._valuesCache[column.id] = newValue;
@@ -159,7 +163,7 @@ const useBillingCampaign = () => {
             <SearchList
               label="Stanje vod. nap."
               value={cell.getValue() as string}
-              endpoint="../BillingCampaignController/getWaterMeterReadings"
+              endpoint={`${CONTROLLER}/getWaterMeterReadings`}
               multiple={false}
               onChange={(newValue) => {
                 row._valuesCache[column.id] = newValue;
@@ -216,12 +220,10 @@ const useBillingCampaign = () => {
         return;
       }
 
-      const response = await $.ajax({
-        url: '../BillingCampaignController/createNewCalculation',
-        type: 'POST',
-        data: { period: period },
-        dataType: 'json',
-      });
+      const response = await fetchAPI<{ success: boolean; message: string }>(
+        `${CONTROLLER}/createNewCalculation`,
+        { method: 'POST', data: { period } }
+      );
 
       if (response.success) {
         toast.success(response.message);
@@ -246,12 +248,10 @@ const useBillingCampaign = () => {
     try {
       const period = selectedMonth.format('YYYY-MM');
 
-      const response = await $.ajax({
-        url: '../BillingCampaignController/closeAccountingPeriod',
-        type: 'POST',
-        data: { period: period },
-        dataType: 'json',
-      });
+      const response = await fetchAPI<{ success: boolean }>(
+        `${CONTROLLER}/closeAccountingPeriod`,
+        { method: 'POST', data: { period } }
+      );
 
       if (response.success) {
         toast.success(`Kampanja za period ${selectedMonth.format('YYYY-MM')} je uspešno zatvorena`);
@@ -342,41 +342,30 @@ const useBillingCampaign = () => {
 
       const formattedDate = date.format('YYYY-MM');
 
-      await $.ajax({
-        url: '../BillingCampaignController/getData',
-        type: 'POST',
-        data: { period: formattedDate },
-        dataType: 'json',
-        success: (response) => {
-          setIsLoadingData(false);
-          setIsFetching(false);
+      const response = await fetchAPI<any>(
+        `${CONTROLLER}/getData`,
+        { method: 'POST', data: { period: formattedDate } }
+      );
 
-          if (response && response.error === 'table_not_exists') {
-            setData([]);
-            setShowTable(false);
-            setIsAccountingClosed(false);
-            toast.error(`Ne postoji kampanja za period: ${date.format('YYYY-MM')}`);
-          } else {
-            setShowTable(true);
-            setData(response || []);
+      setIsLoadingData(false);
+      setIsFetching(false);
 
-            const isClosed = response.length > 0 && response[0].zatvoren == 1;
-            setIsAccountingClosed(isClosed);
+      if (response && response.error === 'table_not_exists') {
+        setData([]);
+        setShowTable(false);
+        setIsAccountingClosed(false);
+        toast.error(`Ne postoji kampanja za period: ${date.format('YYYY-MM')}`);
+      } else {
+        setShowTable(true);
+        setData(response || []);
 
-            if (isClosed) {
-              toast.info(`Kampanja za period ${date.format('YYYY-MM')} je zatvorena.`);
-            }
-          }
-        },
-        error: () => {
-          setIsLoadingData(false);
-          setIsFetching(false);
-          setData([]);
-          setShowTable(false);
-          setIsAccountingClosed(false);
-          toast.error('Došlo je do greške prilikom učitavanja podataka');
-        },
-      });
+        const isClosed = response.length > 0 && response[0].zatvoren == 1;
+        setIsAccountingClosed(isClosed);
+
+        if (isClosed) {
+          toast.info(`Kampanja za period ${date.format('YYYY-MM')} je zatvorena.`);
+        }
+      }
     } catch (error) {
       setIsLoadingData(false);
       setIsFetching(false);
@@ -419,17 +408,19 @@ const useBillingCampaign = () => {
       }
       const id = row.original.id;
       const stanje_vodomera = row.original.stanje_vodomera;
-      const response = await $.ajax({
-        url: '../BillingCampaignController/editRow',
-        type: 'POST',
-        data: {
-          ...values,
-          id,
-          stanje_vodomera,
-          period: selectedMonth.format('YYYY-MM'),
-        },
-        dataType: 'json',
-      });
+
+      const response = await fetchAPI<{ success: boolean }>(
+        `${CONTROLLER}/editRow`,
+        {
+          method: 'POST',
+          data: {
+            ...values,
+            id,
+            stanje_vodomera,
+            period: selectedMonth.format('YYYY-MM'),
+          },
+        }
+      );
 
       if (response.success) {
         toast.success('Čitačka lista je uspešno izmenjena');
@@ -552,28 +543,13 @@ const useBillingCampaign = () => {
         period: selectedMonth.format('YYYY-MM'),
       };
 
-      const response = await $.ajax({
-        url: '../BillingCampaignController/addNewRow',
-        type: 'POST',
-        data: {
-          id_popis: newFormData.id_popis,
-          idmm: newFormData.idmm,
-          idv: newFormData.idv,
-          pocetno_stanje: newFormData.pocetno_stanje,
-          zavrsno_stanje: newFormData.zavrsno_stanje,
-          izmereno: newFormData.izmereno,
-          z_pocetno_stanje: newFormData.z_pocetno_stanje,
-          z_zavrsno_stanje: newFormData.z_zavrsno_stanje,
-          z_izmereno: newFormData.z_izmereno,
-          z_vodomer: newFormData.z_vodomer,
-          stanje_vodomera: newFormData.stanje_vodomera,
-          procenat: newFormData.procenat,
-          napomena: newFormData.napomena,
-          nacin_upisa: newFormData.nacin_upisa,
-          period: newFormData.period,
-        },
-        dataType: 'json',
-      });
+      const response = await fetchAPI<boolean>(
+        `${CONTROLLER}/addNewRow`,
+        {
+          method: 'POST',
+          data: newFormData,
+        }
+      );
 
       if (response === true) {
         await fetchReadingListsRows();
@@ -598,7 +574,7 @@ const useBillingCampaign = () => {
         <Grid container spacing={3}>
           <Grid item xs={12} sm={6} md={4}>
             <SearchList
-              endpoint="../BillingCampaignController/getMeasuringPoints"
+              endpoint={`${CONTROLLER}/getMeasuringPoints`}
               label="ID mernog mesta"
               multiple={false}
               onChange={(newValue) => {
@@ -609,7 +585,7 @@ const useBillingCampaign = () => {
 
           <Grid item xs={12} sm={6} md={4}>
             <SearchList
-              endpoint="../BillingCampaignController/getWaterMeters"
+              endpoint={`${CONTROLLER}/getWaterMeters`}
               label="ID vodomera"
               multiple={false}
               onChange={(newValue) => {
@@ -680,7 +656,7 @@ const useBillingCampaign = () => {
 
           <Grid item xs={12} sm={6} md={4}>
             <SearchList
-              endpoint="../BillingCampaignController/getWaterMeterReadings"
+              endpoint={`${CONTROLLER}/getWaterMeterReadings`}
               label="Stanje vod. nap."
               multiple={false}
               onChange={(newValue) => {
@@ -720,14 +696,12 @@ const useBillingCampaign = () => {
 
   const checkOpenAccountingPeriod = async () => {
     const formattedDate = selectedMonth.format('YYYY-MM');
-    const response = await $.ajax({
-      url: '../BillingCampaignController/checkOpenAccountingPeriod',
-      type: 'POST',
-      data: { period: formattedDate },
-      dataType: 'json',
-    });
+    const response = await fetchAPI<{ success: boolean; message?: string }>(
+      `${CONTROLLER}/checkOpenAccountingPeriod`,
+      { method: 'POST', data: { period: formattedDate } }
+    );
     if (response.success === false) {
-      toast.error(response.message);
+      toast.error(response.message || 'Period nije otvoren');
       setTimeout(() => {
         setWarningMessage(null);
       }, 5000);

@@ -6,12 +6,12 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import { globalTableProps, muiTableBodyCellPropsRowEditStyles } from '@/utils/globalTableProps';
 import Main from '@/components/ui/Main';
-import { fetchPostData } from '@/utils/fetchUtil';
+import { fetchAPI } from '@/utils/fetchUtil';
 import { toast } from 'react-toastify';
 
 type ComplaintPriority = {
   id: number;
-  priority: string;
+  prioritet: string;
 };
 
 export const ComplaintPrioritiesPage = ({ title }: { title: string }) => {
@@ -24,12 +24,15 @@ export const ComplaintPrioritiesPage = ({ title }: { title: string }) => {
   async function fetchPriorities() {
     try {
       setIsFetching(true);
-      const data = await fetchPostData('../ComplaintPrioritiesController/getAll');
-      setIsFetching(false);
+      const data = await fetchAPI<ComplaintPriority[]>('/api/complaints/priorities/all', {
+        method: 'GET',
+      });
       setData(data);
     } catch (err) {
       console.log(err);
       toast.error('Došlo je do greške');
+    } finally {
+      setIsFetching(false);
     }
   }
 
@@ -40,36 +43,34 @@ export const ComplaintPrioritiesPage = ({ title }: { title: string }) => {
   const handleCreate: MRT_TableOptions<ComplaintPriority>['onCreatingRowSave'] = async ({ values, table }) => {
     try {
       setIsCreating(true);
-      const res = await fetchPostData('../ComplaintPrioritiesController/addRow', values);
-      setIsCreating(false);
-      console.log(res.data);
-      if (!res.success) {
-        toast.error('Došlo je do greške priplikom unošenja podataka');
-      } else {
-        setData((prev) => [res.data, ...prev]);
-        toast.success('Uspešno unošenje podataka');
-      }
+      const newPriority = await fetchAPI<ComplaintPriority>('/api/complaints/priorities', {
+        method: 'POST',
+        data: values,
+      });
+      setData((prev) => [newPriority, ...prev]);
+      toast.success('Uspešno unošenje podataka');
       table.setCreatingRow(null);
     } catch (err: any) {
-      toast.error(err.message);
+      toast.error(err.message || 'Došlo je do greške prilikom unošenja podataka');
+    } finally {
+      setIsCreating(false);
     }
   };
 
   const handleUpdate: MRT_TableOptions<ComplaintPriority>['onEditingRowSave'] = async ({ values, row, table }) => {
     try {
-      values['id'] = row.original.id;
       setIsUpdating(true);
-      const res = await fetchPostData('../ComplaintPrioritiesController/editRow', values);
-      setIsUpdating(false);
-      if (!res.success) {
-        toast.error('Došlo je do greške priplikom unošenja podataka');
-      } else {
-        setData((prev) => prev.map((x) => (x.id === row.original.id ? res.data : x)));
-        toast.success('Uspešno unošenje podataka');
-      }
+      const updatedPriority = await fetchAPI<ComplaintPriority>(`/api/complaints/priorities/${row.original.id}`, {
+        method: 'PATCH',
+        data: values,
+      });
+      setData((prev) => prev.map((x) => (x.id === row.original.id ? updatedPriority : x)));
+      toast.success('Uspešna izmena podataka');
       table.setEditingRow(null);
     } catch (err: any) {
-      toast.error(err.message);
+      toast.error(err.message || 'Došlo je do greške prilikom izmene podataka');
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -77,13 +78,16 @@ export const ComplaintPrioritiesPage = ({ title }: { title: string }) => {
     if (window.confirm('Da li potvrdjujete brisanje?')) {
       try {
         setIsDeleting(true);
-        await fetchPostData('../ComplaintPrioritiesController/deleteRow', { id: row.original.id });
-        setIsDeleting(false);
+        await fetchAPI(`/api/complaints/priorities/${row.original.id}`, {
+          method: 'DELETE',
+        });
         setData((state) => state.filter((x) => x.id !== row.original.id));
         toast.success('Uspešno brisanje podataka');
       } catch (err) {
         console.log(err);
-        toast('Došlo je do greške');
+        toast.error('Došlo je do greške');
+      } finally {
+        setIsDeleting(false);
       }
     }
   };

@@ -2,7 +2,7 @@ import Main from '@/components/ui/Main';
 import { Box, Button, Card, CardContent, Divider, TextField, Typography } from '@mui/material';
 import { ChangeEvent, useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
-import { fetchPostData } from '@/utils/fetchUtil';
+import { fetchAPI } from '@/utils/fetchUtil';
 import dayjs from 'dayjs';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -157,7 +157,7 @@ export const CashiersSessionPage = ({ title }: { title: string }) => {
 
   async function getCashierSession() {
     try {
-      const { success, data } = await fetchPostData('../CashiersSessionController/getCashierSession');
+      const { success, data } = await fetchAPI('/api/cashiers-session/getCashierSession', { method: 'POST' });
       if (!success) {
         toast.error('Došlo je do greške tokom provere smene');
         return;
@@ -185,9 +185,9 @@ export const CashiersSessionPage = ({ title }: { title: string }) => {
   }, []);
 
   useEffect(() => {
-    if (payments.length > 0 || !session) return;
+    if (!session) return;
     fetchPayments();
-  }, [payments, session]);
+  }, [session]);
 
   async function fetchPayments() {
     const data = await getAllTransactionsForSession();
@@ -196,7 +196,7 @@ export const CashiersSessionPage = ({ title }: { title: string }) => {
 
   async function openSession() {
     try {
-      const { success, data } = await fetchPostData('../CashiersSessionController/openSession', { pocetni_iznos: amount });
+      const { success, data } = await fetchAPI('/api/cashiers-session/openSession', { method: 'POST', data: { pocetni_iznos: amount } });
       if (!success) {
         toast.error('Došlo je do greške tokom otvaranja smene');
         return;
@@ -222,7 +222,7 @@ export const CashiersSessionPage = ({ title }: { title: string }) => {
         const { blagajnik_id, datum_otvaranja, id } = session;
         const body = { blagajnik_id, napomena: note, datum_otvaranja: datum_otvaranja, id };
 
-        const { success, data } = await fetchPostData('../CashiersSessionController/closeSession', body);
+        const { success, data } = await fetchAPI('/api/cashiers-session/closeSession', { method: 'POST', data: body });
         if (!success) {
           toast.error('Došlo je do greške tokom zatvaranja smene');
           return;
@@ -246,9 +246,9 @@ export const CashiersSessionPage = ({ title }: { title: string }) => {
       const dateParts = session.datum_otvaranja.split(' ');
       const date = dateParts[0];
 
-      const { success, data } = await fetchPostData('../CashiersSessionController/getAllTransactionsForSession', {
+      const { success, data } = await fetchAPI('/api/cashiers-session/getAllTransactionsForSession', { method: 'POST', data: {
         datum_otvaranja: date,
-      });
+      } });
 
       if (!success) {
         toast.error('Došlo je do greške');

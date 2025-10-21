@@ -79,11 +79,8 @@ export const ReadingListsPage = ({ title }: { title: string }) => {
         onCreatingRowSave: handleCreate,
         onEditingRowSave: handleUpdate,
         renderCreateRowDialogContent: ({ row, table, internalEditComponents }) => {
-            if (!row._valuesCache['datum_kreiranja']) {
-                row._valuesCache['datum_kreiranja'] = dayjs().format('YYYY-MM-DD');
-            }
-            if (!row._valuesCache['status_id']) {
-                row._valuesCache['status_id'] = `1 | U izradi`;
+            if (!row._valuesCache['status']) {
+                row._valuesCache['status'] = `1 | Generisana`;
             }
 
             return (
@@ -101,7 +98,7 @@ export const ReadingListsPage = ({ title }: { title: string }) => {
         renderEditRowDialogContent: ({ table, row, internalEditComponents }) => {
 
             return (
-                <Dialog open={true} maxWidth="lg" fullWidth>
+                <Dialog open={true} maxWidth="md" fullWidth>
                     <DialogTitle variant="h5" sx={{ textDecoration: 'underline' }}>
                         Izmena (ID: {row.original.id})
                     </DialogTitle>
@@ -111,16 +108,9 @@ export const ReadingListsPage = ({ title }: { title: string }) => {
                             flexDirection: 'column',
                             gap: '1.5rem',
                             padding: '24px',
-                            overflow: 'scroll',
                         }}
                     >
-                        <Grid container spacing={3}>
-                            {React.Children.map(internalEditComponents, (child, index) => (
-                                <Grid item xs={4} key={index}>
-                                    {child}
-                                </Grid>
-                            ))}
-                        </Grid>
+                        {internalEditComponents}
                     </DialogContent>
                     <DialogActions>
                         <MRT_EditActionButtons variant="text" table={table} row={row} />

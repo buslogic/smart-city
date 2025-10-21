@@ -1,4 +1,4 @@
-import React, { useEffect, ReactNode } from 'react';
+import React, { useEffect, ReactNode, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { Spin } from 'antd';
 import { useAuthStore } from '../../stores/auth.store';
@@ -11,23 +11,31 @@ interface AuthGuardProps {
 export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
   const { isAuthenticated, isLoading, refreshAccessToken, user } = useAuthStore();
   const location = useLocation();
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     const checkAuth = async () => {
       // Proverava da li je access token istekao i pokušava refresh
       if (!TokenManager.isTokenValid() && TokenManager.getRefreshToken()) {
-        await refreshAccessToken();
+        setIsRefreshing(true);
+        try {
+          await refreshAccessToken();
+        } catch (error) {
+          console.error('❌ Failed to refresh token:', error);
+        } finally {
+          setIsRefreshing(false);
+        }
       }
     };
 
     checkAuth();
   }, [refreshAccessToken]);
 
-  // Loading state
-  if (isLoading) {
+  // Loading state - prikaži spinner dok se učitava ili refreshuje token
+  if (isLoading || isRefreshing) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <Spin size="large" />
+        <Spin size="large" tip={isRefreshing ? "Osvježavam sesiju..." : "Učitavam..."} />
       </div>
     );
   }

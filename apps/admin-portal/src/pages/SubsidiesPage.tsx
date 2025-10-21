@@ -3,9 +3,9 @@ import useSubsidies from '@/hooks/useSubsidies';
 import { Subsidy } from '@/types/subsidies';
 import { globalTableProps } from '@/utils/globalTableProps';
 import { Add, Delete, Edit } from '@mui/icons-material';
-import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Grid, Tooltip } from '@mui/material';
+import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Tooltip } from '@mui/material';
 import { MaterialReactTable, MRT_EditActionButtons, MRT_Row, MRT_TableOptions, useMaterialReactTable } from 'material-react-table';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
 import ChangeHistoryIcon from '@mui/icons-material/ChangeHistory';
 import { GenericTable } from '@/components/ui/GenericTable';
@@ -96,31 +96,17 @@ export const SubsidiesPage = ({ title }: { title: string }) => {
       }
 
       return (
-        <Dialog open={true} maxWidth="lg" fullWidth>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <DialogTitle variant="h5" sx={{ textDecoration: 'underline' }}>
             Izmena (ID: {row.original.id})
           </DialogTitle>
-          <DialogContent
-            sx={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '1.5rem',
-              padding: '24px',
-              overflow: 'scroll',
-            }}
-          >
-            <Grid container spacing={3}>
-              {React.Children.map(internalEditComponents, (child, index) => (
-                <Grid item xs={4} key={index}>
-                  {child}
-                </Grid>
-              ))}
-            </Grid>
+          <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {internalEditComponents}
           </DialogContent>
           <DialogActions>
             <MRT_EditActionButtons variant="text" table={table} row={row} />
           </DialogActions>
-        </Dialog>
+        </Box>
       );
     },
     renderRowActions: ({ row, table }) => {
@@ -191,8 +177,8 @@ export const SubsidiesPage = ({ title }: { title: string }) => {
           {selectedRowId && (
             <GenericTable<HistoryRow>
               title="Istorija promena subvencija"
-              fetchUrl="../SubsidiesController/getSubsidiesHistory"
-              fetchParams={{ id: selectedRowId }}
+              fetchUrl={`${import.meta.env.VITE_API_URL || 'http://localhost:3010'}/api/subsidies/history/${selectedRowId}`}
+              fetchParams={{}}
               columns={historyColumns}
             />
           )}

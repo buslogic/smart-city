@@ -23,38 +23,48 @@ api.interceptors.request.use(
   }
 );
 
+// Promise za praćenje trenutnog refresh zahteva (singleton pattern)
+let refreshTokenPromise: Promise<any> | null = null;
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-    
+
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
-      
+
       try {
         const refreshToken = TokenManager.getRefreshToken();
         if (!refreshToken) {
           throw new Error('No refresh token');
         }
-        
-        const response = await axios.post(`${API_URL}/api/auth/refresh`, {
-          refreshToken,
-        });
-        
+
+        // Ako već postoji refresh zahtev u toku, sačekaj ga
+        if (!refreshTokenPromise) {
+          refreshTokenPromise = axios.post(`${API_URL}/api/auth/refresh`, {
+            refreshToken,
+          }).finally(() => {
+            refreshTokenPromise = null; // Reset promise nakon završetka
+          });
+        }
+
+        const response = await refreshTokenPromise;
         const { accessToken, refreshToken: newRefreshToken, expiresIn } = response.data;
-        
+
         // Ažuriraj tokene koristeći TokenManager
         TokenManager.setTokens(accessToken, newRefreshToken || refreshToken, expiresIn || 3600);
-        
+
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         return api(originalRequest);
       } catch (refreshError) {
+        refreshTokenPromise = null; // Reset na grešku
         TokenManager.clearTokens();
         window.location.href = '/login';
         return Promise.reject(refreshError);
       }
     }
-    
+
     return Promise.reject(error);
   }
 );

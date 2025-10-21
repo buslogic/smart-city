@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
 import { WaterMeterTypesService } from './water-meter-types.service';
 import { WaterMeterTypesController } from './water-meter-types.controller';
-import { PrismaModule } from '../prisma/prisma.module';
+import { PrismaLegacyModule } from '../prisma-legacy/prisma-legacy.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaLegacyModule],
   controllers: [WaterMeterTypesController],
   providers: [WaterMeterTypesService],
   exports: [WaterMeterTypesService],

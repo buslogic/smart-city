@@ -11,7 +11,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
 
 export const ComplaintsByAssignePage = ({ title }: { title: string }) => {
-    const { fetchData, updateRow, complaints, columns, isDeleting, isFetching, isUpdating, historyColumns } = useComplaintsByAssigne();
+    const { fetchData, updateRow, complaints, columns, isFetching, isUpdating, historyColumns } = useComplaintsByAssigne();
     const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
     const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
 
@@ -107,7 +107,7 @@ export const ComplaintsByAssignePage = ({ title }: { title: string }) => {
         },
         state: {
             isLoading: isFetching,
-            isSaving: isUpdating || isDeleting,
+            isSaving: isUpdating,
             showProgressBars: isFetching,
         },
     });
@@ -123,7 +123,7 @@ export const ComplaintsByAssignePage = ({ title }: { title: string }) => {
                     {selectedRowId && (
                         <GenericTable<StatusHistory>
                             title="Istorija promena statusa reklamacije"
-                            fetchUrl="../ComplaintsByAssigneController/getStatusComplaintHistory"
+                            fetchUrl="/api/complaints/status-history/search"
                             fetchParams={{ reklamacija_id: selectedRowId }}
                             columns={historyColumns}
                         />

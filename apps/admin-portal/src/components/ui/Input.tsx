@@ -1,14 +1,11 @@
 import { latinOnlyRegex } from '@/utils/utils';
 import { TextField, TextFieldProps } from '@mui/material';
-import React, { useState } from 'react';
+import React from 'react';
 
 const Input = (props: TextFieldProps) => {
-  const [value, setValue] = useState('');
-
   function handleOnChange(e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) {
     const input = e.target.value;
     const v = input.replace(latinOnlyRegex, '');
-    setValue(v);
     if (props.onChange) {
       const newEvent = {
         ...e,
@@ -21,7 +18,7 @@ const Input = (props: TextFieldProps) => {
     }
   }
 
-  return <TextField {...props} value={value} onChange={handleOnChange} />;
+  return <TextField {...props} onChange={handleOnChange} />;
 };
 
 export default Input;

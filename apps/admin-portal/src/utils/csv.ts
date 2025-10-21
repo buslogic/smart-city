@@ -1,8 +1,8 @@
-import { fetchPostData } from './fetchUtil';
+import { api } from '@/services/api';
 
 type Response = {
   success: boolean;
-  msg: string;
+  msg?: string;
   error?: string;
   data: any;
 };
@@ -14,10 +14,15 @@ type Response = {
  */
 export const exportCSV = async (endpoint: string, filename: string): Promise<void> => {
   try {
-    const blob = await fetchPostData(endpoint, {}, 'blob');
+    const response = await api.get(endpoint, {
+      responseType: 'blob',
+    });
+
+    const blob = response.data;
     if (!(blob instanceof Blob)) {
       throw new Error('Failed to fetch CSV blob.');
     }
+
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -28,6 +33,7 @@ export const exportCSV = async (endpoint: string, filename: string): Promise<voi
     window.URL.revokeObjectURL(url);
   } catch (error) {
     console.error('CSV export failed:', error);
+    throw error;
   }
 };
 
@@ -45,8 +51,12 @@ export const importCSV = async (e: React.ChangeEvent<HTMLInputElement>, endpoint
   formData.append('csvFile', file);
 
   try {
-    const data = await fetchPostData(endpoint, formData);
-    return data;
+    const response = await api.post(endpoint, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
   } catch (error) {
     console.error('CSV import failed:', error);
     return {

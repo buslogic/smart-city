@@ -37,6 +37,7 @@ import WaterSystemCitiesPage from './pages/WaterSystemCitiesPage';
 import WaterSystemStreetsPage from './pages/WaterSystemStreetsPage';
 import WaterSystemZonesPage from './pages/WaterSystemZonesPage';
 import WaterSystemRegionPage from './pages/WaterSystemRegionPage';
+import WaterSystemRegionsPage from './pages/WaterSystemRegionsPage';
 import WaterMeterPage from './pages/water-meter/WaterMeterPage';
 import WaterMeterManufacturersPage from './pages/WaterMeterManufacturersPage';
 import WaterMeterAvailabilityPage from './pages/WaterMeterAvailabilityPage';
@@ -289,72 +290,71 @@ function App() {
 
             {/* Vodovod routes */}
             {/* Vodovodni sistem */}
-            <Route path="vodovod/regioni" element={<PermissionGuard permissions={['water_system.regions:view']}><WaterSystemRegionPage /></PermissionGuard>} />
-            <Route path="vodovod/gradovi" element={<PermissionGuard permissions={['water_system.cities:view']}><WaterSystemCitiesPage /></PermissionGuard>} />
-            <Route path="vodovod/zone" element={<PermissionGuard permissions={['water_system.zones:view']}><WaterSystemZonesPage /></PermissionGuard>} />
-            <Route path="vodovod/ulice" element={<PermissionGuard permissions={['water_system.streets:view']}><WaterSystemStreetsPage /></PermissionGuard>} />
+            <Route path="vodovod/regioni" element={<PermissionGuard permissions={['water-system-regions:read']}><WaterSystemRegionsPage title="Rejoni" /></PermissionGuard>} />
+            <Route path="vodovod/gradovi" element={<PermissionGuard permissions={['water_system.cities:view']}><WaterSystemCitiesPage title="Naselja" /></PermissionGuard>} />
+            <Route path="vodovod/zone" element={<PermissionGuard permissions={['water_system_zones:view']}><WaterSystemZonesPage title="Zone" /></PermissionGuard>} />
+            <Route path="vodovod/ulice" element={<PermissionGuard permissions={['water_system_streets:read']}><WaterSystemStreetsPage title="Ulice" /></PermissionGuard>} />
 
             {/* Vodomeri */}
-            <Route path="vodovod/vodomeri" element={<PermissionGuard permissions={['water_meters:view']}><WaterMeterPage /></PermissionGuard>} />
-            <Route path="vodovod/tipovi-vodomera" element={<PermissionGuard permissions={['water_meter_types:view']}><WaterMeterTypesPage /></PermissionGuard>} />
-            <Route path="vodovod/proizvodjaci-vodomera" element={<PermissionGuard permissions={['water_meter_manufacturers:view']}><WaterMeterManufacturersPage /></PermissionGuard>} />
-            <Route path="vodovod/dostupnost-vodomera" element={<PermissionGuard permissions={['water_meter_availability:view']}><WaterMeterAvailabilityPage /></PermissionGuard>} />
-            <Route path="vodovod/zamena-vodomera" element={<PermissionGuard permissions={['water_meter_replacement:view']}><ReplacementWaterMetersPage /></PermissionGuard>} />
-            <Route path="vodovod/napomene-vodomera" element={<PermissionGuard permissions={['water_meter_remarks:view']}><WaterMeterRemarksPage /></PermissionGuard>} />
-            <Route path="vodovod/pregled-izmenjenih-vodomera" element={<PermissionGuard permissions={['water_meter_review:view']}><ReviewModifiedWaterMetersPage /></PermissionGuard>} />
+            <Route path="vodovod/vodomeri" element={<PermissionGuard permissions={['water_meters:view']}><WaterMeterPage title="Pregled" /></PermissionGuard>} />
+            <Route path="vodovod/tipovi-vodomera" element={<PermissionGuard permissions={['water_meter_types:view']}><WaterMeterTypesPage title="Tip vodomera" /></PermissionGuard>} />
+            <Route path="vodovod/proizvodjaci-vodomera" element={<PermissionGuard permissions={['water_meter_manufacturers:view']}><WaterMeterManufacturersPage title="Proizvođači vodomera" /></PermissionGuard>} />
+            <Route path="vodovod/dostupnost-vodomera" element={<PermissionGuard permissions={['water_meter_availability:view']}><WaterMeterAvailabilityPage title="Raspoloživost vodomera" /></PermissionGuard>} />
+            <Route path="vodovod/zamena-vodomera" element={<PermissionGuard permissions={['water_meter_replacement:view']}><ReplacementWaterMetersPage title="Zamenski vodomeri" /></PermissionGuard>} />
+            <Route path="vodovod/napomene-vodomera" element={<PermissionGuard permissions={['water_meter_remarks:view']}><WaterMeterRemarksPage title="Napomene" /></PermissionGuard>} />
+            <Route path="vodovod/pregled-izmenjenih-vodomera" element={<PermissionGuard permissions={['water_meter_review:view']}><ReviewModifiedWaterMetersPage title="Pregled zamenjenih vodomera" /></PermissionGuard>} />
 
-            {/* Merilna mesta */}
-            <Route path="vodovod/merilna-mesta" element={<PermissionGuard permissions={['measuring_points:view']}><MeasuringPointsPage /></PermissionGuard>} />
-            <Route path="vodovod/merilna-mesta-po-adresi" element={<PermissionGuard permissions={['measuring_points_by_address:view']}><MeasuringPointsByAddressPage /></PermissionGuard>} />
-            <Route path="vodovod/potrosnja-merilnih-mesta" element={<PermissionGuard permissions={['measuring_points_consumption:view']}><MeasuringPointsConsumptionPage /></PermissionGuard>} />
+            {/* Merna mesta */}
+            <Route path="vodovod/merna-mesta" element={<PermissionGuard permissions={['measuring_points:view']}><MeasuringPointsPage title="Pregled mernih mesta" /></PermissionGuard>} />
+            <Route path="vodovod/merna-mesta-po-adresi" element={<PermissionGuard permissions={['measuring_points_by_address:view']}><MeasuringPointsByAddressPage title="Merna mesta po adresi" /></PermissionGuard>} />
+            <Route path="vodovod/potrosnja-mernih-mesta" element={<PermissionGuard permissions={['measuring_points_consumption:view']}><MeasuringPointsConsumptionPage title="Potrošnja" /></PermissionGuard>} />
 
             {/* Očitavanja */}
-            <Route path="vodovod/ocitavanja" element={<PermissionGuard permissions={['readings:view']}><ReadingsPage /></PermissionGuard>} />
-            <Route path="vodovod/liste-ocitavanja" element={<PermissionGuard permissions={['reading_lists:view']}><ReadingListsPage /></PermissionGuard>} />
-            <Route path="vodovod/unos-ocitavanja" element={<PermissionGuard permissions={['reading_data_entry:view']}><ReadingListsDataEntryPage /></PermissionGuard>} />
-            <Route path="vodovod/stampa-lista" element={<PermissionGuard permissions={['reading_lists_print:view']}><ReadingListsPrintPage /></PermissionGuard>} />
-            <Route path="vodovod/anomalije-ocitavanja" element={<PermissionGuard permissions={['reading_anomalies:view']}><ReadingAnomaliesPage /></PermissionGuard>} />
-            <Route path="vodovod/ocitaci" element={<PermissionGuard permissions={['water_readers:view']}><WaterReadersPage /></PermissionGuard>} />
+            <Route path="vodovod/ocitavanja" element={<PermissionGuard permissions={['readings:view']}><ReadingsPage title="Očitavanja" /></PermissionGuard>} />
+            <Route path="vodovod/liste-ocitavanja" element={<PermissionGuard permissions={['reading_lists:view']}><ReadingListsPage title="Čitačke liste" /></PermissionGuard>} />
+            <Route path="vodovod/stampa-lista" element={<PermissionGuard permissions={['reading_lists_print:view']}><ReadingListsPrintPage title="Štampa čitačkih listi" /></PermissionGuard>} />
+            <Route path="vodovod/anomalije-ocitavanja" element={<PermissionGuard permissions={['reading_anomalies:view']}><ReadingAnomaliesPage title="Anomalije" /></PermissionGuard>} />
+            <Route path="vodovod/ocitaci" element={<PermissionGuard permissions={['water_readers:view']}><WaterReadersPage title="Čitači" /></PermissionGuard>} />
 
             {/* Usluge */}
-            <Route path="vodovod/usluge" element={<PermissionGuard permissions={['water_services:view']}><WaterServicesPage /></PermissionGuard>} />
-            <Route path="vodovod/upravljanje-uslugama" element={<PermissionGuard permissions={['water_services_manage:view']}><ManageWaterServicesPage /></PermissionGuard>} />
-            <Route path="vodovod/cenovnik-usluga" element={<PermissionGuard permissions={['water_services_pricelist:view']}><WaterServicesPricelistPage /></PermissionGuard>} />
-            <Route path="vodovod/istorija-cenovnika" element={<PermissionGuard permissions={['water_service_pricelist_history:view']}><WaterServicePricelistHistoryPage /></PermissionGuard>} />
-            <Route path="vodovod/pregled-usluga" element={<PermissionGuard permissions={['water_services_review:view']}><WaterServicesReviewPage /></PermissionGuard>} />
+            <Route path="vodovod/usluge" element={<PermissionGuard permissions={['water_services:view']}><WaterServicesPage title="Usluge" /></PermissionGuard>} />
+            <Route path="vodovod/upravljanje-uslugama" element={<PermissionGuard permissions={['water_services_manage:view']}><ManageWaterServicesPage title="Dodeljivanje usluga" /></PermissionGuard>} />
+            <Route path="vodovod/cenovnik-usluga" element={<PermissionGuard permissions={['water_services_pricelist:view']}><WaterServicesPricelistPage title="Cenovnik usluga" /></PermissionGuard>} />
+            <Route path="vodovod/istorija-cenovnika" element={<PermissionGuard permissions={['water_service_pricelist_history:view']}><WaterServicePricelistHistoryPage title="Pregled istorije cenovnika" /></PermissionGuard>} />
+            <Route path="vodovod/pregled-usluga" element={<PermissionGuard permissions={['water_services_review:view']}><WaterServicesReviewPage title="Pregled usluga po mernom mestu" /></PermissionGuard>} />
 
             {/* Obračun */}
-            <Route path="vodovod/kalkulacija-vodomera" element={<PermissionGuard permissions={['water_meter_calculation:view']}><WaterMeterCalculationPage /></PermissionGuard>} />
-            <Route path="vodovod/kampanja-obracuna" element={<PermissionGuard permissions={['billing_campaign:view']}><BillingCampaignPage /></PermissionGuard>} />
-            <Route path="vodovod/kampanja" element={<PermissionGuard permissions={['campaign:view']}><CampaignPage /></PermissionGuard>} />
-            <Route path="vodovod/pod-kampanja" element={<PermissionGuard permissions={['sub_campaign:view']}><SubCampaignPage /></PermissionGuard>} />
-            <Route path="vodovod/stanje-unosa-obracuna" element={<PermissionGuard permissions={['input_calculation_state:view']}><InputCalculationStatePage /></PermissionGuard>} />
+            <Route path="vodovod/obracuni-vodomera" element={<PermissionGuard permissions={['water_meter_calculation:view']}><WaterMeterCalculationPage title="Obračuni" /></PermissionGuard>} />
+            <Route path="vodovod/kampanja-obracuna" element={<PermissionGuard permissions={['billing_campaign:view']}><BillingCampaignPage title="Naplaćivanje kampanja" /></PermissionGuard>} />
+            <Route path="vodovod/kampanja" element={<PermissionGuard permissions={['campaign:view']}><CampaignPage title="Kampanje" /></PermissionGuard>} />
+            <Route path="vodovod/pod-kampanja" element={<PermissionGuard permissions={['sub_campaign:view']}><SubCampaignPage title="Pod kampanje" /></PermissionGuard>} />
+            <Route path="vodovod/stanje-unosa-obracuna" element={<PermissionGuard permissions={['input_calculation_state:view']}><InputCalculationStatePage title="Unos stanja za obračun" /></PermissionGuard>} />
 
             {/* Naplata */}
-            <Route path="vodovod/uplate" element={<PermissionGuard permissions={['payments:view']}><PaymentsPage /></PermissionGuard>} />
-            <Route path="vodovod/uplate-po-nacinu-placanja" element={<PermissionGuard permissions={['payments_by_method:view']}><PaymentsByPaymentMethodPage /></PermissionGuard>} />
-            <Route path="vodovod/blagajna" element={<PermissionGuard permissions={['cash_register:view']}><CashRegisterPage /></PermissionGuard>} />
-            <Route path="vodovod/blagajnici" element={<PermissionGuard permissions={['cashiers:view']}><CashiersPage /></PermissionGuard>} />
-            <Route path="vodovod/sesija-blagajnika" element={<PermissionGuard permissions={['cashiers_session:view']}><CashiersSessionPage /></PermissionGuard>} />
-            <Route path="vodovod/izvestaj-blagajne" element={<PermissionGuard permissions={['cash_register_report:view']}><CashRegisterReportPage /></PermissionGuard>} />
-            <Route path="vodovod/fiskalni-uredjaj" element={<PermissionGuard permissions={['fiscal_device:view']}><FiscalDevicePage /></PermissionGuard>} />
+            <Route path="vodovod/uplate" element={<PermissionGuard permissions={['payments:view']}><PaymentsPage title="Uplate" /></PermissionGuard>} />
+            <Route path="vodovod/uplate-po-nacinu-placanja" element={<PermissionGuard permissions={['payments_by_method:view']}><PaymentsByPaymentMethodPage title="Pregled uplata po metodi plaćanja" /></PermissionGuard>} />
+            <Route path="vodovod/blagajna" element={<PermissionGuard permissions={['cash_register:view']}><CashRegisterPage title="Blagajna" /></PermissionGuard>} />
+            <Route path="vodovod/blagajnici" element={<PermissionGuard permissions={['cashiers:view']}><CashiersPage title="Blagajnik" /></PermissionGuard>} />
+            <Route path="vodovod/sesija-blagajnika" element={<PermissionGuard permissions={['cashiers_session:view']}><CashiersSessionPage title="Smene" /></PermissionGuard>} />
+            <Route path="vodovod/izvestaj-blagajne" element={<PermissionGuard permissions={['cash_register_report:view']}><CashRegisterReportPage title="Dnevni promet po blagajni/blagajniku" /></PermissionGuard>} />
+            <Route path="vodovod/fiskalni-uredjaj" element={<PermissionGuard permissions={['fiscal_device:view']}><FiscalDevicePage title="Blagajna" /></PermissionGuard>} />
 
             {/* Subvencije */}
-            <Route path="vodovod/subvencije" element={<PermissionGuard permissions={['subsidies:view']}><SubsidiesPage /></PermissionGuard>} />
-            <Route path="vodovod/dodela-subvencija" element={<PermissionGuard permissions={['subsidies_assignment:view']}><SubsidiesUserAssignmentPage /></PermissionGuard>} />
+            <Route path="vodovod/subvencije" element={<PermissionGuard permissions={['subsidies:view']}><SubsidiesPage title="Administracija subvencija" /></PermissionGuard>} />
+            <Route path="vodovod/dodela-subvencija" element={<PermissionGuard permissions={['subsidies_assignment:view']}><SubsidiesUserAssignmentPage title="Dodeljivanje subvencija korisniku" /></PermissionGuard>} />
 
             {/* Korisnički nalozi */}
-            <Route path="vodovod/korisnicki-nalozi" element={<PermissionGuard permissions={['user_accounts:view']}><UserAccountPage /></PermissionGuard>} />
-            <Route path="vodovod/kucivetnici" element={<PermissionGuard permissions={['house_council:view']}><HouseCouncilPage /></PermissionGuard>} />
+            <Route path="vodovod/korisnicki-nalozi" element={<PermissionGuard permissions={['user_accounts:view']}><UserAccountPage title="Korisnici" /></PermissionGuard>} />
+            <Route path="vodovod/kucivetnici" element={<PermissionGuard permissions={['house_council:view']}><HouseCouncilPage title="Kućni saveti" /></PermissionGuard>} />
 
             {/* Reklamacije */}
-            <Route path="vodovod/reklamacije" element={<PermissionGuard permissions={['complaints:view']}><ComplaintPage /></PermissionGuard>} />
-            <Route path="vodovod/reklamacije-po-zaduzenom" element={<PermissionGuard permissions={['complaints_by_assignee:view']}><ComplaintsByAssignePage /></PermissionGuard>} />
-            <Route path="vodovod/prioriteti-reklamacija" element={<PermissionGuard permissions={['complaint_priorities:view']}><ComplaintPrioritiesPage /></PermissionGuard>} />
+            <Route path="vodovod/reklamacije" element={<PermissionGuard permissions={['complaints:view']}><ComplaintPage title="Reklamacije i zahtevi" /></PermissionGuard>} />
+            <Route path="vodovod/reklamacije-za-odgovorno-lice" element={<PermissionGuard permissions={['complaints_by_assignee:view']}><ComplaintsByAssignePage title="Reklamacije za odgovorno lice" /></PermissionGuard>} />
+            <Route path="vodovod/prioriteti-reklamacija" element={<PermissionGuard permissions={['complaint_priorities:view']}><ComplaintPrioritiesPage title="Prioriteti" /></PermissionGuard>} />
 
-            {/* Napomene */}
-            <Route path="vodovod/napomene-vodosnabdevanja" element={<PermissionGuard permissions={['water_supply_notes:view']}><WaterSupplyNotesPage /></PermissionGuard>} />
-            <Route path="vodovod/kategorije-napomena" element={<PermissionGuard permissions={['note_categories:view']}><NoteCategoriesPage /></PermissionGuard>} />
+            {/* Beleške */}
+            <Route path="vodovod/beleske" element={<PermissionGuard permissions={['water_supply_notes:view']}><WaterSupplyNotesPage title="Beleške" /></PermissionGuard>} />
+            <Route path="vodovod/kategorije-beleski" element={<PermissionGuard permissions={['note_categories:view']}><NoteCategoriesPage title="Kategorije beleški" /></PermissionGuard>} />
           </Route>
         </Routes>
       </Router>

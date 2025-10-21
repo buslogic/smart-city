@@ -746,6 +746,15 @@ model WaterMeterManufacturer {
   @@map("vodovod_water_meter_manufacturer")
 }
 
+model WaterService {
+  id      Int     @id @default(autoincrement())
+  service String? @db.VarChar(255)
+  note    String? @db.Text
+  code    Int?
+
+  @@map("vodovod_service")
+}
+
 model WaterMeter {
   id                Int       @id @default(autoincrement())
   counter           Int?

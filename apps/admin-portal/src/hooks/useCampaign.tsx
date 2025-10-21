@@ -1,14 +1,15 @@
 import { SearchList } from '@/components/ui/SearchList';
 import { Campaign } from '@/types/billing-campaign';
-import { fetchPostData } from '@/utils/fetchUtil';
+import { fetchAPI } from '@/utils/fetchUtil';
 import { Typography } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers';
-import dayjs from 'dayjs';
+import dayjs, { Dayjs } from 'dayjs';
 import { MRT_ColumnDef } from 'material-react-table';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
 
-const CONTROLLER = '../CampaignController';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3010';
+const CONTROLLER = `${API_BASE}/api/campaigns`;
 
 const useCampaign = () => {
     const [campaign, setCampaign] = useState<Campaign[]>([]);
@@ -24,20 +25,40 @@ const useCampaign = () => {
                 header: 'Period',
                 size: 150,
                 enableEditing: true,
-                Edit: ({ row, cell }) => {
+                Edit: ({ row, cell, column }) => {
                     const rawValue = cell.getValue() as string | null;
-                    const initialValue = rawValue && rawValue !== '0000-00-00' ? dayjs(rawValue) : null;
+                    // Period dolazi kao "YYYY/MM" string, treba ga parsirati
+                    let initialValue: Dayjs | null = null;
+                    if (rawValue && rawValue !== '0000-00-00') {
+                        const parts = rawValue.split('/');
+                        if (parts.length === 2) {
+                            const year = parseInt(parts[0]);
+                            const month = parseInt(parts[1]) - 1; // dayjs month je 0-indexed
+                            initialValue = dayjs().year(year).month(month);
+                        }
+                    }
+
+                    const [selectedDate, setSelectedDate] = useState<Dayjs | null>(initialValue);
 
                     return (
                         <DatePicker
                             views={['month', 'year']}
-                            value={initialValue}
+                            value={selectedDate}
                             label={'Period *'}
                             sx={{ width: '100%' }}
                             format="MM.YYYY"
+                            slotProps={{
+                                textField: {
+                                    variant: 'standard',
+                                },
+                            }}
                             onChange={(newDate) => {
-                                row._valuesCache['godina'] = newDate ? newDate.year() : '';
-                                row._valuesCache['mesec'] = newDate ? newDate.month() + 1 : '';
+                                setSelectedDate(newDate);
+                                if (newDate) {
+                                    row._valuesCache['godina'] = newDate.year();
+                                    row._valuesCache['mesec'] = newDate.month() + 1;
+                                    row._valuesCache[column.id] = `${newDate.year()}/${newDate.month() + 1}`;
+                                }
                             }}
                         />
                     );
@@ -45,7 +66,11 @@ const useCampaign = () => {
                 Cell: ({ cell }) => {
                     const date = cell.getValue();
                     if (!date || date === '0000-00-00') return '';
-                    return dayjs(date as string).format('MM.YYYY');
+                    const parts = (date as string).split('/');
+                    if (parts.length === 2) {
+                        return `${parts[1].padStart(2, '0')}.${parts[0]}`;
+                    }
+                    return date as string;
                 },
             },
             {
@@ -58,18 +83,25 @@ const useCampaign = () => {
                 header: 'Datum kreiranja',
                 size: 150,
                 enableEditing: true,
-                Edit: ({ row, cell }) => {
+                Edit: ({ row, cell, column }) => {
                     const rawValue = cell.getValue() as string | null;
-                    const initialValue = rawValue && rawValue !== '0000-00-00' ? dayjs(rawValue) : null;
+                    const initialValue = rawValue && rawValue !== '0000-00-00' && rawValue !== '' ? dayjs(rawValue) : null;
+                    const [selectedDate, setSelectedDate] = useState<Dayjs | null>(initialValue);
 
                     return (
                         <DatePicker
-                            value={initialValue}
+                            value={selectedDate}
                             label={'Datum kreiranja'}
                             sx={{ width: '100%' }}
                             format="DD.MM.YYYY"
+                            slotProps={{
+                                textField: {
+                                    variant: 'standard',
+                                },
+                            }}
                             onChange={(newDate) => {
-                                row._valuesCache['datum_kreiranja'] = newDate ? newDate.format('YYYY-MM-DD') : '';
+                                setSelectedDate(newDate);
+                                row._valuesCache[column.id] = newDate ? newDate.format('YYYY-MM-DD') : null;
                             }}
                         />
                     );
@@ -85,18 +117,25 @@ const useCampaign = () => {
                 header: 'Datum zatvaranja',
                 size: 150,
                 enableEditing: true,
-                Edit: ({ row, cell }) => {
+                Edit: ({ row, cell, column }) => {
                     const rawValue = cell.getValue() as string | null;
-                    const initialValue = rawValue && rawValue !== '0000-00-00' ? dayjs(rawValue) : null;
+                    const initialValue = rawValue && rawValue !== '0000-00-00' && rawValue !== '' ? dayjs(rawValue) : null;
+                    const [selectedDate, setSelectedDate] = useState<Dayjs | null>(initialValue);
 
                     return (
                         <DatePicker
-                            value={initialValue}
+                            value={selectedDate}
                             label={'Datum zatvaranja'}
                             sx={{ width: '100%' }}
                             format="DD.MM.YYYY"
+                            slotProps={{
+                                textField: {
+                                    variant: 'standard',
+                                },
+                            }}
                             onChange={(newDate) => {
-                                row._valuesCache['datum_zatvaranja'] = newDate ? newDate.format('YYYY-MM-DD') : '';
+                                setSelectedDate(newDate);
+                                row._valuesCache[column.id] = newDate ? newDate.format('YYYY-MM-DD') : null;
                             }}
                         />
                     );
@@ -121,7 +160,7 @@ const useCampaign = () => {
                             label="Status"
                             value={value}
                             disabled={!isCreating && !isEditing}
-                            endpoint={CONTROLLER + '/getStatusForSL'}
+                            endpoint={`${CONTROLLER}/getStatusForSL`}
                             multiple={false}
                             onChange={(newValue) => {
                                 row._valuesCache[column.id] = newValue;
@@ -136,22 +175,31 @@ const useCampaign = () => {
 
     const fetchData = useCallback(async () => {
         setIsFetching(true);
-        const data = await fetchPostData(CONTROLLER + '/getRows');
+        const data = await fetchAPI<Campaign[]>(`${CONTROLLER}/getRows`, { method: 'POST' });
         setIsFetching(false);
         setCampaign(data);
     }, []);
 
     const createRow = useCallback(async (row: Campaign): Promise<void> => {
-        const exists = await fetchPostData(CONTROLLER + '/checkIfCampaignExists', {
-            godina: row.godina,
-            mesec: row.mesec,
-        });
+        const exists = await fetchAPI<{ exists: boolean }>(
+            `${CONTROLLER}/checkIfCampaignExists`,
+            {
+                method: 'POST',
+                data: {
+                    godina: row.godina,
+                    mesec: row.mesec,
+                }
+            }
+        );
         if (exists && exists.exists) {
             toast.error('Kampanja za izabrani period već postoji');
             return;
         } else {
             setIsCreating(true);
-            const res = await fetchPostData(CONTROLLER + '/addRow', row);
+            const res = await fetchAPI<{ success: boolean; error?: string; data: Campaign }>(
+                `${CONTROLLER}/addRow`,
+                { method: 'POST', data: row }
+            );
             setIsCreating(false);
             if (!res.success) {
                 throw new Error(res.error);
@@ -162,7 +210,10 @@ const useCampaign = () => {
 
     const updateRow = useCallback(async (row: Campaign) => {
         setIsUpdating(true);
-        const res = await fetchPostData(CONTROLLER + '/editRow', row);
+        const res = await fetchAPI<{ success: boolean; error?: string; data: Campaign }>(
+            `${CONTROLLER}/editRow`,
+            { method: 'POST', data: row }
+        );
         setIsUpdating(false);
         if (!res.success) {
             throw new Error(res.error);
@@ -172,7 +223,7 @@ const useCampaign = () => {
 
     const deleteRow = useCallback(async (id: number) => {
         setIsDeleting(true);
-        await fetchPostData(CONTROLLER + '/deleteRow', { id });
+        await fetchAPI(`${CONTROLLER}/deleteRow`, { method: 'POST', data: { id } });
         setIsDeleting(false);
         setCampaign((state) => state.filter((x) => x.id !== id));
     }, []);

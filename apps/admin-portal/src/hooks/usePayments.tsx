@@ -1,9 +1,9 @@
 import { Payments } from '@/types/cashRegister';
-import { fetchPostData } from '@/utils/fetchUtil';
+import { fetchAPI } from '@/utils/fetchUtil';
 import { useCallback, useState } from 'react';
 import { toast } from 'react-toastify';
 
-const CONTROLLER = '../PaymentsController';
+const CONTROLLER = '/api/payments';
 
 const useSubsidies = () => {
     const [payments, setPayments] = useState<Payments[]>([]);
@@ -16,8 +16,11 @@ const useSubsidies = () => {
     const fetchRows = async (id: number) => {
         try {
             setIsFetching(true);
-            const data = await fetchPostData('../PaymentsController/getPaymentData', {
-                payer_id: id,
+            const data = await fetchAPI('/api/payments/get-payment-data', {
+                method: 'POST',
+                data: {
+                    payer_id: id,
+                },
             });
             setIsFetching(false);
             setPayments(data);
@@ -30,8 +33,11 @@ const useSubsidies = () => {
     const fetchInactiveRows = async (id: number) => {
         try {
             setIsFetching(true);
-            const data = await fetchPostData('../PaymentsController/getInactivePaymentData', {
-                payer_id: id,
+            const data = await fetchAPI('/api/payments/get-inactive-payment-data', {
+                method: 'POST',
+                data: {
+                    payer_id: id,
+                },
             });
             setIsFetching(false);
             setInactivePayments(data);
@@ -44,7 +50,10 @@ const useSubsidies = () => {
     const createRow = useCallback(async (row: Payments): Promise<void> => {
         setIsCreating(true);
         try {
-            const res = await fetchPostData(CONTROLLER + '/addRow', row);
+            const res = await fetchAPI(CONTROLLER + '/add-row', {
+                method: 'POST',
+                data: row,
+            });
 
             if (!res.success) {
                 throw new Error(res.error);
@@ -67,7 +76,10 @@ const useSubsidies = () => {
 
     const updateRow = useCallback(async (row: Payments) => {
         setIsUpdating(true);
-        const res = await fetchPostData(CONTROLLER + '/editRow', row);
+        const res = await fetchAPI(CONTROLLER + '/edit-row', {
+            method: 'POST',
+            data: row,
+        });
         setIsUpdating(false);
         if (!res.success) {
             throw new Error(res.error);
@@ -98,7 +110,10 @@ const useSubsidies = () => {
     const deleteRow = useCallback(async (id: number) => {
         setIsDeleting(true);
         try {
-            const res = await fetchPostData(CONTROLLER + '/deleteRow', { id });
+            const res = await fetchAPI(CONTROLLER + '/delete-row', {
+                method: 'POST',
+                data: { id },
+            });
 
             if (!res.success) {
                 throw new Error(res.error || 'Greška pri brisanju');

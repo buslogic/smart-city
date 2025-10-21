@@ -25,7 +25,7 @@ const ChangeHistoryModal = ({
       </DialogTitle>
       <DialogContent>
         <Box>
-          <GenericTable<HistoryRow> fetchUrl="../WaterMeterController/getWaterMeterHistoryByIDV" fetchParams={{ idv: rowID }} columns={columns} />
+          <GenericTable<HistoryRow> fetchUrl={`${import.meta.env.VITE_API_URL || 'http://localhost:3010'}/api/water-meters/history`} fetchParams={{ idv: rowID }} columns={columns} />
         </Box>
       </DialogContent>
     </Dialog>

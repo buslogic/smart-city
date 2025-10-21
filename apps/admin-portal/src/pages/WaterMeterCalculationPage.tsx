@@ -2,7 +2,7 @@ import Main from '@/components/ui/Main';
 import { ROBOTO_BOLD, ROBOTO_REGULAR } from '@/constants/base64/fonts';
 import { VODOVOD_LOGO_PNG } from '@/constants/base64/logo';
 import { Subsidy } from '@/types/subsidies';
-import { fetchPostData } from '@/utils/fetchUtil';
+import { fetchAPI } from '@/utils/fetchUtil';
 import { globalTableProps } from '@/utils/globalTableProps';
 import { Info, PictureAsPdf } from '@mui/icons-material';
 import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Tooltip } from '@mui/material';
@@ -64,20 +64,23 @@ export const WaterMeterCalculationPage = ({ title }: { title: string }) => {
 
       setIsFetching(true);
 
+      const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3010';
       const body = { year: period.year(), month: period.month() + 1 };
-      const { data, error } = await fetchPostData('../WaterMeterCalculationController/getRows', body);
 
-      if (!data && !!error) {
-        toast.error(error);
-        return;
+      const data = await fetchAPI<{ readings: WaterMeterReading[]; calculations: Calculation }>(
+        `${API_BASE}/api/water-meter-calculation/getRows`,
+        { method: 'POST', data: body }
+      );
+
+      setCalculation(data.calculations);
+      setReadings(data.readings);
+
+      if (data.readings.length === 0) {
+        toast.info('Nema očitavanja za izabrani period. Molimo odaberite drugi period.');
       }
-
-      const { readings, calculations } = data;
-      setCalculation(calculations);
-      setReadings(readings);
-    } catch (err) {
+    } catch (err: any) {
       console.log(err);
-      toast.error('Doslo je do greske!');
+      toast.error(err.message || 'Doslo je do greske!');
     } finally {
       setIsFetching(false);
     }

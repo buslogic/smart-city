@@ -53,7 +53,7 @@ export default function Codebook() {
       <Box sx={{ width: '500px' }}>
         <SearchList
           label="Korisnik"
-          endpoint={`../UserAccountController/getUserAccountsForSL`}
+          endpoint={`/api/user-accounts/search/for-sl`}
           multiple={false}
           onChange={handleOnChange}
           textFieldProps={{ variant: 'standard' }}

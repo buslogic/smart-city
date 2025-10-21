@@ -2,7 +2,7 @@ import { Box, Button, Tooltip, Typography } from '@mui/material';
 import { MaterialReactTable, MRT_ColumnDef, useMaterialReactTable, MRT_RowData, MRT_Row, MRT_TableOptions } from 'material-react-table';
 import { useEffect, useState, useCallback } from 'react';
 import { Add, Edit, Delete } from '@mui/icons-material';
-import { fetchPostData } from '@/utils/fetchUtil';
+import { fetchAPI } from '@/utils/fetchUtil';
 import { toast } from 'react-toastify';
 import { globalTableProps } from '@/utils/globalTableProps';
 
@@ -39,10 +39,7 @@ export function GenericTable<T extends MRT_RowData>({
     setIsLoading(true);
     try {
       setTimeout(() => {}, 3000);
-      const res = await fetchPostData(fetchUrl, fetchParams);
-      if (res.length === 0) {
-        toast.info('Nema podataka za izabrani filter');
-      }
+      const res = await fetchAPI(fetchUrl, { method: 'POST', data: fetchParams });
       setData(res);
     } catch (error) {
       console.error('Error fetching data:', error);

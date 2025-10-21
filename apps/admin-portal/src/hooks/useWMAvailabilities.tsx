@@ -33,11 +33,14 @@ const useWMAvailabilities = () => {
   const createRow = useCallback(async (row: WMAvailability): Promise<void> => {
     setIsCreating(true);
     try {
-      const res = await fetchAPI<WMAvailability>(`${API_BASE}/api/water-meter-availability`, {
+      const res = await fetchAPI<WMAvailability[]>(`${API_BASE}/api/water-meter-availability`, {
         method: 'POST',
         data: row,
       });
-      setAvailabilities((prev) => [res, ...prev]);
+      // Backend vraća kompletnu listu sortiranu po ID DESC (najnoviji prvi)
+      if (Array.isArray(res)) {
+        setAvailabilities(res);
+      }
     } catch (err) {
       console.log(err);
       throw new Error('Neuspešan unos podataka');
@@ -49,11 +52,14 @@ const useWMAvailabilities = () => {
   const updateRow = useCallback(async (row: WMAvailability) => {
     setIsUpdating(true);
     try {
-      const res = await fetchAPI<WMAvailability>(`${API_BASE}/api/water-meter-availability/${row.id}`, {
+      const res = await fetchAPI<WMAvailability[]>(`${API_BASE}/api/water-meter-availability/${row.id}`, {
         method: 'PATCH',
         data: row,
       });
-      setAvailabilities((prev) => prev.map((x) => (x.id === row.id ? res : x)));
+      // Backend vraća kompletnu listu sortiranu po ID DESC
+      if (Array.isArray(res)) {
+        setAvailabilities(res);
+      }
     } catch (err) {
       console.log(err);
       throw err;

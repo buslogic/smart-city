@@ -11,6 +11,18 @@ export type Notes = {
     deleted_at: string;
 }
 
+export type WaterSupplyNote = {
+    id?: number;
+    categoryId: string | number; // Format: "id | name" ili samo id
+    title: string;
+    body: string;
+    authorId?: number;
+    isPinned: number;
+    isPrivate: number;
+    createdAt?: string;
+    updatedAt?: string;
+}
+
 export type NoteCategory = {
     id: number;
     name: string;
