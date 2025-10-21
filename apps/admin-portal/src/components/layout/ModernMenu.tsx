@@ -516,40 +516,16 @@ const ModernMenu: React.FC = () => {
         // permissions: ['settings:view'], // ❌ Uklonjeno - hijerarhijska logika će automatski prikazati
         children: [
           {
-            key: 'general',
+            key: '/settings/general',
             menuOrder: 401000000000,
             icon: <SettingOutlined />,
             label: 'Opšta',
-            // Folder sa pod-opcijama
-            children: [
-              {
-                key: '/settings/general/company-info',
-                menuOrder: 401010000000,
-                icon: <DatabaseOutlined />,
-                label: 'Informacije o Kompaniji',
-                permissions: ['settings.company_info:read'],
-              },
-              {
-                key: '/settings/general/legacy-databases',
-                menuOrder: 401020000000,
-                icon: <DatabaseOutlined />,
-                label: 'Legacy Baze',
-                permissions: ['legacy_databases:read'],
-              },
-              {
-                key: '/settings/general/legacy-tables',
-                menuOrder: 401030000000,
-                icon: <DatabaseOutlined />,
-                label: 'Legacy Tabele',
-                permissions: ['legacy_tables:read'],
-              },
-              {
-                key: '/settings/general/email-templates',
-                menuOrder: 401040000000,
-                icon: <MailOutlined />,
-                label: 'Email Šabloni',
-                permissions: ['settings.email_templates:view'],
-              },
+            // Direktna opcija sa tabovima unutar stranice - bez children
+            permissions: [
+              'settings.company_info:read',
+              'legacy_databases:read',
+              'legacy_tables:read',
+              'settings.email_templates:view',
             ],
           },
           {
@@ -590,9 +566,7 @@ const ModernMenu: React.FC = () => {
     }
     if (path.includes('/settings/')) {
       keys.push('settings');
-      if (path.includes('/settings/general/')) {
-        keys.push('general'); // Opšta folder unutar Podešavanja
-      }
+      // 'general' više nije folder, već direktna opcija - nema potrebe za push
     }
 
     setOpenKeys(keys);

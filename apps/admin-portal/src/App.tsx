@@ -110,7 +110,18 @@ function App() {
             
             <Route
               path="settings/general"
-              element={<GeneralSettings />}
+              element={
+                <PermissionGuard
+                  permissions={[
+                    'settings.company_info:read',
+                    'legacy_databases:read',
+                    'legacy_tables:read',
+                    'settings.email_templates:view',
+                  ]}
+                >
+                  <GeneralSettings />
+                </PermissionGuard>
+              }
             />
             
             <Route 
