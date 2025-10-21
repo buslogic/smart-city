@@ -285,7 +285,8 @@ export class TimescaledbService {
         aggregateName === 'daily_vehicle_stats' ||
         aggregateName === 'hourly_vehicle_stats' ||
         aggregateName === 'vehicle_hourly_stats' ||
-        aggregateName === 'monthly_vehicle_raw_stats'
+        aggregateName === 'monthly_vehicle_raw_stats' ||
+        aggregateName === 'gps_data_5_minute_no_postgis'
       ) {
         // Za velike aggregate, pokreni u pozadini
         this.logger.log(
@@ -293,10 +294,10 @@ export class TimescaledbService {
         );
 
         // refresh_continuous_aggregate ne može da radi u transakciji
-        // Postavimo kratak timeout i pokušajmo direktno
+        // Postavimo duži timeout za velike aggregate sa složenim PostGIS funkcijama
         try {
-          // Postavi timeout na 5 minuta za sve slučajeve
-          const timeoutMs = 300000; // 5 minuta
+          // Postavi timeout na 60 minuta za full refresh (posebno za gps_data_5_minute_no_lag_aggregate)
+          const timeoutMs = 3600000; // 60 minuta
           await client.query(`SET statement_timeout = ${timeoutMs}`);
 
           // Zatim pokušaj refresh (ovo će timeout-ovati za velike aggregate)
@@ -350,11 +351,11 @@ export class TimescaledbService {
           // Vrati uspešan response
           return {
             success: true,
-            message: `Osvežavanje agregata "${aggregateName}" je pokrenuto u pozadini. Zbog velikog broja podataka (344M GPS tačaka), proces može trajati 2-5 minuta.`,
+            message: `Osvežavanje agregata "${aggregateName}" je pokrenuto. Zbog velikog broja podataka i složenih PostGIS kalkulacija, proces može trajati 15-60 minuta za full refresh.`,
             details: {
               aggregate: aggregateName,
               status: 'running_in_background',
-              note: 'Možete nastaviti sa radom. Tabela će biti automatski ažurirana kada se refresh završi.',
+              note: 'Možete nastaviti sa radom. Tabela će biti automatski ažurirana kada se refresh završi. Za brži refresh, koristite inkrementalni refresh sa vremenskim opsegom.',
             },
           };
         } catch (err: any) {

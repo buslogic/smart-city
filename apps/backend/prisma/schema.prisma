@@ -1,3 +1,4 @@
+// Smart City Prisma Schema - Last validated: 2025-10-09
 generator client {
   provider = "prisma-client-js"
 }
@@ -33,6 +34,10 @@ model User {
   dashboardConfig          UserDashboardConfig?
   roles                    UserRole[]
   vehicleSyncLogs          VehicleSyncLog[]
+  turnusSyncLogs           TurnusSyncLog[]            @relation("TurnusSyncLogs")
+  driverDefaults           TurnusDefaultPerDriver[]   @relation("DriverDefaults")
+  createdDefaults          TurnusDefaultPerDriver[]   @relation("DefaultCreator")
+  updatedDefaults          TurnusDefaultPerDriver[]   @relation("DefaultUpdater")
 
   @@index([email])
   @@index([userGroupId])
@@ -327,9 +332,8 @@ model GpsRawBuffer {
   rawData       Json?     @map("raw_data")
   workerGroup   Int?      @map("worker_group") @db.TinyInt
 
-  @@index([processStatus], map: "idx_status_only")
+  @@index([workerGroup, processStatus, retryCount, receivedAt], map: "idx_worker_processing")
   @@index([processStatus, retryCount, receivedAt], map: "idx_worker_select")
-  @@index([workerGroup, processStatus, retryCount], map: "idx_worker_group")
   @@index([processedAt, processStatus], map: "idx_cleanup")
   @@index([receivedAt], map: "idx_received_at")
   @@index([vehicleId, timestamp], map: "idx_vehicle_timestamp")
@@ -713,210 +717,811 @@ enum ApiKeyType {
   INTEGRATION
 }
 
-model WaterMeterType {
-  id                 Int                  @id @default(autoincrement())
-  type               String               @db.VarChar(255)
-  createdAt          DateTime             @default(now()) @map("created_at")
-  updatedAt          DateTime             @updatedAt @map("updated_at")
-  waterMeters        WaterMeter[]
-  ReplacedWaterMeter ReplacedWaterMeter[]
+model CentralPoint {
+  id Int @id @default(autoincrement())
 
-  @@map("vodovod_water_meter_type")
+  // Osnovne informacije
+  name    String @map("cp_name") @db.VarChar(400)
+  address String @map("cp_address") @db.VarChar(400)
+  zip     String @map("cp_zip") @db.VarChar(10)
+  city    String @map("cp_city") @db.VarChar(100)
+
+  // Kontakt informacije
+  phone1 String @map("cp_phone1") @db.VarChar(50)
+  phone2 String @map("cp_phone2") @db.VarChar(50)
+  email  String @map("cp_email") @db.VarChar(255)
+
+  // Boss informacije
+  boss      String @map("cp_boss") @db.VarChar(200)
+  bossPhone String @map("cp_boss_phone") @db.VarChar(50)
+  bossEmail String @map("cp_boss_email") @db.VarChar(255)
+
+  // Geografija
+  mainStationUid String @map("main_station_uid") @db.VarChar(6)
+  longitude      String @map("cp_longitude") @db.VarChar(50)
+  latitude       String @map("cp_latitude") @db.VarChar(50)
+
+  // Komentar
+  comment String @map("cp_comment") @db.VarChar(400)
+
+  // Finansije
+  owes                      Float  @map("cp_owes") @db.Float
+  expects                   Float  @map("cp_expects") @db.Float
+  saldo                     Float  @map("cp_saldo") @db.Float
+  incomeSettlementTimeframe String @default("0") @map("income_settlement_timeframe_cp") @db.VarChar(10)
+
+  // Audit trail
+  changedBy String   @map("changed_by") @db.VarChar(100)
+  dateTime  DateTime @map("date_time") @db.DateTime(0)
+
+  // Java/Applet settings
+  enableJavaApplet        Boolean @default(false) @map("enablejavaapplet")
+  enableTicketReturn      Int     @default(0) @map("enableticketreturn") @db.SmallInt
+  enableTicketDelete      Boolean @default(false) @map("enableticketdelete")
+  enableOtherTicketsCheck Boolean @default(true) @map("enableotherticketscheck")
+  enableJournalCheck      Int     @default(1) @map("enablejournalcheck") @db.TinyInt
+
+  // Fuel
+  internalFuel Boolean? @map("internal_fuel")
+
+  // UI/Display
+  color        String @map("cp_color") @db.VarChar(7)
+  lineColor    String @map("cp_line_color") @db.VarChar(7)
+  image        Bytes? @map("cp_image") @db.MediumBlob
+  imageAndroid Bytes? @map("cp_image_android") @db.MediumBlob
+
+  // Customer info images
+  customerInfoCloseDeparture Bytes? @map("cp_customer_info_close_departure") @db.MediumBlob
+  customerInfoOpenDeparture  Bytes? @map("cp_customer_info_open_departure") @db.MediumBlob
+  validatorCloseDeparture    Bytes? @map("cp_validator_close_departure") @db.MediumBlob
+  validatorOpenDeparture     Bytes? @map("cp_validator_open_departure") @db.MediumBlob
+
+  // Android settings
+  sendAndroidPinRequestToAdmin Int    @default(0) @map("send_android_pin_request_to_admin") @db.TinyInt
+  androidAdmin                 BigInt @default(0) @map("android_admin")
+
+  // Country/VAT info
+  countryId   Int     @default(0) @map("cp_country_id")
+  countryName String? @map("cp_country_name") @db.VarChar(50)
+  vatId       String? @map("cp_vat_id") @db.VarChar(15)
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Additional settings
+  otherCpView       Int     @default(0) @map("other_cp_view") @db.UnsignedTinyInt
+  dispatchOrderByCp Int     @default(0) @map("dispatch_order_by_cp") @db.UnsignedTinyInt
+  active            Boolean @default(false)
+
+  // Invoice/Account info
+  placeOfInvoice           String? @map("place_of_the_invoice") @db.VarChar(100)
+  currentAccount           String? @map("current_account") @db.VarChar(100)
+  currentAccountForPlastic String? @map("current_account_for_plastic") @db.VarChar(100)
+
+  // Depot
+  depotCode String? @map("depot_code") @db.VarChar(20)
+
+  // GTFS
+  creatingZipByGtfsStandard Boolean @default(false) @map("creating_zip_by_gtfs_starndard")
+
+  // Device list
+  defaultDeviceListSubgroupId Int? @map("default_device_list_subgroup_id")
+
+  // Legacy sync tracking
+  legacyTicketingId  Int?                    @unique @map("legacy_ticketing_id")
+  legacyCityId       Int?                    @unique @map("legacy_city_id")
+  syncSource         CentralPointSyncSource? @default(manual) @map("sync_source")
+  syncWithCityServer Boolean                 @default(false) @map("sync_with_city_server")
+
+  @@index([mainStationUid])
+  @@index([active])
+  @@index([depotCode])
+  @@index([legacyTicketingId])
+  @@index([legacyCityId])
+  @@map("central_points")
 }
 
-model WaterMeterAvailability {
-  id                  Int                  @id @default(autoincrement())
-  availability        String               @db.VarChar(255)
-  createdAt           DateTime             @default(now()) @map("created_at")
-  updatedAt           DateTime             @updatedAt @map("updated_at")
-  waterMeters         WaterMeter[]
-  replacedWaterMeters ReplacedWaterMeter[]
-
-  @@map("vodovod_water_meter_availability")
+enum CentralPointSyncSource {
+  manual
+  ticketing_sync
 }
 
-model WaterMeterManufacturer {
-  id                  Int                  @id @default(autoincrement())
-  manufacturer        String               @db.VarChar(255)
-  createdAt           DateTime             @default(now()) @map("created_at")
-  updatedAt           DateTime             @updatedAt @map("updated_at")
-  waterMeters         WaterMeter[]
-  replacedWaterMeters ReplacedWaterMeter[]
+model PriceTableGroup {
+  id                BigInt   @id @default(autoincrement())
+  dateValidFrom     String   @map("date_valid_from") @db.VarChar(30)
+  status            String   @default("N") @db.VarChar(2)
+  synchroStatus     String   @default("N") @map("synchro_status") @db.VarChar(5)
+  sendIncremental   String   @default("0") @map("send_incremental") @db.VarChar(5)
+  changedBy         String   @map("changed_by") @db.VarChar(100)
+  dateTime          DateTime @map("date_time") @db.DateTime(0)
+  name              String   @db.VarChar(100)
+  legacyTicketingId BigInt?  @unique @map("legacy_ticketing_id")
+  legacyCityId      BigInt?  @unique @map("legacy_city_id")
+  lines             Line[]
 
-  @@map("vodovod_water_meter_manufacturer")
+  @@unique([dateValidFrom], map: "unique_date_valid_from")
+  @@index([status], map: "idx_status")
+  @@index([synchroStatus], map: "idx_synchro_status")
+  @@index([legacyTicketingId], map: "idx_legacy_ticketing_id")
+  @@index([legacyCityId], map: "idx_legacy_city_id")
+  @@map("price_table_groups")
 }
 
-model WaterService {
-  id      Int     @id @default(autoincrement())
-  service String? @db.VarChar(255)
-  note    String? @db.Text
-  code    Int?
+model Line {
+  id                                BigInt             @id @default(autoincrement())
+  lineNumber                        String             @map("line_number") @db.VarChar(5)
+  actualLineNumber                  String             @map("actual_line_number") @db.VarChar(10)
+  lineTitle                         String             @map("line_title") @db.VarChar(255)
+  lineTitleReturn                   String             @map("line_title_return") @db.VarChar(255)
+  rootLineNumber                    String             @map("root_line_number") @db.VarChar(5)
+  lineNumberForDisplay              String             @map("line_number_for_display") @db.VarChar(20)
+  circleRoute                       Boolean            @default(false) @map("circle_route")
+  directionIdForDisplay             DirectionType      @default(A) @map("direction_id_for_display")
+  lineTitleForDisplay               String             @map("line_title_for_display") @db.VarChar(255)
+  lineNumberForSite                 String             @map("line_number_for_site") @db.VarChar(255)
+  furl                              String             @db.VarChar(255)
+  toPlace                           String             @map("to_place") @db.VarChar(255)
+  toPlaceTwo                        String             @map("to_place_two") @db.VarChar(255)
+  numOfDirection                    Int                @default(0) @map("num_of_direction") @db.TinyInt
+  officialDeparture                 String             @map("official_departure") @db.VarChar(30)
+  dateValidFrom                     String             @map("date_valid_from") @db.VarChar(30)
+  priceTableIdent                   String             @unique @map("price_table_ident") @db.VarChar(64)
+  monthlyPriceTableIdent            String             @map("monthly_price_table_ident") @db.VarChar(64)
+  subversion                        String             @default("0") @db.VarChar(2)
+  numberOfStations                  Int                @default(0) @map("number_of_stations") @db.SmallInt
+  vatFromTaxTable                   String             @map("vat_from_tax_table") @db.VarChar(64)
+  vatId                             String             @map("vat_id") @db.VarChar(5)
+  vatValue                          String             @map("vat_value") @db.VarChar(5)
+  discountTariffTableIdent          String             @map("discount_tariff_table_ident") @db.VarChar(50)
+  regionTableIdent                  String             @map("region_table_ident") @db.VarChar(50)
+  zoneTableIdent                    String             @map("zone_table_ident") @db.VarChar(50)
+  distanceTableIdent                String             @map("distance_table_ident") @db.VarChar(50)
+  citiesTableIdent                  String             @map("cities_table_ident") @db.VarChar(50)
+  lineTypeId                        Int                @default(0) @map("line_type_id") @db.SmallInt
+  lineType                          String             @default("none") @map("line_type") @db.VarChar(100)
+  changedSinceSync                  String             @default("0") @map("changed_since_sync") @db.VarChar(2)
+  changeLog                         String             @map("change_log") @db.LongText
+  changeIncremental                 String             @default("0") @map("change_incremental") @db.VarChar(5)
+  centralPointDbId                  String             @default("0") @map("central_point_db_id") @db.VarChar(10)
+  centralPointName                  String             @map("central_point_name") @db.VarChar(200)
+  changedBy                         String             @map("changed_by") @db.VarChar(50)
+  dateTime                          DateTime           @default(now()) @map("date_time") @db.DateTime(0)
+  status                            String             @default("N") @map("status") @db.VarChar(8)
+  busOperator                       Int                @default(0) @map("bus_operator") @db.SmallInt
+  displayByDispachPlanning          Boolean            @default(false) @map("display_by_dispach_planning")
+  lineRoute                         String             @map("line_route") @db.LongText
+  lineRoute1                        String             @map("line_route1") @db.LongText
+  bestfrom                          DateTime?          @map("bestfrom") @db.Date
+  gLineRoute                        String             @map("g_line_route") @db.LongText
+  gLineRoute1                       String             @map("g_line_route1") @db.LongText
+  maxSpeed                          Int                @default(0) @map("max_speed") @db.TinyInt
+  timeAllowed                       Int                @default(0) @map("time_allowed") @db.SmallInt
+  isolatedExportsAccountingSoftware Boolean            @default(false) @map("isolated_exports_accounting_software")
+  daysSellInAdvance                 Int                @default(255) @map("days_sell_in_advance") @db.SmallInt
+  roundPrice                        Int                @default(500) @map("round_price") @db.MediumInt
+  bestFromRet                       DateTime           @default(dbgenerated("'2012-01-01'")) @map("best_from_ret") @db.Date
+  daysSellInAdvanceRet              Int                @default(255) @map("days_sell_in_advance_ret") @db.SmallInt
+  bestTo                            DateTime           @default(dbgenerated("'2029-12-31'")) @map("best_to") @db.Date
+  bestToRet                         DateTime           @default(dbgenerated("'2029-12-31'")) @map("best_to_ret") @db.Date
+  checkInAmount                     Decimal            @default(0.00) @map("check_in_amount") @db.Decimal(12, 2)
+  pricePerKm                        Decimal            @default(0.00) @map("price_per_km") @db.Decimal(12, 2)
+  additionalLineTypeId              Int                @default(0) @map("additional_line_type_id") @db.TinyInt
+  usedInDispech                     Boolean            @default(false) @map("used_in_dispech")
+  showOnNet                         Boolean            @default(false) @map("show_on_net")
+  showOnNetCity                     Boolean            @default(false) @map("show_on_net_city")
+  netPricelistId                    Int                @default(0) @map("net_pricelist_id")
+  payOnDelivery                     String             @map("PAY_ON_DELIVERY") @db.VarChar(50)
+  mobilePhone                       String             @map("MOBILE_PHONE") @db.VarChar(50)
+  creditCard                        String             @map("CREDIT_CARD") @db.VarChar(50)
+  usedInBooking                     Boolean            @default(false) @map("used_in_booking")
+  startTerminusKm                   Decimal?           @default(0.000) @map("start_terminus_km") @db.Decimal(8, 3)
+  endTerminusKm                     Decimal?           @default(0.000) @map("end_terminus_km") @db.Decimal(8, 3)
+  rvSaleFlag                        Boolean?           @default(false) @map("rv_sale_flag")
+  rvLineSource                      Int                @default(3) @map("rv_line_source") @db.TinyInt
+  qrValidations                     Int                @default(0) @map("qr_validations")
+  qrValidationsReturn               Int                @default(0) @map("qr_validations_return")
+  qrValidationsDir1                 Int                @default(0) @map("qr_validations_dir1")
+  qrValidationsReturnDir1           Int                @default(0) @map("qr_validations_return_dir1")
+  transientPriceSetting             Int                @default(0) @map("transient_price_setting")
+  sellWithoutSeatNo                 Boolean            @default(true) @map("sell_without_seat_no")
+  alwaysExportFlag                  Boolean            @default(false) @map("always_export_flag")
+  minModeSecurity                   Int                @default(60) @map("min_mode_security")
+  allowedMin                        Int                @default(240) @map("allowed_min")
+  mainLineFromGroup                 String             @map("main_line_from_group") @db.VarChar(50)
+  routeCode                         String             @map("route_code") @db.VarChar(10)
+  gtfsRouteId                       Int                @default(0) @map("gtfs_route_id")
+  priceVariationId                  Int                @default(0) @map("price_variation_id")
+  wrongDirectionType                Int?               @default(0) @map("wrong_direction_type")
+  gtfsShapeId                       String             @map("gtfs_shape_id") @db.VarChar(50)
+  descriptionOfStreetsGtfs          String             @map("description_of_streets_gtfs") @db.VarChar(1255)
+  usedInDateShedule                 Boolean            @default(false) @map("used_in_date_shedule")
+  lineKmMeanValueWithBusTerminus    Decimal?           @default(0.000) @map("line_km_mean_value_with_bus_terminus") @db.Decimal(8, 3)
+  systemTypesId                     Int                @map("system_types_id")
+  categoriesLineId                  Int                @map("categories_line_id")
+  timeFromByLine                    DateTime           @map("time_from_by_line") @db.Time(0)
+  timeToByLine                      DateTime           @map("time_to_by_line") @db.Time(0)
+  onlineDiscountType                OnlineDiscountType @default(ZERO) @map("online_discount_type")
+  showOnWeb                         Boolean            @default(false) @map("show_on_web")
+  updatedAt                         DateTime?          @default(now()) @updatedAt @map("updated_at")
+  showOnAndroid                     Boolean            @default(true) @map("show_on_android")
+  legacyTicketingId                 BigInt?            @unique @map("legacy_ticketing_id")
+  legacyCityId                      BigInt?            @unique @map("legacy_city_id")
+  priceTableGroup                   PriceTableGroup?   @relation(fields: [dateValidFrom], references: [dateValidFrom])
 
-  @@map("vodovod_service")
+  @@index([lineNumber], map: "idx_line_number")
+  @@index([lineNumberForDisplay], map: "idx_line_number_for_display")
+  @@index([dateValidFrom], map: "idx_date_valid_from")
+  @@index([status], map: "idx_status")
+  @@index([centralPointDbId], map: "idx_central_point_db_id")
+  @@index([lineType], map: "idx_line_type")
+  @@index([lineTypeId], map: "idx_line_type_id")
+  @@index([busOperator], map: "idx_bus_operator")
+  @@index([isolatedExportsAccountingSoftware], map: "idx_isolated_exports")
+  @@index([gtfsRouteId], map: "idx_gtfs_route_id")
+  @@index([priceVariationId], map: "idx_price_variation_id")
+  @@index([legacyTicketingId], map: "idx_legacy_ticketing_id")
+  @@index([legacyCityId], map: "idx_legacy_city_id")
+  @@map("lines")
 }
 
-model WaterMeter {
-  id                Int       @id @default(autoincrement())
-  counter           Int?
-  idv               String?   @unique @db.VarChar(255)
-  availabilityId    Int?      @map("availability_id")
-  typeId            Int?      @map("type_id")
-  manufacturerId    Int?      @map("manufacturer_id")
-  serialNumber      String?   @map("serial_number") @db.VarChar(255)
-  calibratedFrom    DateTime? @map("calibrated_from")
-  calibratedTo      DateTime? @map("calibrated_to")
-  module            String?   @db.VarChar(255)
-  disconnectionDate DateTime? @map("disconnection_date")
-  idmm              Int?
-  sifraPotrosaca    Int?      @map("sifra_potrosaca")
-  sifraKupca        Int?      @map("sifra_kupca")
-  aktivan           Boolean   @default(true)
-  createdAt         DateTime? @default(now()) @map("created_at")
-  updatedAt         DateTime? @updatedAt @map("updated_at")
+model TimetableDate {
+  id                BigInt   @id @default(autoincrement())
+  dateValidFrom     String   @map("date_valid_from") @db.VarChar(30)
+  dateValidTo       String?  @map("date_valid_to") @db.VarChar(30)
+  status            String   @default("N") @db.VarChar(2)
+  synchroStatus     String   @default("N") @map("synchro_status") @db.VarChar(5)
+  sendIncremental   String   @default("0") @map("send_incremental") @db.VarChar(5)
+  changedBy         String   @map("changed_by") @db.VarChar(100)
+  dateTime          DateTime @map("date_time") @db.DateTime(0)
+  name              String   @db.VarChar(100)
+  legacyTicketingId BigInt?  @unique @map("legacy_ticketing_id")
+  legacyCityId      BigInt?  @unique @map("legacy_city_id")
 
-  type         WaterMeterType?         @relation(fields: [typeId], references: [id], map: "FK_vodovod_water_meter_type_id")
-  availability WaterMeterAvailability? @relation(fields: [availabilityId], references: [id], map: "FK_vodovod_water_meter_availability_id")
-  manufacturer WaterMeterManufacturer? @relation(fields: [manufacturerId], references: [id], map: "FK_vodovod_water_meter_manufacturer_id")
-  replacements ReplacedWaterMeter[]
-
-  @@index([typeId], map: "FK_vodovod_water_meter_type_id")
-  @@index([availabilityId], map: "FK_vodovod_water_meter_availability_id")
-  @@index([manufacturerId], map: "FK_vodovod_water_meter_manufacturer_id")
-  @@index([idmm], map: "fk_idmm")
-  @@index([sifraKupca], map: "vodomer_fk_sifra_kupca")
-  @@index([sifraPotrosaca], map: "vodomer_fk_sifra_potrosaca")
-  @@map("vodovod_water_meter")
+  @@unique([dateValidFrom], map: "unique_date_valid_from")
+  @@index([dateValidTo], map: "idx_date_valid_to")
+  @@index([status], map: "idx_status")
+  @@index([synchroStatus], map: "idx_synchro_status")
+  @@index([legacyTicketingId], map: "idx_legacy_ticketing_id")
+  @@index([legacyCityId], map: "idx_legacy_city_id")
+  @@map("timetable_dates")
 }
 
-model ReplacedWaterMeter {
-  id                Int       @id @default(autoincrement())
-  counter           Int?
-  idv               String?   @unique @db.VarChar(255)
-  availability      Int?
-  type              Int?
-  manufacturer      Int?
-  serialNumber      String?   @map("serial_number") @db.VarChar(255)
-  calibratedFrom    DateTime? @map("calibrated_from")
-  calibratedTo      DateTime? @map("calibrated_to")
-  module            String?   @db.VarChar(255)
-  disconnectionDate DateTime? @map("disconnection_date")
-  idmm              Int?
-  sifraPotrosaca    Int?      @map("sifra_potrosaca")
-  sifraKupca        Int?      @map("sifra_kupca")
-  aktivan           Boolean   @default(true)
-  replacedId        Int?      @map("replaced_id")
-  createdAt         DateTime? @default(now()) @map("created_at")
-  updatedAt         DateTime? @updatedAt @map("updated_at")
-
-  replacedMeter   WaterMeter?             @relation(fields: [replacedId], references: [id], map: "fk_replaced_water_meter_original")
-  typeRef         WaterMeterType?         @relation(fields: [type], references: [id])
-  availabilityRef WaterMeterAvailability? @relation(fields: [availability], references: [id])
-  manufacturerRef WaterMeterManufacturer? @relation(fields: [manufacturer], references: [id])
-
-  @@index([replacedId], map: "fk_replaced_water_meter_original")
-  @@map("vodovod_replaced_water_meter")
+enum DirectionType {
+  A
+  B
 }
 
-model WaterMeterReading {
-  id                  Int       @id @default(autoincrement())
-  meterReading        String?   @map("meter_reading") @db.VarChar(255)
-  faulty              Boolean?
-  unreadable          Boolean?
-  notFoundOnSite      Boolean?  @map("not_found_on_site")
-  noMeter             Boolean?  @map("no_meter")
-  negativeConsumption Boolean?  @map("negative_consumption")
-  transferToNextCl    Boolean?  @map("transfer_to_next_cl")
-  billPrintout        Boolean?  @map("bill_printout")
-  note                String?   @db.Text
-  userAccount         String?   @map("user_account") @db.VarChar(255)
-  canceled            Boolean?
-  priority            Boolean?
-  average             Boolean?
-  meterReaderOnly     Boolean?  @map("meter_reader_only")
-  disconnected        Boolean?
-  censusSelect        Boolean?  @map("census_select")
-  zsPrintout          Boolean?  @map("zs_printout")
-  createdAt           DateTime? @default(now()) @map("created_at")
-  updatedAt           DateTime? @updatedAt @map("updated_at")
-
-  @@map("vodovod_water_meter_readings")
+enum OnlineDiscountType {
+  ZERO @map("0")
+  ONE  @map("1")
+  TWO  @map("2")
 }
 
-model OrderingCity {
-  id        Int       @id @default(autoincrement())
-  cityName  String    @map("city_name") @db.VarChar(255)
-  zipCode   String?   @map("zip_code") @db.VarChar(20)
-  aktivan   Boolean   @default(true)
-  createdAt DateTime? @default(now()) @map("created_at")
-  updatedAt DateTime? @updatedAt @map("updated_at")
+model PriceVariation {
+  id                   Int       @id @default(autoincrement())
+  variationName        String    @map("variation_name") @db.VarChar(250)
+  variationDescription String    @map("variation_description") @db.VarChar(255)
+  gtfsRouteSettingsId  String?   @map("gtfs_route_settings_id") @db.VarChar(250)
+  direction            String?   @db.VarChar(10)
+  mainBasicRoute       Boolean?  @map("main_basic_route")
+  datetimeFrom         DateTime? @map("datetime_from")
+  datetimeTo           DateTime? @map("datetime_to")
+  lineTypeId           Int       @map("line_type_id")
+  updatedAt            DateTime? @default(now()) @updatedAt @map("updated_at")
+  legacyTicketingId    BigInt?   @unique @map("legacy_ticketing_id")
+  legacyCityId         BigInt?   @unique @map("legacy_city_id")
 
-  addresses OrderingAddress[]
-
-  @@map("ordering_cities")
+  @@index([variationName])
+  @@index([lineTypeId])
+  @@index([legacyTicketingId])
+  @@index([legacyCityId])
+  @@map("price_variations")
 }
 
-model OrderingAddress {
-  id          Int       @id @default(autoincrement())
-  addressName String    @map("address_name") @db.VarChar(255)
-  cityId      Int?      @map("city_id")
-  zoneId      Int?      @map("zone_id")
-  aktivan     Boolean   @default(true)
-  createdAt   DateTime? @default(now()) @map("created_at")
-  updatedAt   DateTime? @updatedAt @map("updated_at")
+model VremenaPolaska {
+  id                   Int       @id @default(autoincrement()) @db.UnsignedInt
+  datum                DateTime  @db.Date
+  idlinije             String    @db.VarChar(50)
+  smer                 Int       @db.TinyInt
+  pon                  String    @db.Text
+  uto                  String    @db.Text
+  sre                  String    @db.Text
+  cet                  String    @db.Text
+  pet                  String    @db.Text
+  sub                  String    @db.Text
+  ned                  String    @db.Text
+  dk1                  String    @db.Text
+  dk1naziv             String    @map("dk1naziv") @db.VarChar(20)
+  dk2                  String    @db.Text
+  dk2naziv             String    @map("dk2naziv") @db.VarChar(20)
+  dk3                  String    @db.Text
+  dk3naziv             String    @map("dk3naziv") @db.VarChar(20)
+  dk4                  String    @db.Text
+  dk4naziv             String    @map("dk4naziv") @db.VarChar(20)
+  variation            Int       @default(0) @db.TinyInt
+  datetimeFrom         DateTime  @default(now()) @map("datetime_from")
+  datetimeTo           DateTime  @default(now()) @map("datetime_to")
+  variationDescription String    @default("") @map("variation_description") @db.VarChar(100)
+  updatedAt            DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  legacyTicketingId    BigInt?   @map("legacy_ticketing_id")
+  legacyCityId         BigInt?   @map("legacy_city_id")
 
-  city            OrderingCity?          @relation(fields: [cityId], references: [id], map: "FK_ordering_addresses_city_id")
-  zone            VodvodZone?            @relation(fields: [zoneId], references: [id], map: "FK_ordering_addresses_zone_id")
-  measuringPoints VodvodMeasuringPoint[]
-
-  @@index([cityId], map: "FK_ordering_addresses_city_id")
-  @@index([zoneId], map: "FK_ordering_addresses_zone_id")
-  @@map("ordering_addresses")
+  @@unique([datum, idlinije, smer, datetimeFrom], map: "datum_idlinije_smer_datetime_from")
+  @@index([datum], map: "datum_2")
+  @@index([idlinije])
+  @@index([smer])
+  @@index([legacyTicketingId])
+  @@index([legacyCityId])
+  @@map("vremena_polaska")
 }
 
-model VodvodRegion {
-  id         Int       @id @default(autoincrement())
-  regionName String    @map("region_name") @db.VarChar(255)
-  aktivan    Boolean   @default(true)
-  createdAt  DateTime? @default(now()) @map("created_at")
-  updatedAt  DateTime? @updatedAt @map("updated_at")
+model VremenaPolaskaSt {
+  id                       Int       @id @default(autoincrement()) @db.UnsignedInt
+  datum                    DateTime  @db.Date
+  idlinije                 String    @default("") @db.VarChar(40)
+  smer                     Int       @default(0) @db.UnsignedTinyInt
+  dan                      String    @default("") @db.VarChar(3)
+  vreme                    String    @default("") @db.VarChar(5)
+  stanice                  String    @default("") @db.VarChar(3000)
+  opis                     String    @default("") @db.VarChar(200)
+  centralPoint             Int       @default(0) @map("central_point") @db.UnsignedInt
+  pauza                    String    @default("") @db.VarChar(200)
+  defaultTimes             String    @default("") @map("default_times") @db.VarChar(400)
+  dayBefore                Int       @default(0) @map("day_before") @db.UnsignedTinyInt
+  defaultPeron             String    @default("") @map("default_peron") @db.VarChar(20)
+  numDepartures            Int       @default(1) @map("num_departures") @db.UnsignedTinyInt
+  defaultNumSeats          Int       @default(57) @map("default_num_seats") @db.UnsignedTinyInt
+  timetableShortCommentsId Int       @default(0) @map("timetable_short_comments_id") @db.UnsignedInt
+  vehicleChassisTypesId    Int       @default(0) @map("vehicle_chassis_types_id") @db.UnsignedInt
+  gtfsTripId               String    @default("") @map("gtfs_trip_id") @db.VarChar(50)
+  serviceId                String    @default("") @map("service_id") @db.VarChar(50)
+  notOfficial              Int       @default(0) @map("not_official") @db.UnsignedTinyInt
+  compCode                 Int       @default(0) @map("comp_code") @db.UnsignedTinyInt
+  vehicleGroupTypesId      Int       @default(0) @map("vehicle_group_types_id") @db.UnsignedSmallInt
+  turageNo                 Int       @default(0) @map("turage_no") @db.UnsignedSmallInt
+  departureNoInTurage      Int       @default(0) @map("departure_no_in_turage") @db.UnsignedTinyInt
+  updatedAt                DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  legacyTicketingId        BigInt?   @map("legacy_ticketing_id")
+  legacyCityId             BigInt?   @map("legacy_city_id")
 
-  zones VodvodZone[]
-
-  @@map("vodovod_regions")
+  @@unique([idlinije, smer, dan, vreme, centralPoint], map: "datum")
+  @@index([datum], map: "datum_2")
+  @@index([idlinije], map: "idlinije_3")
+  @@index([gtfsTripId], map: "gtfs_trip_id")
+  @@index([serviceId], map: "service_id")
+  @@index([datum, dan, vreme], map: "datum_dan_vreme")
+  @@index([datum, idlinije, dan, vreme, serviceId], map: "datum_idlinije_dan_vreme_service_id")
+  @@index([idlinije, centralPoint, dan], map: "idlinije_cp_dan")
+  @@index([legacyTicketingId])
+  @@index([legacyCityId])
+  @@map("vremena_polaska_st")
 }
 
-model VodvodZone {
-  id        Int       @id @default(autoincrement())
-  zoneName  String    @map("zone_name") @db.VarChar(255)
-  regionId  Int?      @map("region_id")
-  aktivan   Boolean   @default(true)
-  createdAt DateTime? @default(now()) @map("created_at")
-  updatedAt DateTime? @updatedAt @map("updated_at")
+model UniqueStationIdLocal {
+  uniqueId              String    @id @map("unique_id") @db.VarChar(5)
+  stationName           String    @map("station_name") @db.VarChar(50)
+  gpsx                  Decimal   @db.Decimal(15, 10)
+  gpsy                  Decimal   @db.Decimal(15, 10)
+  description           String    @db.VarChar(500)
+  range                 Int       @default(20)
+  rangeForDriverConsole Int       @default(20) @map("range_for_driver_console")
+  rangeForValidators    Int       @default(20) @map("range_for_validators")
+  changed               Boolean
+  mainOperator          Boolean   @map("main_operator")
+  groupId               Int       @map("group_id") @db.UnsignedTinyInt
+  readyForBooking       Int       @default(0) @map("ready_for_booking") @db.TinyInt
+  usedInBooking         Int       @default(0) @map("used_in_booking") @db.UnsignedTinyInt
+  dateValidFrom         DateTime? @map("date_valid_from") @db.Date
+  legacyTicketingId     BigInt?   @unique(map: "legacy_ticketing_id") @map("legacy_ticketing_id")
+  legacyCityId          BigInt?   @unique(map: "legacy_city_id") @map("legacy_city_id")
 
-  region          VodvodRegion?          @relation(fields: [regionId], references: [id], map: "FK_vodovod_zones_region_id")
-  addresses       OrderingAddress[]
-  measuringPoints VodvodMeasuringPoint[]
-
-  @@index([regionId], map: "FK_vodovod_zones_region_id")
-  @@map("vodovod_zones")
+  @@index([stationName], map: "station_name")
+  @@map("unique_station_id_local")
 }
 
-model VodvodMeasuringPoint {
-  IDMM        Int       @id @map("IDMM")
-  IDU         Int?      @map("IDU")
-  zoneId      Int?      @map("zone_id")
-  streetId    Int?      @map("street_id")
-  houseNumber String?   @map("house_number") @db.VarChar(50)
-  typeId      Int?      @map("type_id")
-  status      Int?
-  aktivan     Boolean   @default(true)
-  createdAt   DateTime? @default(now()) @map("created_at")
-  updatedAt   DateTime? @updatedAt @map("updated_at")
+model PriceListsLineUidsTemplate {
+  priceTablesIndexId  Int      @map("price_tables_index_id") @db.UnsignedMediumInt
+  stationNumber       Int      @default(1) @map("station_number") @db.UnsignedTinyInt
+  stationUid          Int      @default(0) @map("station_uid") @db.UnsignedSmallInt
+  disableShowOnPublic Boolean  @default(false) @map("disable_show_on_public")
+  pricelistVersion    DateTime @map("pricelist_version") @db.DateTime(0)
+  activeFlag          Boolean  @map("active_flag")
+  changedBy           Int      @default(0) @map("changed_by") @db.UnsignedSmallInt
+  changeDateTime      DateTime @default(now()) @map("change_date_time") @db.Timestamp(0)
+  transientStation    Int      @default(0) @map("transient_station") @db.UnsignedTinyInt
 
-  address OrderingAddress? @relation(fields: [IDU], references: [id], map: "FK_vodovod_measuring_points_address_id")
-  zone    VodvodZone?      @relation(fields: [zoneId], references: [id], map: "FK_vodovod_measuring_points_zone_id")
+  @@id([priceTablesIndexId, stationNumber, pricelistVersion, activeFlag])
+  @@index([stationUid], map: "idx_station_uid")
+  @@map("price_lists_line_uids_template")
+}
 
-  @@index([IDU], map: "FK_vodovod_measuring_points_address_id")
-  @@index([zoneId], map: "FK_vodovod_measuring_points_zone_id")
-  @@map("vodovod_measuring_points")
+model TurnusGroupsName {
+  id            Int      @id @default(autoincrement()) @db.SmallInt
+  name          String   @db.VarChar(50)
+  active        Boolean
+  changedBy     Int      @map("changed_by") @db.MediumInt
+  changeDate    DateTime @default(now()) @updatedAt @map("change_date") @db.Timestamp(0)
+  dateValidFrom DateTime @map("date_valid_from") @db.Date
+
+  @@index([active])
+  @@index([dateValidFrom])
+  @@map("turnus_groups_names")
+}
+
+model TurnusGroupsAssign {
+  turnusId   Int      @map("turnus_id") @db.MediumInt
+  groupId    Int      @map("group_id") @db.SmallInt
+  changedBy  Int      @map("changed_by") @db.MediumInt
+  changeDate DateTime @default(now()) @updatedAt @map("change_date") @db.Timestamp(0)
+  dateFrom   DateTime @default(dbgenerated("'2023-11-01 00:00:00'")) @map("date_from") @db.DateTime(0)
+  dateTo     DateTime @default(dbgenerated("'2037-11-01 00:00:00'")) @map("date_to") @db.DateTime(0)
+
+  @@id([turnusId, groupId, dateFrom])
+  @@index([turnusId])
+  @@index([groupId])
+  @@map("turnus_groups_assign")
+}
+
+model TurnusDays {
+  id       Int    @id @default(autoincrement())
+  turnusId Int    @map("turnus_id") @db.MediumInt
+  dayname  String @db.VarChar(20)
+
+  @@index([turnusId])
+  @@index([dayname])
+  @@map("turnus_days")
+}
+
+model ChangesCodesTours {
+  id                    Int      @id @default(autoincrement())
+  turnusId              Int      @map("turnus_id") @db.UnsignedMediumInt
+  turnusName            String   @map("turnus_name") @db.VarChar(320)
+  lineNo                String   @map("line_no") @db.VarChar(6)
+  startTime             DateTime @map("start_time") @db.Time(0)
+  direction             Int      @db.TinyInt
+  duration              DateTime @db.Time(0)
+  centralPoint          String   @map("central_point") @db.VarChar(4)
+  changeCode            Int      @map("change_code")
+  jobId                 Int      @map("job_id") @db.SmallInt
+  newStartTime          DateTime @map("new_start_time") @db.Time(0)
+  newDuration           DateTime @map("new_duration") @db.Time(0)
+  startStation          Int      @map("start_station") @db.SmallInt
+  endStation            Int      @map("end_station") @db.SmallInt
+  dayNumber             Int      @map("day_number") @db.TinyInt
+  lineTypeId            Int      @map("line_type_id") @db.TinyInt
+  rezijski              String   @db.VarChar(20)
+  printId               String   @map("print_id") @db.VarChar(4)
+  betweenRez            Int      @map("between_rez") @db.UnsignedTinyInt
+  busNumber             Int      @default(1) @map("bus_number") @db.UnsignedTinyInt
+  startStationId        Int      @map("start_station_id") @db.UnsignedMediumInt
+  endStationId          Int      @map("end_station_id") @db.UnsignedMediumInt
+  changeTime            DateTime @map("change_time") @db.DateTime(0)
+  changeUser            String   @map("change_user") @db.VarChar(8)
+  active                Int      @db.UnsignedTinyInt
+  firstDayDurationPart  DateTime @map("first_day_duration_part") @db.Time(0)
+  secondDayDurationPart DateTime @map("second_day_duration_part") @db.Time(0)
+  customId              String   @map("custom_id") @db.VarChar(20)
+  transportId           String   @map("transport_id") @db.VarChar(20)
+  departureNumber       Int      @map("departure_number") @db.UnsignedTinyInt
+  shiftNumber           Int      @map("shift_number") @db.UnsignedTinyInt
+  turageNo              Int      @default(0) @map("turage_no") @db.UnsignedSmallInt
+  departureNoInTurage   Int      @map("departure_no_in_turage") @db.UnsignedTinyInt
+
+  @@unique([turnusId, startTime, lineNo, departureNumber, shiftNumber])
+  @@index([turnusId])
+  @@index([lineTypeId])
+  @@index([centralPoint])
+  @@index([turnusName])
+  @@index([lineNo])
+  @@index([changeCode])
+  @@index([startTime])
+  @@index([centralPoint, turnusName], map: "testaca")
+  @@index([turnusId, turnusName], map: "turnus_id_2")
+  @@index([lineNo, direction, startTime], map: "line_no2")
+  @@map("changes_codes_tours")
+}
+
+model DateTravelOrder {
+  id                      Int      @default(autoincrement()) @db.UnsignedInt
+  lineType                String   @map("line_type") @db.VarChar(30)
+  startDate               DateTime @map("start_date") @db.Date
+  driverId                Int      @map("driver_id") @db.UnsignedInt
+  driverName              String   @map("driver_name") @db.VarChar(50)
+  otherIds                Int      @map("other_ids") @db.UnsignedInt
+  otherNames              String   @map("other_names") @db.VarChar(50)
+  otherIds2               Int      @map("other_ids_2") @db.UnsignedInt
+  otherNames2             String   @map("other_names_2") @db.VarChar(50)
+  lineNo                  String   @map("line_no") @db.VarChar(6)
+  lineName                String   @map("line_name") @db.VarChar(80)
+  busName                 String   @map("bus_name") @db.VarChar(50)
+  noOfSeats               Int      @map("no_of_seats") @db.UnsignedSmallInt
+  garageNo                String   @map("garage_no") @db.VarChar(20)
+  registNo                String   @map("regist_no") @db.VarChar(20)
+  registArea              String   @map("regist_area") @db.VarChar(30)
+  bpivDate                DateTime @map("bpiv_date") @db.Date
+  bpivNo                  String   @map("bpiv_no") @db.VarChar(30)
+  startTime               DateTime @map("start_time") @db.Time(0)
+  endTime                 DateTime @map("end_time") @db.Time(0)
+  endDate                 DateTime @map("end_date") @db.Date
+  endTimeFound            DateTime @map("end_time_found") @db.Time(0)
+  endTimeManual           DateTime @map("end_time_manual") @db.Time(0)
+  endDateFound            DateTime @map("end_date_found") @db.Date
+  orderNo                 Int      @map("order_no") @db.UnsignedInt
+  issuedate               DateTime @db.Date
+  planned                 Int      @db.UnsignedTinyInt
+  realised                Int      @db.UnsignedTinyInt
+  comment                 String   @db.Text
+  prepareTime             String   @map("prepare_time") @db.VarChar(5)
+  lineTime                String   @map("line_time") @db.VarChar(5)
+  lineKm                  Decimal  @map("line_km") @db.Decimal(8, 3)
+  speedLimit              Int      @map("speed_limit") @db.TinyInt
+  checkCash               Int      @map("check_cash") @db.TinyInt
+  checkKm                 Int      @map("check_km") @db.TinyInt
+  checkPrepare            Int      @map("check_prepare") @db.TinyInt
+  checkSpeed              Int      @map("check_speed") @db.TinyInt
+  checkStart              Int      @map("check_start") @db.TinyInt
+  checkEnd                Int      @map("check_end") @db.TinyInt
+  checkStations           Int      @map("check_stations") @db.TinyInt
+  checkRoute              Int      @map("check_route") @db.TinyInt
+  checkRpm                Int      @map("check_rpm") @db.TinyInt
+  checkAccBrk             Int      @map("check_acc_brk") @db.TinyInt
+  checkMud                Int      @map("check_mud") @db.UnsignedTinyInt
+  checkFuel               Int      @map("check_fuel") @db.UnsignedTinyInt
+  checkFuelTime           DateTime @map("check_fuel_time") @db.DateTime(0)
+  kmFound                 Decimal  @map("km_found") @db.Decimal(8, 3)
+  prepareFound            String   @map("prepare_found") @db.VarChar(5)
+  speedPeakFound          Int      @map("speed_peak_found") @db.TinyInt
+  speedAverageFound       Decimal  @map("speed_average_found") @db.Decimal(5, 2)
+  speedDurationFound      String   @map("speed_duration_found") @db.VarChar(5)
+  speedAllowedPeak        Int      @map("speed_allowed_peak") @db.TinyInt
+  speedAllowedDuration    String   @map("speed_allowed_duration") @db.VarChar(5)
+  speedregPeakFound       Int      @map("speedreg_peak_found") @db.TinyInt
+  speedregAverageFound    Decimal  @map("speedreg_average_found") @db.Decimal(5, 2)
+  speedregDurationFound   String   @map("speedreg_duration_found") @db.VarChar(5)
+  speedregAllowedPeak     Int      @map("speedreg_allowed_peak") @db.TinyInt
+  speedregAllowedDuration String   @map("speedreg_allowed_duration") @db.VarChar(5)
+  speedredPeakFound       Int      @map("speedred_peak_found") @db.TinyInt
+  speedredAverageFound    Decimal  @map("speedred_average_found") @db.Decimal(5, 2)
+  speedredDurationFound   String   @map("speedred_duration_found") @db.VarChar(5)
+  speedredAllowedPeak     Int      @map("speedred_allowed_peak") @db.TinyInt
+  speedredAllowedDuration String   @map("speedred_allowed_duration") @db.VarChar(5)
+  reductionRoadFound      Int      @map("reduction_road_found") @db.TinyInt
+  reductionKmFound        Decimal  @map("reduction_km_found") @db.Decimal(8, 3)
+  tempAverageFound        Int      @map("temp_average_found") @db.UnsignedTinyInt
+  tempPeakFound           Int      @map("temp_peak_found") @db.UnsignedTinyInt
+  oilAverageFound         Int      @map("oil_average_found") @db.UnsignedSmallInt
+  oilPeakFound            Int      @map("oil_peak_found") @db.UnsignedSmallInt
+  startFound              DateTime @map("start_found") @db.Time(0)
+  startDateFound          DateTime @map("start_date_found") @db.Date
+  startDateManual         DateTime @map("start_date_manual") @db.Date
+  endDateManual           DateTime @map("end_date_manual") @db.Date
+  startManual             DateTime @map("start_manual") @db.Time(0)
+  startReason             Int      @map("start_reason") @db.TinyInt
+  stationsFound           Int      @map("stations_found") @db.TinyInt
+  cashComment             String   @map("cash_comment") @db.Text
+  kmComment               String   @map("km_comment") @db.Text
+  prepareComment          String   @map("prepare_comment") @db.Text
+  speedComment            String   @map("speed_comment") @db.Text
+  startComment            String   @map("start_comment") @db.Text
+  endComment              String   @map("end_comment") @db.Text
+  routeComment            String   @map("route_comment") @db.Text
+  gasFound                String   @map("gas_found") @db.VarChar(11)
+  fiscInfo                String   @map("fisc_info") @db.VarChar(40)
+  tempComment             String   @map("temp_comment") @db.Text
+  oilComment              String   @map("oil_comment") @db.Text
+  editedBy                Int      @map("edited_by")
+  beforeTime              String   @map("before_time") @db.VarChar(5)
+  afterTime               String   @map("after_time") @db.VarChar(5)
+  beforeTimeFound         String   @map("before_time_found") @db.VarChar(8)
+  afterTimeFound          String   @map("after_time_found") @db.VarChar(8)
+  sheduleId               Int      @map("shedule_id")
+  prepareFlag             String   @map("prepare_flag") @db.VarChar(1)
+  beforeFlag              String   @map("before_flag") @db.VarChar(1)
+  durationFlag            String   @map("duration_flag") @db.VarChar(1)
+  afterFlag               String   @map("after_flag") @db.VarChar(1)
+  rpmFound                String   @map("rpm_found") @db.VarChar(30)
+  accBrkFound             String   @map("acc_brk_found") @db.VarChar(30)
+  additOptFound           Int      @map("addit_opt_found") @db.UnsignedMediumInt
+  fuelConsPrep            Decimal  @map("fuel_cons_prep") @db.Decimal(6, 2)
+  fuelConsBefore          Decimal  @map("fuel_cons_before") @db.Decimal(6, 2)
+  fuelConsAfter           Decimal  @map("fuel_cons_after") @db.Decimal(6, 2)
+  fuelConsMain            Decimal  @map("fuel_cons_main") @db.Decimal(6, 2)
+  fuelConsStop            Decimal  @map("fuel_cons_stop") @db.Decimal(6, 2)
+  speedBChk               Int      @map("speed_b_chk") @db.UnsignedTinyInt
+  speedBVal               Decimal  @map("speed_b_val") @db.Decimal(5, 2)
+  rpmBChk                 Int      @map("rpm_b_chk") @db.UnsignedTinyInt
+  rpmBVal                 Decimal  @map("rpm_b_val") @db.Decimal(5, 2)
+  accbrkBChk              Int      @map("accbrk_b_chk") @db.UnsignedTinyInt
+  accbrkBVal              Decimal  @map("accbrk_b_val") @db.Decimal(5, 2)
+  allBChk                 Int      @map("all_b_chk") @db.UnsignedTinyInt
+  allBVal                 Decimal  @map("all_b_val") @db.Decimal(5, 2)
+  modifiedBy              Int      @map("modified_by") @db.UnsignedInt
+  modifiedDate            DateTime @map("modified_date") @db.DateTime(0)
+  createdBy               Int      @map("created_by")
+  createdDate             DateTime @map("created_date") @db.DateTime(0)
+  realisedBy              Int      @map("realised_by")
+  realisedDate            DateTime @map("realised_date") @db.DateTime(0)
+  canceledBy              Int      @map("canceled_by")
+  canceledDate            DateTime @map("canceled_date") @db.DateTime(0)
+  likePlannedBy           Int      @map("like_planned_by")
+  likePlannedDate         DateTime @map("like_planned_date") @db.DateTime(0)
+  missingGpsDataPercent   Int      @default(0) @map("missing_gps_data_percent") @db.UnsignedTinyInt
+  kmFoundByAnalyse        Decimal  @default(0) @map("km_found_by_analyse") @db.Decimal(8, 3)
+  stationsFoundByAnalyse  Int      @default(0) @map("stations_found_by_analyse") @db.UnsignedMediumInt
+  stationsStopped         Int      @default(0) @map("stations_stopped") @db.UnsignedMediumInt
+  vehicleAge              Int      @default(0) @map("vehicle_age") @db.UnsignedTinyInt
+  vehicleAgeMonths        Int      @default(0) @map("vehicle_age_months") @db.UnsignedTinyInt
+  vehicleAgeDays          Int      @default(0) @map("vehicle_age_days") @db.UnsignedTinyInt
+  transportationCost      Int      @default(0) @map("transportation_cost") @db.UnsignedInt
+  first3Last3Departure    Int      @default(0) @map("first_3_last_3_departure") @db.UnsignedTinyInt
+  cpRealised              Int      @default(0) @map("cp_realised") @db.UnsignedSmallInt
+
+  @@id([id, startDate])
+  @@index([garageNo], map: "garage_no")
+  @@index([driverId], map: "driver_id")
+  @@index([orderNo], map: "order_no")
+  @@index([sheduleId], map: "shedule_id")
+  @@index([realisedBy], map: "realised_by")
+  @@index([realisedDate], map: "realised_date")
+  @@map("date_travel_order")
+}
+
+// ========================================
+// Turnus Default Per Driver System
+// ========================================
+
+enum DayOfWeek {
+  Ponedeljak
+  Utorak
+  Sreda
+  Četvrtak
+  Petak
+  Subota
+  Nedelja
+}
+
+model TurnusDefaultPerDriver {
+  id                   Int        @id @default(autoincrement())
+  driverId             Int        @map("driver_id")
+  turnusName           String     @map("turnus_name") @db.VarChar(50)
+  lineNumberForDisplay String?    @map("line_number_for_display") @db.VarChar(10)
+  shiftNumber          Int?       @map("shift_number") @db.TinyInt
+  dayOfWeek            DayOfWeek? @map("day_of_week")
+  priority             Int        @default(100)
+  isActive             Boolean    @default(true) @map("is_active")
+  usageCount           Int        @default(0) @map("usage_count")
+  usagePercentage      Decimal    @default(0.00) @map("usage_percentage") @db.Decimal(5, 2)
+  lastUsedDate         DateTime?  @map("last_used_date") @db.Date
+  autoGenerated        Boolean    @default(false) @map("auto_generated")
+  confidenceScore      Decimal    @default(0.00) @map("confidence_score") @db.Decimal(5, 2)
+  note                 String?    @db.Text
+  createdAt            DateTime   @default(now()) @map("created_at")
+  updatedAt            DateTime   @updatedAt @map("updated_at")
+  createdBy            Int?       @map("created_by")
+  updatedBy            Int?       @map("updated_by")
+
+  // Relations
+  driver  User  @relation("DriverDefaults", fields: [driverId], references: [id], onDelete: Cascade)
+  creator User? @relation("DefaultCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater User? @relation("DefaultUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  // Indexes
+  @@unique([driverId, turnusName, lineNumberForDisplay, shiftNumber, dayOfWeek], map: "unique_driver_turnus_config")
+  @@index([driverId, isActive], map: "tdpd_driver_id_is_active_idx")
+  @@index([turnusName, lineNumberForDisplay], map: "tdpd_turnus_line_idx")
+  @@index([priority], map: "tdpd_priority_idx")
+  @@index([autoGenerated, confidenceScore], map: "tdpd_auto_gen_conf_idx")
+  @@map("turnus_default_per_driver")
+}
+
+// Legacy table imported from BGNaplata server - main ticketing schedule table
+model DateShedule {
+  id                        Int       @default(autoincrement()) @db.UnsignedInt
+  startTime                 DateTime  @map("start_time") @db.Time /// start time from timetable (may not be actual start time if departure is split into 2 or more departures, in that case, actual start time is in field tt_start_time)
+  startStation              String    @map("start_station") @db.VarChar(50) /// start station name
+  endTime                   DateTime  @map("end_time") @db.Time /// end time (may not be end time from timetable if departure is split into two or more departures)
+  endStation                String    @map("end_station") @db.VarChar(50) /// end station name
+  lineNo                    String    @map("line_no") @db.VarChar(6) /// line number
+  lineName                  String    @map("line_name") @db.VarChar(100) /// line name
+  busOperator               String    @map("bus_operator") @db.VarChar(40) /// name of bus operator
+  busNumber                 Int       @map("bus_number") @db.UnsignedSmallInt /// bus number on same departure, same line number, same time, same direction
+  busRegistration           String    @map("bus_registration") @db.VarChar(10) /// vehicle plate number
+  busGarageNo               String    @map("bus_garage_no") @db.VarChar(15) /// vehicle garage number
+  peron                     String    @db.VarChar(4) /// landplace number
+  assignedPersons           String    @map("assigned_persons") @db.VarChar(500) /// assigned persons roles and names imploded using |$| string
+  rBusRegistration          String    @map("r_bus_registration") @db.VarChar(10) /// realised bus registration
+  rBusGarageNo              String    @map("r_bus_garage_no") @db.VarChar(15) /// realised bus garage number
+  rPeron                    String    @map("r_peron") @db.VarChar(4) /// realised landplace
+  rAssignedPersons          String    @map("r_assigned_persons") @db.VarChar(500) /// realised assigned persons roles and names imploded using |$| string
+  rUserIds                  String    @map("r_user_ids") @db.VarChar(500) /// realised user ids and events, for format see user_ids field
+  user1IdRealised           Int       @default(0) @map("user_1_id_realised") @db.UnsignedMediumInt
+  user2IdRealised           Int       @default(0) @map("user_2_id_realised") @db.UnsignedMediumInt
+  user3IdRealised           Int       @default(0) @map("user_3_id_realised") @db.UnsignedMediumInt
+  status                    Int       @map("status") @db.UnsignedSmallInt /// deprecated
+  startDate                 DateTime  @map("start_date") @db.Date /// start date of departure, see start_time
+  userIds                   String    @map("user_ids") @db.VarChar(500) /// Assigned user ids and events, imploded using string |$|. After explode we have one string for each user. This user string is imploded using ||| string. After explode of one user string we end up with array of strings. In this array, first item is user ID, second item is user group ID from user_groups table (driver=2 for example), third item is user events for day 0, fourth item is user events for day 1 (for multi day departures) etc. If there is no fourth item, then there is no day 1. User events string is imploded using |#| string. After explode we have array of events-times pairs strings. Each event-time string is imploded using ### string. After explode of event-time string we have array with two strings, event ID from changes_codes table and event time.
+  user1IdPlanned            Int       @default(0) @map("user_1_id_planned") @db.UnsignedMediumInt
+  user2IdPlanned            Int       @default(0) @map("user_2_id_planned") @db.UnsignedMediumInt
+  user3IdPlanned            Int       @default(0) @map("user_3_id_planned") @db.UnsignedMediumInt
+  busReg2                   String    @map("bus_reg_2") @db.VarChar(10) /// deprecated
+  busGar2                   String    @map("bus_gar_2") @db.VarChar(10) /// deprecated
+  endDate                   DateTime  @map("end_date") @db.Date /// actual end date of departure
+  direction                 Int       @db.UnsignedTinyInt /// line number direction (0=from first to last station direction, 1=from last to first station direction)
+  rideType                  Int       @map("ride_type") @db.UnsignedTinyInt /// 0=normal ride, 1=free ride (slobodna voznja) , 2=extra ride (vanredna voznja) ,9=KM ride (voznja po KM)
+  freeId                    Int       @default(0) @map("free_id") @db.UnsignedMediumInt /// free ride id from date_free_ride table
+  kmPred                    Decimal   @default(0.000) @map("km_pred") @db.Decimal(8, 3) /// predicted KM for line number
+  kmReal                    Decimal   @default(0.000) @map("km_real") @db.Decimal(8, 3) /// deprecated
+  lineType                  String    @default("") @map("line_type") @db.VarChar(40) /// line type string from line_types table
+  tourId                    Int       @default(0) @map("tour_id") @db.UnsignedMediumInt /// id of turnus from changes_codes_tours table in which this departure is assigned
+  centralPoint              Int       @default(0) @map("central_point") @db.UnsignedSmallInt /// central point id from central_points table
+  modified                  Int       @default(0) @db.UnsignedTinyInt /// 0=not split, > 0 = split departure
+  ttStartTime               DateTime  @default(dbgenerated("'00:00:00'")) @map("tt_start_time") @db.Time /// actual start time
+  ttStartDate               DateTime  @map("tt_start_date") @db.Date /// actual start date
+  priceTablesIndexId        Int       @default(0) @map("price_tables_index_id") @db.UnsignedInt
+  departureOpenTime         DateTime  @map("departure_open_time") @db.DateTime(0)
+  departureCloseTime        DateTime  @map("departure_close_time") @db.DateTime(0)
+  startStationUid           Int       @default(0) @map("start_station_uid") @db.UnsignedMediumInt
+  endStationUid             Int       @default(0) @map("end_station_uid") @db.UnsignedMediumInt
+  lastStationUpdateTime     DateTime  @map("last_station_update_time") @db.DateTime(0)
+  lastStationNumber         Int       @default(0) @map("last_station_number") @db.UnsignedSmallInt
+  numberOfStationsFound     Int       @default(0) @map("number_of_stations_found") @db.UnsignedSmallInt
+  numberOfStationsInLine    Int       @default(0) @map("number_of_stations_in_line") @db.UnsignedSmallInt
+  currentRoutePosition      Int       @default(0) @map("current_route_position") @db.UnsignedSmallInt
+  firstStationTime          DateTime  @map("first_station_time") @db.DateTime(0)
+  lastStationTime           DateTime  @map("last_station_time") @db.DateTime(0)
+  androidDepartureId        Int       @default(0) @map("android_departure_id") @db.UnsignedInt
+  androidDepartureIdClose   Int       @default(0) @map("android_departure_id_close") @db.UnsignedInt
+  turnusDepartureNo         Int       @default(0) @map("turnus_departure_no") @db.UnsignedSmallInt
+  turnusVehicleNo           Int       @default(0) @map("turnus_vehicle_no") @db.UnsignedSmallInt
+  nextDepartureTime         DateTime  @default(dbgenerated("'00:00:00'")) @map("next_departure_time") @db.Time
+  departureStatus           Int       @default(0) @map("departure_status") @db.UnsignedTinyInt
+  departureAnalysed         Int       @default(0) @map("departure_analysed") @db.UnsignedTinyInt
+  departureAnalysedDatetime DateTime? @map("departure_analysed_datetime") @db.DateTime(0)
+  vehicleGroupTypesId       Int?      @default(0) @map("vehicle_group_types_id") @db.UnsignedSmallInt
+  vremenaPolaskaStId        Int       @default(0) @map("vremena_polaska_st_id") @db.UnsignedInt
+  plannedBy                 Int       @default(0) @map("planned_by") @db.UnsignedTinyInt /// 0-automatic; 1-dispatcher;
+  lastModified              DateTime  @default(now()) @updatedAt @map("last_modified") @db.DateTime(0)
+
+  // Composite primary key
+  @@id([id, startDate])
+  // Indexes
+  @@index([freeId], map: "free_id")
+  @@index([endDate], map: "end_date")
+  @@index([startDate, startTime], map: "start_date")
+  @@index([androidDepartureId], map: "android_departure_id")
+  @@index([priceTablesIndexId], map: "price_tables_index_id_index")
+  @@index([startDate, tourId], map: "start_date2")
+  @@index([lastModified], map: "last_modified")
+  @@map("date_shedule")
+}
+
+// ========== TURNUS SYNC TRACKING MODELS ==========
+
+model TurnusSyncLog {
+  id                    Int       @id @default(autoincrement())
+  syncId                String    @unique @map("sync_id") /// Unique identifier: turnus-sync-{groupId}-{timestamp}
+  groupId               Int       @map("group_id") /// Turnus group ID being synced
+  status                String    @default("pending") /// pending, in_progress, completed, failed
+  totalRecords          Int       @default(0) @map("total_records")
+  processedRecords      Int       @default(0) @map("processed_records")
+  upsertedRecords       Int       @default(0) @map("upserted_records")
+  errorRecords          Int       @default(0) @map("error_records")
+  lastProcessedTurnusId Int?      @map("last_processed_turnus_id") /// For resume capability
+  lastProcessedBatch    Int       @default(0) @map("last_processed_batch") /// Last completed batch number
+  startedAt             DateTime  @map("started_at")
+  completedAt           DateTime? @map("completed_at")
+  errorMessage          String?   @map("error_message") @db.Text
+  userId                Int       @map("user_id")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  user User @relation("TurnusSyncLogs", fields: [userId], references: [id])
+
+  @@index([syncId])
+  @@index([groupId])
+  @@index([status])
+  @@index([userId])
+  @@index([startedAt])
+  @@map("turnus_sync_logs")
 }

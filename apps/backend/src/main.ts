@@ -9,6 +9,7 @@ import { SwaggerAuthMiddleware } from './common/middleware/swagger-auth.middlewa
 import { ApiKeysService } from './api-keys/api-keys.service';
 
 // Bootstrap aplikacije - inicijalizacija NestJS servera
+// Fixed Prisma migrations: Added UNIQUE constraint before FK creation (2025-10-19)
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 

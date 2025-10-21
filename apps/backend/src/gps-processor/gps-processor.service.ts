@@ -355,17 +355,29 @@ export class GpsProcessorService {
       // Svaki worker uzima podatke za različita vozila koristeći modulo operaciju
       const fetchStart = new Date();
 
-      // Koristi worker_group kolonu za brzu raspodelu (bez MOD kalkulacije)
-      // Svaki worker uzima svoje redove prema worker_group indeksu
-      // SKIP LOCKED uklonjen jer svaki worker ima ekskluzivnu grupu
+      // DEADLOCK FIX:
+      // - FORCE INDEX (idx_worker_processing): Forsira optimizovan composite index
+      //   koji pokriva worker_group + process_status + retry_count + received_at
+      // - SKIP LOCKED: Preskače zapise koje drugi worker-i drže, eliminiše deadlock
+      //
+      // Stari pristup:
+      // - MySQL koristio idx_status_only (samo process_status)
+      // - Skenirao milione 'pending' zapisa, pa filtrirao po worker_group
+      // - Držao lock-ove predugo → deadlock sa UPDATE query-jima
+      //
+      // Novi pristup:
+      // - idx_worker_processing (worker_group, process_status, retry_count, received_at)
+      // - Direktan index seek na worker_group = X, process_status = 'pending'
+      // - Skenira samo ~100-5000 zapisa umesto miliona
+      // - SKIP LOCKED omogućava worker-ima da rade nezavisno
       const batch = await this.prisma.$queryRaw<any[]>`
-        SELECT * FROM gps_raw_buffer 
+        SELECT * FROM gps_raw_buffer FORCE INDEX (idx_worker_processing)
         WHERE worker_group = ${workerId - 1}
-        AND process_status = 'pending' 
+        AND process_status = 'pending'
         AND retry_count < 3
         ORDER BY received_at ASC
         LIMIT ${limit}
-        FOR UPDATE
+        FOR UPDATE SKIP LOCKED
       `;
       const fetchEnd = new Date();
 
@@ -624,13 +636,10 @@ export class GpsProcessorService {
         const bufferData = {
           vehicleId: point.vehicleId,
           garageNo: point.garageNo || '',
+          // Unix timestamp je već UTC, ne treba convertBelgradeToUTC!
           timestamp: new Date(
-            this.convertBelgradeToUTC(
-              new Date(
-                (point.timestamp || Math.floor(Date.now() / 1000)) * 1000,
-              ),
-            ),
-          ), // Convert Unix timestamp to Date sa Belgrade->UTC konverzijom
+            (point.timestamp || Math.floor(Date.now() / 1000)) * 1000,
+          ),
           lat: parseFloat(point.lat),
           lng: parseFloat(point.lng),
           speed: parseInt(point.speed) || 0,
@@ -722,8 +731,8 @@ export class GpsProcessorService {
   async cleanupFailedRecords(olderThanHours: number = 24) {
     try {
       const result = await this.prisma.$executeRaw`
-        DELETE FROM gps_raw_buffer 
-        WHERE process_status = 'failed' 
+        DELETE FROM gps_raw_buffer
+        WHERE process_status = 'failed'
         AND retry_count >= 3
         AND received_at < DATE_SUB(NOW(), INTERVAL ${olderThanHours} HOUR)
       `;
@@ -732,6 +741,67 @@ export class GpsProcessorService {
       return result;
     } catch (error) {
       this.logger.error('Greška pri čišćenju failed zapisa:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * 🔧 RECOVERY: Popravi worker_group za zapise koji imaju NULL
+   * Ovo je automatski recovery mehanizam za probleme pri unosu podataka
+   * Pokreće se svakih 1 minut
+   */
+  @Cron('*/1 * * * *') // Svaki 1 minut
+  async recoverMissingWorkerGroups() {
+    try {
+      // Prvo proveri da li postoje zapisi sa NULL worker_group
+      const nullCount: any[] = await this.prisma.$queryRaw`
+        SELECT COUNT(*) as count
+        FROM gps_raw_buffer
+        WHERE process_status = 'pending'
+          AND worker_group IS NULL
+          AND vehicle_id IS NOT NULL
+      `;
+
+      const count = Number(nullCount[0]?.count || 0);
+
+      if (count === 0) {
+        return; // Nema problema, izlazimo
+      }
+
+      this.logger.warn(
+        `🔧 RECOVERY: Detektovano ${count} pending zapisa sa worker_group=NULL. Popravljam...`,
+      );
+
+      // Popravi worker_group na osnovu vehicle_id % 8
+      const result = await this.prisma.$executeRaw`
+        UPDATE gps_raw_buffer
+        SET worker_group = vehicle_id % 8
+        WHERE process_status = 'pending'
+          AND worker_group IS NULL
+          AND vehicle_id IS NOT NULL
+      `;
+
+      this.logger.log(
+        `✅ RECOVERY: Popravljeno ${result} zapisa - worker_group postavljen na vehicle_id % 8`,
+      );
+
+      // Proveri distribuciju posle popravke
+      const distribution: any[] = await this.prisma.$queryRaw`
+        SELECT worker_group, COUNT(*) as count
+        FROM gps_raw_buffer
+        WHERE process_status = 'pending'
+        GROUP BY worker_group
+        ORDER BY worker_group
+      `;
+
+      const distInfo = distribution
+        .map((row) => `W${row.worker_group}:${row.count}`)
+        .join(', ');
+      this.logger.log(`📊 RECOVERY: Nova distribucija - ${distInfo}`);
+
+      return result;
+    } catch (error) {
+      this.logger.error('❌ RECOVERY greška pri popravljanju worker_group:', error);
       return 0;
     }
   }
@@ -899,6 +969,104 @@ export class GpsProcessorService {
   }
 
   /**
+   * Recovery mehanizam za stuck processing zapise
+   * Detektuje i resetuje zapise koji su zaglavljeni u processing statusu
+   * Pokreće se svakih 5 minuta
+   */
+  @Cron('*/5 * * * *') // Svakih 5 minuta
+  async recoverStuckRecords() {
+    try {
+      const stuckThresholdMinutes = 5; // Zapisi stuck duže od 5 minuta
+      const maxRetries = 3; // Maksimalan broj pokušaja
+
+      const stuckThreshold = new Date();
+      stuckThreshold.setMinutes(
+        stuckThreshold.getMinutes() - stuckThresholdMinutes,
+      );
+
+      // Dohvati stuck zapise
+      const stuckRecords = await this.prisma.$queryRaw<
+        { id: bigint; retry_count: number; vehicle_id: number }[]
+      >`
+        SELECT id, retry_count, vehicle_id
+        FROM gps_raw_buffer
+        WHERE process_status = 'processing'
+        AND processed_at < ${stuckThreshold}
+        LIMIT 10000
+      `;
+
+      if (stuckRecords.length === 0) {
+        return { recovered: 0, failed: 0 };
+      }
+
+      this.logger.warn(
+        `🔧 Pronađeno ${stuckRecords.length} stuck processing zapisa (starijih od ${stuckThresholdMinutes} min)`,
+      );
+
+      // Podeli na one koje treba retry-ovati i one koje treba failovati
+      const recordsToRetry: bigint[] = [];
+      const recordsToFail: bigint[] = [];
+
+      stuckRecords.forEach((record) => {
+        if (record.retry_count >= maxRetries - 1) {
+          // Već je bio retry-ovan 2 puta, sad ide u failed
+          recordsToFail.push(record.id);
+        } else {
+          // Retry-uj
+          recordsToRetry.push(record.id);
+        }
+      });
+
+      let recoveredCount = 0;
+      let failedCount = 0;
+
+      // Reset zapisa za retry
+      if (recordsToRetry.length > 0) {
+        const result = await this.prisma.$executeRaw`
+          UPDATE gps_raw_buffer
+          SET process_status = 'pending',
+              retry_count = retry_count + 1,
+              processed_at = NULL,
+              error_message = CONCAT(
+                COALESCE(error_message, ''),
+                ' | Auto-recovery: Reset from stuck processing status at ',
+                NOW()
+              )
+          WHERE id IN (${Prisma.join(recordsToRetry)})
+        `;
+        recoveredCount = result;
+        this.logger.log(
+          `✅ Resetovano ${recoveredCount} stuck zapisa u pending status`,
+        );
+      }
+
+      // Označi kao trajno failed
+      if (recordsToFail.length > 0) {
+        const result = await this.prisma.$executeRaw`
+          UPDATE gps_raw_buffer
+          SET process_status = 'failed',
+              retry_count = retry_count + 1,
+              error_message = CONCAT(
+                COALESCE(error_message, ''),
+                ' | Auto-recovery: Max retries exceeded, marked as failed at ',
+                NOW()
+              )
+          WHERE id IN (${Prisma.join(recordsToFail)})
+        `;
+        failedCount = result;
+        this.logger.warn(
+          `⚠️ Označeno ${failedCount} stuck zapisa kao failed (max retries exceeded)`,
+        );
+      }
+
+      return { recovered: recoveredCount, failed: failedCount };
+    } catch (error) {
+      this.logger.error('Greška pri recovery-ju stuck zapisa:', error);
+      return { recovered: 0, failed: 0 };
+    }
+  }
+
+  /**
    * Kontrola cron jobova
    */
   static setCronEnabled(
@@ -922,7 +1090,12 @@ export class GpsProcessorService {
     processedCount: number;
     timeRange?: { min: Date; max: Date };
   }> {
+    this.logger.log(
+      `🔵 insertBatchToTimescaleDB CALLED with ${batch?.length || 0} points`,
+    );
+
     if (!batch || batch.length === 0) {
+      this.logger.warn('⚠️ insertBatchToTimescaleDB: Empty batch!');
       return { processedCount: 0 };
     }
 
@@ -966,9 +1139,10 @@ export class GpsProcessorService {
       let paramIndex = 1;
 
       for (const point of batchPoints) {
-        // Track time range - VAŽNO: konvertuj Belgrade->UTC
-        const convertedTime = this.convertBelgradeToUTC(point.timestamp);
-        const pointTime = new Date(convertedTime);
+        // Track time range
+        // VAŽNO: point.timestamp je već Date objekat u UTC (iz buffer-a)
+        // NE pozivati convertBelgradeToUTC jer bi to uzrokovalo duplu konverziju!
+        const pointTime = new Date(point.timestamp);
         if (!minTime || pointTime < minTime) minTime = pointTime;
         if (!maxTime || pointTime > maxTime) maxTime = pointTime;
 
@@ -983,7 +1157,7 @@ export class GpsProcessorService {
 
         // Dodaj vrednosti
         batchValues.push(
-          convertedTime, // time - konvertovano u UTC
+          pointTime.toISOString(), // time - već je UTC, samo pretvori u ISO string
           point.vehicle_id || point.vehicleId, // vehicle_id
           point.garage_no || point.garageNo, // garage_no
           parseFloat(point.lat), // lat
@@ -1017,8 +1191,23 @@ export class GpsProcessorService {
           in_route = EXCLUDED.in_route
       `;
 
-      await this.timescalePool.query(insertQuery, batchValues);
-      totalInserted += batchPoints.length;
+      try {
+        this.logger.log(
+          `🔵 Attempting TimescaleDB INSERT: ${batchPoints.length} points (batch ${batchStart})`,
+        );
+        const result = await this.timescalePool.query(insertQuery, batchValues);
+        this.logger.log(
+          `✅ TimescaleDB INSERT SUCCESS: rowCount=${result.rowCount}, command=${result.command}`,
+        );
+        totalInserted += batchPoints.length;
+      } catch (error) {
+        this.logger.error(
+          `❌ TimescaleDB INSERT greška (batch ${batchStart}-${batchStart + batchPoints.length}): ${error.message}`,
+        );
+        this.logger.error(`Error code: ${error.code}`);
+        this.logger.error(`Sample point: ${JSON.stringify(batchPoints[0])}`);
+        throw error; // Re-throw da worker catch-uje
+      }
     }
 
     return {

@@ -29,6 +29,7 @@ import {
 import { useAuthStore } from '../../stores/auth.store';
 import { getAvatarUrl, isProduction } from '../../utils/avatar';
 import axios from 'axios';
+import { API_URL } from '../../config/runtime';
 
 const { Title, Text } = Typography;
 
@@ -60,7 +61,7 @@ const Profile: React.FC = () => {
   const loadProfile = async () => {
     try {
       const response = await axios.get(
-        `${import.meta.env.VITE_API_URL}/api/users/profile`,
+        `${API_URL}/api/users/profile`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -159,7 +160,7 @@ const Profile: React.FC = () => {
         formData.append('isPublic', 'true');
         
         const uploadResponse = await axios.post(
-          `${import.meta.env.VITE_API_URL}/api/spaces/upload-avatar`,
+          `${API_URL}/api/spaces/upload-avatar`,
           formData,
           {
             headers: {
@@ -176,7 +177,7 @@ const Profile: React.FC = () => {
         formData.append('file', file);
         
         const uploadResponse = await axios.post(
-          `${import.meta.env.VITE_API_URL}/api/uploads/avatar`,
+          `${API_URL}/api/uploads/avatar`,
           formData,
           {
             headers: {
@@ -191,7 +192,7 @@ const Profile: React.FC = () => {
 
       // Ažuriraj profil sa URL-om avatara
       const profileResponse = await axios.patch(
-        `${import.meta.env.VITE_API_URL}/api/users/profile/avatar`,
+        `${API_URL}/api/users/profile/avatar`,
         { avatarUrl },
         {
           headers: {
@@ -224,7 +225,7 @@ const Profile: React.FC = () => {
     
     try {
       const response = await axios.delete(
-        `${import.meta.env.VITE_API_URL}/api/users/profile/avatar`,
+        `${API_URL}/api/users/profile/avatar`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,

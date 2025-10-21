@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Modal, DatePicker, Button, Space, Spin, Empty, Statistic, Row, Col, Slider, message } from 'antd';
+import { Modal, DatePicker, Button, Space, Spin, Empty, Statistic, Row, Col, Slider, message, Select } from 'antd';
 import { Play, Pause, SkipBack, SkipForward, Clock, TrendingUp, Navigation, AlertCircle } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Polyline, Popup } from 'react-leaflet';
 import L from 'leaflet';
@@ -9,6 +9,7 @@ import { VehicleMapper } from '../../utils/vehicle-mapper';
 import 'leaflet/dist/leaflet.css';
 
 const { RangePicker } = DatePicker;
+const { Option } = Select;
 
 interface VehiclePosition {
   garageNo: string;
@@ -84,6 +85,7 @@ const createBusIconSmall = (speed: number, course: number) => {
 
 const VehicleHistoryModal: React.FC<VehicleHistoryModalProps> = ({ visible, vehicle, onClose }) => {
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(null);
+  const [dataSource, setDataSource] = useState<'gps_data' | 'gps_data_lag_filtered'>('gps_data');
   const [loading, setLoading] = useState(false);
   const [gpsPoints, setGpsPoints] = useState<GPSPoint[]>([]);
   const [statistics, setStatistics] = useState<Statistics | null>(null);
@@ -121,12 +123,20 @@ const VehicleHistoryModal: React.FC<VehicleHistoryModalProps> = ({ visible, vehi
       }
 
       const [start, end] = dateRange;
+
+      // DEBUG: Loguj koji izvor se koristi
+      console.log('🔍 [VehicleHistory] Učitavam podatke iz izvora:', dataSource);
+      console.log('📅 [VehicleHistory] Period:', start.format('DD.MM.YYYY HH:mm'), '-', end.format('DD.MM.YYYY HH:mm'));
+
       const response = await api.get(`/api/dispatcher/vehicle-history/${vehicleId}`, {
         params: {
           startDate: start.toISOString(),
           endDate: end.toISOString(),
+          source: dataSource,
         },
       });
+
+      console.log('✅ [VehicleHistory] Odgovor:', response.data.points?.length, 'tačaka');
 
       if (response.data.success) {
         setGpsPoints(response.data.points);
@@ -194,6 +204,13 @@ const VehicleHistoryModal: React.FC<VehicleHistoryModalProps> = ({ visible, vehi
   const routeLine = gpsPoints.slice(0, currentIndex + 1).map((p) => [p.lat, p.lng] as [number, number]);
   const fullRouteLine = gpsPoints.map((p) => [p.lat, p.lng] as [number, number]);
 
+  // Validacija - proveri da li su koordinate validne
+  const hasValidCoordinates = gpsPoints.length > 0 &&
+    gpsPoints[0].lat &&
+    gpsPoints[0].lng &&
+    !isNaN(gpsPoints[0].lat) &&
+    !isNaN(gpsPoints[0].lng);
+
   return (
     <Modal
       title={
@@ -213,7 +230,7 @@ const VehicleHistoryModal: React.FC<VehicleHistoryModalProps> = ({ visible, vehi
     >
       {/* Kontrole */}
       <div className="mb-4 space-y-4">
-        {/* Date picker i Load button */}
+        {/* Date picker, Source select i Load button */}
         <div className="flex items-center gap-4">
           <RangePicker
             showTime
@@ -223,6 +240,17 @@ const VehicleHistoryModal: React.FC<VehicleHistoryModalProps> = ({ visible, vehi
             placeholder={['Početak', 'Kraj']}
             style={{ flex: 1 }}
           />
+          <Select
+            value={dataSource}
+            onChange={(value) => {
+              console.log('🔄 [VehicleHistory] Promena izvora podataka:', value);
+              setDataSource(value);
+            }}
+            style={{ width: 200 }}
+          >
+            <Option value="gps_data">GPS Data (original)</Option>
+            <Option value="gps_data_lag_filtered">GPS Data (lag filtered)</Option>
+          </Select>
           <Button type="primary" onClick={loadHistory} loading={loading}>
             Prikaži istoriju
           </Button>
@@ -396,12 +424,13 @@ const VehicleHistoryModal: React.FC<VehicleHistoryModalProps> = ({ visible, vehi
             <Spin size="large" />
             <p className="mt-4 text-gray-600">Učitavanje GPS podataka...</p>
           </div>
-        ) : gpsPoints.length === 0 ? (
+        ) : !hasValidCoordinates ? (
           <div className="flex items-center justify-center h-full bg-gray-100">
             <Empty description="Nema GPS podataka za izabrani period" />
           </div>
         ) : (
           <MapContainer
+            key={`map-${gpsPoints.length}-${gpsPoints[0]?.time}`}
             center={[gpsPoints[0].lat, gpsPoints[0].lng]}
             zoom={14}
             style={{ height: '100%', width: '100%' }}

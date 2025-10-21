@@ -37,8 +37,10 @@ RUN mkdir -p /app/uploads /app/scripts /home/nestjs/.ssh && \
     chown -R nestjs:nodejs /app/uploads && \
     chown -R nestjs:nodejs /app/scripts && \
     chown -R nestjs:nodejs /home/nestjs/.ssh && \
-    chmod 700 /home/nestjs/.ssh && \
-    chmod 755 /app/scripts
+    chmod 755 /app/scripts && \
+    chmod 700 /home/nestjs/.ssh
+
+# SSH ključevi će biti mount-ovani tokom runtime-a
 
 # Copy built application from builder
 COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist

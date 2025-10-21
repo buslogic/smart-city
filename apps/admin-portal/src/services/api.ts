@@ -1,7 +1,6 @@
 import axios from 'axios';
 import { TokenManager } from '../utils/token';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3010';
+import { API_URL } from '../config/runtime';
 
 export const api = axios.create({
   baseURL: API_URL,
@@ -16,6 +15,12 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    // Ako šaljemo FormData, ukloni Content-Type da browser automatski postavi multipart/form-data
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
+    }
+
     return config;
   },
   (error) => {

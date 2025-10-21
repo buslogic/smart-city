@@ -34,19 +34,10 @@ import {
   ToolOutlined,
   RadarChartOutlined,
   AlertOutlined,
-  ExperimentOutlined,
-  DropboxOutlined,
-  HomeOutlined,
-  MoneyCollectOutlined,
-  ReadOutlined,
-  FileSearchOutlined,
-  UserAddOutlined,
-  CalculatorOutlined,
-  ShopOutlined,
-  PrinterOutlined,
-  LineChartOutlined,
-  AuditOutlined,
-  CheckCircleOutlined
+  TagsOutlined,
+  BranchesOutlined,
+  CalendarOutlined,
+  MailOutlined
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { useAuthStore } from '../../stores/auth.store';
@@ -266,6 +257,146 @@ const ModernMenu: React.FC = () => {
                 label: <span className="text-red-500 font-semibold">🚨 GPS Migration</span>,
                 permissions: ['system:view'],
               },
+              {
+                key: '/transport/vehicles/gps-lag-transfer',
+                menuOrder: 301060000000,
+                icon: <DatabaseOutlined />,
+                label: 'GPS LAG Transfer',
+                permissions: ['vehicles.gps.lag:view'],
+              },
+            ],
+          },
+          {
+            key: 'administration',
+            menuOrder: 301500000000,
+            icon: <SettingOutlined />,
+            label: 'Administracija',
+            // permissions: ['transport.administration:view'], // ❌ Uklonjeno - hijerarhijska logika
+            children: [
+              {
+                key: '/transport/administration/central-points',
+                menuOrder: 301510000000,
+                icon: <EnvironmentOutlined />,
+                label: 'Centralne tačke',
+                // Prikaži ako korisnik ima bar jednu view permisiju (kontejner ili bilo koji server)
+                permissions: [
+                  'transport.administration.central_points:view',
+                  'transport.administration.central_points.main:view',
+                  'transport.administration.central_points.ticketing:view',
+                  'transport.administration.central_points.city:view',
+                ],
+              },
+              {
+                key: '/transport/administration/stops-sync',
+                menuOrder: 301515000000,
+                icon: <EnvironmentOutlined />,
+                label: 'Stajališta Sync.',
+                // Prikaži ako korisnik ima bar jednu view permisiju (kontejner ili bilo koji server)
+                permissions: [
+                  'transport.administration.stops_sync:view',
+                  'transport.administration.stops_sync.main:view',
+                  'transport.administration.stops_sync.ticketing:view',
+                  'transport.administration.stops_sync.city:view',
+                ],
+              },
+              {
+                key: '/transport/administration/price-list-groups',
+                menuOrder: 301520000000,
+                icon: <TagsOutlined />,
+                label: 'Grupe cenovnika',
+                // Prikaži ako korisnik ima bar jednu view permisiju (kontejner ili bilo koji server)
+                permissions: [
+                  'transport.administration.price_list_groups:view',
+                  'transport.administration.price_list_groups.main:view',
+                  'transport.administration.price_list_groups.ticketing:view',
+                  'transport.administration.price_list_groups.city:view',
+                ],
+              },
+              {
+                key: '/transport/administration/lines-admin',
+                menuOrder: 301525000000,
+                icon: <BranchesOutlined />,
+                label: 'Linije Administracija',
+                permissions: ['transport.administration.lines_admin:view'],
+              },
+              {
+                key: '/transport/administration/lines',
+                menuOrder: 301530000000,
+                icon: <BranchesOutlined />,
+                label: 'Linije Sync.',
+                // Prikaži ako korisnik ima bar jednu view permisiju (kontejner ili bilo koji server)
+                permissions: [
+                  'transport.administration.lines:view',
+                  'transport.administration.lines.main:view',
+                  'transport.administration.lines.ticketing:view',
+                  'transport.administration.lines.city:view',
+                ],
+              },
+              {
+                key: '/transport/administration/variations',
+                menuOrder: 301535000000,
+                icon: <TagsOutlined />,
+                label: 'Varijacije',
+                // Prikaži ako korisnik ima bar jednu view permisiju (kontejner ili bilo koji server)
+                permissions: [
+                  'transport.administration.variations:view',
+                  'transport.administration.variations.main:view',
+                  'transport.administration.variations.ticketing:view',
+                  'transport.administration.variations.city:view',
+                ],
+              },
+              {
+                key: '/transport/administration/timetable-dates',
+                menuOrder: 301540000000,
+                icon: <CalendarOutlined />,
+                label: 'Grupe za RedVoznje',
+                // Prikaži ako korisnik ima bar jednu view permisiju (kontejner ili bilo koji server)
+                permissions: [
+                  'transport.administration.timetable_dates:view',
+                  'transport.administration.timetable_dates.main:view',
+                  'transport.administration.timetable_dates.ticketing:view',
+                  'transport.administration.timetable_dates.city:view',
+                ],
+              },
+              {
+                key: '/transport/administration/timetable-sync',
+                menuOrder: 301545000000,
+                icon: <SyncOutlined />,
+                label: 'RedVoznje Sync.',
+                // Prikaži ako korisnik ima bar jednu view permisiju (kontejner ili bilo koji server)
+                permissions: [
+                  'transport.administration.timetable_sync:view',
+                  'transport.administration.timetable_sync.main:view',
+                  'transport.administration.timetable_sync.ticketing:view',
+                  'transport.administration.timetable_sync.city:view',
+                ],
+              },
+              {
+                key: '/transport/administration/turnusi-groups-sync',
+                menuOrder: 301550000000,
+                icon: <SyncOutlined />,
+                label: 'Turnusi Grupe Sync',
+                // Prikaži ako korisnik ima bar jednu view permisiju (kontejner ili bilo koji server)
+                permissions: [
+                  'transport.administration.turnusi_sync:view',
+                  'transport.administration.turnusi_sync.main:view',
+                  'transport.administration.turnusi_sync.ticketing:view',
+                  'transport.administration.turnusi_sync.city:view',
+                ],
+              },
+              {
+                key: '/transport/administration/turnusi',
+                menuOrder: 301555000000,
+                icon: <SyncOutlined />,
+                label: 'Turnusi Sync',
+                // Prikaži ako korisnik ima bar jednu view permisiju (kontejner ili bilo koji server)
+                permissions: [
+                  'transport.administration.turnusi:view',
+                  'transport.administration.turnusi.main:view',
+                  'transport.administration.turnusi.ticketing:view',
+                  'transport.administration.turnusi.city:view',
+                ],
+              },
             ],
           },
           {
@@ -303,6 +434,29 @@ const ModernMenu: React.FC = () => {
                 icon: <UserOutlined />,
                 label: 'Karton Vozača',
                 permissions: ['dispatcher.driver_card:view'],
+              },
+              {
+                key: 'planning',
+                menuOrder: 302050000000,
+                icon: <CalendarOutlined />,
+                label: 'Planiranje',
+                // permissions: ['transport.planning:view'], // ❌ Uklonjeno - hijerarhijska logika
+                children: [
+                  {
+                    key: '/transport/planning/schedule',
+                    menuOrder: 302050010000,
+                    icon: <CalendarOutlined />,
+                    label: 'Raspored',
+                    permissions: ['transport.planning.schedule:view'],
+                  },
+                  {
+                    key: '/transport/planning/turnus-defaults',
+                    menuOrder: 302050020000,
+                    icon: <UserOutlined />,
+                    label: 'Default Turnusa',
+                    permissions: ['transport.planning.turnus_defaults:view'],
+                  },
+                ],
               },
             ],
           },
@@ -366,7 +520,13 @@ const ModernMenu: React.FC = () => {
             menuOrder: 401000000000,
             icon: <SettingOutlined />,
             label: 'Opšta',
-            // Bez permissions - hijerarhijska logika: prikaži ako GeneralSettings komponenta ima vidljive tabove
+            // Direktna opcija sa tabovima unutar stranice - bez children
+            permissions: [
+              'settings.company_info:read',
+              'legacy_databases:read',
+              'legacy_tables:read',
+              'settings.email_templates:view',
+            ],
           },
           {
             key: '/settings/api-keys',
@@ -374,383 +534,6 @@ const ModernMenu: React.FC = () => {
             icon: <ApiOutlined />,
             label: 'API Keys',
             permissions: ['api_keys:view'],
-          },
-        ],
-      },
-      {
-        key: 'vodovod',
-        menuOrder: 500000000000,
-        icon: <ExperimentOutlined />,
-        label: 'Vodovod',
-        children: [
-          // Vodovodni sistem
-          {
-            key: 'vodovodniSistem',
-            menuOrder: 510000000000,
-            icon: <HomeOutlined />,
-            label: 'Vodovodni sistem',
-            children: [
-              {
-                key: '/vodovod/regioni',
-                menuOrder: 511000000000,
-                label: 'Rejoni',
-                permissions: ['water_system.regions:view'],
-              },
-              {
-                key: '/vodovod/gradovi',
-                menuOrder: 512000000000,
-                label: 'Gradovi',
-                permissions: ['water_system.cities:view'],
-              },
-              {
-                key: '/vodovod/zone',
-                menuOrder: 513000000000,
-                label: 'Zone',
-                permissions: ['water_system_zones:view'],
-              },
-              {
-                key: '/vodovod/ulice',
-                menuOrder: 514000000000,
-                label: 'Ulice',
-                permissions: ['water_system_streets:view'],
-              },
-            ],
-          },
-          // Vodomeri
-          {
-            key: 'vodomeri',
-            menuOrder: 520000000000,
-            icon: <DropboxOutlined />,
-            label: 'Vodomeri',
-            children: [
-              {
-                key: '/vodovod/vodomeri',
-                menuOrder: 521000000000,
-                label: 'Evidencija vodomera',
-                permissions: ['water_meters:view'],
-              },
-              {
-                key: '/vodovod/tipovi-vodomera',
-                menuOrder: 522000000000,
-                label: 'Tipovi vodomera',
-                permissions: ['water_meter_types:view'],
-              },
-              {
-                key: '/vodovod/proizvodjaci-vodomera',
-                menuOrder: 523000000000,
-                label: 'Proizvođači vodomera',
-                permissions: ['water_meter_manufacturers:view'],
-              },
-              {
-                key: '/vodovod/dostupnost-vodomera',
-                menuOrder: 524000000000,
-                label: 'Dostupnost vodomera',
-                permissions: ['water_meter_availability:view'],
-              },
-              {
-                key: '/vodovod/zamena-vodomera',
-                menuOrder: 525000000000,
-                label: 'Zamena vodomera',
-                permissions: ['water_meter_replacement:view'],
-              },
-              {
-                key: '/vodovod/napomene-vodomera',
-                menuOrder: 526000000000,
-                label: 'Napomene',
-                permissions: ['water_meter_remarks:view'],
-              },
-              {
-                key: '/vodovod/pregled-izmenjenih-vodomera',
-                menuOrder: 527000000000,
-                label: 'Pregled izmenjenih',
-                permissions: ['water_meter_review:view'],
-              },
-            ],
-          },
-          // Merna mesta
-          {
-            key: 'mernaMesta',
-            menuOrder: 530000000000,
-            icon: <EnvironmentOutlined />,
-            label: 'Merna mesta',
-            children: [
-              {
-                key: '/vodovod/merna-mesta',
-                menuOrder: 531000000000,
-                label: 'Pregled mernih mesta',
-                permissions: ['measuring_points:view'],
-              },
-              {
-                key: '/vodovod/merna-mesta-po-adresi',
-                menuOrder: 532000000000,
-                label: 'Merna mesta po adresi',
-                permissions: ['measuring_points_by_address:view'],
-              },
-              {
-                key: '/vodovod/potrosnja-mernih-mesta',
-                menuOrder: 533000000000,
-                label: 'Potrošnja',
-                permissions: ['measuring_points_consumption:view'],
-              },
-            ],
-          },
-          // Očitavanja
-          {
-            key: 'ocitavanja',
-            menuOrder: 540000000000,
-            icon: <ReadOutlined />,
-            label: 'Očitavanja',
-            children: [
-              {
-                key: '/vodovod/ocitavanja',
-                menuOrder: 541000000000,
-                label: 'Pregled očitavanja',
-                permissions: ['readings:view'],
-              },
-              {
-                key: '/vodovod/liste-ocitavanja',
-                menuOrder: 542000000000,
-                label: 'Liste očitavanja',
-                permissions: ['reading_lists:view'],
-              },
-              {
-                key: '/vodovod/stampa-lista',
-                menuOrder: 544000000000,
-                label: 'Štampa lista',
-                permissions: ['reading_lists_print:view'],
-              },
-              {
-                key: '/vodovod/anomalije-ocitavanja',
-                menuOrder: 545000000000,
-                label: 'Anomalije',
-                permissions: ['reading_anomalies:view'],
-              },
-              {
-                key: '/vodovod/ocitaci',
-                menuOrder: 546000000000,
-                label: 'Očitači',
-                permissions: ['water_readers:view'],
-              },
-            ],
-          },
-          // Usluge
-          {
-            key: 'usluge',
-            menuOrder: 550000000000,
-            icon: <ToolOutlined />,
-            label: 'Usluge',
-            children: [
-              {
-                key: '/vodovod/usluge',
-                menuOrder: 551000000000,
-                label: 'Pregled usluga',
-                permissions: ['water_services:view'],
-              },
-              {
-                key: '/vodovod/upravljanje-uslugama',
-                menuOrder: 552000000000,
-                label: 'Upravljanje uslugama',
-                permissions: ['water_services_manage:view'],
-              },
-              {
-                key: '/vodovod/cenovnik-usluga',
-                menuOrder: 553000000000,
-                label: 'Cenovnik',
-                permissions: ['water_services_pricelist:view'],
-              },
-              {
-                key: '/vodovod/istorija-cenovnika',
-                menuOrder: 554000000000,
-                label: 'Istorija cenovnika',
-                permissions: ['water_service_pricelist_history:view'],
-              },
-              {
-                key: '/vodovod/pregled-usluga',
-                menuOrder: 555000000000,
-                label: 'Pregled izvršenih usluga',
-                permissions: ['water_services_review:view'],
-              },
-            ],
-          },
-          // Obračun
-          {
-            key: 'obracun',
-            menuOrder: 560000000000,
-            icon: <CalculatorOutlined />,
-            label: 'Obračun',
-            children: [
-              {
-                key: '/vodovod/obracuni-vodomera',
-                menuOrder: 561000000000,
-                label: 'Obračuni vodomera',
-                permissions: ['water_meter_calculation:view'],
-              },
-              {
-                key: '/vodovod/kampanja-obracuna',
-                menuOrder: 562000000000,
-                label: 'Kampanje obračuna',
-                permissions: ['billing_campaign:view'],
-              },
-              {
-                key: '/vodovod/kampanja',
-                menuOrder: 563000000000,
-                label: 'Kampanje',
-                permissions: ['campaign:view'],
-              },
-              {
-                key: '/vodovod/pod-kampanja',
-                menuOrder: 564000000000,
-                label: 'Pod-kampanje',
-                permissions: ['sub_campaign:view'],
-              },
-              {
-                key: '/vodovod/stanje-unosa-obracuna',
-                menuOrder: 565000000000,
-                label: 'Stanje unosa',
-                permissions: ['input_calculation_state:view'],
-              },
-            ],
-          },
-          // Naplata
-          {
-            key: 'naplata',
-            menuOrder: 570000000000,
-            icon: <MoneyCollectOutlined />,
-            label: 'Naplata',
-            children: [
-              {
-                key: '/vodovod/uplate',
-                menuOrder: 571000000000,
-                label: 'Uplate',
-                permissions: ['payments:view'],
-              },
-              {
-                key: '/vodovod/uplate-po-nacinu-placanja',
-                menuOrder: 572000000000,
-                label: 'Uplate po načinu plaćanja',
-                permissions: ['payments_by_method:view'],
-              },
-              {
-                key: '/vodovod/blagajna',
-                menuOrder: 573000000000,
-                label: 'Blagajna',
-                permissions: ['cash_register:view'],
-              },
-              {
-                key: '/vodovod/blagajnici',
-                menuOrder: 574000000000,
-                label: 'Blagajnici',
-                permissions: ['cashiers:view'],
-              },
-              {
-                key: '/vodovod/sesija-blagajnika',
-                menuOrder: 575000000000,
-                label: 'Sesije blagajnika',
-                permissions: ['cashiers_session:view'],
-              },
-              {
-                key: '/vodovod/izvestaj-blagajne',
-                menuOrder: 576000000000,
-                label: 'Izveštaj blagajne',
-                permissions: ['cash_register_report:view'],
-              },
-              {
-                key: '/vodovod/fiskalni-uredjaj',
-                menuOrder: 577000000000,
-                label: 'Fiskalni uređaj',
-                permissions: ['fiscal_device:view'],
-              },
-            ],
-          },
-          // Subvencije
-          {
-            key: 'subvencije',
-            menuOrder: 580000000000,
-            icon: <MoneyCollectOutlined />,
-            label: 'Subvencije',
-            children: [
-              {
-                key: '/vodovod/subvencije',
-                menuOrder: 581000000000,
-                label: 'Pregled subvencija',
-                permissions: ['subsidies:view'],
-              },
-              {
-                key: '/vodovod/dodela-subvencija',
-                menuOrder: 582000000000,
-                label: 'Dodela subvencija',
-                permissions: ['subsidies_assignment:view'],
-              },
-            ],
-          },
-          // Korisnički nalozi
-          {
-            key: 'korisnici-vodovod',
-            menuOrder: 590000000000,
-            icon: <UserAddOutlined />,
-            label: 'Korisnički nalozi',
-            children: [
-              {
-                key: '/vodovod/korisnicki-nalozi',
-                menuOrder: 591000000000,
-                label: 'Pregled naloga',
-                permissions: ['user_accounts:view'],
-              },
-              {
-                key: '/vodovod/kucivetnici',
-                menuOrder: 592000000000,
-                label: 'Kućivetnici',
-                permissions: ['house_council:view'],
-              },
-            ],
-          },
-          // Reklamacije
-          {
-            key: 'reklamacije',
-            menuOrder: 600000000000,
-            icon: <FileSearchOutlined />,
-            label: 'Reklamacije',
-            children: [
-              {
-                key: '/vodovod/reklamacije',
-                menuOrder: 601000000000,
-                label: 'Pregled reklamacija',
-                permissions: ['complaints:view'],
-              },
-              {
-                key: '/vodovod/reklamacije-za-odgovorno-lice',
-                menuOrder: 602000000000,
-                label: 'Za odgovorno lice',
-                permissions: ['complaints_by_assignee:view'],
-              },
-              {
-                key: '/vodovod/prioriteti-reklamacija',
-                menuOrder: 603000000000,
-                label: 'Prioriteti',
-                permissions: ['complaint_priorities:view'],
-              },
-            ],
-          },
-          // Napomene
-          {
-            key: 'napomene',
-            menuOrder: 610000000000,
-            icon: <FileTextOutlined />,
-            label: 'Napomene',
-            children: [
-              {
-                key: '/vodovod/beleske',
-                menuOrder: 611000000000,
-                label: 'Beleške',
-                permissions: ['water_supply_notes:view'],
-              },
-              {
-                key: '/vodovod/kategorije-beleski',
-                menuOrder: 612000000000,
-                label: 'Kategorije beleški',
-                permissions: ['note_categories:view'],
-              },
-            ],
           },
         ],
       },
@@ -771,58 +554,19 @@ const ModernMenu: React.FC = () => {
     if (path.includes('/transport/')) {
       keys.push('transport');
       if (path.includes('/vehicle')) keys.push('vehicles');
+      if (path.includes('/administration/')) keys.push('administration');
       if (path.includes('/dispatcher/')) keys.push('dispatcher');
       if (path.includes('/safety/')) keys.push('safety');
       if (path.includes('/maintenance/')) keys.push('maintenance');
+      if (path.includes('/planning/')) {
+        keys.push('dispatcher'); // Planning je unutar dispatcher-a
+        keys.push('planning');
+      }
+      if (path.includes('/turnusi')) keys.push('administration');
     }
-    if (path.includes('/settings/')) keys.push('settings');
-    if (path.includes('/vodovod/')) {
-      keys.push('vodovod');
-      // Sub-meniji
-      if (path.includes('/vodovod/regioni') || path.includes('/vodovod/gradovi') ||
-          path.includes('/vodovod/zone') || path.includes('/vodovod/ulice')) {
-        keys.push('vodovodniSistem');
-      }
-      if (path.includes('/vodovod/vodomeri') || path.includes('/vodovod/tipovi-vodomera') ||
-          path.includes('/vodovod/proizvodjaci') || path.includes('/vodovod/dostupnost') ||
-          path.includes('/vodovod/zamena') || path.includes('/vodovod/napomene-vodomera') ||
-          path.includes('/vodovod/pregled-izmenjenih')) {
-        keys.push('vodomeri');
-      }
-      if (path.includes('/vodovod/merna-mesta')) {
-        keys.push('mernaMesta');
-      }
-      if (path.includes('/vodovod/ocitavanja') || path.includes('/vodovod/liste-ocitavanja') ||
-          path.includes('/vodovod/stampa-lista') ||
-          path.includes('/vodovod/anomalije') || path.includes('/vodovod/ocitaci')) {
-        keys.push('ocitavanja');
-      }
-      if (path.includes('/vodovod/usluge') || path.includes('/vodovod/upravljanje-uslugama') ||
-          path.includes('/vodovod/cenovnik') || path.includes('/vodovod/istorija-cenovnika') ||
-          path.includes('/vodovod/pregled-usluga')) {
-        keys.push('usluge');
-      }
-      if (path.includes('/vodovod/kalkulacija') || path.includes('/vodovod/kampanja') ||
-          path.includes('/vodovod/stanje-unosa')) {
-        keys.push('obracun');
-      }
-      if (path.includes('/vodovod/uplate') || path.includes('/vodovod/blagajna') ||
-          path.includes('/vodovod/blagajnici') || path.includes('/vodovod/sesija') ||
-          path.includes('/vodovod/izvestaj') || path.includes('/vodovod/fiskalni')) {
-        keys.push('naplata');
-      }
-      if (path.includes('/vodovod/subvencije') || path.includes('/vodovod/dodela')) {
-        keys.push('subvencije');
-      }
-      if (path.includes('/vodovod/korisnicki-nalozi') || path.includes('/vodovod/kucivetnici')) {
-        keys.push('korisnici-vodovod');
-      }
-      if (path.includes('/vodovod/reklamacije') || path.includes('/vodovod/prioriteti')) {
-        keys.push('reklamacije');
-      }
-      if (path.includes('/vodovod/napomene') || path.includes('/vodovod/kategorije')) {
-        keys.push('napomene');
-      }
+    if (path.includes('/settings/')) {
+      keys.push('settings');
+      // 'general' više nije folder, već direktna opcija - nema potrebe za push
     }
 
     setOpenKeys(keys);

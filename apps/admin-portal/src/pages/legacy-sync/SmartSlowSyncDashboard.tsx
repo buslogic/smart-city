@@ -24,6 +24,7 @@ import {
   Popconfirm,
   Radio,
   Checkbox,
+  DatePicker,
 } from 'antd';
 import {
   PlayCircleOutlined,
@@ -43,6 +44,7 @@ import {
   DeleteOutlined,
   CarOutlined,
   CloseCircleOutlined,
+  CalendarOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration';
@@ -55,6 +57,7 @@ dayjs.extend(duration);
 dayjs.extend(relativeTime);
 
 const { Title, Text, Paragraph } = Typography;
+const { RangePicker } = DatePicker;
 
 interface SlowSyncConfig {
   preset: 'fast' | 'balanced' | 'conservative' | 'custom';
@@ -71,6 +74,9 @@ interface SlowSyncConfig {
   forceProcess: boolean;
   syncAlreadySyncedVehicles: boolean;
   aggressiveDetectionEnabled?: boolean; // NOVO - za agresivnu detekciju
+  syncMode?: 'full' | 'dateRange'; // NOVO - način sinhronizacije
+  syncFromDate?: string; // NOVO - početni datum (ISO format)
+  syncToDate?: string; // NOVO - krajnji datum (ISO format)
 }
 
 interface SlowSyncProgress {
@@ -161,6 +167,7 @@ const SmartSlowSyncDashboard: React.FC = () => {
     message: string;
     type: 'info' | 'success' | 'warning' | 'error';
   }>>([]);
+  const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
 
   useEffect(() => {
     fetchProgress();
@@ -244,7 +251,15 @@ const SmartSlowSyncDashboard: React.FC = () => {
       const response = await api.get('/api/legacy-sync/slow-sync/config');
       setConfig(response.data);
       setTempConfig(response.data);
-      
+
+      // Učitaj date range ako postoji
+      if (response.data.syncMode === 'dateRange' && response.data.syncFromDate && response.data.syncToDate) {
+        setDateRange([
+          dayjs(response.data.syncFromDate),
+          dayjs(response.data.syncToDate)
+        ]);
+      }
+
       // NOVO: Učitaj i status agresivne detekcije iz Worker Pool konfiguracije
       const workerConfigResponse = await api.get('/api/legacy-sync/config');
       if (workerConfigResponse.data) {
@@ -318,6 +333,14 @@ const SmartSlowSyncDashboard: React.FC = () => {
       setLoading(true);
       // Izdvoji aggressiveDetectionEnabled jer ne pripada Smart Slow Sync konfiguraciji
       const { aggressiveDetectionEnabled, ...slowSyncConfig } = tempConfig || {};
+
+      // Dodaj date range ako je odabran
+      if (tempConfig && tempConfig.syncMode === 'dateRange' && dateRange) {
+        (slowSyncConfig as any).syncFromDate = dateRange[0]?.startOf('day').toISOString();
+        // Dodaj 1 dan na endDate da bi krajnji datum bio inkluzivan (ako korisnik odabere "do 04", uključi ceo dan 04)
+        (slowSyncConfig as any).syncToDate = dateRange[1]?.add(1, 'day').startOf('day').toISOString();
+      }
+
       await api.post('/api/legacy-sync/slow-sync/start', slowSyncConfig);
       message.success('Smart Slow Sync pokrenut uspešno!');
       await fetchProgress();
@@ -424,24 +447,35 @@ const SmartSlowSyncDashboard: React.FC = () => {
   const handleSaveConfig = async () => {
     try {
       setLoading(true);
-      
+
       // Izdvoji aggressiveDetectionEnabled iz tempConfig jer ne pripada Smart Slow Sync konfiguraciji
       const { aggressiveDetectionEnabled, ...slowSyncConfig } = tempConfig || {};
-      
+
+      // Dodaj date range ako je odabran
+      if (tempConfig && tempConfig.syncMode === 'dateRange' && dateRange) {
+        (slowSyncConfig as any).syncFromDate = dateRange[0]?.startOf('day').toISOString();
+        // Dodaj 1 dan na endDate da bi krajnji datum bio inkluzivan (ako korisnik odabere "do 04", uključi ceo dan 04)
+        (slowSyncConfig as any).syncToDate = dateRange[1]?.add(1, 'day').startOf('day').toISOString();
+      } else if (tempConfig && tempConfig.syncMode === 'full') {
+        // Ukloni date range za full sync
+        delete (slowSyncConfig as any).syncFromDate;
+        delete (slowSyncConfig as any).syncToDate;
+      }
+
       // Sačuvaj Smart Slow Sync konfiguraciju (bez aggressiveDetectionEnabled)
       await api.patch('/api/legacy-sync/slow-sync/config', slowSyncConfig);
-      
+
       // NOVO: Sačuvaj i agresivnu detekciju u Worker Pool konfiguraciju
       if (aggressiveDetectionEnabled !== undefined) {
         await api.post('/api/legacy-sync/config/aggressive-detection', {
           enabled: aggressiveDetectionEnabled
         });
       }
-      
+
       // Sačuvaj COPY konfiguraciju (filtriraj samo potrebne fieldove)
       const { estimatedSpeed, recommendedMethod, ...copyConfigToSave } = copyConfig;
       await legacySyncService.updateCopyConfig(copyConfigToSave);
-      
+
       message.success('Konfiguracija sačuvana');
       setConfig(tempConfig);
       setConfigModalVisible(false);
@@ -1631,6 +1665,97 @@ const SmartSlowSyncDashboard: React.FC = () => {
 
           <Divider />
 
+          <div style={{ background: '#e6f7ff', padding: '12px', borderRadius: '8px', border: '1px solid #91d5ff' }}>
+            <Text strong style={{ color: '#1890ff' }}>📅 Period sinhronizacije:</Text>
+            <div style={{ marginTop: 12 }}>
+              <Radio.Group
+                value={tempConfig?.syncMode || 'full'}
+                onChange={(e) => {
+                  setTempConfig({ ...tempConfig!, syncMode: e.target.value });
+                  if (e.target.value === 'full') {
+                    setDateRange(null);
+                  }
+                }}
+                style={{ width: '100%' }}
+              >
+                <Space direction="vertical">
+                  <Radio value="full">
+                    <Space>
+                      <DatabaseOutlined />
+                      <Text strong>Full Sync</Text>
+                      <Text type="secondary" style={{ fontSize: 12 }}>(Svi dostupni podaci)</Text>
+                    </Space>
+                  </Radio>
+                  <Radio value="dateRange">
+                    <Space>
+                      <CalendarOutlined />
+                      <Text strong>Odabrani period</Text>
+                      <Text type="secondary" style={{ fontSize: 12 }}>(Samo podaci u zadatom periodu)</Text>
+                    </Space>
+                  </Radio>
+                </Space>
+              </Radio.Group>
+            </div>
+
+            {tempConfig?.syncMode === 'dateRange' && (
+              <div style={{ marginTop: 16, marginLeft: 24 }}>
+                <Text strong>Izaberite period:</Text>
+                <div style={{ marginTop: 8 }}>
+                  <RangePicker
+                    value={dateRange}
+                    onChange={(dates) => setDateRange(dates as [dayjs.Dayjs | null, dayjs.Dayjs | null])}
+                    format="DD.MM.YYYY"
+                    style={{ width: '100%' }}
+                    allowClear={false}
+                    placeholder={['Početni datum', 'Krajnji datum']}
+                    disabledDate={(current) => {
+                      // Ne dozvoljavaj datume u budućnosti
+                      return current && current.isAfter(dayjs(), 'day');
+                    }}
+                    presets={[
+                      { label: 'Poslednja nedelja', value: [dayjs().subtract(7, 'days'), dayjs()] },
+                      { label: 'Poslednji mesec', value: [dayjs().subtract(1, 'month'), dayjs()] },
+                      { label: 'Poslednja 3 meseca', value: [dayjs().subtract(3, 'months'), dayjs()] },
+                      { label: 'Poslednih 6 meseci', value: [dayjs().subtract(6, 'months'), dayjs()] },
+                      { label: 'Ova godina', value: [dayjs().startOf('year'), dayjs()] },
+                      { label: 'Prošla godina', value: [dayjs().subtract(1, 'year').startOf('year'), dayjs().subtract(1, 'year').endOf('year')] },
+                    ]}
+                  />
+                </div>
+                {dateRange && dateRange[0] && dateRange[1] && (
+                  <div style={{ marginTop: 8 }}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      📊 Sinhronizovaće se podaci od {dateRange[0].format('DD.MM.YYYY')} do {dateRange[1].format('DD.MM.YYYY')}
+                      <br />
+                      ⏱️ Period: {dateRange[1].diff(dateRange[0], 'day')} dana
+                    </Text>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {tempConfig?.syncMode === 'full' && (
+              <div style={{ marginTop: 12, marginLeft: 24 }}>
+                <Alert
+                  message="Full Sync Režim"
+                  description={
+                    <div>
+                      <Text style={{ fontSize: 12 }}>
+                        Sinhronizovaće se SVI dostupni GPS podaci iz legacy baze.
+                        Ovo može trajati duže u zavisnosti od količine podataka.
+                      </Text>
+                    </div>
+                  }
+                  type="info"
+                  showIcon
+                  icon={<InfoCircleOutlined />}
+                />
+              </div>
+            )}
+          </div>
+
+          <Divider />
+
           <Row gutter={16}>
             <Col span={12}>
               <Text strong>Vozila po batch-u:</Text>
@@ -1659,7 +1784,7 @@ const SmartSlowSyncDashboard: React.FC = () => {
               <Text strong>Pauza između batch-ova (min):</Text>
               <InputNumber
                 style={{ width: '100%', marginTop: 8 }}
-                min={5}
+                min={1}
                 max={120}
                 value={tempConfig?.batchDelayMinutes}
                 onChange={(value) => setTempConfig({ ...tempConfig!, batchDelayMinutes: value || 30 })}
@@ -1704,16 +1829,21 @@ const SmartSlowSyncDashboard: React.FC = () => {
             </Col>
           </Row>
 
-          <div>
-            <Text strong>Period sinhronizacije (dana unazad):</Text>
-            <InputNumber
-              style={{ width: '100%', marginTop: 8 }}
-              min={1}
-              max={365}
-              value={tempConfig?.syncDaysBack}
-              onChange={(value) => setTempConfig({ ...tempConfig!, syncDaysBack: value || 120 })}
-            />
-          </div>
+          {tempConfig?.syncMode === 'full' && (
+            <div>
+              <Text strong>Period sinhronizacije (dana unazad):</Text>
+              <InputNumber
+                style={{ width: '100%', marginTop: 8 }}
+                min={1}
+                max={365}
+                value={tempConfig?.syncDaysBack}
+                onChange={(value) => setTempConfig({ ...tempConfig!, syncDaysBack: value || 120 })}
+              />
+              <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
+                Za Full Sync - sinhronizovaće se poslednih {tempConfig?.syncDaysBack || 120} dana
+              </Text>
+            </div>
+          )}
 
           <div>
             <Space>

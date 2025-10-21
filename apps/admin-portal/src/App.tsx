@@ -15,6 +15,17 @@ import GeneralSettings from './pages/settings/GeneralSettings';
 import ApiKeys from './pages/settings/ApiKeys';
 import Vehicles from './pages/transport/Vehicles';
 import VehicleSync from './pages/transport/VehicleSync';
+import GpsLagTransfer from './pages/transport/vehicles/GpsLagTransfer';
+import CentralPoints from './pages/transport/administration/CentralPoints';
+import StopsSync from './pages/transport/administration/StopsSync';
+import PriceListGroups from './pages/transport/administration/PriceListGroups';
+import Lines from './pages/transport/administration/Lines';
+import LinesAdministration from './pages/transport/administration/LinesAdministration';
+import Variations from './pages/transport/administration/Variations';
+import TimetableDates from './pages/transport/administration/TimetableDates';
+import TimetableSync from './pages/transport/administration/TimetableSync';
+import TurnusiSync from './pages/transport/administration/TurnusiSync';
+import Turnusi from './pages/transport/administration/Turnusi';
 import MapVehiclesModern from './pages/transport/dispatcher/MapVehiclesModern';
 import VehicleAnalytics from './pages/transport/dispatcher/VehicleAnalytics';
 import GpsSync from './pages/transport/dispatcher/GpsSync';
@@ -28,6 +39,8 @@ import Profile from './pages/users/Profile';
 import ChangePassword from './pages/users/ChangePassword';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import TimescaleDB from './pages/transport/maintenance/TimescaleDB';
+import Schedule from './pages/transport/planning/Schedule';
+import TurnusDefaults from './pages/transport/planning/TurnusDefaults';
 import MigrationPage from './pages/migration/MigrationPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import WaterMeterTypesPage from './pages/water-meter-types/WaterMeterTypesPage';
@@ -150,7 +163,18 @@ function App() {
             
             <Route
               path="settings/general"
-              element={<GeneralSettings />}
+              element={
+                <PermissionGuard
+                  permissions={[
+                    'settings.company_info:read',
+                    'legacy_databases:read',
+                    'legacy_tables:read',
+                    'settings.email_templates:view',
+                  ]}
+                >
+                  <GeneralSettings />
+                </PermissionGuard>
+              }
             />
             
             <Route 
@@ -162,25 +186,187 @@ function App() {
               } 
             />
             
-            <Route 
-              path="transport/vehicles" 
+            <Route
+              path="transport/vehicles"
               element={
                 <PermissionGuard permissions={['vehicles:read']}>
                   <Vehicles />
                 </PermissionGuard>
-              } 
+              }
             />
-            
-            <Route 
-              path="transport/vehicle-sync" 
+
+            <Route
+              path="transport/vehicles/gps-lag-transfer"
+              element={
+                <PermissionGuard permissions={['vehicles.gps.lag:view']}>
+                  <GpsLagTransfer />
+                </PermissionGuard>
+              }
+            />
+
+            <Route
+              path="transport/vehicle-sync"
               element={
                 <PermissionGuard permissions={['vehicles.sync:view']}>
                   <VehicleSync />
                 </PermissionGuard>
-              } 
+              }
             />
-            
-            <Route 
+
+            <Route
+              path="transport/administration/central-points"
+              element={
+                <PermissionGuard
+                  permissions={[
+                    'transport.administration.central_points:view',
+                    'transport.administration.central_points.main:view',
+                    'transport.administration.central_points.ticketing:view',
+                    'transport.administration.central_points.city:view'
+                  ]}
+                >
+                  <CentralPoints />
+                </PermissionGuard>
+              }
+            />
+
+            <Route
+              path="transport/administration/stops-sync"
+              element={
+                <PermissionGuard
+                  permissions={[
+                    'transport.administration.stops_sync:view',
+                    'transport.administration.stops_sync.main:view',
+                    'transport.administration.stops_sync.ticketing:view',
+                    'transport.administration.stops_sync.city:view'
+                  ]}
+                >
+                  <StopsSync />
+                </PermissionGuard>
+              }
+            />
+
+            <Route
+              path="transport/administration/price-list-groups"
+              element={
+                <PermissionGuard
+                  permissions={[
+                    'transport.administration.price_list_groups:view',
+                    'transport.administration.price_list_groups.main:view',
+                    'transport.administration.price_list_groups.ticketing:view',
+                    'transport.administration.price_list_groups.city:view'
+                  ]}
+                >
+                  <PriceListGroups />
+                </PermissionGuard>
+              }
+            />
+
+            <Route
+              path="transport/administration/lines"
+              element={
+                <PermissionGuard
+                  permissions={[
+                    'transport.administration.lines:view',
+                    'transport.administration.lines.main:view',
+                    'transport.administration.lines.ticketing:view',
+                    'transport.administration.lines.city:view'
+                  ]}
+                >
+                  <Lines />
+                </PermissionGuard>
+              }
+            />
+
+            <Route
+              path="transport/administration/lines-admin"
+              element={
+                <PermissionGuard permissions={['transport.administration.lines_admin:view']}>
+                  <LinesAdministration />
+                </PermissionGuard>
+              }
+            />
+
+            <Route
+              path="transport/administration/variations"
+              element={
+                <PermissionGuard
+                  permissions={[
+                    'transport.administration.variations:view',
+                    'transport.administration.variations.main:view',
+                    'transport.administration.variations.ticketing:view',
+                    'transport.administration.variations.city:view'
+                  ]}
+                >
+                  <Variations />
+                </PermissionGuard>
+              }
+            />
+
+            <Route
+              path="transport/administration/timetable-dates"
+              element={
+                <PermissionGuard
+                  permissions={[
+                    'transport.administration.timetable_dates:view',
+                    'transport.administration.timetable_dates.main:view',
+                    'transport.administration.timetable_dates.ticketing:view',
+                    'transport.administration.timetable_dates.city:view'
+                  ]}
+                >
+                  <TimetableDates />
+                </PermissionGuard>
+              }
+            />
+
+            <Route
+              path="transport/administration/timetable-sync"
+              element={
+                <PermissionGuard
+                  permissions={[
+                    'transport.administration.timetable_sync:view',
+                    'transport.administration.timetable_sync.main:view',
+                    'transport.administration.timetable_sync.ticketing:view',
+                    'transport.administration.timetable_sync.city:view',
+                  ]}
+                >
+                  <TimetableSync />
+                </PermissionGuard>
+              }
+            />
+
+            <Route
+              path="transport/administration/turnusi-groups-sync"
+              element={
+                <PermissionGuard
+                  permissions={[
+                    'transport.administration.turnusi_sync:view',
+                    'transport.administration.turnusi_sync.main:view',
+                    'transport.administration.turnusi_sync.ticketing:view',
+                    'transport.administration.turnusi_sync.city:view',
+                  ]}
+                >
+                  <TurnusiSync />
+                </PermissionGuard>
+              }
+            />
+
+            <Route
+              path="transport/administration/turnusi"
+              element={
+                <PermissionGuard
+                  permissions={[
+                    'transport.administration.turnusi:view',
+                    'transport.administration.turnusi.main:view',
+                    'transport.administration.turnusi.ticketing:view',
+                    'transport.administration.turnusi.city:view',
+                  ]}
+                >
+                  <Turnusi />
+                </PermissionGuard>
+              }
+            />
+
+            <Route
               path="transport/gps-buffer-status" 
               element={
                 <PermissionGuard permissions={['dispatcher:sync_gps']}>
@@ -275,6 +461,24 @@ function App() {
               element={
                 <PermissionGuard permissions={['maintenance.timescaledb:view']}>
                   <TimescaleDB />
+                </PermissionGuard>
+              }
+            />
+
+            <Route
+              path="transport/planning/schedule"
+              element={
+                <PermissionGuard permissions={['transport.planning.schedule:view']}>
+                  <Schedule />
+                </PermissionGuard>
+              }
+            />
+
+            <Route
+              path="transport/planning/turnus-defaults"
+              element={
+                <PermissionGuard permissions={['transport.planning.turnus_defaults:view']}>
+                  <TurnusDefaults />
                 </PermissionGuard>
               }
             />

@@ -161,18 +161,32 @@ export class DispatcherController {
     type: String,
     description: 'Krajnji datum (ISO format)',
   })
+  @ApiQuery({
+    name: 'source',
+    required: false,
+    enum: ['gps_data', 'gps_data_lag_filtered'],
+    description: 'Izvor GPS podataka (default: gps_data)',
+  })
   @ApiResponse({ status: 200, description: 'GPS istorija vozila' })
   @ApiResponse({ status: 400, description: 'Neispravni parametri' })
   async getVehicleHistory(
     @Param('vehicleId') vehicleId: string,
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
+    @Query('source') source?: string,
   ) {
     try {
+      const dataSource = source === 'gps_data_lag_filtered' ? 'gps_data_lag_filtered' : 'gps_data';
+
+      // DEBUG: Loguj koji source parametar stiže
+      console.log(`🔍 [Controller] Primljeni source parametar: "${source}"`);
+      console.log(`📊 [Controller] Koristi se tabela: "${dataSource}"`);
+
       const result = await this.dispatcherService.getVehicleHistory(
         parseInt(vehicleId),
         new Date(startDate),
         new Date(endDate),
+        dataSource,
       );
 
       return {

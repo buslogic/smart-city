@@ -35,4 +35,4 @@ createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </StrictMode>,
 )
-// Force redeploy Sun Aug 31 14:23:38 CEST 2025
+// Force redeploy Mon Oct 20 10:05:00 CEST 2025 - Fix 429 errors

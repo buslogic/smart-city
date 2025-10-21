@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsNumber,
@@ -18,6 +19,11 @@ export enum SeverityLevel {
   NORMAL = 'normal',
   MODERATE = 'moderate',
   SEVERE = 'severe',
+}
+
+export enum AggregateType {
+  NO_POSTGIS = 'no_postgis', // Novi agregat БEZ PostGIS (brži, default)
+  POSTGIS = 'postgis', // Stari agregat SA PostGIS (backup)
 }
 
 export class DrivingEventDto {
@@ -200,4 +206,60 @@ export class ChartDataDto {
 
   @ApiProperty({ description: 'Number of events in this period' })
   eventCount: number;
+}
+
+export class BatchStatisticsDto {
+  @ApiProperty({
+    description: 'Array of vehicle IDs',
+    example: [1, 2, 3, 4, 5],
+    type: [Number],
+  })
+  @IsNumber({}, { each: true })
+  vehicleIds: number[];
+
+  @ApiProperty({
+    description: 'Start date (YYYY-MM-DD)',
+    example: '2025-08-01',
+  })
+  @IsDateString()
+  startDate: string;
+
+  @ApiProperty({
+    description: 'End date (YYYY-MM-DD)',
+    example: '2025-08-31',
+  })
+  @IsDateString()
+  endDate: string;
+
+  @ApiProperty({
+    enum: AggregateType,
+    description:
+      'Aggregate type: no_postgis (БEZ PostGIS, brži, default) ili postgis (SA PostGIS, backup)',
+    required: false,
+    default: AggregateType.NO_POSTGIS,
+  })
+  @IsOptional()
+  @IsEnum(AggregateType)
+  aggregateType?: AggregateType;
+
+  @ApiProperty({
+    description:
+      'Zaobiđi aggregate-e i računaj direktno iz gps_data tabele (najsporije, emergency)',
+    required: false,
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  useDirectCalculation?: boolean;
+
+  @ApiProperty({
+    enum: ['main', 'backup'],
+    description:
+      'Izvor podataka: main (aktuelni podaci) ili backup (backup tabele)',
+    required: false,
+    default: 'main',
+  })
+  @IsOptional()
+  @IsString()
+  dataSource?: 'main' | 'backup';
 }

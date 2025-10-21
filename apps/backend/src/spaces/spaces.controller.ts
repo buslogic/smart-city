@@ -29,6 +29,8 @@ import { SpacesService } from './spaces.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
+import { ConfigService } from '@nestjs/config';
+import { SpacesPathHelper } from '../common/helpers/spaces-path.helper';
 
 interface FileUploadDto {
   folder?: string;
@@ -41,7 +43,10 @@ interface FileUploadDto {
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @ApiBearerAuth()
 export class SpacesController {
-  constructor(private readonly spacesService: SpacesService) {}
+  constructor(
+    private readonly spacesService: SpacesService,
+    private readonly configService: ConfigService,
+  ) {}
 
   @Post('upload-avatar')
   @ApiOperation({ summary: 'Upload avatar slike (bez dodatnih permisija)' })
@@ -70,11 +75,63 @@ export class SpacesController {
 
     const fileName = this.spacesService.generateFileName(file.originalname, 'avatar');
 
+    // Uzmi company code iz env varijable i generiši folder path
+    const companyCode = this.configService.get('COMPANY_CODE', 'default');
+    const folder = SpacesPathHelper.getFolderPath(companyCode, 'avatars');
+
     const result = await this.spacesService.uploadFile(file.buffer, {
-      folder: 'avatars',
+      folder, // npr. "litas/avatars"
       fileName,
       contentType: file.mimetype,
       isPublic: true, // Avatari su uvek javni
+      metadata: {
+        originalName: file.originalname,
+        uploadedAt: new Date().toISOString(),
+      },
+    });
+
+    return {
+      success: true,
+      file: result,
+    };
+  }
+
+  @Post('upload-logo')
+  @ApiOperation({ summary: 'Upload company logo (bez dodatnih permisija)' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB max
+      },
+    }),
+  )
+  @UseGuards(JwtAuthGuard) // Samo JWT auth, bez permisija
+  async uploadLogo(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() uploadDto: FileUploadDto,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Fajl nije prosleđen');
+    }
+
+    // Validacija da je slika (uključujući SVG za logo)
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/svg+xml', 'image/webp'];
+    if (!allowedTypes.includes(file.mimetype)) {
+      throw new BadRequestException('Samo slike su dozvoljene za logo (JPEG, PNG, GIF, SVG, WebP)');
+    }
+
+    const fileName = this.spacesService.generateFileName(file.originalname, 'logo');
+
+    // Uzmi company code iz env varijable i generiši folder path
+    const companyCode = this.configService.get('COMPANY_CODE', 'default');
+    const folder = SpacesPathHelper.getFolderPath(companyCode, 'company-logos');
+
+    const result = await this.spacesService.uploadFile(file.buffer, {
+      folder, // npr. "litas/company-logos"
+      fileName,
+      contentType: file.mimetype,
+      isPublic: true, // Company logo je javan
       metadata: {
         originalName: file.originalname,
         uploadedAt: new Date().toISOString(),
@@ -144,8 +201,16 @@ export class SpacesController {
 
     const fileName = this.spacesService.generateFileName(file.originalname);
 
+    // Uzmi company code i generiši folder path
+    const companyCode = this.configService.get('COMPANY_CODE', 'default');
+    const baseFolder = uploadDto.folder || 'uploads';
+    // Ako folder već sadrži company code, ostavi ga; inače dodaj prefix
+    const folder = SpacesPathHelper.belongsToCompany(baseFolder, companyCode)
+      ? baseFolder
+      : SpacesPathHelper.getFolderPath(companyCode, baseFolder);
+
     const result = await this.spacesService.uploadFile(file.buffer, {
-      folder: uploadDto.folder || 'uploads',
+      folder, // npr. "litas/uploads" ili "litas/documents"
       fileName,
       contentType: file.mimetype,
       isPublic: uploadDto.isPublic || false,
@@ -205,11 +270,19 @@ export class SpacesController {
       throw new BadRequestException('Fajlovi nisu prosleđeni');
     }
 
+    // Uzmi company code i generiši folder path
+    const companyCode = this.configService.get('COMPANY_CODE', 'default');
+    const baseFolder = uploadDto.folder || 'uploads';
+    // Ako folder već sadrži company code, ostavi ga; inače dodaj prefix
+    const folder = SpacesPathHelper.belongsToCompany(baseFolder, companyCode)
+      ? baseFolder
+      : SpacesPathHelper.getFolderPath(companyCode, baseFolder);
+
     const uploadPromises = files.map((file) => {
       const fileName = this.spacesService.generateFileName(file.originalname);
 
       return this.spacesService.uploadFile(file.buffer, {
-        folder: uploadDto.folder || 'uploads',
+        folder, // npr. "litas/uploads" ili "litas/documents"
         fileName,
         contentType: file.mimetype,
         isPublic: uploadDto.isPublic || false,

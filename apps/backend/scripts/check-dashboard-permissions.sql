@@ -1,1 +1,0 @@
-SELECT * FROM permissions WHERE name LIKE 'dashboard:%';

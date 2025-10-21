@@ -1,10 +1,12 @@
+import { API_URL } from '../config/runtime';
+
 /**
  * Helper funkcija za formiranje pune putanje avatara
  * Podržava i lokalni development i produkciju sa DigitalOcean Spaces
  */
 export const getAvatarUrl = (avatarPath: string | null | undefined): string | undefined => {
   // console.log('getAvatarUrl called with:', avatarPath);
-  
+
   if (!avatarPath) {
     // console.log('No avatar path provided');
     return undefined;
@@ -17,7 +19,7 @@ export const getAvatarUrl = (avatarPath: string | null | undefined): string | un
   }
 
   // Za relativne putanje (/uploads/avatars/...), dodaj base URL
-  const apiUrl = import.meta.env.VITE_API_URL;
+  const apiUrl = API_URL;
   
   if (!apiUrl) {
     console.warn('VITE_API_URL nije definisan u environment varijablama');
@@ -57,10 +59,10 @@ export const getAvatarUrl = (avatarPath: string | null | undefined): string | un
  * Proveri da li je aplikacija u produkcijskom modu
  */
 export const isProduction = (): boolean => {
-  const apiUrl = import.meta.env.VITE_API_URL;
-  return apiUrl && (
-    apiUrl.includes('smart-city.rs') || 
+  const apiUrl = API_URL;
+  return !!(apiUrl && (
+    apiUrl.includes('smart-city.rs') ||
     apiUrl.includes('vercel.app') ||
     apiUrl.includes('digitalocean')
-  );
+  ));
 };

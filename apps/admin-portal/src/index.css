@@ -400,40 +400,70 @@ input[type="checkbox"]:focus {
   }
 }
 
-/* Input styles from old project - remove outline and border */
-input {
-  outline: none !important;
-  border: none !important;
-  margin: 0 !important;
-  box-shadow: none !important;
+/* React Select Tailwind Styles */
+.react-select-container .react-select__control {
+  min-height: 38px;
+  border-color: rgb(209 213 219);
+  border-radius: 0.375rem;
 }
 
-/* MUI TextField and Autocomplete - remove outline */
-.MuiOutlinedInput-notchedOutline {
-  border: none !important;
+.react-select-container .react-select__control--is-focused {
+  border-color: rgb(59 130 246);
+  box-shadow: 0 0 0 3px rgb(59 130 246 / 0.1);
 }
 
-.MuiOutlinedInput-root {
-  outline: none !important;
+.react-select-container .react-select__control--is-disabled {
+  background-color: rgb(243 244 246);
+  cursor: not-allowed;
 }
 
-.MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline {
-  border: none !important;
+.react-select-container .react-select__placeholder {
+  color: rgb(156 163 175);
 }
 
-.MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline {
-  border: none !important;
-  outline: none !important;
+.react-select-container .react-select__single-value {
+  color: rgb(17 24 39);
 }
 
-/* Force full width on all inputs in edit dialog */
-.MuiDialog-paper .MuiTextField-root,
-.MuiDialog-paper .MuiAutocomplete-root {
-  width: 100% !important;
+.react-select-container .react-select__input-container {
+  color: rgb(17 24 39);
 }
 
-/* Remove left padding from input fields */
-.MuiInputBase-input {
-  padding-left: 0 !important;
+.react-select-container .react-select__menu {
+  border-color: rgb(229 231 235);
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
 }
 
+.react-select-container .react-select__option {
+  cursor: pointer;
+}
+
+.react-select-container .react-select__option--is-focused {
+  background-color: rgb(239 246 255);
+}
+
+.react-select-container .react-select__option--is-selected {
+  background-color: rgb(37 99 235);
+  color: white;
+}
+
+.react-select-container .react-select__indicator-separator {
+  background-color: rgb(229 231 235);
+}
+
+.react-select-container .react-select__dropdown-indicator {
+  color: rgb(107 114 128);
+}
+
+.react-select-container .react-select__clear-indicator {
+  color: rgb(107 114 128);
+  cursor: pointer;
+}
+
+.react-select-container .react-select__clear-indicator:hover {
+  color: rgb(220 38 38);
+}
+
+.react-select-container .react-select__loading-indicator {
+  color: rgb(37 99 235);
+}

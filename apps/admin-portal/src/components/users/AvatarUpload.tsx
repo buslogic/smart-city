@@ -9,6 +9,7 @@ import {
 import { getAvatarUrl, isProduction } from '../../utils/avatar';
 import { useAuthStore } from '../../stores/auth.store';
 import axios from 'axios';
+import { API_URL } from '../../config/runtime';
 
 interface AvatarUploadProps {
   avatarUrl?: string | null;
@@ -112,7 +113,7 @@ const AvatarUpload: React.FC<AvatarUploadProps> = ({
         formData.append('isPublic', 'true');
 
         const uploadResponse = await axios.post(
-          `${import.meta.env.VITE_API_URL}/api/spaces/upload-avatar`,
+          `${API_URL}/api/spaces/upload-avatar`,
           formData,
           {
             headers: {
@@ -129,7 +130,7 @@ const AvatarUpload: React.FC<AvatarUploadProps> = ({
         formData.append('file', file);
 
         const uploadResponse = await axios.post(
-          `${import.meta.env.VITE_API_URL}/api/uploads/avatar`,
+          `${API_URL}/api/uploads/avatar`,
           formData,
           {
             headers: {

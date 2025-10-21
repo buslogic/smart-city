@@ -911,8 +911,14 @@ export class LegacySyncWorkerPoolService {
             continue;
           }
 
+          // VAŽNO: cols[1] je timestamp u Belgrade vremenu (GMT+2)
+          // Moramo ga konvertovati u UTC pre upisa u TimescaleDB
+          const belgradeTimestamp = cols[1]; // Format: 'YYYY-MM-DD HH:mm:ss'
+          const belgradeTime = new Date(belgradeTimestamp + ' GMT+0200');
+          const utcTime = belgradeTime.toISOString();
+
           batch.push({
-            time: cols[1], // captured timestamp
+            time: utcTime, // captured timestamp - konvertovano u UTC
             vehicle_id: vehicleId,
             garage_no: garageNo,
             lat: parseFloat(cols[2]),
@@ -1092,10 +1098,18 @@ export class LegacySyncWorkerPoolService {
       );
 
       // 4. Prebaci iz temp tabele u glavnu sa ON CONFLICT
+      // VAŽNO: Eksplicitno kreiramo location iz lat/lng jer trigger ne radi sa TimescaleDB hypertable
       const transferStart = Date.now();
       const result = await client.query(`
-        INSERT INTO gps_data 
-        SELECT * FROM ${tempTableName}
+        INSERT INTO gps_data (
+          time, vehicle_id, garage_no, lat, lng, location,
+          speed, course, alt, state, in_route, data_source
+        )
+        SELECT
+          time, vehicle_id, garage_no, lat, lng,
+          ST_SetSRID(ST_MakePoint(lng, lat), 4326),
+          speed, course, alt, state, in_route, data_source
+        FROM ${tempTableName}
         ON CONFLICT (vehicle_id, time) DO UPDATE SET
           garage_no = EXCLUDED.garage_no,
           lat = EXCLUDED.lat,

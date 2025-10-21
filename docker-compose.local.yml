@@ -29,7 +29,7 @@ services:
     restart: unless-stopped
     command: redis-server --requirepass RedisPassword123! --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:
-      - "6381:6379"
+      - "6382:6379"
     volumes:
       - redis_data_local:/data
     networks:
@@ -40,7 +40,7 @@ services:
       retries: 5
 
   timescaledb:
-    image: timescale/timescaledb-ha:pg16-all
+    image: timescale/timescaledb-ha:pg16
     container_name: smartcity-timescale-local
     restart: unless-stopped
     environment:

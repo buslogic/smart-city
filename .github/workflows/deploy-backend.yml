@@ -25,21 +25,27 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Login to DigitalOcean Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: registry.digitalocean.com
           username: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
           password: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
 
+      - name: Generate timestamp tag
+        id: timestamp
+        run: echo "tag=$(date +'%Y%m%d_%H%M')" >> $GITHUB_OUTPUT
+
       - name: Build and push Docker image
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           context: ./apps/backend
           push: true
-          tags: registry.digitalocean.com/smart-city/backend:latest,registry.digitalocean.com/smart-city/backend:${{ github.sha }}
+          tags: |
+            registry.digitalocean.com/smart-city/backend:latest
+            registry.digitalocean.com/smart-city/backend:${{ steps.timestamp.outputs.tag }}
           cache-from: type=registry,ref=registry.digitalocean.com/smart-city/backend:buildcache
           cache-to: type=registry,ref=registry.digitalocean.com/smart-city/backend:buildcache,mode=max
 
@@ -56,6 +62,28 @@ jobs:
           username: ${{ secrets.PRODUCTION_USER }}
           key: ${{ secrets.PRODUCTION_SSH_KEY }}
           script: |
+            # Pripremi SSH ključeve na serveru
+            mkdir -p /root/apps/backend/.ssh
+
+            # Kopiraj SSH ključeve iz secrets (preko environment varijabli)
+            cat > /root/apps/backend/.ssh/gsp-to-legacy << 'EOF'
+            ${{ secrets.LEGACY_SSH_KEY }}
+            EOF
+
+            cat > /root/apps/backend/.ssh/gsp-to-legacy.pub << 'EOF'
+            ${{ secrets.LEGACY_SSH_KEY_PUB }}
+            EOF
+
+            cat > /root/apps/backend/.ssh/known_hosts << 'EOF'
+            ${{ secrets.LEGACY_KNOWN_HOSTS }}
+            EOF
+
+            # Postavi pravilne permissions
+            chmod 700 /root/apps/backend/.ssh
+            chmod 600 /root/apps/backend/.ssh/gsp-to-legacy
+            chmod 644 /root/apps/backend/.ssh/gsp-to-legacy.pub
+            chmod 644 /root/apps/backend/.ssh/known_hosts
+
             # Pull latest image
             docker pull registry.digitalocean.com/smart-city/backend:latest
 
@@ -63,18 +91,32 @@ jobs:
             docker stop backend-app || true
             docker rm backend-app || true
 
-            # Start new container
+            # Start new container sa SSH mount-om
             docker run -d \
               --name backend-app \
               --restart unless-stopped \
               --network host \
               --env-file /root/apps/backend/.env.production \
               -v /root/apps/backend/uploads:/app/uploads \
+              -v /root/apps/backend/.ssh:/home/nestjs/.ssh:ro \
               --health-cmd="curl -f http://localhost:3010/health || exit 1" \
               --health-interval=30s \
               --health-timeout=10s \
               --health-retries=3 \
               registry.digitalocean.com/smart-city/backend:latest
+
+            # Popravi ownership SSH ključeva UNUTAR kontejnera (read-only mount problem)
+            # Kopiramo ih u tmpfs i menjamo ownership
+            docker exec -u root backend-app sh -c '
+              mkdir -p /tmp/.ssh &&
+              cp -r /home/nestjs/.ssh/* /tmp/.ssh/ &&
+              chown -R nestjs:nogroup /tmp/.ssh &&
+              chmod 700 /tmp/.ssh &&
+              chmod 600 /tmp/.ssh/gsp-to-legacy /tmp/.ssh/known_hosts &&
+              chmod 644 /tmp/.ssh/*.pub &&
+              rm -rf /home/nestjs/.ssh &&
+              mv /tmp/.ssh /home/nestjs/.ssh
+            '
 
             # Wait for container to be healthy
             echo "Waiting for container to be healthy..."
@@ -102,7 +144,7 @@ jobs:
         run: |
           echo "✅ Backend deployed successfully to production!"
           echo "📍 API URL: https://api.smart-city.rs"
-          echo "🔄 Image: registry.digitalocean.com/smart-city/backend:${{ github.sha }}"
+          echo "🔄 Image: registry.digitalocean.com/smart-city/backend:latest"
 
       - name: Send notification on failure
         if: failure()

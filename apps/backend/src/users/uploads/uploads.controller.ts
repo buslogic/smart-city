@@ -10,6 +10,7 @@ import {
   Get,
   Param,
   Logger,
+  UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -20,10 +21,13 @@ import { v4 as uuidv4 } from 'uuid';
 import type { Response } from 'express';
 import { SpacesService } from '../../spaces/spaces.service';
 import { ConfigService } from '@nestjs/config';
+import { SpacesPathHelper } from '../../common/helpers/spaces-path.helper';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 
 @ApiTags('uploads')
 @Controller('uploads')
 @ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 export class UploadsController {
   private readonly logger = new Logger(UploadsController.name);
   private readonly isProduction: boolean;
@@ -93,10 +97,14 @@ export class UploadsController {
           'avatar',
         );
 
+        // Uzmi company code iz env varijable i generiši folder path
+        const companyCode = this.configService.get('COMPANY_CODE', 'default');
+        const folder = SpacesPathHelper.getFolderPath(companyCode, 'avatars');
+
         const uploadResult = await this.spacesService.uploadFile(
           file.buffer,
           {
-            folder: 'avatars',
+            folder, // npr. "litas/avatars"
             fileName,
             contentType: file.mimetype,
             isPublic: true, // Avatar slike su javne
@@ -191,10 +199,14 @@ export class UploadsController {
           'company-logo',
         );
 
+        // Uzmi company code iz env varijable i generiši folder path
+        const companyCode = this.configService.get('COMPANY_CODE', 'default');
+        const folder = SpacesPathHelper.getFolderPath(companyCode, 'company-logos');
+
         const uploadResult = await this.spacesService.uploadFile(
           file.buffer,
           {
-            folder: 'company-logos',
+            folder, // npr. "litas/company-logos"
             fileName,
             contentType: file.mimetype,
             isPublic: true, // Company logo je javan
@@ -240,9 +252,15 @@ export class UploadsController {
     try {
       if (this.isProduction) {
         // Za Spaces, filename može biti key ili samo filename
-        const key = filename.includes('/')
-          ? filename
-          : `avatars/${filename}`;
+        let key: string;
+        if (filename.includes('/')) {
+          // Ako je već kompletan path, koristi ga
+          key = filename;
+        } else {
+          // Generiši path sa company code-om
+          const companyCode = this.configService.get('COMPANY_CODE', 'default');
+          key = SpacesPathHelper.getFilePath(companyCode, 'avatars', filename);
+        }
 
         await this.spacesService.deleteFile(key);
 
@@ -272,9 +290,15 @@ export class UploadsController {
     try {
       if (this.isProduction) {
         // Na produkciji, redirect na Spaces CDN URL
-        const key = filename.includes('/')
-          ? filename
-          : `avatars/${filename}`;
+        let key: string;
+        if (filename.includes('/')) {
+          // Ako je već kompletan path, koristi ga
+          key = filename;
+        } else {
+          // Generiši path sa company code-om
+          const companyCode = this.configService.get('COMPANY_CODE', 'default');
+          key = SpacesPathHelper.getFilePath(companyCode, 'avatars', filename);
+        }
 
         // Generiši signed URL ako fajl nije javan
         // ili jednostavno redirect na CDN

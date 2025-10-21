@@ -111,6 +111,7 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
 
       // Drugi nivo - Transport
       if (menuOrder === 301000000000) return 'Vozila';
+      if (menuOrder === 301500000000) return 'Administracija';
       if (menuOrder === 302000000000) return 'Dispečerski Modul';
       if (menuOrder === 303000000000) return 'Bezbednost i Analiza';
       if (menuOrder === 304000000000) return 'Održavanje Sistema';
@@ -121,12 +122,50 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
       if (menuOrder === 301030000000) return 'GPS Real-Time Sync';
       if (menuOrder === 301040000000) return 'Legacy Sync';
       if (menuOrder === 301050000000) return 'GPS Migration';
+      if (menuOrder === 301060000000) return 'GPS LAG Transfer';
+
+      // Treći nivo - Administracija
+      if (menuOrder === 301510000000) return 'Centralne tačke';
+      if (menuOrder === 301515000000) return 'Stajališta Sync.';
+      if (menuOrder === 301520000000) return 'Grupe cenovnika';
+      if (menuOrder === 301525000000) return 'Linije Administracija';
+      if (menuOrder === 301530000000) return 'Linije Sync.';
+      if (menuOrder === 301535000000) return 'Varijacije';
+      if (menuOrder === 301540000000) return 'Grupe za RedVoznje';
+      if (menuOrder === 301545000000) return 'RedVoznje Sync.';
+      if (menuOrder === 301550000000) return 'Turnusi Sync';
+
+      // Četvrti nivo - Centralne tačke pod-serveri
+      if (menuOrder >= 301510010000 && menuOrder < 301510020000) return 'Glavni Server';
+      if (menuOrder >= 301510100000 && menuOrder < 301510200000) return 'Tiketing Server';
+      if (menuOrder >= 301510200000 && menuOrder < 301510300000) return 'Gradski Server';
+
+      // Četvrti nivo - Stajališta Sync. pod-serveri
+      if (menuOrder >= 301515010000 && menuOrder < 301515020000) return 'Glavni Server';
+      if (menuOrder >= 301515100000 && menuOrder < 301515200000) return 'Tiketing Server';
+      if (menuOrder >= 301515200000 && menuOrder < 301515300000) return 'Gradski Server';
+
+      // Četvrti nivo - Grupe cenovnika pod-serveri
+      if (menuOrder >= 301520010000 && menuOrder < 301520020000) return 'Glavni Server';
+      if (menuOrder >= 301520100000 && menuOrder < 301520200000) return 'Ticketing Server';
+      if (menuOrder >= 301520200000 && menuOrder < 301520300000) return 'Gradski Server';
+
+      // Četvrti nivo - Linije pod-serveri
+      if (menuOrder >= 301530010000 && menuOrder < 301530020000) return 'Glavni Server';
+      if (menuOrder >= 301530100000 && menuOrder < 301530200000) return 'Glavni Server';
+      if (menuOrder >= 301530200000 && menuOrder < 301530300000) return 'Ticketing Server';
+      if (menuOrder >= 301530300000 && menuOrder < 301530400000) return 'Gradski Server';
 
       // Treći nivo - Dispečerski Modul
       if (menuOrder === 302010000000) return 'Mapa';
       if (menuOrder === 302020000000) return 'Analitika vozila';
       if (menuOrder === 302030000000) return 'GPS Sync';
       if (menuOrder === 302040000000) return 'Karton Vozača';
+      if (menuOrder === 302050000000) return 'Planiranje';
+
+      // Četvrti nivo - Planiranje (pod Dispečerskim modulom)
+      if (menuOrder === 302050010000) return 'Raspored';
+      if (menuOrder === 302050020000) return 'Default Turnusa';
 
       // Treći nivo - Bezbednost i Analiza
       if (menuOrder === 303010000000) return 'Agresivna vožnja';
@@ -137,10 +176,10 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
       if (menuOrder === 304010000000) return 'TimescaleDB';
 
       // Drugi nivo - Podešavanje
-      if (menuOrder === 401000000000) return 'Opšte informacije';
+      if (menuOrder === 401000000000) return 'Opšta'; // Folder
       if (menuOrder === 402000000000) return 'API Ključevi';
-      if (menuOrder === 403000000000) return 'Email šabloni';
 
+<<<<<<< HEAD
       // Drugi nivo - Vodovod
       if (menuOrder === 501000000000) return 'Vodomeri';
       if (menuOrder === 502000000000) return 'Merna Mesta';
@@ -152,6 +191,19 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
       if (menuOrder >= 401040000000 && menuOrder < 401050000000) return 'Email Šabloni';
       if (menuOrder >= 401050000000 && menuOrder < 401060000000) return 'API Podešavanja';
       if (menuOrder >= 401060000000 && menuOrder < 401070000000) return 'Sistemska Podešavanja';
+=======
+      // Treći nivo - Opšta pod-grupe (4. nivo u hijerarhiji)
+      if (menuOrder === 401010000000) return 'Informacije o Kompaniji';
+      if (menuOrder === 401020000000) return 'Legacy Baze';
+      if (menuOrder === 401030000000) return 'Legacy Tabele';
+      if (menuOrder === 401040000000) return 'Email Šabloni';
+
+      // Četvrti nivo - Pojedinačne permisije
+      if (menuOrder >= 401010000001 && menuOrder < 401010999999) return 'Informacije o Kompaniji';
+      if (menuOrder >= 401020000001 && menuOrder < 401020999999) return 'Legacy Baze';
+      if (menuOrder >= 401030000001 && menuOrder < 401030999999) return 'Legacy Tabele';
+      if (menuOrder >= 401040000001 && menuOrder < 401040999999) return 'Email Šabloni';
+>>>>>>> origin/main
 
       // Treći nivo - Vodomeri
       if (menuOrder === 501010000000) return 'Tipovi Vodomera';
@@ -180,6 +232,7 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
         if (resource === 'gps.buffer.status' && action === 'view') return 'GPS Buffer Status';
         if (resource === 'legacy.sync' && action === 'view') return 'Legacy Sync';
         if (resource === 'system' && action === 'view') return 'GPS Migration';
+        if (resource === 'vehicles.gps.lag' && action === 'view') return 'GPS LAG Transfer';
         if (resource === 'dispatcher' && action === 'view_map') return 'Mapa Vozila';
         if (resource === 'dispatcher' && action === 'view_analytics') return 'Analitika Vozila';
         if (resource === 'dispatcher.sync' && action === 'view') return 'GPS Sync Dashboard';
@@ -220,16 +273,25 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
 
     // Rekurzivna funkcija za kreiranje hijerarhije na bilo kom nivou
     const buildHierarchy = (permissions: Permission[], levelDepth: number = 0): PermissionNode[] => {
-      const levelDivisor = Math.pow(10, 11 - (levelDepth * 2)); // 100000000000, 1000000000, 10000000, itd.
-      const nextLevelDivisor = Math.pow(10, 11 - ((levelDepth + 1) * 2));
-
-      // Grupiši permisije po trenutnom nivou
+      // Grupiši permisije po trenutnom nivou koristeći string slicing
+      // menuOrder struktura: XXYYZZ000000 (12 cifara)
+      // levelDepth 0: grupiši po XX (pozicije 0-2)
+      // levelDepth 1: grupiši po XXYY (pozicije 0-4)
+      // levelDepth 2: grupiši po XXYYZZ (pozicije 0-6)
       const groups = permissions.reduce((acc, permission) => {
         const menuOrder = permission.menuOrder!;
-        const currentLevelValue = Math.floor(menuOrder / levelDivisor);
-        const nextLevelValue = Math.floor((menuOrder % levelDivisor) / nextLevelDivisor);
+        const menuOrderStr = menuOrder.toString().padStart(12, '0');
 
-        const groupKey = currentLevelValue.toString();
+        // Uzmi cifre do trenutnog nivoa (uključivo)
+        const currentGroupDigits = (levelDepth + 1) * 2;
+        const groupKey = menuOrderStr.substring(0, currentGroupDigits);
+
+        // Proveri da li ima sledeći nivo
+        const nextLevelStart = currentGroupDigits;
+        const nextLevelEnd = nextLevelStart + 2;
+        const nextLevelDigits = menuOrderStr.substring(nextLevelStart, nextLevelEnd);
+        const hasSubLevel = nextLevelDigits !== '00';
+
         if (!acc[groupKey]) {
           acc[groupKey] = {
             mainPermissions: [],
@@ -237,7 +299,7 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
           };
         }
 
-        if (nextLevelValue === 0) {
+        if (!hasSubLevel) {
           acc[groupKey].mainPermissions.push(permission);
         } else {
           acc[groupKey].subPermissions.push(permission);
@@ -272,6 +334,10 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
                              permission.resource.includes('.roles') ||
                              permission.resource.includes('.groups') ||
                              permission.resource.includes('.driver_card') ||
+                             permission.resource.includes('.schedule') ||
+                             // Legacy databases i tables - SVE akcije (.read, .create, .update, .delete) su meni opcije
+                             (permission.resource === 'legacy_databases' && ['read', 'create', 'update', 'delete'].includes(permission.action)) ||
+                             (permission.resource === 'legacy_tables' && ['read', 'create', 'update', 'delete'].includes(permission.action)) ||
                              permission.action === 'view' && (
                                permission.resource.endsWith('.administration') ||
                                permission.resource.endsWith('.management') ||
@@ -284,8 +350,6 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
                                permission.resource.startsWith('settings.') ||
                                permission.resource === 'api_settings' ||
                                permission.resource === 'system_settings' ||
-                               permission.resource === 'legacy_databases' ||
-                               permission.resource === 'legacy_tables' ||
                                // Transport related menu options (treći nivo)
                                permission.resource === 'vehicles' ||
                                permission.resource.startsWith('vehicles.') ||
@@ -293,6 +357,7 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
                                permission.resource === 'dispatcher.driver_card' ||
                                permission.resource.startsWith('safety.') ||
                                permission.resource.startsWith('maintenance.') ||
+                               permission.resource.startsWith('planning.') ||
                                permission.resource.startsWith('gps.') ||
                                permission.resource.startsWith('legacy.') ||
                                permission.resource === 'system'
@@ -362,9 +427,9 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
 
         return node;
       }).sort((a, b) => {
-        // Sortiraju se po groupKey numerički (1, 2, 3, 4...)
-        const aGroupKey = parseInt(a.id.split('-')[2]); // level-0-1 -> 1
-        const bGroupKey = parseInt(b.id.split('-')[2]); // level-0-2 -> 2
+        // Sortiraju se po groupKey numerički (3010, 3015, 3020...)
+        const aGroupKey = parseInt(a.id.split('-')[2]); // level-1-3010 -> 3010
+        const bGroupKey = parseInt(b.id.split('-')[2]); // level-1-3015 -> 3015
         return aGroupKey - bGroupKey;
       });
     };

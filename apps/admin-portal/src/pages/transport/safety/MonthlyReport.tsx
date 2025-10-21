@@ -19,6 +19,8 @@ import {
   Tooltip,
   Switch,
   Progress,
+  Radio,
+  Alert,
 } from 'antd';
 import {
   FilePdfOutlined,
@@ -31,6 +33,8 @@ import {
   InfoCircleOutlined,
   DashboardOutlined,
   TableOutlined,
+  DatabaseOutlined,
+  ThunderboltOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
@@ -306,6 +310,8 @@ const MonthlyReport: React.FC = () => {
   const [savingConfig, setSavingConfig] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
   const [isExecutiveView, setIsExecutiveView] = useState(false); // Toggle između detaljnog i izvršnog prikaza
+  const [calculationMethod, setCalculationMethod] = useState<'views' | 'direct'>('views'); // Metoda računanja kilometraže
+  const [dataSource, setDataSource] = useState<'main' | 'backup'>('main'); // Izvor podataka (main ili backup)
 
   // Fetch all vehicles
   const { data: vehiclesResponse, isLoading: vehiclesLoading } = useQuery({
@@ -365,7 +371,10 @@ const MonthlyReport: React.FC = () => {
         const chunkStats = await drivingBehaviorService.getBatchStatistics(
           chunk,
           startDate,
-          endDate
+          endDate,
+          calculationMethod === 'direct', // Koristi direktno računanje ako je odabrano
+          'no_postgis', // Uvek koristimo NO-PostGIS aggregate (PostGIS je uklonjen)
+          dataSource // Izvor podataka (main ili backup)
         );
 
         allStats.push(...chunkStats);
@@ -762,6 +771,48 @@ const MonthlyReport: React.FC = () => {
         </p>
       </div>
 
+      {/* Data Source Selection */}
+      <Card className="mb-4">
+        <Row gutter={16} align="middle">
+          <Col span={24}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <DatabaseOutlined className="text-blue-600 text-xl" />
+                <div>
+                  <label className="text-sm font-semibold text-gray-900">
+                    Izvor podataka:
+                  </label>
+                  <div className="text-xs text-gray-600 mt-1">
+                    Odaberite da li želite prikazati aktuelne ili backup podatke
+                  </div>
+                </div>
+              </div>
+              <Radio.Group
+                value={dataSource}
+                onChange={(e) => setDataSource(e.target.value)}
+                size="large"
+              >
+                <Radio.Button value="main">
+                  📊 Aktuelni podaci
+                </Radio.Button>
+                <Radio.Button value="backup">
+                  💾 Backup (Septembar 2025)
+                </Radio.Button>
+              </Radio.Group>
+            </div>
+            {dataSource === 'backup' && calculationMethod === 'views' && (
+              <Alert
+                message="Backup tabele koriste direktne aggregate (БEZ VIEW wrappera)"
+                description="Podaci se učitavaju iz hourly_vehicle_distance i monthly_vehicle_distance agregata."
+                type="info"
+                showIcon
+                className="mt-3"
+              />
+            )}
+          </Col>
+        </Row>
+      </Card>
+
       {/* Filters */}
       <Card className="mb-4">
         <Row gutter={16} align="middle">
@@ -857,6 +908,36 @@ const MonthlyReport: React.FC = () => {
                   Kompaktni izveštaj optimizovan za upravu i štampu
                 </div>
               )}
+            </div>
+          </Col>
+        </Row>
+
+        {/* Metoda računanja kilometraže */}
+        <Row gutter={16} align="middle" className="mt-4">
+          <Col span={24}>
+            <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <div className="flex items-center space-x-4">
+                <InfoCircleOutlined className="text-blue-600 text-xl" />
+                <div>
+                  <label className="text-sm font-semibold text-blue-900">
+                    Metoda računanja kilometraže:
+                  </label>
+                  <div className="text-xs text-blue-700 mt-1">
+                    {calculationMethod === 'views'
+                      ? dataSource === 'main'
+                        ? '✅ VIEW agregati БEZ PostGIS (Haversine formula) - brže, preporučeno'
+                        : '✅ Backup agregati БEZ PostGIS - hourly/monthly_vehicle_distance'
+                      : '⚠️ Direktno iz GPS podataka (PostGIS ST_Distance) - sporije, backup opcija'}
+                  </div>
+                </div>
+              </div>
+              <Switch
+                checked={calculationMethod === 'direct'}
+                onChange={(checked) => setCalculationMethod(checked ? 'direct' : 'views')}
+                checkedChildren={<><DatabaseOutlined /> Direktno</>}
+                unCheckedChildren={<><ThunderboltOutlined /> Agregati</>}
+                size="default"
+              />
             </div>
           </Col>
         </Row>

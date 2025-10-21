@@ -1,7 +1,6 @@
 import axios from 'axios';
 import { TokenManager } from '../utils/token';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3010';
+import { API_URL as API_BASE_URL } from '../config/runtime';
 
 export interface DrivingEvent {
   id: number;
@@ -79,11 +78,19 @@ class DrivingBehaviorService {
 
   /**
    * OPTIMIZED: Get statistics for multiple vehicles in a single request
+   * TRIPLE MODE: Supports 3 calculation methods:
+   *   1. NO-PostGIS VIEW aggregates (fastest, default)
+   *   2. PostGIS VIEW aggregates (backup)
+   *   3. Direct from gps_data (slowest, emergency)
+   * DATA SOURCE: Supports main and backup tables
    */
   async getBatchStatistics(
     vehicleIds: number[],
     startDate: string,
-    endDate: string
+    endDate: string,
+    useDirectCalculation?: boolean,
+    aggregateType?: 'no_postgis' | 'postgis',
+    dataSource?: 'main' | 'backup'
   ): Promise<VehicleStatistics[]> {
     try {
       const response = await axios.post(
@@ -91,7 +98,10 @@ class DrivingBehaviorService {
         {
           vehicleIds,
           startDate,
-          endDate
+          endDate,
+          useDirectCalculation: useDirectCalculation ?? false,
+          aggregateType: aggregateType ?? 'no_postgis',
+          dataSource: dataSource ?? 'main'
         },
         {
           headers: this.getAuthHeaders(),

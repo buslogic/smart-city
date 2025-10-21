@@ -130,7 +130,7 @@ export class GpsAnalyticsService {
       // Osnovne metrike
       const metricsQuery = `
         WITH vehicle_data AS (
-          SELECT 
+          SELECT
             COUNT(*) as total_points,
             AVG(speed) FILTER (WHERE speed > 0) as avg_speed,
             MAX(speed) as max_speed,
@@ -143,17 +143,32 @@ export class GpsAnalyticsService {
             AND time BETWEEN $2 AND $3
         ),
         route_calculation AS (
-          SELECT 
+          -- Outlier filtering: eliminiši GPS skokove veće od 150m
+          WITH ordered_points AS (
+            SELECT
+              time,
+              location,
+              LAG(location) OVER (ORDER BY time) as prev_location
+            FROM gps_data
+            WHERE vehicle_id = $1
+              AND time BETWEEN $2 AND $3
+              AND speed > 0
+              AND location IS NOT NULL
+          ),
+          valid_segments AS (
+            SELECT time, location
+            FROM ordered_points
+            WHERE prev_location IS NULL
+              OR ST_Distance(location::geography, prev_location::geography) <= 150
+          )
+          SELECT
             COALESCE(
               ST_Length(
                 ST_MakeLine(location ORDER BY time)::geography
               ) / 1000.0,
               0
             ) as total_distance
-          FROM gps_data
-          WHERE vehicle_id = $1
-            AND time BETWEEN $2 AND $3
-            AND speed > 0
+          FROM valid_segments
         ),
         stop_detection AS (
           SELECT COUNT(*) as total_stops
@@ -199,20 +214,41 @@ export class GpsAnalyticsService {
 
       // Podaci po satima
       const hourlyQuery = `
-        SELECT 
-          LPAD(EXTRACT(HOUR FROM time AT TIME ZONE 'Europe/Belgrade')::TEXT, 2, '0') as hour,
+        WITH ordered_points AS (
+          SELECT
+            EXTRACT(HOUR FROM time AT TIME ZONE 'Europe/Belgrade') as hour,
+            time,
+            location,
+            speed,
+            LAG(location) OVER (ORDER BY time) as prev_location
+          FROM gps_data
+          WHERE vehicle_id = $1
+            AND time BETWEEN $2 AND $3
+            AND speed > 0
+            AND location IS NOT NULL
+        ),
+        valid_segments AS (
+          SELECT
+            hour,
+            time,
+            location,
+            speed
+          FROM ordered_points
+          WHERE prev_location IS NULL
+            OR ST_Distance(location::geography, prev_location::geography) <= 150
+        )
+        SELECT
+          LPAD(hour::TEXT, 2, '0') as hour,
           COUNT(*) as points,
-          COALESCE(AVG(speed) FILTER (WHERE speed > 0), 0)::NUMERIC(5,1) as avg_speed,
+          COALESCE(AVG(speed), 0)::NUMERIC(5,1) as avg_speed,
           COALESCE(
             ST_Length(
               ST_MakeLine(location ORDER BY time)::geography
             ) / 1000.0,
             0
           )::NUMERIC(10,2) as distance
-        FROM gps_data
-        WHERE vehicle_id = $1
-          AND time BETWEEN $2 AND $3
-        GROUP BY EXTRACT(HOUR FROM time AT TIME ZONE 'Europe/Belgrade')
+        FROM valid_segments
+        GROUP BY hour
         ORDER BY hour
       `;
 
@@ -287,20 +323,41 @@ export class GpsAnalyticsService {
 
       if (daysDiff > 1) {
         const dailyQuery = `
-          SELECT 
-            DATE(time AT TIME ZONE 'Europe/Belgrade') as date,
-            COUNT(*) FILTER (WHERE speed > 0) as moving_points,
-            COALESCE(AVG(speed) FILTER (WHERE speed > 0), 0)::NUMERIC(5,1) as avg_speed,
+          WITH ordered_points AS (
+            SELECT
+              DATE(time AT TIME ZONE 'Europe/Belgrade') as date,
+              time,
+              location,
+              speed,
+              LAG(location) OVER (ORDER BY time) as prev_location
+            FROM gps_data
+            WHERE vehicle_id = $1
+              AND time BETWEEN $2 AND $3
+              AND speed > 0
+              AND location IS NOT NULL
+          ),
+          valid_segments AS (
+            SELECT
+              date,
+              time,
+              location,
+              speed
+            FROM ordered_points
+            WHERE prev_location IS NULL
+              OR ST_Distance(location::geography, prev_location::geography) <= 150
+          )
+          SELECT
+            date,
+            COUNT(*) as moving_points,
+            COALESCE(AVG(speed), 0)::NUMERIC(5,1) as avg_speed,
             COALESCE(
               ST_Length(
                 ST_MakeLine(location ORDER BY time)::geography
               ) / 1000.0,
               0
             )::NUMERIC(10,2) as distance
-          FROM gps_data
-          WHERE vehicle_id = $1
-            AND time BETWEEN $2 AND $3
-          GROUP BY DATE(time AT TIME ZONE 'Europe/Belgrade')
+          FROM valid_segments
+          GROUP BY date
           ORDER BY date
         `;
 

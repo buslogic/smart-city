@@ -1,0 +1,32 @@
+{
+  "timestamp": "2025-10-18T15:53:08.766Z",
+  "checks": {
+    "migrationsVsSchema": {
+      "passed": true,
+      "message": "Migrations successfully applied to fresh database",
+      "details": {
+        "status": "Prisma schema loaded from prisma/schema.prisma\nDatasource \"db\": MySQL database \"prisma_validation_1760802788765\" at \"localhost:3325\"\n\n178 migrations found in prisma/migrations\n\nDatabase schema is up to date!\n"
+      }
+    },
+    "schemaVsDatabase": {
+      "passed": true,
+      "message": "Schema matches the database structure (dynamic tables ignored)",
+      "details": {
+        "ignoredTables": [
+          "price_lists_line_uids_2023_09_01"
+        ]
+      }
+    },
+    "migrationHistory": {
+      "passed": true,
+      "message": "Migration history is consistent",
+      "details": {
+        "status": "Prisma schema loaded from prisma/schema.prisma\nDatasource \"db\": MySQL database \"smartcity_dev\" at \"localhost:3325\"\n\n178 migrations found in prisma/migrations\n\nDatabase schema is up to date!\n"
+      }
+    }
+  },
+  "summary": {
+    "allPassed": true,
+    "recommendation": "✅ All checks passed! Your Prisma setup is consistent."
+  }
+}

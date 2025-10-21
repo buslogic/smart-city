@@ -13,11 +13,10 @@ import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import { usePermissions } from '../../../hooks/usePermissions';
 import axios from 'axios';
 import { TokenManager } from '../../../utils/token';
+import { API_URL } from '../../../config/runtime';
 
 const { Search } = Input;
 const { Option } = Select;
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3010';
 
 interface LegacyDatabase {
   id: number;

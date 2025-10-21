@@ -34,6 +34,34 @@ Smart City platforma za upravljanje gradskom infrastrukturom sa fokusom na trans
 └── admin-portal/   # Admin UI za upravljanje
 ```
 
+## 🔧 Admin Portal - Runtime Configuration
+
+**VAŽNO:** Admin portal koristi **runtime config sistem** za Kubernetes deploymente!
+
+### Fallback Chain (prioritet)
+1. **window.APP_CONFIG** (Kubernetes ConfigMap) - runtime injection
+2. **import.meta.env.VITE_*** (Vercel/local .env) - build-time
+3. **Hardcoded fallback** (localhost:3010) - default
+
+### Ključni fajlovi
+- **`src/config/runtime.ts`** - Runtime config helper sa fallback-om
+- **`public/config.js`** - Fallback za development/Vercel
+- **`index.html`** - Učitava config.js PRE React aplikacije
+
+### Deployment strategije
+- **Vercel**: Koristi build-time env varijable (`VITE_API_URL`)
+- **Kubernetes**: ConfigMap override-uje `/config.js` sa runtime podešavanjima
+- **Local Dev**: Koristi `.env` fajl ili fallback
+
+### Kako koristiti
+```typescript
+// ✅ ISPRAVNO - uvek koristi runtime helper
+import { API_URL, WS_URL } from '../config/runtime';
+
+// ❌ POGREŠNO - NE koristi direktno import.meta.env
+const url = import.meta.env.VITE_API_URL; // GREŠKA!
+```
+
 ## 📦 Ključni backend moduli
 
 ### Core funkcionalnosti
@@ -99,7 +127,33 @@ const id = vehicle.id; // NE RADI OVO!
 **NIKADA ne izvršavaj SQL komande direktno na TimescaleDB bazi!**
 Sve promene MORAJU proći kroz dbmate migracije zbog LIVE servera.
 
-### Lokacija i komande:
+### 🤖 Automatsko izvršavanje migracija (GitHub Actions)
+
+**VAŽNO:** Migracije se automatski izvršavaju preko GitHub Actions workflow-a!
+
+**Workflow:** `.github/workflows/timescale-migrations.yml`
+
+**Automatski trigger:**
+- Push na `main` branch SA promenama u `apps/backend/timescale/migrations/**`
+- Workflow automatski: instalira dbmate → proverava status → izvršava `dbmate up`
+
+**Ručno pokretanje:**
+```bash
+# Preko GitHub CLI:
+gh workflow run timescale-migrations.yml
+
+# Ili preko GitHub UI:
+# Actions → TimescaleDB Migrations → Run workflow
+```
+
+**Praćenje statusa:**
+```bash
+gh run list --workflow=timescale-migrations.yml --limit 5
+gh run view [RUN_ID] --log
+```
+
+### 💻 Lokalni development (dbmate komande)
+
 ```bash
 # UVEK prelazi u ovaj direktorijum pre rada sa migracijama:
 cd /home/kocev/smart-city/apps/backend/timescale
@@ -107,12 +161,14 @@ cd /home/kocev/smart-city/apps/backend/timescale
 # Proveri status migracija:
 export PATH=$PATH:~/bin && dbmate --migrations-dir ./migrations status
 
-# Pokreni sve migracije:
+# Pokreni sve migracije (LOKALNO):
 export PATH=$PATH:~/bin && dbmate --migrations-dir ./migrations up
 
 # Kreiraj novu migraciju:
 export PATH=$PATH:~/bin && dbmate --migrations-dir ./migrations new naziv_migracije
 ```
+
+**Napomena:** Za LIVE server, NE pokreći migracije ručno - pusti GitHub Actions!
 
 ## 🚀 Development workflow
 

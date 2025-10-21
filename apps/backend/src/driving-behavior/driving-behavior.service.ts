@@ -13,6 +13,7 @@ import {
   ChartDataPointDto,
   EventType,
   SeverityLevel,
+  AggregateType,
 } from './dto/driving-events.dto';
 
 @Injectable()
@@ -452,140 +453,394 @@ export class DrivingBehaviorService {
   /**
    * OPTIMIZED: Get statistics for multiple vehicles at once
    * Much faster than individual queries!
+   * TRIPLE MODE: Supports 3 calculation methods:
+   *   1. NO-PostGIS VIEW aggregates (fastest, default) - Haversine formula
+   *   2. PostGIS VIEW aggregates (backup) - ST_Distance
+   *   3. Direct from gps_data (slowest, emergency) - ST_Distance
+   * DATA SOURCE: Supports main and backup tables
    */
   async getBatchMonthlyStatistics(
     vehicleIds: number[],
     startDate: string,
     endDate: string,
+    useDirectCalculation: boolean = false,
+    aggregateType: AggregateType = AggregateType.NO_POSTGIS,
+    dataSource: 'main' | 'backup' = 'main',
   ): Promise<VehicleStatisticsDto[]> {
     try {
-      // Batch query for all vehicles at once!
-      const batchQuery = `
-        WITH event_stats AS (
-          SELECT 
-            vehicle_id,
-            COUNT(*) FILTER (WHERE event_type = 'harsh_acceleration' AND severity >= 4) as severe_acc,
-            COUNT(*) FILTER (WHERE event_type = 'harsh_acceleration' AND severity = 3) as moderate_acc,
-            COUNT(*) FILTER (WHERE event_type = 'harsh_braking' AND severity >= 4) as severe_brake,
-            COUNT(*) FILTER (WHERE event_type = 'harsh_braking' AND severity = 3) as moderate_brake,
-            AVG(g_force)::NUMERIC(5,3) as avg_g_force,
-            MAX(g_force)::NUMERIC(5,3) as max_g_force,
-            COUNT(*) as total_events,
-            MODE() WITHIN GROUP (ORDER BY EXTRACT(HOUR FROM time))::INTEGER as most_common_hour
-          FROM driving_events
-          WHERE vehicle_id = ANY($1::int[])
-            AND time >= $2::date
-            AND time < $3::date + INTERVAL '1 day'
-          GROUP BY vehicle_id
-        ),
-        distance_stats AS (
-          -- Kombinacija monthly i hourly agregata za tačne Belgrade km
-          -- Monthly daje UTC bucket, hourly koriguje za UTC+2 offset
-          WITH monthly_base AS (
-            SELECT
-              vehicle_id,
-              total_km as km_monthly,
-              active_days
-            FROM monthly_vehicle_distance
-            WHERE vehicle_id = ANY($1::int[])
-              AND month_utc = DATE_TRUNC('month', $2::date)::timestamptz
-          ),
-          hourly_start_correction AS (
-            -- Dodaj sate od prethodnog meseca koji pripadaju Belgrade mesecu
-            -- Npr. za avgust: 31.07 22:00-23:59 UTC = 01.08 00:00-01:59 Belgrade
-            SELECT
-              vehicle_id,
-              COALESCE(SUM(total_km), 0) as km_to_add
-            FROM hourly_vehicle_distance
-            WHERE vehicle_id = ANY($1::int[])
-              AND hour_utc >= (DATE_TRUNC('month', $2::date) - INTERVAL '2 hours')::timestamptz
-              AND hour_utc < DATE_TRUNC('month', $2::date)::timestamptz
-            GROUP BY vehicle_id
-          ),
-          hourly_end_correction AS (
-            -- Oduzmi sate koji ne pripadaju Belgrade mesecu
-            -- Npr. za avgust: 31.08 22:00-23:59 UTC = 01.09 00:00-01:59 Belgrade
-            SELECT
-              vehicle_id,
-              COALESCE(SUM(total_km), 0) as km_to_subtract
-            FROM hourly_vehicle_distance
-            WHERE vehicle_id = ANY($1::int[])
-              AND hour_utc >= (DATE_TRUNC('month', $3::date + INTERVAL '1 day') - INTERVAL '2 hours')::timestamptz
-              AND hour_utc < DATE_TRUNC('month', $3::date + INTERVAL '1 day')::timestamptz
-            GROUP BY vehicle_id
-          )
-          SELECT
-            COALESCE(m.vehicle_id, hs.vehicle_id, he.vehicle_id) as vehicle_id,
-            COALESCE(m.km_monthly, 0) +
-            COALESCE(hs.km_to_add, 0) -
-            COALESCE(he.km_to_subtract, 0) as total_km,
-            COALESCE(m.active_days, 0) as active_days
-          FROM monthly_base m
-          FULL OUTER JOIN hourly_start_correction hs ON m.vehicle_id = hs.vehicle_id
-          FULL OUTER JOIN hourly_end_correction he ON
-            COALESCE(m.vehicle_id, hs.vehicle_id) = he.vehicle_id
-        )
-        SELECT
-          COALESCE(e.vehicle_id, d.vehicle_id) as vehicle_id,
-          COALESCE(severe_acc, 0) as severe_accelerations,
-          COALESCE(moderate_acc, 0) as moderate_accelerations,
-          COALESCE(severe_brake, 0) as severe_brakings,
-          COALESCE(moderate_brake, 0) as moderate_brakings,
-          COALESCE(avg_g_force, 0) as avg_g_force,
-          COALESCE(max_g_force, 0) as max_g_force,
-          COALESCE(total_events, 0) as total_events,
-          COALESCE(total_km, 0) as total_distance_km,
-          COALESCE(active_days, 0) as active_days,
-          COALESCE(most_common_hour, 0) as most_common_hour,
-          CASE 
-            WHEN total_km > 0 AND total_events > 0 THEN 
-              (total_events::NUMERIC / total_km * 100)::NUMERIC(10,2)
-            ELSE 0
-          END as events_per_100km
-        FROM event_stats e
-        FULL OUTER JOIN distance_stats d ON e.vehicle_id = d.vehicle_id
-        ORDER BY vehicle_id
-      `;
+      // Get event and distance statistics based on data source
+      let eventStats: Map<number, any>;
+      let distanceStats: Map<number, any>;
 
-      const result = await this.pgPool.query(batchQuery, [
+      if (dataSource === 'backup') {
+        // BACKUP TABLES - podržava aggregate i Direct
+        this.logger.log(`📦 BACKUP tabele`);
+        eventStats = await this.getEventStatsFromBackup(vehicleIds, startDate, endDate);
+
+        if (useDirectCalculation) {
+          // Direct iz gps_data_backup БEZ agregata
+          this.logger.warn(`⚠️ DIREKTNO iz gps_data_backup_04102025130800 (БEZ agregata)`);
+          distanceStats = await this.getDistanceStatsDirectlyFromBackup(vehicleIds, startDate, endDate);
+        } else {
+          // Koristi backup aggregate (БEZ VIEW wrappera)
+          this.logger.log(`✅ BACKUP agregati - hourly/monthly_vehicle_distance`);
+          distanceStats = await this.getDistanceStatsFromBackupAggregates(vehicleIds, startDate, endDate);
+        }
+      } else {
+        // MAIN TABLES - podržava VIEW i Direct
+        this.logger.log(`📊 MAIN tabele - koristi driving_events i gps_data`);
+        eventStats = await this.getEventStats(vehicleIds, startDate, endDate);
+
+        // Get distance statistics - TRIPLE MODE (samo za main)
+        if (useDirectCalculation) {
+          // OPCIJA 3: Najsporije, emergency
+          this.logger.warn(`⚠️ DIREKTNO računanje iz gps_data (najsporije, sa PostGIS ST_Distance)`);
+          distanceStats = await this.getDistanceStatsDirectly(vehicleIds, startDate, endDate);
+        } else if (aggregateType === AggregateType.NO_POSTGIS) {
+          // OPCIJA 1: Najbrže, default
+          this.logger.log(`✅ NO-PostGIS VIEW agregati (brže, preporučeno, Haversine formula)`);
+          distanceStats = await this.getDistanceStatsFromNoPostGISViews(vehicleIds, startDate, endDate);
+        } else {
+          // OPCIJA 2: Backup
+          this.logger.log(`✅ PostGIS VIEW agregati (backup opcija, ST_Distance)`);
+          distanceStats = await this.getDistanceStatsFromViews(vehicleIds, startDate, endDate);
+        }
+      }
+
+      // Merge stats and calculate safety scores
+      return this.mergeStatsAndCalculateSafetyScore(
+        eventStats,
+        distanceStats,
         vehicleIds,
         startDate,
         endDate,
-      ]);
-
-      // Dohvati garage numbers iz MySQL (BRŽE nego iz gps_data!)
-      const vehicles = await this.prisma.busVehicle.findMany({
-        where: { id: { in: vehicleIds } },
-        select: { id: true, garageNumber: true },
-      });
-      const garageMap = new Map<number, string>(
-        vehicles.map((v) => [v.id, v.garageNumber]),
-      );
-
-      // Calculate safety scores in application (flexible!)
-      return Promise.all(
-        result.rows.map(async (row) => ({
-          vehicleId: row.vehicle_id,
-          garageNo: garageMap.get(row.vehicle_id) || `V${row.vehicle_id}`,
-          totalEvents: row.total_events,
-          severeAccelerations: row.severe_accelerations,
-          moderateAccelerations: row.moderate_accelerations,
-          severeBrakings: row.severe_brakings,
-          moderateBrakings: row.moderate_brakings,
-          avgGForce: parseFloat(row.avg_g_force) || 0,
-          maxGForce: parseFloat(row.max_g_force) || 0,
-          totalDistanceKm: parseFloat(row.total_distance_km) || 0,
-          eventsPer100Km: parseFloat(row.events_per_100km) || 0,
-          mostCommonHour: row.most_common_hour || 0,
-          safetyScore: await this.calculateBatchSafetyScore(row),
-          startDate,
-          endDate,
-        })),
       );
     } catch (error) {
       this.logger.error(`Error in batch monthly statistics: ${error.message}`);
       throw error;
     }
+  }
+
+  /**
+   * Get event statistics (harsh accelerations/brakings) for multiple vehicles
+   */
+  private async getEventStats(
+    vehicleIds: number[],
+    startDate: string,
+    endDate: string,
+  ): Promise<Map<number, any>> {
+    const query = `
+      SELECT
+        vehicle_id,
+        COUNT(*) FILTER (WHERE event_type = 'harsh_acceleration' AND severity >= 4) as severe_acc,
+        COUNT(*) FILTER (WHERE event_type = 'harsh_acceleration' AND severity = 3) as moderate_acc,
+        COUNT(*) FILTER (WHERE event_type = 'harsh_braking' AND severity >= 4) as severe_brake,
+        COUNT(*) FILTER (WHERE event_type = 'harsh_braking' AND severity = 3) as moderate_brake,
+        AVG(g_force)::NUMERIC(5,3) as avg_g_force,
+        MAX(g_force)::NUMERIC(5,3) as max_g_force,
+        COUNT(*) as total_events,
+        MODE() WITHIN GROUP (ORDER BY EXTRACT(HOUR FROM time))::INTEGER as most_common_hour
+      FROM driving_events
+      WHERE vehicle_id = ANY($1::int[])
+        AND time >= $2::date
+        AND time < $3::date + INTERVAL '1 day'
+      GROUP BY vehicle_id
+    `;
+
+    const result = await this.pgPool.query(query, [vehicleIds, startDate, endDate]);
+
+    const eventMap = new Map<number, any>();
+    result.rows.forEach(row => {
+      eventMap.set(row.vehicle_id, row);
+    });
+
+    return eventMap;
+  }
+
+  /**
+   * OPCIJA 1: Get distance statistics from VIEW aggregates (FAST - default)
+   * Uses monthly + hourly VIEW-ova for Belgrade time (UTC+2) correction
+   * БEZ PostGIS - koristi custom Haversine funkciju
+   */
+  private async getDistanceStatsFromViews(
+    vehicleIds: number[],
+    startDate: string,
+    endDate: string,
+  ): Promise<Map<number, any>> {
+    const query = `
+      WITH monthly_base AS (
+        SELECT
+          vehicle_id,
+          total_distance_km as km_monthly,
+          num_days as active_days
+        FROM monthly_view_gps_data_5_minute_no_postgis
+        WHERE vehicle_id = ANY($1::int[])
+          AND month = DATE_TRUNC('month', $2::date)::date
+      ),
+      hourly_start_correction AS (
+        -- Dodaj sate od prethodnog meseca koji pripadaju Belgrade mesecu
+        -- Npr. za avgust: 31.07 22:00-23:59 UTC = 01.08 00:00-01:59 Belgrade
+        SELECT
+          vehicle_id,
+          COALESCE(SUM(total_distance_km), 0) as km_to_add
+        FROM hourly_view_gps_data_5_minute_no_postgis
+        WHERE vehicle_id = ANY($1::int[])
+          AND hour >= (DATE_TRUNC('month', $2::date) - INTERVAL '2 hours')::timestamptz
+          AND hour < DATE_TRUNC('month', $2::date)::timestamptz
+        GROUP BY vehicle_id
+      ),
+      hourly_end_correction AS (
+        -- Oduzmi sate koji ne pripadaju Belgrade mesecu
+        -- Npr. za avgust: 31.08 22:00-23:59 UTC = 01.09 00:00-01:59 Belgrade
+        SELECT
+          vehicle_id,
+          COALESCE(SUM(total_distance_km), 0) as km_to_subtract
+        FROM hourly_view_gps_data_5_minute_no_postgis
+        WHERE vehicle_id = ANY($1::int[])
+          AND hour >= (DATE_TRUNC('month', $3::date + INTERVAL '1 day') - INTERVAL '2 hours')::timestamptz
+          AND hour < DATE_TRUNC('month', $3::date + INTERVAL '1 day')::timestamptz
+        GROUP BY vehicle_id
+      )
+      SELECT
+        COALESCE(m.vehicle_id, hs.vehicle_id, he.vehicle_id) as vehicle_id,
+        COALESCE(m.km_monthly, 0) +
+        COALESCE(hs.km_to_add, 0) -
+        COALESCE(he.km_to_subtract, 0) as total_km,
+        COALESCE(m.active_days, 0) as active_days
+      FROM monthly_base m
+      FULL OUTER JOIN hourly_start_correction hs ON m.vehicle_id = hs.vehicle_id
+      FULL OUTER JOIN hourly_end_correction he ON
+        COALESCE(m.vehicle_id, hs.vehicle_id) = he.vehicle_id
+    `;
+
+    const result = await this.pgPool.query(query, [vehicleIds, startDate, endDate]);
+
+    const distanceMap = new Map<number, any>();
+    result.rows.forEach(row => {
+      distanceMap.set(row.vehicle_id, {
+        total_km: parseFloat(row.total_km) || 0,
+        active_days: row.active_days || 0,
+      });
+    });
+
+    return distanceMap;
+  }
+
+  /**
+   * OPCIJA 1B: Get distance statistics from NO-PostGIS VIEW aggregates (FAST - new default)
+   * Uses monthly + hourly VIEW-ova БEZ PostGIS za Belgrade time (UTC+2) correction
+   */
+  private async getDistanceStatsFromNoPostGISViews(
+    vehicleIds: number[],
+    startDate: string,
+    endDate: string,
+  ): Promise<Map<number, any>> {
+    const query = `
+      WITH monthly_base AS (
+        SELECT
+          vehicle_id,
+          total_distance_km as km_monthly,
+          num_days as active_days
+        FROM monthly_view_gps_data_5_minute_no_postgis
+        WHERE vehicle_id = ANY($1::int[])
+          AND month = DATE_TRUNC('month', $2::date)::date
+      ),
+      hourly_start_correction AS (
+        -- Dodaj sate od prethodnog meseca koji pripadaju Belgrade mesecu
+        -- Npr. za avgust: 31.07 22:00-23:59 UTC = 01.08 00:00-01:59 Belgrade
+        SELECT
+          vehicle_id,
+          COALESCE(SUM(total_distance_km), 0) as km_to_add
+        FROM hourly_view_gps_data_5_minute_no_postgis
+        WHERE vehicle_id = ANY($1::int[])
+          AND hour >= (DATE_TRUNC('month', $2::date) - INTERVAL '2 hours')::timestamptz
+          AND hour < DATE_TRUNC('month', $2::date)::timestamptz
+        GROUP BY vehicle_id
+      ),
+      hourly_end_correction AS (
+        -- Oduzmi sate koji ne pripadaju Belgrade mesecu
+        -- Npr. za avgust: 31.08 22:00-23:59 UTC = 01.09 00:00-01:59 Belgrade
+        SELECT
+          vehicle_id,
+          COALESCE(SUM(total_distance_km), 0) as km_to_subtract
+        FROM hourly_view_gps_data_5_minute_no_postgis
+        WHERE vehicle_id = ANY($1::int[])
+          AND hour >= (DATE_TRUNC('month', $3::date + INTERVAL '1 day') - INTERVAL '2 hours')::timestamptz
+          AND hour < DATE_TRUNC('month', $3::date + INTERVAL '1 day')::timestamptz
+        GROUP BY vehicle_id
+      )
+      SELECT
+        COALESCE(m.vehicle_id, hs.vehicle_id, he.vehicle_id) as vehicle_id,
+        COALESCE(m.km_monthly, 0) +
+        COALESCE(hs.km_to_add, 0) -
+        COALESCE(he.km_to_subtract, 0) as total_km,
+        COALESCE(m.active_days, 0) as active_days
+      FROM monthly_base m
+      FULL OUTER JOIN hourly_start_correction hs ON m.vehicle_id = hs.vehicle_id
+      FULL OUTER JOIN hourly_end_correction he ON
+        COALESCE(m.vehicle_id, hs.vehicle_id) = he.vehicle_id
+    `;
+
+    const result = await this.pgPool.query(query, [vehicleIds, startDate, endDate]);
+
+    const distanceMap = new Map<number, any>();
+    result.rows.forEach(row => {
+      distanceMap.set(row.vehicle_id, {
+        total_km: parseFloat(row.total_km) || 0,
+        active_days: row.active_days || 0,
+      });
+    });
+
+    this.logger.log(`✅ NO-PostGIS VIEW agregati: ${result.rows.length} vozila (Haversine formula)`);
+
+    return distanceMap;
+  }
+
+  /**
+   * OPCIJA 2: Get distance statistics directly from gps_data (SLOWER but RELIABLE)
+   * Uses PostGIS ST_Distance on location field with Belgrade time (UTC+2) handling
+   */
+  private async getDistanceStatsDirectly(
+    vehicleIds: number[],
+    startDate: string,
+    endDate: string,
+  ): Promise<Map<number, any>> {
+    const query = `
+      WITH ordered_points AS (
+        SELECT
+          vehicle_id,
+          time,
+          location,
+          LAG(location) OVER (PARTITION BY vehicle_id ORDER BY time) as prev_location,
+          LAG(time) OVER (PARTITION BY vehicle_id ORDER BY time) as prev_time
+        FROM gps_data
+        WHERE vehicle_id = ANY($1::int[])
+          -- BELGRADE TIME konverzija (UTC+2):
+          -- Početak: YYYY-MM-01 00:00 Belgrade = YYYY-MM-01 00:00 UTC - 2h = prethodni dan 22:00 UTC
+          AND time >= (($2::date)::timestamptz - INTERVAL '2 hours')
+          -- Kraj: YYYY-MM-DD 23:59 Belgrade = YYYY-MM-DD 23:59 UTC + 1 day - 2h = isti dan 22:00 UTC
+          AND time < (($3::date + INTERVAL '1 day')::timestamptz - INTERVAL '2 hours')
+          AND location IS NOT NULL
+          AND speed > 0  -- Samo pokretna vozila
+      ),
+      distance_calc AS (
+        SELECT
+          vehicle_id,
+          SUM(
+            CASE
+              WHEN prev_location IS NOT NULL
+                AND EXTRACT(EPOCH FROM (time - prev_time)) < 300  -- Max 5min gap
+              THEN ST_Distance(location::geography, prev_location::geography) / 1000.0
+              ELSE 0
+            END
+          ) as total_distance_km
+        FROM ordered_points
+        WHERE prev_location IS NOT NULL
+        GROUP BY vehicle_id
+      ),
+      active_days_calc AS (
+        SELECT
+          vehicle_id,
+          COUNT(DISTINCT DATE(time AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Belgrade')) as active_days
+        FROM gps_data
+        WHERE vehicle_id = ANY($1::int[])
+          AND time >= (($2::date)::timestamptz - INTERVAL '2 hours')
+          AND time < (($3::date + INTERVAL '1 day')::timestamptz - INTERVAL '2 hours')
+          AND speed > 0
+        GROUP BY vehicle_id
+      )
+      SELECT
+        COALESCE(d.vehicle_id, a.vehicle_id) as vehicle_id,
+        COALESCE(d.total_distance_km, 0) as total_km,
+        COALESCE(a.active_days, 0) as active_days
+      FROM distance_calc d
+      FULL OUTER JOIN active_days_calc a ON d.vehicle_id = a.vehicle_id
+    `;
+
+    const result = await this.pgPool.query(query, [vehicleIds, startDate, endDate]);
+
+    const distanceMap = new Map<number, any>();
+    result.rows.forEach(row => {
+      distanceMap.set(row.vehicle_id, {
+        total_km: parseFloat(row.total_km) || 0,
+        active_days: row.active_days || 0,
+      });
+    });
+
+    this.logger.log(`✅ Direktno izračunato za ${result.rows.length} vozila (Belgrade time UTC+2)`);
+
+    return distanceMap;
+  }
+
+  /**
+   * Merge event stats and distance stats, then calculate safety scores
+   */
+  private async mergeStatsAndCalculateSafetyScore(
+    eventStats: Map<number, any>,
+    distanceStats: Map<number, any>,
+    vehicleIds: number[],
+    startDate: string,
+    endDate: string,
+  ): Promise<VehicleStatisticsDto[]> {
+    // Dohvati garage numbers iz MySQL (BRŽE nego iz gps_data!)
+    const vehicles = await this.prisma.busVehicle.findMany({
+      where: { id: { in: vehicleIds } },
+      select: { id: true, garageNumber: true },
+    });
+    const garageMap = new Map<number, string>(
+      vehicles.map((v) => [v.id, v.garageNumber]),
+    );
+
+    // Merge all stats
+    const allVehicleIds = new Set([...eventStats.keys(), ...distanceStats.keys()]);
+
+    return Promise.all(
+      Array.from(allVehicleIds).map(async (vehicleId) => {
+        const events = eventStats.get(vehicleId) || {
+          severe_acc: 0,
+          moderate_acc: 0,
+          severe_brake: 0,
+          moderate_brake: 0,
+          avg_g_force: 0,
+          max_g_force: 0,
+          total_events: 0,
+          most_common_hour: 0,
+        };
+
+        const distance = distanceStats.get(vehicleId) || {
+          total_km: 0,
+          active_days: 0,
+        };
+
+        const eventsPer100Km = distance.total_km > 0
+          ? (events.total_events / distance.total_km * 100)
+          : 0;
+
+        return {
+          vehicleId,
+          garageNo: garageMap.get(vehicleId) || `V${vehicleId}`,
+          totalEvents: events.total_events,
+          severeAccelerations: events.severe_acc,
+          moderateAccelerations: events.moderate_acc,
+          severeBrakings: events.severe_brake,
+          moderateBrakings: events.moderate_brake,
+          avgGForce: parseFloat(events.avg_g_force) || 0,
+          maxGForce: parseFloat(events.max_g_force) || 0,
+          totalDistanceKm: distance.total_km,
+          eventsPer100Km,
+          mostCommonHour: events.most_common_hour || 0,
+          safetyScore: await this.calculateBatchSafetyScore({
+            severe_accelerations: events.severe_acc,
+            moderate_accelerations: events.moderate_acc,
+            severe_brakings: events.severe_brake,
+            moderate_brakings: events.moderate_brake,
+            total_distance_km: distance.total_km,
+          }),
+          startDate,
+          endDate,
+        };
+      }),
+    );
   }
 
   /**
@@ -970,6 +1225,200 @@ export class DrivingBehaviorService {
       vehicleId,
       garageNo: `V${vehicleId}`,
     };
+  }
+
+  /**
+   * ===========================================================================
+   * BACKUP TABLE METHODS
+   * ===========================================================================
+   * Metode za rad sa backup tabelama:
+   * - driving_events_backup_20250930
+   * - gps_data_backup_04102025130800
+   */
+
+  /**
+   * Get event statistics from BACKUP table (driving_events_backup_20250930)
+   */
+  private async getEventStatsFromBackup(
+    vehicleIds: number[],
+    startDate: string,
+    endDate: string,
+  ): Promise<Map<number, any>> {
+    const query = `
+      SELECT
+        vehicle_id,
+        COUNT(*) FILTER (WHERE event_type = 'harsh_acceleration' AND severity >= 4) as severe_acc,
+        COUNT(*) FILTER (WHERE event_type = 'harsh_acceleration' AND severity = 3) as moderate_acc,
+        COUNT(*) FILTER (WHERE event_type = 'harsh_braking' AND severity >= 4) as severe_brake,
+        COUNT(*) FILTER (WHERE event_type = 'harsh_braking' AND severity = 3) as moderate_brake,
+        AVG(g_force)::NUMERIC(5,3) as avg_g_force,
+        MAX(g_force)::NUMERIC(5,3) as max_g_force,
+        COUNT(*) as total_events,
+        MODE() WITHIN GROUP (ORDER BY EXTRACT(HOUR FROM time))::INTEGER as most_common_hour
+      FROM driving_events_backup_20250930
+      WHERE vehicle_id = ANY($1::int[])
+        AND time >= $2::date
+        AND time < $3::date + INTERVAL '1 day'
+      GROUP BY vehicle_id
+    `;
+
+    const result = await this.pgPool.query(query, [vehicleIds, startDate, endDate]);
+
+    const eventMap = new Map<number, any>();
+    result.rows.forEach(row => {
+      eventMap.set(row.vehicle_id, row);
+    });
+
+    this.logger.log(`📦 Event stats iz BACKUP tabele: ${result.rows.length} vozila`);
+
+    return eventMap;
+  }
+
+  /**
+   * Get distance statistics from BACKUP AGGREGATES
+   * Uses hourly_vehicle_distance and monthly_vehicle_distance VIEW-ovi
+   * (nastali iz gps_data_backup_04102025130800)
+   */
+  private async getDistanceStatsFromBackupAggregates(
+    vehicleIds: number[],
+    startDate: string,
+    endDate: string,
+  ): Promise<Map<number, any>> {
+    const query = `
+      WITH monthly_base AS (
+        SELECT
+          vehicle_id,
+          total_km as km_monthly,
+          active_days
+        FROM monthly_vehicle_distance
+        WHERE vehicle_id = ANY($1::int[])
+          AND month_utc = DATE_TRUNC('month', $2::date)::timestamptz
+      ),
+      hourly_start_correction AS (
+        -- Dodaj sate od prethodnog meseca koji pripadaju Belgrade mesecu
+        -- Npr. za avgust: 31.07 22:00-23:59 UTC = 01.08 00:00-01:59 Belgrade
+        SELECT
+          vehicle_id,
+          COALESCE(SUM(total_km), 0) as km_to_add
+        FROM hourly_vehicle_distance
+        WHERE vehicle_id = ANY($1::int[])
+          AND hour_utc >= (DATE_TRUNC('month', $2::date) - INTERVAL '2 hours')::timestamptz
+          AND hour_utc < DATE_TRUNC('month', $2::date)::timestamptz
+        GROUP BY vehicle_id
+      ),
+      hourly_end_correction AS (
+        -- Oduzmi sate koji ne pripadaju Belgrade mesecu
+        -- Npr. za avgust: 31.08 22:00-23:59 UTC = 01.09 00:00-01:59 Belgrade
+        SELECT
+          vehicle_id,
+          COALESCE(SUM(total_km), 0) as km_to_subtract
+        FROM hourly_vehicle_distance
+        WHERE vehicle_id = ANY($1::int[])
+          AND hour_utc >= (DATE_TRUNC('month', $3::date + INTERVAL '1 day') - INTERVAL '2 hours')::timestamptz
+          AND hour_utc < DATE_TRUNC('month', $3::date + INTERVAL '1 day')::timestamptz
+        GROUP BY vehicle_id
+      )
+      SELECT
+        COALESCE(m.vehicle_id, hs.vehicle_id, he.vehicle_id) as vehicle_id,
+        COALESCE(m.km_monthly, 0) +
+        COALESCE(hs.km_to_add, 0) -
+        COALESCE(he.km_to_subtract, 0) as total_km,
+        COALESCE(m.active_days, 0) as active_days
+      FROM monthly_base m
+      FULL OUTER JOIN hourly_start_correction hs ON m.vehicle_id = hs.vehicle_id
+      FULL OUTER JOIN hourly_end_correction he ON
+        COALESCE(m.vehicle_id, hs.vehicle_id) = he.vehicle_id
+    `;
+
+    const result = await this.pgPool.query(query, [vehicleIds, startDate, endDate]);
+
+    const distanceMap = new Map<number, any>();
+    result.rows.forEach(row => {
+      distanceMap.set(row.vehicle_id, {
+        total_km: parseFloat(row.total_km) || 0,
+        active_days: row.active_days || 0,
+      });
+    });
+
+    this.logger.log(`📦 Backup agregati: ${result.rows.length} vozila (hourly/monthly_vehicle_distance)`);
+
+    return distanceMap;
+  }
+
+  /**
+   * Get distance statistics directly from BACKUP table (gps_data_backup_04102025130800)
+   * Uses PostGIS ST_Distance on location field with Belgrade time (UTC+2) handling
+   */
+  private async getDistanceStatsDirectlyFromBackup(
+    vehicleIds: number[],
+    startDate: string,
+    endDate: string,
+  ): Promise<Map<number, any>> {
+    const query = `
+      WITH ordered_points AS (
+        SELECT
+          vehicle_id,
+          time,
+          location,
+          LAG(location) OVER (PARTITION BY vehicle_id ORDER BY time) as prev_location,
+          LAG(time) OVER (PARTITION BY vehicle_id ORDER BY time) as prev_time
+        FROM gps_data_backup_04102025130800
+        WHERE vehicle_id = ANY($1::int[])
+          -- BELGRADE TIME konverzija (UTC+2):
+          -- Početak: YYYY-MM-01 00:00 Belgrade = YYYY-MM-01 00:00 UTC - 2h = prethodni dan 22:00 UTC
+          AND time >= (($2::date)::timestamptz - INTERVAL '2 hours')
+          -- Kraj: YYYY-MM-DD 23:59 Belgrade = YYYY-MM-DD 23:59 UTC + 1 day - 2h = isti dan 22:00 UTC
+          AND time < (($3::date + INTERVAL '1 day')::timestamptz - INTERVAL '2 hours')
+          AND location IS NOT NULL
+          AND speed > 0  -- Samo pokretna vozila
+      ),
+      distance_calc AS (
+        SELECT
+          vehicle_id,
+          SUM(
+            CASE
+              WHEN prev_location IS NOT NULL
+                AND EXTRACT(EPOCH FROM (time - prev_time)) < 300  -- Max 5min gap
+              THEN ST_Distance(location::geography, prev_location::geography) / 1000.0
+              ELSE 0
+            END
+          ) as total_distance_km
+        FROM ordered_points
+        WHERE prev_location IS NOT NULL
+        GROUP BY vehicle_id
+      ),
+      active_days_calc AS (
+        SELECT
+          vehicle_id,
+          COUNT(DISTINCT DATE(time AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Belgrade')) as active_days
+        FROM gps_data_backup_04102025130800
+        WHERE vehicle_id = ANY($1::int[])
+          AND time >= (($2::date)::timestamptz - INTERVAL '2 hours')
+          AND time < (($3::date + INTERVAL '1 day')::timestamptz - INTERVAL '2 hours')
+          AND speed > 0
+        GROUP BY vehicle_id
+      )
+      SELECT
+        COALESCE(d.vehicle_id, a.vehicle_id) as vehicle_id,
+        COALESCE(d.total_distance_km, 0) as total_km,
+        COALESCE(a.active_days, 0) as active_days
+      FROM distance_calc d
+      FULL OUTER JOIN active_days_calc a ON d.vehicle_id = a.vehicle_id
+    `;
+
+    const result = await this.pgPool.query(query, [vehicleIds, startDate, endDate]);
+
+    const distanceMap = new Map<number, any>();
+    result.rows.forEach(row => {
+      distanceMap.set(row.vehicle_id, {
+        total_km: parseFloat(row.total_km) || 0,
+        active_days: row.active_days || 0,
+      });
+    });
+
+    this.logger.log(`📦 Distance stats iz BACKUP tabele: ${result.rows.length} vozila (Belgrade time UTC+2)`);
+
+    return distanceMap;
   }
 
   async onModuleDestroy() {

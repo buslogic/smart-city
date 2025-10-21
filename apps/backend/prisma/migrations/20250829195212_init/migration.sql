@@ -94,6 +94,16 @@ ALTER TABLE `role_permissions` ADD CONSTRAINT `role_permissions_roleId_fkey` FOR
 -- AddForeignKey
 ALTER TABLE `role_permissions` ADD CONSTRAINT `role_permissions_permissionId_fkey` FOREIGN KEY (`permissionId`) REFERENCES `permissions`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
+-- Insert initial SUPER_ADMIN role (ID=1)
+INSERT INTO `roles` (`id`, `name`, `description`, `created_at`, `updated_at`)
+VALUES (
+    1,
+    'SUPER_ADMIN',
+    'Administratorska uloga sa potpunim pristupom',
+    NOW(),
+    NOW()
+);
+
 -- Insert initial admin user (ID=1) for system operations
 -- Password je 'Test123!' hash-ovan sa bcrypt
 INSERT INTO `users` (`id`, `email`, `first_name`, `last_name`, `password`, `is_active`, `created_at`, `updated_at`)
@@ -102,8 +112,17 @@ VALUES (
     'admin@smart-city.rs',
     'System',
     'Admin',
-    '$2b$10$Y3XOm9JxGKmVhPVGZp6DZeK5Ly8z2LXH5pE5QqYHVpQqKqH5Tn.LS',
+    '$2b$10$LOtq1Mfir6wfBpRpQiUP2.ZGgBtHzyXgSCZlMgN3tj7yzjl51nDuW',
     true,
     NOW(),
     NOW()
+);
+
+-- Assign SUPER_ADMIN role to initial admin user
+INSERT INTO `user_roles` (`userId`, `roleId`, `assigned_at`, `assigned_by`)
+VALUES (
+    1,
+    1,
+    NOW(),
+    NULL
 );
