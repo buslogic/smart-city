@@ -14,6 +14,8 @@ export class LineResponseDto {
   lineType: string;
   lineStatus: string;
   priceTableIdent: string;
+  centralPointId: string;
+  centralPointName: string;
   variationId: number | null;
   variationName: string | null;
   datetimeFrom: Date | null;

@@ -37,7 +37,8 @@ import {
   TagsOutlined,
   BranchesOutlined,
   CalendarOutlined,
-  MailOutlined
+  MailOutlined,
+  PrinterOutlined
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { useAuthStore } from '../../stores/auth.store';
@@ -448,6 +449,13 @@ const ModernMenu: React.FC = () => {
                     icon: <CalendarOutlined />,
                     label: 'Raspored',
                     permissions: ['transport.planning.schedule:view'],
+                  },
+                  {
+                    key: '/transport/planning/schedule-print',
+                    menuOrder: 302050015000,
+                    icon: <PrinterOutlined />,
+                    label: 'Štampa Rasporeda',
+                    permissions: ['transport.planning.schedule_print:view'],
                   },
                   {
                     key: '/transport/planning/turnus-defaults',

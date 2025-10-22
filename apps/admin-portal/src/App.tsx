@@ -37,6 +37,7 @@ import ChangePassword from './pages/users/ChangePassword';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import TimescaleDB from './pages/transport/maintenance/TimescaleDB';
 import Schedule from './pages/transport/planning/Schedule';
+import SchedulePrint from './pages/transport/planning/SchedulePrint';
 import TurnusDefaults from './pages/transport/planning/TurnusDefaults';
 import MigrationPage from './pages/migration/MigrationPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
@@ -417,6 +418,15 @@ function App() {
               element={
                 <PermissionGuard permissions={['transport.planning.schedule:view']}>
                   <Schedule />
+                </PermissionGuard>
+              }
+            />
+
+            <Route
+              path="transport/planning/schedule-print"
+              element={
+                <PermissionGuard permissions={['transport.planning.schedule_print:view']}>
+                  <SchedulePrint />
                 </PermissionGuard>
               }
             />

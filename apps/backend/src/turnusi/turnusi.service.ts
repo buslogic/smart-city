@@ -210,14 +210,14 @@ export class TurnusiService {
           cct.turnus_id,
           cct.turnus_name,
           cct.line_no,
-          cct.start_time,
+          CAST(cct.start_time AS CHAR) as start_time,
           cct.direction,
-          cct.duration,
+          CAST(cct.duration AS CHAR) as duration,
           cct.central_point,
           cct.change_code,
           cct.job_id,
-          cct.new_start_time,
-          cct.new_duration,
+          CAST(cct.new_start_time AS CHAR) as new_start_time,
+          CAST(cct.new_duration AS CHAR) as new_duration,
           cct.start_station,
           cct.end_station,
           cct.day_number,
@@ -231,8 +231,8 @@ export class TurnusiService {
           cct.change_time,
           cct.change_user,
           cct.active,
-          cct.first_day_duration_part,
-          cct.second_day_duration_part,
+          CAST(cct.first_day_duration_part AS CHAR) as first_day_duration_part,
+          CAST(cct.second_day_duration_part AS CHAR) as second_day_duration_part,
           cct.custom_id,
           cct.transport_id,
           cct.departure_number,
@@ -397,7 +397,8 @@ export class TurnusiService {
           group.turageNumbers.add(turnus.turageNo);
 
           // Calculate first and last departure time
-          const startTime = new Date(turnus.startTime);
+          // startTime is now a string in HH:mm:ss format after CAST
+          const startTime = turnus.startTime;
           if (!group.firstDepartureTime || startTime < group.firstDepartureTime) {
             group.firstDepartureTime = startTime;
           }
@@ -424,8 +425,8 @@ export class TurnusiService {
 
             shiftDetails.push({
               shiftNumber: shiftNum,
-              firstDepartureTime: new Date(firstDep.startTime),
-              lastDepartureTime: new Date(lastDep.startTime),
+              firstDepartureTime: firstDep.startTime, // Already a string in HH:mm:ss format
+              lastDepartureTime: lastDep.startTime,   // Already a string in HH:mm:ss format
               departureCount: shiftDepartures.length,
             });
           }

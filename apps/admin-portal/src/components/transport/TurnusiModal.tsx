@@ -87,7 +87,26 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
 
   const formatTime = (time: Date | string) => {
     if (!time) return '-';
+    // If it's already a string in HH:mm:ss format, return it directly
+    if (typeof time === 'string' && /^\d{2}:\d{2}:\d{2}$/.test(time)) {
+      return time;
+    }
     return dayjs(time).format('HH:mm:ss');
+  };
+
+  // Helper function to convert time (Date or string) to minutes
+  const getTimeInMinutes = (time: Date | string): number => {
+    if (!time) return 0;
+
+    if (typeof time === 'string' && /^\d{2}:\d{2}:\d{2}$/.test(time)) {
+      // Parse HH:mm:ss string
+      const [hours, minutes] = time.split(':').map(Number);
+      return hours * 60 + minutes;
+    }
+
+    // Parse as Date
+    const date = dayjs(time);
+    return date.hour() * 60 + date.minute();
   };
 
   const getDayName = (day: number): string => {
@@ -251,18 +270,24 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
         width: 75,
         align: 'center',
         render: (duration: Date | string) => {
-          // Backend returns duration as ISO string like "1970-01-01T00:55:00.000Z"
-          // We only need the time part (HH:mm:ss)
+          // Backend returns duration as string "HH:mm:ss" after CAST
           let durationStr = '-';
 
           if (duration) {
-            if (typeof duration === 'string') {
-              // Parse ISO string and extract time (only hours and minutes)
-              const date = new Date(duration);
-              const hours = String(date.getUTCHours()).padStart(2, '0');
-              const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+            if (typeof duration === 'string' && /^\d{2}:\d{2}:\d{2}$/.test(duration)) {
+              // Already in HH:mm:ss format - extract hours and minutes
+              const [hours, minutes] = duration.split(':');
               durationStr = `${hours}:${minutes}`;
+            } else if (typeof duration === 'string') {
+              // Try to parse as Date (for backward compatibility)
+              const date = new Date(duration);
+              if (!isNaN(date.getTime())) {
+                const hours = String(date.getUTCHours()).padStart(2, '0');
+                const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+                durationStr = `${hours}:${minutes}`;
+              }
             } else {
+              // It's a Date object
               const d = new Date(duration);
               const hours = String(d.getUTCHours()).padStart(2, '0');
               const minutes = String(d.getUTCMinutes()).padStart(2, '0');
@@ -530,8 +555,8 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
             const shift = record.shiftDetails[0];
             if (!shift) return <Text type="secondary" style={{ fontSize: '9px' }}>-</Text>;
 
-            const startMinutes = dayjs(shift.firstDepartureTime).hour() * 60 + dayjs(shift.firstDepartureTime).minute();
-            const endMinutes = dayjs(shift.lastDepartureTime).hour() * 60 + dayjs(shift.lastDepartureTime).minute();
+            const startMinutes = getTimeInMinutes(shift.firstDepartureTime);
+            const endMinutes = getTimeInMinutes(shift.lastDepartureTime);
             const duration = endMinutes >= startMinutes ? endMinutes - startMinutes : (24 * 60) - startMinutes + endMinutes;
             const hours = Math.floor(duration / 60);
             const minutes = duration % 60;
@@ -674,8 +699,8 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
             const shift = record.shiftDetails[1];
             if (!shift) return <Text type="secondary" style={{ fontSize: '9px' }}>-</Text>;
 
-            const startMinutes = dayjs(shift.firstDepartureTime).hour() * 60 + dayjs(shift.firstDepartureTime).minute();
-            const endMinutes = dayjs(shift.lastDepartureTime).hour() * 60 + dayjs(shift.lastDepartureTime).minute();
+            const startMinutes = getTimeInMinutes(shift.firstDepartureTime);
+            const endMinutes = getTimeInMinutes(shift.lastDepartureTime);
             const duration = endMinutes >= startMinutes ? endMinutes - startMinutes : (24 * 60) - startMinutes + endMinutes;
             const hours = Math.floor(duration / 60);
             const minutes = duration % 60;
@@ -818,8 +843,8 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
             const shift = record.shiftDetails[2];
             if (!shift) return <Text type="secondary" style={{ fontSize: '9px' }}>-</Text>;
 
-            const startMinutes = dayjs(shift.firstDepartureTime).hour() * 60 + dayjs(shift.firstDepartureTime).minute();
-            const endMinutes = dayjs(shift.lastDepartureTime).hour() * 60 + dayjs(shift.lastDepartureTime).minute();
+            const startMinutes = getTimeInMinutes(shift.firstDepartureTime);
+            const endMinutes = getTimeInMinutes(shift.lastDepartureTime);
             const duration = endMinutes >= startMinutes ? endMinutes - startMinutes : (24 * 60) - startMinutes + endMinutes;
             const hours = Math.floor(duration / 60);
             const minutes = duration % 60;
@@ -942,8 +967,8 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
         const DAY_MINUTES = 24 * 60; // Total minutes in a day
 
         // Calculate total turnus duration
-        const startMinutes = dayjs(record.firstDepartureTime).hour() * 60 + dayjs(record.firstDepartureTime).minute();
-        const endMinutes = dayjs(record.lastDepartureTime).hour() * 60 + dayjs(record.lastDepartureTime).minute();
+        const startMinutes = getTimeInMinutes(record.firstDepartureTime);
+        const endMinutes = getTimeInMinutes(record.lastDepartureTime);
         const totalMinutes = endMinutes >= startMinutes ? endMinutes - startMinutes : DAY_MINUTES - startMinutes + endMinutes;
         const totalHours = Math.floor(totalMinutes / 60);
         const totalMins = totalMinutes % 60;
@@ -1026,8 +1051,8 @@ const TurnusiModal: React.FC<TurnusiModalProps> = ({
 
               {/* Shift segments */}
               {record.shiftDetails.map((shift: ShiftDetail, index: number) => {
-                const shiftStart = dayjs(shift.firstDepartureTime).hour() * 60 + dayjs(shift.firstDepartureTime).minute();
-                const shiftEnd = dayjs(shift.lastDepartureTime).hour() * 60 + dayjs(shift.lastDepartureTime).minute();
+                const shiftStart = getTimeInMinutes(shift.firstDepartureTime);
+                const shiftEnd = getTimeInMinutes(shift.lastDepartureTime);
                 const shiftDuration = shiftEnd >= shiftStart ? shiftEnd - shiftStart : DAY_MINUTES - shiftStart + shiftEnd;
 
                 // Calculate position and width as percentage of 24h
