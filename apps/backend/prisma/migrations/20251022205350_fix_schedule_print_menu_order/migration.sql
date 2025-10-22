@@ -1,10 +1,23 @@
--- Fix menuOrder for Schedule Print permissions
--- Change from 302050015000 to 302050020000
--- Move Turnus Defaults from 302050020000 to 302050030000
--- Move Linked Turnusi from 302050030000 to 302050040000
--- Correct hierarchy: Schedule (01) -> Schedule Print (02) -> Turnus Defaults (03) -> Linked Turnusi (04)
+-- Fix menuOrder for Schedule Print permissions + complete reorganization
+-- First INSERT Schedule Print and Linked Turnusi if they don't exist
+-- Then reorganize all menuOrders
+-- Final hierarchy: Schedule (01) -> Schedule Print (02) -> Turnus Defaults (03) -> Linked Turnusi (04)
 
--- First, move Linked Turnusi to temporary high numbers to avoid conflicts
+-- Step 1: Insert Schedule Print permissions if they don't exist
+INSERT IGNORE INTO permissions (name, resource, action, description, description_sr, category, menu_order, updated_at)
+VALUES
+  ('transport.planning.schedule_print:view', 'transport.planning.schedule_print', 'view', 'View schedule printing', 'Pregled štampe rasporeda', 'transport', 302050015000, NOW()),
+  ('transport.planning.schedule_print:export', 'transport.planning.schedule_print', 'export', 'Export/print schedule', 'Štampa i izvoz rasporeda', 'transport', 302050015001, NOW());
+
+-- Step 2: Insert Linked Turnusi permissions if they don't exist
+INSERT IGNORE INTO permissions (name, resource, action, description, description_sr, category, menu_order, updated_at)
+VALUES
+  ('transport.planning.linked_turnusi:view', 'transport.planning.linked_turnusi', 'view', 'View linked turnusi', 'Pregled povezanih turnusa', 'transport', 302050030000, NOW()),
+  ('transport.planning.linked_turnusi:create', 'transport.planning.linked_turnusi', 'create', 'Create linked turnusi', 'Kreiranje povezanih turnusa', 'transport', 302050030001, NOW()),
+  ('transport.planning.linked_turnusi:update', 'transport.planning.linked_turnusi', 'update', 'Update linked turnusi', 'Izmena povezanih turnusa', 'transport', 302050030002, NOW()),
+  ('transport.planning.linked_turnusi:delete', 'transport.planning.linked_turnusi', 'delete', 'Delete linked turnusi', 'Brisanje povezanih turnusa', 'transport', 302050030003, NOW());
+
+-- Step 3: Now reorganize menuOrders - move Linked Turnusi to temporary high numbers to avoid conflicts
 UPDATE permissions SET menu_order = 302050090000 WHERE menu_order = 302050030000;
 UPDATE permissions SET menu_order = 302050090001 WHERE menu_order = 302050030001;
 UPDATE permissions SET menu_order = 302050090002 WHERE menu_order = 302050030002;
