@@ -161,8 +161,9 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
 
       // Četvrti nivo - Planiranje (pod Dispečerskim modulom)
       if (menuOrder === 302050010000) return 'Raspored';
-      if (menuOrder === 302050015000) return 'Štampa Rasporeda';
-      if (menuOrder === 302050020000) return 'Default Turnusa';
+      if (menuOrder === 302050020000) return 'Štampa Rasporeda';
+      if (menuOrder === 302050030000) return 'Default Turnusa';
+      if (menuOrder === 302050040000) return 'Povezani turnusi';
 
       // Treći nivo - Bezbednost i Analiza
       if (menuOrder === 303010000000) return 'Agresivna vožnja';

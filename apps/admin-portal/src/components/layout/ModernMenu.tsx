@@ -38,7 +38,8 @@ import {
   BranchesOutlined,
   CalendarOutlined,
   MailOutlined,
-  PrinterOutlined
+  PrinterOutlined,
+  LinkOutlined
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { useAuthStore } from '../../stores/auth.store';
@@ -452,17 +453,24 @@ const ModernMenu: React.FC = () => {
                   },
                   {
                     key: '/transport/planning/schedule-print',
-                    menuOrder: 302050015000,
+                    menuOrder: 302050020000,
                     icon: <PrinterOutlined />,
                     label: 'Štampa Rasporeda',
                     permissions: ['transport.planning.schedule_print:view'],
                   },
                   {
                     key: '/transport/planning/turnus-defaults',
-                    menuOrder: 302050020000,
+                    menuOrder: 302050030000,
                     icon: <UserOutlined />,
                     label: 'Default Turnusa',
                     permissions: ['transport.planning.turnus_defaults:view'],
+                  },
+                  {
+                    key: '/transport/planning/linked-turnusi',
+                    menuOrder: 302050040000,
+                    icon: <LinkOutlined />,
+                    label: 'Povezani turnusi',
+                    permissions: ['transport.planning.linked_turnusi:view'],
                   },
                 ],
               },

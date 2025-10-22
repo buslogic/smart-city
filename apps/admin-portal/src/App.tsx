@@ -39,6 +39,7 @@ import TimescaleDB from './pages/transport/maintenance/TimescaleDB';
 import Schedule from './pages/transport/planning/Schedule';
 import SchedulePrint from './pages/transport/planning/SchedulePrint';
 import TurnusDefaults from './pages/transport/planning/TurnusDefaults';
+import LinkedTurnusi from './pages/transport/planning/LinkedTurnusi';
 import MigrationPage from './pages/migration/MigrationPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 
@@ -436,6 +437,15 @@ function App() {
               element={
                 <PermissionGuard permissions={['transport.planning.turnus_defaults:view']}>
                   <TurnusDefaults />
+                </PermissionGuard>
+              }
+            />
+
+            <Route
+              path="transport/planning/linked-turnusi"
+              element={
+                <PermissionGuard permissions={['transport.planning.linked_turnusi:view']}>
+                  <LinkedTurnusi />
                 </PermissionGuard>
               }
             />
