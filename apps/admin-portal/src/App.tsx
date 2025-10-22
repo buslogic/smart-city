@@ -1,3 +1,4 @@
+// Trigger deploy - migration 20251022214407 applied
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ConfigProvider, App as AntApp } from 'antd';
 import srRS from 'antd/locale/sr_RS';
