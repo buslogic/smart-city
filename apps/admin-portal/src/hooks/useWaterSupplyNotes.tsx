@@ -56,6 +56,7 @@ const useWaterSupplyNotes = () => {
                             label="Naslov"
                             defaultValue={value}
                             fullWidth
+                            variant="standard"
                             onChange={(e) => {
                                 row._valuesCache[column.id] = e.target.value;
                             }}
@@ -76,6 +77,7 @@ const useWaterSupplyNotes = () => {
                             multiline
                             rows={4}
                             fullWidth
+                            variant="standard"
                             onChange={(e) => {
                                 row._valuesCache[column.id] = e.target.value;
                             }}

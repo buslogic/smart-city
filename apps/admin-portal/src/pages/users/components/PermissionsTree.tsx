@@ -11,8 +11,7 @@ import {
   Settings,
   Database,
   LayoutDashboard,
-  Bus,
-  Droplets
+  Bus
 } from 'lucide-react';
 import type { Permission } from '../../../types/rbac.types';
 
@@ -75,8 +74,8 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
         case 1: return <LayoutDashboard className="h-5 w-5" />; // Dashboard
         case 2: return <Users className="h-5 w-5" />;           // Korisnici
         case 3: return <Bus className="h-5 w-5" />;             // Transport
+        case 35: return <Database className="h-5 w-5" />;       // Vodovod (350000000000)
         case 4: return <Settings className="h-5 w-5" />;       // Podešavanje
-        case 5: return <Droplets className="h-5 w-5" />;       // Vodovod
         default: return <Database className="h-5 w-5" />;
       }
     };
@@ -89,20 +88,20 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
         case 1: return { text: 'text-purple-700', bg: 'bg-purple-50' };
         case 2: return { text: 'text-indigo-700', bg: 'bg-indigo-50' };
         case 3: return { text: 'text-green-700', bg: 'bg-green-50' };
+        case 35: return { text: 'text-blue-700', bg: 'bg-blue-50' }; // Vodovod
         case 4: return { text: 'text-orange-700', bg: 'bg-orange-50' };
-        case 5: return { text: 'text-cyan-700', bg: 'bg-cyan-50' };
         default: return { text: 'text-gray-700', bg: 'bg-gray-50' };
       }
     };
 
     // Mapiranje menuOrder na nazive menija na osnovu stvarnih menuOrder vrednosti iz ModernMenu
     const getMenuName = (menuOrder: number): string => {
-      // Glavni nivoi (100000000000, 200000000000, 300000000000, 400000000000, 500000000000)
+      // Glavni nivoi (100000000000, 200000000000, 300000000000, 350000000000, 400000000000)
       if (menuOrder === 100000000000) return 'Dashboard';
       if (menuOrder === 200000000000) return 'Korisnici';
       if (menuOrder === 300000000000) return 'Autobuski Prevoznici';
+      if (menuOrder === 350000000000) return 'Vodovod';
       if (menuOrder === 400000000000) return 'Podešavanje';
-      if (menuOrder === 500000000000) return 'Vodovod';
 
       // Drugi nivo - Korisnici
       if (menuOrder === 201000000000) return 'Administracija';
@@ -177,23 +176,95 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
       // Treći nivo - Održavanje Sistema
       if (menuOrder === 304010000000) return 'TimescaleDB';
 
+      // Drugi nivo - Vodovod
+      if (menuOrder === 351000000000) return 'Vodomeri';
+      if (menuOrder === 352000000000) return 'Merna mesta';
+      if (menuOrder === 353000000000) return 'Teritorija i zone';
+      if (menuOrder === 354000000000) return 'Čitačke liste';
+      if (menuOrder === 355000000000) return 'Cenovnici';
+      if (menuOrder === 356000000000) return 'Finansije';
+      if (menuOrder === 357000000000) return 'Korisnici';
+      if (menuOrder === 358000000000) return 'Subvencije';
+      if (menuOrder === 359000000000) return 'Blagajna';
+      if (menuOrder === 360000000000) return 'Reklamacije';
+      if (menuOrder === 361000000000) return 'Obračuni';
+      if (menuOrder === 362000000000) return 'Beleške';
+
+      // Treći nivo - Vodomeri
+      if (menuOrder === 351010000000) return 'Pregled';
+      if (menuOrder === 351020000000) return 'Zamenski vodomeri';
+      if (menuOrder === 351030000000) return 'Raspoloživost';
+      if (menuOrder === 351040000000) return 'Proizvođači';
+      if (menuOrder === 351050000000) return 'Tip vodomera';
+      if (menuOrder === 351060000000) return 'Napomene';
+
+      // Treći nivo - Merna mesta
+      if (menuOrder === 352010000000) return 'Merna mesta';
+      if (menuOrder === 352020000000) return 'Kućni saveti';
+      if (menuOrder === 352030000000) return 'Ulice';
+      if (menuOrder === 352040000000) return 'Rejoni';
+
+      // Treći nivo - Teritorija i zone
+      if (menuOrder === 353010000000) return 'Ulice';
+      if (menuOrder === 353020000000) return 'Rejoni';
+      if (menuOrder === 353030000000) return 'Naselja';
+      if (menuOrder === 353040000000) return 'Zone';
+
+      // Treći nivo - Čitačke liste
+      if (menuOrder === 354010000000) return 'Kampanje';
+      if (menuOrder === 354020000000) return 'Pod kampanje';
+      if (menuOrder === 354030000000) return 'Štampa čitačkih listi';
+      if (menuOrder === 354040000000) return 'Čitači';
+      if (menuOrder === 354050000000) return 'Očitavanja';
+      if (menuOrder === 354060000000) return 'Pregled zamenjenih vodomera';
+      if (menuOrder === 354070000000) return 'Anomalije';
+
+      // Treći nivo - Cenovnici
+      if (menuOrder === 355010000000) return 'Usluge';
+      if (menuOrder === 355020000000) return 'Cenovnik usluga';
+      if (menuOrder === 355030000000) return 'Dodeljivanje usluga';
+      if (menuOrder === 355040000000) return 'Pregled usluga po mernom mestu';
+      if (menuOrder === 355050000000) return 'Pregled istorije cenovnika';
+
+      // Treći nivo - Finansije
+      if (menuOrder === 356010000000) return 'Promena/istorija adresa mernih mesta';
+
+      // Treći nivo - Korisnici (Vodovod)
+      if (menuOrder === 357010000000) return 'Pregled korisnika';
+      if (menuOrder === 357020000000) return 'Potrošnja po mernom mestu/potrošaču';
+
+      // Treći nivo - Subvencije
+      if (menuOrder === 358010000000) return 'Administracija subvencija';
+      if (menuOrder === 358020000000) return 'Dodeljivanje subvencija korisniku';
+
+      // Treći nivo - Blagajna
+      if (menuOrder === 359010000000) return 'Blagajna';
+      if (menuOrder === 359020000000) return 'Fiskalni uređaji';
+      if (menuOrder === 359030000000) return 'Uplate';
+      if (menuOrder === 359040000000) return 'Blagajnik';
+      if (menuOrder === 359050000000) return 'Smene';
+      if (menuOrder === 359060000000) return 'Izveštaji blagajne';
+
+      // Četvrti nivo - Izveštaji blagajne
+      if (menuOrder === 359060010000) return 'Dnevni promet po blagajni/blagajniku';
+      if (menuOrder === 359060020000) return 'Pregled uplata po metodi plaćanja';
+
+      // Treći nivo - Reklamacije
+      if (menuOrder === 360010000000) return 'Reklamacije i zahtevi';
+      if (menuOrder === 360020000000) return 'Prioriteti';
+      if (menuOrder === 360030000000) return 'Reklamacije za odgovorno lice';
+
+      // Treći nivo - Obračuni
+      if (menuOrder === 361010000000) return 'Obračuni vodomera';
+
+      // Treći nivo - Beleške
+      if (menuOrder === 362010000000) return 'Beleške';
+      if (menuOrder === 362020000000) return 'Kategorije beleški';
+
       // Drugi nivo - Podešavanje
       if (menuOrder === 401000000000) return 'Opšta'; // Folder
       if (menuOrder === 402000000000) return 'API Ključevi';
 
-<<<<<<< HEAD
-      // Drugi nivo - Vodovod
-      if (menuOrder === 501000000000) return 'Vodomeri';
-      if (menuOrder === 502000000000) return 'Merna Mesta';
-
-      // Treći nivo - Settings pod-opcije
-      if (menuOrder >= 401010000000 && menuOrder < 401020000000) return 'Informacije o Kompaniji';
-      if (menuOrder >= 401020000000 && menuOrder < 401030000000) return 'Legacy Baze';
-      if (menuOrder >= 401030000000 && menuOrder < 401040000000) return 'Legacy Tabele';
-      if (menuOrder >= 401040000000 && menuOrder < 401050000000) return 'Email Šabloni';
-      if (menuOrder >= 401050000000 && menuOrder < 401060000000) return 'API Podešavanja';
-      if (menuOrder >= 401060000000 && menuOrder < 401070000000) return 'Sistemska Podešavanja';
-=======
       // Treći nivo - Opšta pod-grupe (4. nivo u hijerarhiji)
       if (menuOrder === 401010000000) return 'Informacije o Kompaniji';
       if (menuOrder === 401020000000) return 'Legacy Baze';
@@ -205,20 +276,6 @@ const PermissionsTreeMenuOrder: React.FC<PermissionsTreeProps> = ({
       if (menuOrder >= 401020000001 && menuOrder < 401020999999) return 'Legacy Baze';
       if (menuOrder >= 401030000001 && menuOrder < 401030999999) return 'Legacy Tabele';
       if (menuOrder >= 401040000001 && menuOrder < 401040999999) return 'Email Šabloni';
->>>>>>> origin/main
-
-      // Treći nivo - Vodomeri
-      if (menuOrder === 501010000000) return 'Tipovi Vodomera';
-      if (menuOrder === 501020000000) return 'Dostupnost Vodomera';
-      if (menuOrder === 501030000000) return 'Proizvođači Vodomera';
-      if (menuOrder === 501040000000) return 'Vodomeri';
-      if (menuOrder === 501050000000) return 'Zamenjeni Vodomeri';
-      if (menuOrder === 501060000000) return 'Napomene Vodomera';
-
-      // Treći nivo - Merna Mesta
-      if (menuOrder === 502010000000) return 'Pregled Mernih Mesta';
-      if (menuOrder === 502020000000) return 'Merna Mesta po Adresi';
-      if (menuOrder === 502030000000) return 'Potrošnja';
 
       // Fallback za permisije - koristi resource ili description
       const permission = allPermissions.find(p => p.menuOrder === menuOrder);

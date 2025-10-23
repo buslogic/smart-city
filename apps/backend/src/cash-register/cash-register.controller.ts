@@ -62,4 +62,11 @@ export class CashRegisterController {
   async getPaymentsByPaymentMethod(@Body() body: { id: number }, @Request() req) {
     return this.cashRegisterService.getPaymentsByPaymentMethod(req.user.id, body.id);
   }
+
+  @Get('is-session-open')
+  async isSessionOpen(@Request() req) {
+    const isOpen = await this.cashRegisterService.isSessionOpen(req.user.id);
+    return isOpen;
+  }
 }
+

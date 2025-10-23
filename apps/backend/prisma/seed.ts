@@ -183,6 +183,22 @@ async function main() {
     // Water Services Review permissions (menuOrder: 501100000000 + offset)
     { name: 'water_services_review:view', resource: 'water_services_review', action: 'view', description: 'Pregled usluga po mernom mestu', menuOrder: 501100000000 },
 
+    // House Council permissions (menuOrder: 501110000000 + offset)
+    { name: 'house_council:create', resource: 'house_council', action: 'create', description: 'Kreiranje kućnih saveta', menuOrder: 501110000001 },
+    { name: 'house_council:view', resource: 'house_council', action: 'view', description: 'Pregled kućnih saveta', menuOrder: 501110000000 },
+    { name: 'house_council:edit', resource: 'house_council', action: 'edit', description: 'Ažuriranje kućnih saveta', menuOrder: 501110000002 },
+    { name: 'house_council:delete', resource: 'house_council', action: 'delete', description: 'Brisanje kućnih saveta', menuOrder: 501110000003 },
+
+    // Measuring Points By Address permissions (menuOrder: 501120000000 + offset)
+    { name: 'measuring_points_by_address:create', resource: 'measuring_points_by_address', action: 'create', description: 'Kreiranje adresa mernih mesta', menuOrder: 501120000001 },
+    { name: 'measuring_points_by_address:view', resource: 'measuring_points_by_address', action: 'view', description: 'Pregled adresa mernih mesta', menuOrder: 501120000000 },
+
+    // Water Services Pricelist permissions (menuOrder: 501130000000 + offset)
+    { name: 'water_services_pricelist:view', resource: 'water_services_pricelist', action: 'view', description: 'Pregled cenovnika vodovod usluga', menuOrder: 501130000000 },
+
+    // Consumers permissions (menuOrder: 501140000000 + offset)
+    { name: 'consumers:view', resource: 'consumers', action: 'view', description: 'Pregled potrošača', menuOrder: 501140000000 },
+
     // Measuring Points permissions (menuOrder: 502010000000 + offset)
     { name: 'measuring_points:create', resource: 'measuring_points', action: 'create', description: 'Kreiranje mernih mesta', menuOrder: 502010000001 },
     { name: 'measuring_points:view', resource: 'measuring_points', action: 'view', description: 'Pregled mernih mesta', menuOrder: 502010000000 },

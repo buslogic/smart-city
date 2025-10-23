@@ -3,7 +3,9 @@ import { MaterialReactTable, MRT_ColumnDef, useMaterialReactTable } from 'materi
 import { Box, Paper } from '@mui/material';
 import { globalTableProps } from '@/utils/globalTableProps';
 import { SearchList } from '@/components/ui/SearchList';
-import { fetchPostData } from '@/utils/fetchUtil';
+import { fetchAPI, fetchPostData } from '@/utils/fetchUtil';
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3010';
 import { toast } from 'react-toastify';
 import Main from '@/components/ui/Main';
 
@@ -120,7 +122,7 @@ const MeasuringPointsConsumptionPage = ({ title }: { title: string }) => {
           <Box display="flex" flexWrap={{ xs: 'wrap', sm: 'nowrap' }} marginTop={2} gap={2} alignItems="center" justifyContent="center">
             <SearchList
               label="Merno mesto"
-              endpoint="../WaterMeterController/getMeasuringPointsForSL"
+              endpoint={`${API_BASE}/api/water-meters/search/measuring-points`}
               multiple={false}
               textFieldProps={{
                 variant: 'outlined',
@@ -149,7 +151,7 @@ const MeasuringPointsConsumptionPage = ({ title }: { title: string }) => {
             />
             <SearchList
               label="Potrošač"
-              endpoint="../ConsumersController/getConsumersForSL"
+              endpoint={`${API_BASE}/api/consumers/search/for-sl`}
               multiple={false}
               value={consumerInput}
               textFieldProps={{

@@ -52,7 +52,7 @@ export class UserAccountsService {
     await this.prismaLegacy.$executeRawUnsafe(
       query,
       dto.pricelist_id,
-      dto.active ? 1 : 0,
+      dto.active, // Already 0 or 1 from DTO
       updatedAt,
       dto.id,
     );
@@ -700,8 +700,9 @@ export class UserAccountsService {
   // Helper methods
 
   private async getUserAccountServiceByID(id: number) {
+    // Isto formatiranje kao getServicesByUserAccountID (linija 27-37)
     const query = `
-      SELECT vwsp.*, vs.*, vcc.category, vuas.*
+      SELECT vcc.category, vs.service, vuas.*
       FROM vodovod_user_account_services vuas
       LEFT JOIN vodovod_water_services_pricelist vwsp ON vuas.pricelist_id = vwsp.id
       LEFT JOIN vodovod_service vs ON vs.id = vwsp.service_id

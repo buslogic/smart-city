@@ -75,7 +75,7 @@ const useReplacementWaterMeters = () => {
             {
                 accessorKey: 'typeId',
                 header: 'Tip',
-                size: 150,
+                size: 350,
                 enableEditing: true,
                 Edit: ({ cell, table, column, row }) => {
                     const { creatingRow: isCreating, editingRow: isEditing } = table.getState();

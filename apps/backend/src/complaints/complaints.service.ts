@@ -244,7 +244,14 @@ export class ComplaintsService {
     await this.findOne(id);
 
     // IDENTIČNA LOGIKA kao u PHP ComplaintModel::deleteRow (linija 539-558)
-    const result = await this.legacyDb.$executeRawUnsafe(
+    // Prvo obriši sve zapise iz status history zbog foreign key constraint-a
+    await this.legacyDb.$executeRawUnsafe(
+      `DELETE FROM vodovod_complaint_status_history WHERE reklamacija_id = ?`,
+      id,
+    );
+
+    // Zatim obriši samu reklamaciju
+    await this.legacyDb.$executeRawUnsafe(
       `DELETE FROM vodovod_complaint WHERE id = ?`,
       id,
     );

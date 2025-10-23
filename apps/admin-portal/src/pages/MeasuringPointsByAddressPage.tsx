@@ -1,12 +1,14 @@
 import Main from '@/components/ui/Main';
 import { SearchList } from '@/components/ui/SearchList';
 import { MeasuringPoints } from '@/types/measuring-points';
-import { fetchPostData } from '@/utils/fetchUtil';
+import { fetchAPI } from '@/utils/fetchUtil';
 import { globalTableProps } from '@/utils/globalTableProps';
 import { Box, Button, TextField } from '@mui/material';
 import { MaterialReactTable, MRT_ColumnDef, useMaterialReactTable } from 'material-react-table';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3010';
 
 export default function MeasuringPointsByAddressPage({ title }: { title: string }) {
     const [isFetching, setIsFetching] = useState<boolean>(false);
@@ -24,7 +26,7 @@ export default function MeasuringPointsByAddressPage({ title }: { title: string 
         const fetchInitialData = async () => {
             try {
                 setIsFetching(true);
-                const data: MeasuringPoints[] = await fetchPostData('../MeasuringPointsByAddressController/getAddressHistory', {});
+                const data: MeasuringPoints[] = await fetchAPI(`${API_BASE}/api/measuring-points-by-address/get-address-history`, { method: 'POST' });
                 setRows(data);
             } catch (err) {
                 console.log(err);
@@ -43,9 +45,9 @@ export default function MeasuringPointsByAddressPage({ title }: { title: string 
             const parts = newValue.split('|');
             const idmm = parts[0].trim();
 
-            const addressDetails: MeasuringPoints[] = await fetchPostData(
-                '../MeasuringPointsByAddressController/getAddressByIDMM',
-                { idmm: idmm }
+            const addressDetails: MeasuringPoints[] = await fetchAPI(
+                `${API_BASE}/api/measuring-points-by-address/get-address-by-idmm`,
+                { method: 'POST', data: { idmm: parseInt(idmm) } }
             );
             if (addressDetails.length > 0) {
                 const detail = addressDetails[0];
@@ -64,16 +66,19 @@ export default function MeasuringPointsByAddressPage({ title }: { title: string 
     const handleSubmit = async () => {
         try {
             setIsFetching(true);
-            const { data, success } = await fetchPostData(
-                '../MeasuringPointsByAddressController/saveNewAddress',
+            const { data, success } = await fetchAPI(
+                `${API_BASE}/api/measuring-points-by-address/save-new-address`,
                 {
-                    idmm,
-                    staraAdresa,
-                    brojAdrese,
-                    ulaz,
-                    novaAdresa,
-                    noviBroj,
-                    noviUlaz,
+                    method: 'POST',
+                    data: {
+                        idmm,
+                        staraAdresa,
+                        brojAdrese,
+                        ulaz,
+                        novaAdresa,
+                        noviBroj,
+                        noviUlaz,
+                    }
                 }
             );
             if (!success) {
@@ -153,7 +158,7 @@ export default function MeasuringPointsByAddressPage({ title }: { title: string 
             <Box sx={{ width: '500px', marginBottom: '12px' }}>
                 <SearchList
                     label="Merno mesto"
-                    endpoint={`../WaterMeterController/getMeasuringPointsForSL`}
+                    endpoint={`${API_BASE}/api/water-meters/search/measuring-points`}
                     multiple={false}
                     textFieldProps={{
                         variant: 'standard',
@@ -205,7 +210,7 @@ export default function MeasuringPointsByAddressPage({ title }: { title: string 
                 <Box sx={{ flex: 1, marginTop: 2 }}>
                     <SearchList
                         label="Nova adresa"
-                        endpoint={`../MeasuringPointsByAddressController/getAddresses`}
+                        endpoint={`${API_BASE}/api/measuring-points-by-address/get-addresses`}
                         multiple={false}
                         textFieldProps={{
                             variant: 'standard',

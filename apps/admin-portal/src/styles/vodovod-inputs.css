@@ -1,0 +1,101 @@
+/* Vodovod Input Styles - Samo donji border - GLOBALNO ZA SVE INPUTE */
+
+/* GLOBALNO - SVI INPUTI U CELOJ APLIKACIJI */
+div.MuiInputBase-root.MuiInput-root,
+div.MuiInputBase-root,
+.MuiInputBase-root.MuiInput-root.MuiInput-underline,
+.MuiInputBase-root.MuiInput-root,
+.MuiInputBase-root,
+.MuiInput-root {
+  outline: none !important;
+  border: none !important;
+  border-top: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+input.MuiInputBase-input.MuiInput-input,
+input.MuiInputBase-input,
+.MuiInputBase-input.MuiInput-input,
+.MuiInput-input,
+.MuiInputBase-input,
+input {
+  outline: none !important;
+  border: none !important;
+  border-top: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  border-radius: 0 !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Attribute selektori - hvataju SVE */
+[class*="MuiInputBase-root"][class*="MuiInput-root"],
+[class*="MuiInputBase-root"],
+[class*="MuiInput-root"] {
+  border: none !important;
+  border-top: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  border-radius: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+[class*="MuiInput-input"],
+[class*="MuiInputBase-input"] {
+  outline: none !important;
+  border: none !important;
+  border-top: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  box-shadow: none !important;
+}
+
+/* MUI Input pseudo elementi za donji border */
+.MuiInput-root::before,
+.MuiInputBase-root.MuiInput-root::before {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.42) !important;
+  border-top: none !important;
+  border-left: none !important;
+  border-right: none !important;
+}
+
+.MuiInput-root:hover:not(.Mui-disabled)::before,
+.MuiInputBase-root.MuiInput-root:hover:not(.Mui-disabled)::before {
+  border-bottom: 2px solid rgba(0, 0, 0, 0.87) !important;
+}
+
+.MuiInput-root::after,
+.MuiInputBase-root.MuiInput-root::after {
+  border-bottom: 2px solid #1976d2 !important;
+  border-top: none !important;
+  border-left: none !important;
+  border-right: none !important;
+}
+
+/* Ukloni outline sa MUI outlined inputa */
+.MuiOutlinedInput-notchedOutline {
+  border: none !important;
+  outline: none !important;
+}
+
+.MuiOutlinedInput-root {
+  border: none !important;
+  border-top: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  border-radius: 0 !important;
+  outline: none !important;
+}
+
+.MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline {
+  border: none !important;
+}
+
+.MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline {
+  border: none !important;
+}

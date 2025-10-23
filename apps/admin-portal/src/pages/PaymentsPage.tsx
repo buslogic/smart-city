@@ -112,6 +112,19 @@ export const PaymentsPage = ({ title }: { title: string }) => {
                 header: 'Broj fakture',
                 size: 100,
                 enableEditing: true,
+                Edit: ({ cell, row }) => {
+                    return (
+                        <TextField
+                            defaultValue={cell.getValue()}
+                            label="Broj fakture"
+                            variant="standard"
+                            fullWidth
+                            onChange={(e) => {
+                                row._valuesCache['id_fakture'] = e.target.value;
+                            }}
+                        />
+                    );
+                },
             },
             {
                 accessorKey: 'nacin_placanja_id',
@@ -147,7 +160,7 @@ export const PaymentsPage = ({ title }: { title: string }) => {
                                 row._valuesCache['nacin_placanja_id'] = values;
                             }}
                             renderInput={(params) => (
-                                <TextField {...params} label="Način plaćanja" />
+                                <TextField {...params} label="Način plaćanja" variant="standard" />
                             )}
                         />
                     );
@@ -170,6 +183,7 @@ export const PaymentsPage = ({ title }: { title: string }) => {
                             label="Iznos gotovina"
                             size="small"
                             fullWidth
+                            variant="standard"
                             disabled={isDisabled}
                             onChange={(e) => {
                                 row._valuesCache['iznos_gotovina'] = e.target.value;
@@ -203,6 +217,7 @@ export const PaymentsPage = ({ title }: { title: string }) => {
                             label="Iznos kartica"
                             size="small"
                             fullWidth
+                            variant="standard"
                             disabled={isDisabled}
                             onChange={(e) => {
                                 row._valuesCache['iznos_kartica'] = e.target.value;
@@ -236,6 +251,7 @@ export const PaymentsPage = ({ title }: { title: string }) => {
                             label="Iznos ček"
                             size="small"
                             fullWidth
+                            variant="standard"
                             disabled={isDisabled}
                             onChange={(e) => {
                                 row._valuesCache['iznos_cek'] = e.target.value;
@@ -269,6 +285,7 @@ export const PaymentsPage = ({ title }: { title: string }) => {
                             label="Iznos vaučer"
                             size="small"
                             fullWidth
+                            variant="standard"
                             disabled={isDisabled}
                             onChange={(e) => {
                                 row._valuesCache['iznos_vaucer'] = e.target.value;
@@ -303,6 +320,7 @@ export const PaymentsPage = ({ title }: { title: string }) => {
                             label="Iznos ukupno"
                             size="small"
                             fullWidth
+                            variant="standard"
                             disabled
                         />
                     );
@@ -337,18 +355,57 @@ export const PaymentsPage = ({ title }: { title: string }) => {
                 header: 'Broj fiskalnog računa',
                 size: 150,
                 enableEditing: true,
+                Edit: ({ cell, row }) => {
+                    return (
+                        <TextField
+                            defaultValue={cell.getValue()}
+                            label="Broj fiskalnog računa"
+                            variant="standard"
+                            fullWidth
+                            onChange={(e) => {
+                                row._valuesCache['broj_fiskalnog_racuna'] = e.target.value;
+                            }}
+                        />
+                    );
+                },
             },
             {
                 accessorKey: 'pos_referenca',
                 header: 'POS referenca',
                 size: 150,
                 enableEditing: true,
+                Edit: ({ cell, row }) => {
+                    return (
+                        <TextField
+                            defaultValue={cell.getValue()}
+                            label="POS referenca"
+                            variant="standard"
+                            fullWidth
+                            onChange={(e) => {
+                                row._valuesCache['pos_referenca'] = e.target.value;
+                            }}
+                        />
+                    );
+                },
             },
             {
                 accessorKey: 'ip_adresa',
                 header: 'IP adresa',
                 size: 150,
                 enableEditing: true,
+                Edit: ({ cell, row }) => {
+                    return (
+                        <TextField
+                            defaultValue={cell.getValue()}
+                            label="IP adresa"
+                            variant="standard"
+                            fullWidth
+                            onChange={(e) => {
+                                row._valuesCache['ip_adresa'] = e.target.value;
+                            }}
+                        />
+                    );
+                },
             },
             {
                 accessorKey: 'kreirao_id',

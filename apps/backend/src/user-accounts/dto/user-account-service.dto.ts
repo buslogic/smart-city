@@ -32,14 +32,10 @@ export class EditUserAccountServiceDto {
   @IsInt()
   pricelist_id: number;
 
-  @ApiProperty({ description: 'CRM Contact ID' })
+  @ApiProperty({ description: 'Active status (0 or 1)' })
   @Type(() => Number)
   @IsInt()
-  crm_contact_id: number;
-
-  @ApiProperty({ description: 'Active status' })
-  @IsBoolean()
-  active: boolean;
+  active: number;
 }
 
 export class RemoveAccountServiceDto {

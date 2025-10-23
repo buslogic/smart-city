@@ -39,7 +39,10 @@ import {
   CalendarOutlined,
   MailOutlined,
   PrinterOutlined,
-  LinkOutlined
+  LinkOutlined,
+  DropboxOutlined,
+  DollarOutlined,
+  GiftOutlined
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { useAuthStore } from '../../stores/auth.store';
@@ -525,6 +528,381 @@ const ModernMenu: React.FC = () => {
         ],
       },
       {
+        key: 'vodovod',
+        menuOrder: 350000000000,
+        icon: <DropboxOutlined />,
+        label: 'Vodovod',
+        children: [
+          {
+            key: 'vodovod-vodomeri',
+            menuOrder: 351000000000,
+            icon: <ToolOutlined />,
+            label: 'Vodomeri',
+            children: [
+              {
+                key: '/vodovod/water-meters',
+                menuOrder: 351010000000,
+                label: 'Pregled',
+                permissions: ['vodovod.water_meters:view'],
+              },
+              {
+                key: '/vodovod/replacement-water-meters',
+                menuOrder: 351020000000,
+                label: 'Zamenski vodomeri',
+                permissions: ['vodovod.replacement_water_meters:view'],
+              },
+              {
+                key: '/vodovod/water-meter-availability',
+                menuOrder: 351030000000,
+                label: 'Raspoloživost',
+                permissions: ['vodovod.water_meter_availability:view'],
+              },
+              {
+                key: '/vodovod/water-meter-manufacturers',
+                menuOrder: 351040000000,
+                label: 'Proizvođači',
+                permissions: ['vodovod.water_meter_manufacturers:view'],
+              },
+              {
+                key: '/vodovod/water-meter-types',
+                menuOrder: 351050000000,
+                label: 'Tip vodomera',
+                permissions: ['vodovod.water_meter_types:view'],
+              },
+              {
+                key: '/vodovod/water-meter-remarks',
+                menuOrder: 351060000000,
+                label: 'Napomene',
+                permissions: ['vodovod.water_meter_remarks:view'],
+              },
+            ],
+          },
+          {
+            key: 'vodovod-merna-mesta',
+            menuOrder: 352000000000,
+            icon: <EnvironmentOutlined />,
+            label: 'Merna mesta',
+            children: [
+              {
+                key: '/vodovod/measuring-points',
+                menuOrder: 352010000000,
+                label: 'Merna mesta',
+                permissions: ['vodovod.measuring_points:view'],
+              },
+              {
+                key: '/vodovod/house-council',
+                menuOrder: 352020000000,
+                label: 'Kućni saveti',
+                permissions: ['vodovod.house_council:view'],
+              },
+              {
+                key: '/vodovod/water-system-streets',
+                menuOrder: 352030000000,
+                label: 'Ulice',
+                permissions: ['vodovod.water_system_streets:view'],
+              },
+              {
+                key: '/vodovod/water-system-regions',
+                menuOrder: 352040000000,
+                label: 'Rejoni',
+                permissions: ['vodovod.water_system_regions:view'],
+              },
+            ],
+          },
+          {
+            key: 'vodovod-teritorija',
+            menuOrder: 353000000000,
+            icon: <EnvironmentOutlined />,
+            label: 'Teritorija i zone',
+            children: [
+              {
+                key: '/vodovod/water-system-streets-all',
+                menuOrder: 353010000000,
+                label: 'Ulice',
+                permissions: ['vodovod.water_system_streets:view'],
+              },
+              {
+                key: '/vodovod/water-system-regions-all',
+                menuOrder: 353020000000,
+                label: 'Rejoni',
+                permissions: ['vodovod.water_system_regions:view'],
+              },
+              {
+                key: '/vodovod/water-system-cities',
+                menuOrder: 353030000000,
+                label: 'Naselja',
+                permissions: ['vodovod.water_system_cities:view'],
+              },
+              {
+                key: '/vodovod/water-system-zones',
+                menuOrder: 353040000000,
+                label: 'Zone',
+                permissions: ['vodovod.water_system_zones:view'],
+              },
+            ],
+          },
+          {
+            key: 'vodovod-citacke-liste',
+            menuOrder: 354000000000,
+            icon: <FileTextOutlined />,
+            label: 'Čitačke liste',
+            children: [
+              {
+                key: '/vodovod/campaigns',
+                menuOrder: 354010000000,
+                label: 'Kampanje',
+                permissions: ['vodovod.campaigns:view'],
+              },
+              {
+                key: '/vodovod/sub-campaigns',
+                menuOrder: 354020000000,
+                label: 'Pod kampanje',
+                permissions: ['vodovod.sub_campaigns:view'],
+              },
+              {
+                key: '/vodovod/reading-lists-print',
+                menuOrder: 354030000000,
+                label: 'Štampa čitačkih listi',
+                permissions: ['vodovod.reading_lists_print:view'],
+              },
+              {
+                key: '/vodovod/water-readers',
+                menuOrder: 354040000000,
+                label: 'Čitači',
+                permissions: ['vodovod.water_readers:view'],
+              },
+              {
+                key: '/vodovod/readings',
+                menuOrder: 354050000000,
+                label: 'Očitavanja',
+                permissions: ['vodovod.readings:view'],
+              },
+              {
+                key: '/vodovod/review-modified-water-meters',
+                menuOrder: 354060000000,
+                label: 'Pregled zamenjenih vodomera',
+                permissions: ['vodovod.review_modified_water_meters:view'],
+              },
+              {
+                key: '/vodovod/reading-anomalies',
+                menuOrder: 354070000000,
+                label: 'Anomalije',
+                permissions: ['vodovod.reading_anomalies:view'],
+              },
+            ],
+          },
+          {
+            key: 'vodovod-cenovnici',
+            menuOrder: 355000000000,
+            icon: <TagsOutlined />,
+            label: 'Cenovnici',
+            children: [
+              {
+                key: '/vodovod/water-services',
+                menuOrder: 355010000000,
+                label: 'Usluge',
+                permissions: ['vodovod.water_services:view'],
+              },
+              {
+                key: '/vodovod/water-services-pricelist',
+                menuOrder: 355020000000,
+                label: 'Cenovnik usluga',
+                permissions: ['vodovod.water_services_pricelist:view'],
+              },
+              {
+                key: '/vodovod/manage-water-services',
+                menuOrder: 355030000000,
+                label: 'Dodeljivanje usluga',
+                permissions: ['vodovod.manage_water_services:view'],
+              },
+              {
+                key: '/vodovod/water-services-review',
+                menuOrder: 355040000000,
+                label: 'Pregled usluga po mernom mestu',
+                permissions: ['vodovod.water_services_review:view'],
+              },
+              {
+                key: '/vodovod/water-service-pricelist-history',
+                menuOrder: 355050000000,
+                label: 'Pregled istorije cenovnika',
+                permissions: ['vodovod.water_service_pricelist_history:view'],
+              },
+            ],
+          },
+          {
+            key: 'vodovod-finansije',
+            menuOrder: 356000000000,
+            icon: <DollarOutlined />,
+            label: 'Finansije',
+            children: [
+              {
+                key: '/vodovod/measuring-points-by-address',
+                menuOrder: 356010000000,
+                label: 'Promena/istorija adresa mernih mesta',
+                permissions: ['vodovod.measuring_points_by_address:view'],
+              },
+            ],
+          },
+          {
+            key: 'vodovod-korisnici',
+            menuOrder: 357000000000,
+            icon: <UserOutlined />,
+            label: 'Korisnici',
+            children: [
+              {
+                key: '/vodovod/user-accounts',
+                menuOrder: 357010000000,
+                label: 'Pregled korisnika',
+                permissions: ['vodovod.user_accounts:view'],
+              },
+              {
+                key: '/vodovod/measuring-points-consumption',
+                menuOrder: 357020000000,
+                label: 'Potrošnja po mernom mestu/potrošaču',
+                permissions: ['vodovod.measuring_points_consumption:view'],
+              },
+            ],
+          },
+          {
+            key: 'vodovod-subvencije',
+            menuOrder: 358000000000,
+            icon: <GiftOutlined />,
+            label: 'Subvencije',
+            children: [
+              {
+                key: '/vodovod/subsidies',
+                menuOrder: 358010000000,
+                label: 'Administracija subvencija',
+                permissions: ['vodovod.subsidies:view'],
+              },
+              {
+                key: '/vodovod/subsidies-user-assignment',
+                menuOrder: 358020000000,
+                label: 'Dodeljivanje subvencija korisniku',
+                permissions: ['vodovod.subsidies_user_assignment:view'],
+              },
+            ],
+          },
+          {
+            key: 'vodovod-blagajna',
+            menuOrder: 359000000000,
+            icon: <DollarOutlined />,
+            label: 'Blagajna',
+            children: [
+              {
+                key: '/vodovod/cash-register',
+                menuOrder: 359010000000,
+                label: 'Blagajna',
+                permissions: ['vodovod.cash_register:view'],
+              },
+              {
+                key: '/vodovod/fiscal-device',
+                menuOrder: 359020000000,
+                label: 'Fiskalni uređaji',
+                permissions: ['vodovod.fiscal_device:view'],
+              },
+              {
+                key: '/vodovod/payments',
+                menuOrder: 359030000000,
+                label: 'Uplate',
+                permissions: ['vodovod.payments:view'],
+              },
+              {
+                key: '/vodovod/cashiers',
+                menuOrder: 359040000000,
+                label: 'Blagajnik',
+                permissions: ['vodovod.cashiers:view'],
+              },
+              {
+                key: '/vodovod/cashiers-session',
+                menuOrder: 359050000000,
+                label: 'Smene',
+                permissions: ['vodovod.cashiers_session:view'],
+              },
+              {
+                key: 'vodovod-blagajna-izvestaji',
+                menuOrder: 359060000000,
+                label: 'Izveštaji blagajne',
+                children: [
+                  {
+                    key: '/vodovod/cash-register-report',
+                    menuOrder: 359060010000,
+                    label: 'Dnevni promet po blagajni/blagajniku',
+                    permissions: ['vodovod.cash_register_report:view'],
+                  },
+                  {
+                    key: '/vodovod/payments-by-payment-method',
+                    menuOrder: 359060020000,
+                    label: 'Pregled uplata po metodi plaćanja',
+                    permissions: ['vodovod.payments_by_payment_method:view'],
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            key: 'vodovod-reklamacije',
+            menuOrder: 360000000000,
+            icon: <WarningOutlined />,
+            label: 'Reklamacije',
+            children: [
+              {
+                key: '/vodovod/complaints',
+                menuOrder: 360010000000,
+                label: 'Reklamacije i zahtevi',
+                permissions: ['vodovod.complaints:view'],
+              },
+              {
+                key: '/vodovod/complaint-priorities',
+                menuOrder: 360020000000,
+                label: 'Prioriteti',
+                permissions: ['vodovod.complaint_priorities:view'],
+              },
+              {
+                key: '/vodovod/complaints-by-assignee',
+                menuOrder: 360030000000,
+                label: 'Reklamacije za odgovorno lice',
+                permissions: ['vodovod.complaints_by_assignee:view'],
+              },
+            ],
+          },
+          {
+            key: 'vodovod-obracuni',
+            menuOrder: 361000000000,
+            icon: <BarChartOutlined />,
+            label: 'Obračuni',
+            children: [
+              {
+                key: '/vodovod/water-meter-calculation',
+                menuOrder: 361010000000,
+                label: 'Obračuni vodomera',
+                permissions: ['vodovod.water_meter_calculation:view'],
+              },
+            ],
+          },
+          {
+            key: 'vodovod-beleske',
+            menuOrder: 362000000000,
+            icon: <FileTextOutlined />,
+            label: 'Beleške',
+            children: [
+              {
+                key: '/vodovod/water-supply-notes',
+                menuOrder: 362010000000,
+                label: 'Beleške',
+                permissions: ['vodovod.water_supply_notes:view'],
+              },
+              {
+                key: '/vodovod/note-categories',
+                menuOrder: 362020000000,
+                label: 'Kategorije beleški',
+                permissions: ['vodovod.note_categories:view'],
+              },
+            ],
+          },
+        ],
+      },
+      {
         key: 'settings',
         menuOrder: 400000000000,
         icon: <SettingOutlined />,
@@ -579,6 +957,26 @@ const ModernMenu: React.FC = () => {
         keys.push('planning');
       }
       if (path.includes('/turnusi')) keys.push('administration');
+    }
+    if (path.includes('/vodovod/')) {
+      keys.push('vodovod');
+      if (path.includes('/water-meter')) keys.push('vodovod-vodomeri');
+      if (path.includes('/measuring-point') || path.includes('/house-council')) keys.push('vodovod-merna-mesta');
+      if (path.includes('/water-system-')) keys.push('vodovod-teritorija');
+      if (path.includes('/campaign') || path.includes('/reading') || path.includes('/water-reader')) keys.push('vodovod-citacke-liste');
+      if (path.includes('/water-service')) keys.push('vodovod-cenovnici');
+      if (path.includes('/measuring-points-by-address')) keys.push('vodovod-finansije');
+      if (path.includes('/user-account') || path.includes('/measuring-points-consumption')) keys.push('vodovod-korisnici');
+      if (path.includes('/subsid')) keys.push('vodovod-subvencije');
+      if (path.includes('/cash') || path.includes('/fiscal') || path.includes('/payment')) {
+        keys.push('vodovod-blagajna');
+        if (path.includes('cash-register-report') || path.includes('payments-by-payment-method')) {
+          keys.push('vodovod-blagajna-izvestaji');
+        }
+      }
+      if (path.includes('/complaint')) keys.push('vodovod-reklamacije');
+      if (path.includes('/calculation')) keys.push('vodovod-obracuni');
+      if (path.includes('/note') || path.includes('/water-supply-note')) keys.push('vodovod-beleske');
     }
     if (path.includes('/settings/')) {
       keys.push('settings');

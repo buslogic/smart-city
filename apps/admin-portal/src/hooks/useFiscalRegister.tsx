@@ -1,13 +1,13 @@
 import { SearchList } from '@/components/ui/SearchList';
 import { FiscalDevice } from '@/types/cashRegister';
-import { fetchPostData } from '@/utils/fetchUtil';
+import { fetchAPI } from '@/utils/fetchUtil';
 import { Typography } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers';
 import dayjs from 'dayjs';
 import { MRT_ColumnDef } from 'material-react-table';
 import { useCallback, useMemo, useState } from 'react';
 
-const CONTROLLER = '../FiscalDeviceController';
+const CONTROLLER = '/api/fiscal-device';
 
 const useFiscalDevice = () => {
     const [fiscalDevice, setFiscalDevice] = useState<FiscalDevice[]>([]);
@@ -40,13 +40,20 @@ const useFiscalDevice = () => {
                 enableEditing: true,
                 Edit: ({ row, cell }) => {
                     const initialValue = cell.getValue() ? dayjs(cell.getValue() as string) : null;
+                    const [value, setValue] = useState(initialValue);
                     return (
                         <DatePicker
-                            value={initialValue}
+                            value={value}
                             label={'Poslednja sinhronizacija'}
                             sx={{ width: '100%' }}
+                            slotProps={{
+                                textField: {
+                                    variant: 'standard',
+                                },
+                            }}
                             format="DD.MM.YYYY"
                             onChange={(newDate) => {
+                                setValue(newDate);
                                 row._valuesCache['poslednja_sinhronizacija'] = newDate?.format('YYYY-MM-DD');
                             }}
                         />
@@ -86,14 +93,22 @@ const useFiscalDevice = () => {
 
     const fetchData = useCallback(async () => {
         setIsFetching(true);
-        const data = await fetchPostData(CONTROLLER + '/getRows');
+        const data = await fetchAPI<FiscalDevice[]>(CONTROLLER + '/getRows', {
+            method: 'POST',
+        });
         setIsFetching(false);
         setFiscalDevice(data);
     }, []);
 
     const createRow = useCallback(async (row: FiscalDevice): Promise<void> => {
         setIsCreating(true);
-        const res = await fetchPostData(CONTROLLER + '/addRow', row);
+        const res = await fetchAPI<{ success: boolean; data: FiscalDevice; error?: string }>(
+            CONTROLLER + '/addRow',
+            {
+                method: 'POST',
+                data: row,
+            }
+        );
         setIsCreating(false);
         if (!res.success) {
             throw new Error(res.error);
@@ -103,7 +118,13 @@ const useFiscalDevice = () => {
 
     const updateRow = useCallback(async (row: FiscalDevice) => {
         setIsUpdating(true);
-        const res = await fetchPostData(CONTROLLER + '/editRow', row);
+        const res = await fetchAPI<{ success: boolean; data: FiscalDevice; error?: string }>(
+            CONTROLLER + '/editRow',
+            {
+                method: 'POST',
+                data: row,
+            }
+        );
         setIsUpdating(false);
         if (!res.success) {
             throw new Error(res.error);
@@ -113,7 +134,10 @@ const useFiscalDevice = () => {
 
     const deleteRow = useCallback(async (id: number) => {
         setIsDeleting(true);
-        await fetchPostData(CONTROLLER + '/deleteRow', { id });
+        await fetchAPI(CONTROLLER + '/deleteRow', {
+            method: 'POST',
+            data: { id },
+        });
         setIsDeleting(false);
         setFiscalDevice((state) => state.filter((x) => x.id !== id));
     }, []);

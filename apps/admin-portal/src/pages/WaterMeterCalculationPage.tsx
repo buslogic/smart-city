@@ -581,9 +581,22 @@ export const WaterMeterCalculationPage = ({ title }: { title: string }) => {
           sx={{
             width: '350px',
             '& .MuiInputBase-root': {
+              border: '1px solid rgba(0, 0, 0, 0.23) !important',
+              borderRadius: '4px !important',
+              '&:hover': {
+                borderColor: 'rgba(0, 0, 0, 0.87) !important',
+              },
+              '&.Mui-focused': {
+                borderColor: '#1976d2 !important',
+                borderWidth: '2px !important',
+              },
               '& .MuiInputBase-input': {
                 padding: '0 14px',
+                border: 'none !important',
               },
+            },
+            '& .MuiOutlinedInput-notchedOutline': {
+              border: 'none !important',
             },
           }}
         />

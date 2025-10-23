@@ -3,6 +3,7 @@ import Main from '@/components/ui/Main';
 import { SearchList } from '@/components/ui/SearchList';
 import { HouseCouncil } from '@/types/house-council';
 import { globalTableProps } from '@/utils/globalTableProps';
+import { fetchAPI } from '@/utils/fetchUtil';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Grid, Tooltip } from '@mui/material';
@@ -18,6 +19,8 @@ import {
 } from 'material-react-table';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'react-toastify';
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3010';
 
 export const HouseCouncilPage = ({ title }: { title: string }) => {
   const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
@@ -38,18 +41,16 @@ export const HouseCouncilPage = ({ title }: { title: string }) => {
 
   const fetchHouseCouncilRows = async () => {
     try {
-      await $.ajax({
-        url: '../HouseCouncilController/getData',
-        type: 'POST',
-        dataType: 'json',
-        success: (rows) => {
-          setIsLoadingData(false);
-          setIsFetching(false);
-          setData(rows);
-        },
+      setIsFetching(true);
+      const houseCouncils = await fetchAPI<HouseCouncil[]>(`${API_BASE}/api/house-council`, {
+        method: 'GET',
       });
+      setData(houseCouncils);
+      setIsLoadingData(false);
+      setIsFetching(false);
     } catch (err) {
       console.error(err);
+      toast.error('Greška prilikom učitavanja kućnih saveta');
       setIsLoadingData(false);
       setIsFetching(false);
     }
@@ -72,7 +73,7 @@ export const HouseCouncilPage = ({ title }: { title: string }) => {
             <SearchList
               label="ID mernog mesta"
               value={cell.getValue() as string}
-              endpoint="../HouseCouncilController/getMeasuringPoints"
+              endpoint={`${API_BASE}/api/house-council/search/measuring-points`}
               disabled={!isCreating && !isEditing}
               multiple={false}
               onChange={(newValue) => {
@@ -120,7 +121,7 @@ export const HouseCouncilPage = ({ title }: { title: string }) => {
             <SearchList
               label="Ulica"
               value={cell.getValue() as string}
-              endpoint="../HouseCouncilController/getAdress"
+              endpoint={`${API_BASE}/api/house-council/search/addresses`}
               multiple={false}
               onChange={(newValue) => {
                 row._valuesCache[column.id] = newValue;
@@ -153,7 +154,7 @@ export const HouseCouncilPage = ({ title }: { title: string }) => {
             <SearchList
               label="Primarno merno mesto"
               value={cell.getValue() as string}
-              endpoint={`../MeasuringPointsController/getPrimaryMeasuringPoints?excludeId=${excludeId}`}
+              endpoint={`${API_BASE}/api/house-council/search/measuring-points`}
               disabled={!isCreating && !isEditing}
               multiple={false}
               onChange={(newValue) => {
@@ -173,7 +174,7 @@ export const HouseCouncilPage = ({ title }: { title: string }) => {
             <SearchList
               label="Naselje"
               value={cell.getValue() as string}
-              endpoint="../HouseCouncilController/getCity"
+              endpoint={`${API_BASE}/api/house-council/search/cities`}
               multiple={false}
               onChange={(newValue) => {
                 row._valuesCache[column.id] = newValue;
@@ -194,132 +195,107 @@ export const HouseCouncilPage = ({ title }: { title: string }) => {
 
   const handleCreate = async () => {
     try {
-      const datumUgradnjeDayjs = dayjs(datumUgradnjeRef.current?.value);
+      const datumUgradnjeFormatted = date ? dayjs(date).format('YYYY-MM-DD') : '';
 
-      const datumUgradnjeFormatted = datumUgradnjeDayjs.isValid() ? datumUgradnjeDayjs.format('YYYY-MM-DD') : '';
-
-      const newFormData = {
-        IDMM: selectedIDMM || '',
+      const newData = {
+        idmm: selectedIDMM || '',
         adresa: selectedAdress || '',
         naselje: selectedCity || '',
         datum_ugradnje: datumUgradnjeFormatted,
         broj_clanova_KS: brojClanovaKSRef.current?.value || '',
         broj_potrosaca_KS: brojPotrosacaKSRef.current?.value || '',
         prim_MM: selectedPrimary || '',
-        idu: iduRef.current?.value || '',
         broj: brojRef.current?.value || '',
-        KS: selectedIDMM || '',
       };
 
-      const response = await $.ajax({
-        url: '../HouseCouncilController/addNewRow',
-        type: 'POST',
-        data: {
-          idmm: newFormData.IDMM,
-          adresa: newFormData.adresa,
-          naselje: newFormData.naselje,
-          datum_ugradnje: newFormData.datum_ugradnje,
-          broj_clanova_KS: newFormData.broj_clanova_KS,
-          broj_potrosaca_KS: newFormData.broj_potrosaca_KS,
-          prim_MM: newFormData.prim_MM,
-          idu: newFormData.idu,
-          broj: newFormData.broj,
-          kucni_savet: newFormData.KS,
-        },
-        dataType: 'json',
+      await fetchAPI(`${API_BASE}/api/house-council`, {
+        method: 'POST',
+        data: newData,
       });
 
-      if (response === true) {
-        await fetchHouseCouncilRows();
-        toast.success('Kućni savet je uspešno dodat');
-        setIsAddModalOpen(false);
+      await fetchHouseCouncilRows();
+      toast.success('Kućni savet je uspešno dodat');
+      setIsAddModalOpen(false);
 
-        setSelectedIDMM(null);
-        setSelectedAdress(null);
-        setSelectedCity(null);
-        setSelectedPrimary(null);
-      } else {
-        toast.error('Došlo je do greške prilikom dodavanja kućnog saveta');
-      }
+      setSelectedIDMM(null);
+      setSelectedAdress(null);
+      setSelectedCity(null);
+      setSelectedPrimary(null);
+      setDate(null);
     } catch (error) {
-      console.error('Error creating measuring point:', error);
+      console.error('Error creating house council:', error);
       toast.error('Došlo je do greške prilikom dodavanja kućnog saveta');
     }
   };
 
   const renderAddModal = () => (
-    <Dialog open={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} maxWidth="sm" fullWidth>
+    <Dialog open={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} maxWidth="md" fullWidth>
       <DialogTitle>Dodaj kućni savet</DialogTitle>
-      <DialogContent sx={{ pt: 2 }}>
-        <Grid container spacing={3}>
-          <Grid item xs={12} sm={6}>
-            <SearchList
-              endpoint="../HouseCouncilController/getMeasuringPoints"
-              label="ID mernog mesta"
-              multiple={false}
-              onChange={(newValue) => {
-                setSelectedIDMM(newValue);
-              }}
-            />
-          </Grid>
+      <DialogContent sx={{ padding: '24px', overflow: 'scroll' }}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, 1fr)',
+            gap: '1.5rem',
+          }}
+        >
+          <SearchList
+            endpoint={`${API_BASE}/api/house-council/search/measuring-points`}
+            label="ID mernog mesta"
+            multiple={false}
+            onChange={(newValue) => {
+              setSelectedIDMM(newValue);
+            }}
+          />
 
-          <Grid item xs={6}>
-            <SearchList
-              endpoint="../HouseCouncilController/getAdress"
-              label="Ulica"
-              multiple={false}
-              onChange={(newValue) => {
-                setSelectedAdress(newValue);
-              }}
-            />
-          </Grid>
+          <SearchList
+            endpoint={`${API_BASE}/api/house-council/search/addresses`}
+            label="Ulica"
+            multiple={false}
+            onChange={(newValue) => {
+              setSelectedAdress(newValue);
+            }}
+          />
 
-          <Grid item xs={6}>
-            <SearchList
-              endpoint="../HouseCouncilController/getCity"
-              label="Naselje"
-              multiple={false}
-              onChange={(newValue) => {
-                setSelectedCity(newValue);
-              }}
-            />
-          </Grid>
+          <SearchList
+            endpoint={`${API_BASE}/api/house-council/search/cities`}
+            label="Naselje"
+            multiple={false}
+            onChange={(newValue) => {
+              setSelectedCity(newValue);
+            }}
+          />
 
-          <Grid item xs={12} sm={6}>
-            <DatePicker
-              value={date}
-              onChange={(newDate) => {
-                // @ts-expect-error asfasf
-                setDate(newDate);
-              }}
+          <DatePicker
+            value={date}
+            label="Datum ugradnje"
+            onChange={(newDate) => {
               // @ts-expect-error asfasf
-              renderInput={(params) => <Input {...params} fullWidth variant="standard" label="Datum ugradnje" />}
-            />
-          </Grid>
+              setDate(newDate);
+            }}
+            slotProps={{
+              textField: {
+                variant: 'standard',
+                fullWidth: true,
+              },
+            }}
+          />
 
-          <Grid item xs={12} sm={6}>
-            <Input inputRef={brojClanovaKSRef} autoComplete="off" name="broj_clanova_KS" label="Broj članova KS" fullWidth variant="standard" />
-          </Grid>
+          <Input inputRef={brojClanovaKSRef} autoComplete="off" name="broj_clanova_KS" label="Broj članova KS" fullWidth variant="standard" />
 
-          <Grid item xs={12} sm={6}>
-            <Input inputRef={brojPotrosacaKSRef} autoComplete="off" name="broj_potrosaca_KS" label="Broj potrošača KS" fullWidth variant="standard" />
-          </Grid>
+          <Input inputRef={brojPotrosacaKSRef} autoComplete="off" name="broj_potrosaca_KS" label="Broj potrošača KS" fullWidth variant="standard" />
 
-          <Grid item xs={6}>
-            <SearchList
-              endpoint="../MeasuringPointsController/getPrimaryMeasuringPoints?excludeId=${selectedIDMM}"
-              label="Primarno merno mesto"
-              multiple={false}
-              onChange={(newValue) => {
-                setSelectedPrimary(newValue);
-              }}
-            />
-          </Grid>
+          <SearchList
+            endpoint={`${API_BASE}/api/house-council/search/measuring-points`}
+            label="Primarno merno mesto"
+            multiple={false}
+            onChange={(newValue) => {
+              setSelectedPrimary(newValue);
+            }}
+          />
 
-          <Grid item xs={12} sm={6}>
-            <Input inputRef={brojRef} autoComplete="off" name="broj" label="Kućni broj" fullWidth variant="standard" />
-          </Grid>
-        </Grid>
+          <Input inputRef={brojRef} autoComplete="off" name="broj" label="Kućni broj" fullWidth variant="standard" />
+        </Box>
       </DialogContent>
       <DialogActions sx={{ px: 3, py: 2, gap: 1 }}>
         <Button
@@ -340,53 +316,34 @@ export const HouseCouncilPage = ({ title }: { title: string }) => {
   // UPDATE action
   const handleSaveMM: MRT_TableOptions<HouseCouncil>['onEditingRowSave'] = async ({ values, table, row }) => {
     try {
-      console.log(values);
       const id = row.original.id;
-      const response = await $.ajax({
-        url: '../HouseCouncilController/editRow',
-        type: 'POST',
-        data: {
-          ...values,
-          id,
-        },
-        dataType: 'json',
+      await fetchAPI(`${API_BASE}/api/house-council/${id}`, {
+        method: 'PATCH',
+        data: values,
       });
 
-      if (response.success) {
-        toast.success('Kućni savet je uspešno izmenjen');
-        await fetchHouseCouncilRows();
-      } else {
-        toast.error('Došlo je do greške prilikom izmene kućnog saveta');
-      }
+      toast.success('Kućni savet je uspešno izmenjen');
+      await fetchHouseCouncilRows();
     } catch (error) {
-      console.error('Error updating measuring point:', error);
+      console.error('Error updating house council:', error);
       toast.error('Došlo je do greške prilikom izmene kućnog saveta');
     }
 
     table.setEditingRow(null);
   };
 
-  const handleDelete = async (idmm: number) => {
-    $.ajax({
-      url: '../HouseCouncilController/removeRow',
-      type: 'POST',
-      data: {
-        idmm: idmm,
-      },
-      dataType: 'json',
-      success: function (response) {
-        if (response.success) {
-          fetchHouseCouncilRows();
-          toast.success('Kućni savet je uspešno obrisan');
-        } else {
-          toast.error('Greška prilikom deaktivacije kućnog saveta');
-        }
-      },
-      error: function (errorThrown) {
-        console.error('Error during soft delete:', errorThrown);
-        toast.error('Greška prilikom deaktivacije kućnog saveta');
-      },
-    });
+  const handleDelete = async (id: number) => {
+    try {
+      await fetchAPI(`${API_BASE}/api/house-council/${id}`, {
+        method: 'DELETE',
+      });
+
+      await fetchHouseCouncilRows();
+      toast.success('Kućni savet je uspešno obrisan');
+    } catch (error) {
+      console.error('Error deleting house council:', error);
+      toast.error('Greška prilikom deaktivacije kućnog saveta');
+    }
   };
 
   const openDeleteConfirmModal = (row: MRT_Row<HouseCouncil>) => {
@@ -408,16 +365,18 @@ export const HouseCouncilPage = ({ title }: { title: string }) => {
     muiToolbarAlertBannerProps: undefined,
     onEditingRowSave: handleSaveMM,
     renderEditRowDialogContent: ({ table, row, internalEditComponents }) => (
-      <Dialog open={true} onClose={() => table.setEditingRow(null)} maxWidth="sm" fullWidth>
+      <Dialog open={true} onClose={() => table.setEditingRow(null)} maxWidth="md" fullWidth>
         <DialogTitle variant="h4">Izmena kućnog saveta</DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', padding: '24px', overflow: 'scroll' }}>
-          <Grid container spacing={3}>
-            {React.Children.map(internalEditComponents, (child, index) => (
-              <Grid item xs={6} key={index}>
-                {child}
-              </Grid>
-            ))}
-          </Grid>
+        <DialogContent sx={{ padding: '24px', overflow: 'scroll' }}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: '1.5rem',
+            }}
+          >
+            {internalEditComponents}
+          </Box>
         </DialogContent>
         <DialogActions>
           <MRT_EditActionButtons variant="text" table={table} row={row} />

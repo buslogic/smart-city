@@ -1,7 +1,7 @@
 import { SearchList } from '@/components/ui/SearchList';
 import { StatusHistory } from '@/types/complaints';
 import { fetchAPI } from '@/utils/fetchUtil';
-import { TextField, Typography } from '@mui/material';
+import { Typography } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers';
 import dayjs from 'dayjs';
 import { MRT_ColumnDef } from 'material-react-table';
@@ -59,6 +59,11 @@ const useComplaintsByAssigne = () => {
                             value={value}
                             label={'Datum promene'}
                             sx={{ width: '100%' }}
+                            slotProps={{
+                                textField: {
+                                    variant: 'standard',
+                                },
+                            }}
                             onChange={(newDate) => {
                                 setValue(newDate);
                                 row._valuesCache['datum_promene'] = newDate ? newDate.format('YYYY-MM-DD') : '';
@@ -77,27 +82,6 @@ const useComplaintsByAssigne = () => {
                 header: 'Napomena',
                 size: 100,
                 enableEditing: true,
-                Edit: ({ cell, row }) => {
-                    const value = cell.getValue() as string;
-
-                    return (
-                        <TextField
-                            label="Napomena"
-                            defaultValue={value || ''}
-                            multiline
-                            minRows={3}
-                            fullWidth
-                            onChange={(e) => {
-                                row._valuesCache['napomena'] = e.target.value;
-                            }}
-                        />
-                    );
-                },
-                Cell: ({ cell }) => (
-                    <Typography sx={{ whiteSpace: 'pre-wrap' }}>
-                        {cell.getValue() as string}
-                    </Typography>
-                ),
             }
         ];
     }, [complaints]);
@@ -123,6 +107,11 @@ const useComplaintsByAssigne = () => {
                 accessorKey: 'datum_promene',
                 header: 'Datum promene',
                 size: 150,
+                Cell: ({ cell }) => {
+                    const date = cell.getValue();
+                    if (!date || date === '0000-00-00 00:00:00') return '';
+                    return dayjs(date as string).format('DD.MM.YYYY');
+                },
             },
             {
                 accessorKey: 'user_id',

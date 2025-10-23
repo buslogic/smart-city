@@ -8,8 +8,10 @@ import { toast } from 'react-toastify';
 import { globalTableProps } from '@/utils/globalTableProps';
 import Main from '@/components/ui/Main';
 import { SearchList } from '@/components/ui/SearchList';
-import { fetchPostData } from '@/utils/fetchUtil';
+import { fetchAPI } from '@/utils/fetchUtil';
 import dayjs from 'dayjs';
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3010';
 
 type Row = {
   id: number;
@@ -32,7 +34,10 @@ export const ManageWaterServicesPage = ({ title }: { title: string }) => {
 
   async function fetchUserAccountServices(user_account_id: string) {
     setIsFetching(true);
-    const data: Row[] = await fetchPostData('../UserAccountController/getServicesByUserAccountID', { user_account_id });
+    const data: Row[] = await fetchAPI(`${API_BASE}/api/user-accounts/services/by-user-account-id`, {
+      method: 'POST',
+      data: { user_account_id }
+    });
     setIsFetching(false);
     setUserAccountID(user_account_id);
     setData(data);
@@ -54,11 +59,15 @@ export const ManageWaterServicesPage = ({ title }: { title: string }) => {
     try {
       setIsCreating(true);
       const body = { pricelist_id: values.service, user_account_id: userAccountID };
-      const { success, data: row } = await fetchPostData('../UserAccountController/assignPricelistToUserAccount', body);
+      const { success } = await fetchAPI(`${API_BASE}/api/user-accounts/services/assign-pricelist`, {
+        method: 'POST',
+        data: body
+      });
       setIsCreating(false);
 
       if (success) {
-        setData((rows) => [row, ...rows]);
+        // Refetch all data to maintain ORDER BY id DESC from backend
+        await fetchUserAccountServices(userAccountID!);
         toast.success('Uspešno unošenje podataka');
         table.setCreatingRow(null);
         return;
@@ -75,7 +84,10 @@ export const ManageWaterServicesPage = ({ title }: { title: string }) => {
     if (window.confirm('Da li potvrdjujete brisanje?')) {
       try {
         setIsDeleting(true);
-        const { success } = await fetchPostData('../UserAccountController/removeAccountService', { id: row.original.id });
+        const { success } = await fetchAPI(`${API_BASE}/api/user-accounts/services/remove`, {
+          method: 'DELETE',
+          data: { id: row.original.id }
+        });
         setIsDeleting(false);
         if (success) {
           setData((rows) => rows.filter((x) => x.id !== row.original.id));
@@ -93,10 +105,13 @@ export const ManageWaterServicesPage = ({ title }: { title: string }) => {
   const handleUpdate: MRT_TableOptions<Row>['onEditingRowSave'] = async ({ values, row }) => {
     try {
       setIsUpdating(true);
-      values['id'] = row.original.id;
       const { id, pricelist_id } = row.original;
-      const body = { id, active: values.active, pricelist_id, user_account_id: userAccountID };
-      const { data, success } = await fetchPostData('../UserAccountController/editUserAccountService', body);
+      // Send only id, pricelist_id, and active (as 0 or 1)
+      const body = { id, pricelist_id, active: values.active };
+      const { data, success } = await fetchAPI(`${API_BASE}/api/user-accounts/services/edit`, {
+        method: 'POST',
+        data: body
+      });
       setIsUpdating(false);
       if (success) {
         table.setEditingRow(null);
@@ -133,7 +148,7 @@ export const ManageWaterServicesPage = ({ title }: { title: string }) => {
           return (
             <SearchList
               label="Usluga"
-              endpoint="../WaterServicesPricelistController/getPricelistServicesForSL"
+              endpoint={`${API_BASE}/api/water-services-pricelist/search/for-sl`}
               value={value}
               multiple={false}
               filterValues={filterValues}

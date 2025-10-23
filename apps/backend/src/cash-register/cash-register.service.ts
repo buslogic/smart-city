@@ -401,4 +401,33 @@ export class CashRegisterService {
       ukupno: Number(row.ukupno || 0),
     }));
   }
+
+  async isSessionOpen(userId: number): Promise<boolean> {
+    // IDENTIČNO kao u PHP CashiersSessionModel::isSessionOpen
+    try {
+      const currentDate = new Date().toISOString().split('T')[0];
+
+      const query = `
+        SELECT COUNT(*) AS count
+        FROM vodovod_cash_session vcs
+        LEFT JOIN crm_contacts cc ON cc.crm_contacts_user_id = vcs.user_id
+        LEFT JOIN vodovod_cashiers vc ON cc.id = vc.crm_contact_id
+        LEFT JOIN vodovod_cash_register vcr ON vcr.id = vc.kasa_id
+        WHERE vcs.user_id = ? AND vcs.status = 1 AND vcs.datum_otvaranja > ?
+        LIMIT 1
+      `;
+
+      const result = await this.legacyDb.$queryRawUnsafe<Array<{ count: bigint }>>(
+        query,
+        userId,
+        currentDate,
+      );
+
+      const count = Number(result[0]?.count || 0);
+      return count > 0;
+    } catch (error) {
+      console.error('Greška pri proveri smene:', error);
+      return false;
+    }
+  }
 }

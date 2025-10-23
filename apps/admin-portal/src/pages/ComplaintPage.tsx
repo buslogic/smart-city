@@ -35,7 +35,7 @@ export const ComplaintPage = ({ title }: { title: string }) => {
   } = useComplaint();
   const [loggedUserId, setLoggedUserId] = useState<string>('');
   const [loggedUserName, setLoggedUserName] = useState<string>('');
-  const [isShiftOpen, setIsShiftOpen] = useState<number>(1); // TODO: Implement shift status check
+  const [isShiftOpen, setIsShiftOpen] = useState<number>(0);
   const [isPDFGenerating, setIsPDFGenerating] = useState(false);
   const [showAllComplaints, setShowAllComplaints] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -85,8 +85,17 @@ export const ComplaintPage = ({ title }: { title: string }) => {
   };
 
   useEffect(() => {
-    // TODO: Implement getLoggedUser from auth context
-    // TODO: Implement getShiftStatus check
+    const getShiftStatus = async () => {
+      try {
+        const isOpen = await fetchAPI<boolean>('/api/cash-register/is-session-open', {
+          method: 'GET',
+        });
+        setIsShiftOpen(isOpen ? 1 : 0);
+      } catch (err) {
+        console.error('Greška pri proveri smene:', err);
+        setIsShiftOpen(0);
+      }
+    };
 
     const fetchRows = async () => {
       if (showAllComplaints) {
@@ -97,6 +106,7 @@ export const ComplaintPage = ({ title }: { title: string }) => {
     };
 
     fetchRows();
+    getShiftStatus();
   }, [showAllComplaints]);
 
   const columns = useMemo<MRT_ColumnDef<Complaint>[]>(() => {
@@ -788,6 +798,9 @@ export const ComplaintPage = ({ title }: { title: string }) => {
         row._valuesCache['status'] = `1 | Novo`;
       }
 
+      // Filtriraj "Kreirao" kolonu (indeks 12)
+      const filteredComponents = React.Children.toArray(internalEditComponents).filter((_, index) => index !== 12);
+
       return (
         <Dialog open={true} maxWidth="sm" fullWidth>
           <DialogTitle variant="h5" sx={{ textDecoration: 'underline' }}>
@@ -803,7 +816,7 @@ export const ComplaintPage = ({ title }: { title: string }) => {
             }}
           >
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {React.Children.map(internalEditComponents, (child) => (
+              {React.Children.map(filteredComponents, (child) => (
                 <Box sx={{ width: '100%' }}>{child}</Box>
               ))}
             </Box>
@@ -815,6 +828,9 @@ export const ComplaintPage = ({ title }: { title: string }) => {
       );
     },
     renderEditRowDialogContent: ({ table, row, internalEditComponents }) => {
+      // Filtriraj "Kreirao" kolonu (indeks 12)
+      const filteredComponents = React.Children.toArray(internalEditComponents).filter((_, index) => index !== 12);
+
       return (
         <Dialog open={true} maxWidth="sm" fullWidth>
           <DialogTitle variant="h5" sx={{ textDecoration: 'underline' }}>
@@ -830,7 +846,7 @@ export const ComplaintPage = ({ title }: { title: string }) => {
             }}
           >
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {React.Children.map(internalEditComponents, (child) => (
+              {React.Children.map(filteredComponents, (child) => (
                 <Box sx={{ width: '100%' }}>{child}</Box>
               ))}
             </Box>

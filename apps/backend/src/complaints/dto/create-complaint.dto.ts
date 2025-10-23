@@ -32,9 +32,9 @@ export class CreateComplaintDto {
   @IsNotEmpty()
   korisnik_id: string | number;
 
-  @ApiProperty({ description: 'ID mernog mesta (IDMM | adresa format)' })
-  @IsNotEmpty()
-  idmm: string | number;
+  @ApiPropertyOptional({ description: 'ID mernog mesta (IDMM | adresa format)' })
+  @IsOptional()
+  idmm?: string | number | null;
 
   @ApiPropertyOptional({ description: 'ID fakture' })
   @IsOptional()

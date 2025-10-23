@@ -45,6 +45,36 @@ import { TurnusiSyncModule } from './turnusi-sync/turnusi-sync.module';
 import { TurnusiModule } from './turnusi/turnusi.module';
 import { PlanningModule } from './planning/planning.module';
 import { TurnusDefaultsModule } from './turnus-defaults/turnus-defaults.module';
+import { WaterMeterModule } from './water-meter/water-meter.module';
+import { WaterMeterTypesModule } from './water-meter-types/water-meter-types.module';
+import { WaterMeterManufacturersModule } from './water-meter-manufacturers/water-meter-manufacturers.module';
+import { WaterMeterAvailabilityModule } from './water-meter-availability/water-meter-availability.module';
+import { WaterMeterRemarksModule } from './water-meter-remarks/water-meter-remarks.module';
+import { ReplacementWaterMetersModule } from './replacement-water-meters/replacement-water-meters.module';
+import { WaterMeterCalculationModule } from './water-meter-calculation/water-meter-calculation.module';
+import { WaterServicesModule } from './water-services/water-services.module';
+import { WaterServicePricesModule } from './water-service-prices/water-service-prices.module';
+import { WaterReadersModule } from './water-readers/water-readers.module';
+import { WaterSystemRegionsModule } from './water-system-regions/water-system-regions.module';
+import { WaterSystemCitiesModule } from './water-system-cities/water-system-cities.module';
+import { WaterSystemZonesModule } from './water-system-zones/water-system-zones.module';
+import { WaterSystemStreetsModule } from './water-system-streets/water-system-streets.module';
+import { WaterSupplyNotesModule } from './water-supply-notes/water-supply-notes.module';
+import { NoteCategoriesModule } from './note-categories/note-categories.module';
+import { HouseCouncilModule } from './house-council/house-council.module';
+import { MeasuringPointsByAddressModule } from './measuring-points-by-address/measuring-points-by-address.module';
+import { WaterServicesPricelistModule } from './water-services-pricelist/water-services-pricelist.module';
+import { UserAccountsModule } from './user-accounts/user-accounts.module';
+import { ConsumersModule } from './consumers/consumers.module';
+import { CashRegisterModule } from './cash-register/cash-register.module';
+import { CashiersModule } from './cashiers/cashiers.module';
+import { CashiersSessionModule } from './cashiers-session/cashiers-session.module';
+import { ComplaintsModule } from './complaints/complaints.module';
+import { FiscalDeviceModule } from './fiscal-device/fiscal-device.module';
+import { PaymentsModule } from './payments/payments.module';
+import { SubsidiesModule } from './subsidies/subsidies.module';
+import { SubsidiesUserAssignmentModule } from './subsidies-user-assignment/subsidies-user-assignment.module';
+import { MeasuringPointsModule } from './measuring-points/measuring-points.module';
 
 @Module({
   imports: [
@@ -92,6 +122,36 @@ import { TurnusDefaultsModule } from './turnus-defaults/turnus-defaults.module';
     TurnusiModule,
     PlanningModule,
     TurnusDefaultsModule,
+    WaterMeterModule,
+    WaterMeterTypesModule,
+    WaterMeterManufacturersModule,
+    WaterMeterAvailabilityModule,
+    WaterMeterRemarksModule,
+    ReplacementWaterMetersModule,
+    WaterMeterCalculationModule,
+    WaterServicesModule,
+    WaterServicePricesModule,
+    WaterReadersModule,
+    WaterSystemRegionsModule,
+    WaterSystemCitiesModule,
+    WaterSystemZonesModule,
+    WaterSystemStreetsModule,
+    WaterSupplyNotesModule,
+    NoteCategoriesModule,
+    HouseCouncilModule,
+    MeasuringPointsByAddressModule,
+    WaterServicesPricelistModule,
+    UserAccountsModule,
+    ConsumersModule,
+    CashRegisterModule,
+    CashiersModule,
+    CashiersSessionModule,
+    ComplaintsModule,
+    FiscalDeviceModule,
+    PaymentsModule,
+    SubsidiesModule,
+    SubsidiesUserAssignmentModule,
+    MeasuringPointsModule,
   ],
   controllers: [AppController],
   providers: [

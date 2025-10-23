@@ -489,107 +489,116 @@ export const MeasuringPointsPage = ({ title }: { title: string }) => {
   };
 
   const renderAddModal = () => (
-    <Dialog open={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} maxWidth="md" fullWidth>
-      <DialogTitle>Dodaj novo merno mesto</DialogTitle>
-      <DialogContent sx={{ pt: 2, maxHeight: '70vh', overflow: 'auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        <Input inputRef={IDMMRef} autoComplete="off" name="IDMM" label="ID mernog mesta*" fullWidth variant="standard" />
-
-        <SearchList
-          endpoint="/api/water-meters/unassigned-for-sl"
-          label="ID vodomera"
-          multiple={false}
-          onChange={(newValue) => setSelectedIDV(newValue)}
-        />
-
-        <DatePicker
-          value={selectedDate}
-          label="Datum ugradnje"
-          sx={{ width: '100%' }}
-          onChange={(newDate) => setSelectedDate(newDate)}
-        />
-
-        <SearchList
-          endpoint="/api/measuring-points/cities"
-          label="Naselje"
-          multiple={false}
-          onChange={(newValue) => setSelectedNaselje(newValue)}
-        />
-
-        <SearchList
-          endpoint="/api/measuring-points/addresses"
-          label="Ulica"
-          multiple={false}
-          onChange={(newValue) => setSelectedAdress(newValue)}
-        />
-
-        <Input inputRef={ulazRef} autoComplete="off" name="ulaz" label="Ulaz" fullWidth variant="standard" />
-
-        <Input inputRef={brojRef} autoComplete="off" name="broj" label="Kućni broj" fullWidth variant="standard" />
-
-        <Input inputRef={prosekPSRef} autoComplete="off" name="prosek_ps" label="Prosek PS" fullWidth variant="standard" />
-
-        <Input inputRef={napomenaRef} autoComplete="off" name="napomena" label="Napomena" fullWidth variant="standard" multiline rows={2} />
-
-        <Input inputRef={brojClanovaKSRef} autoComplete="off" name="broj_clanova_ks" label="Broj članova kućnog saveta" fullWidth variant="standard" />
-
-        <Input inputRef={brojPotrosacaKSRef} autoComplete="off" name="broj_potrosaca_ks" label="Broj potrošača kućnog saveta" fullWidth variant="standard" />
-
-        <Select
-          value={typeSelection}
-          onChange={(e) => setTypeSelection(e.target.value)}
-          fullWidth
-          variant="standard"
-          label="Vrsta mernog mesta"
+    <Dialog open={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} maxWidth="lg" fullWidth>
+      <DialogTitle variant="h4" marginBottom={2}>Dodaj novo merno mesto</DialogTitle>
+      <DialogContent sx={{ padding: '24px', overflow: 'scroll' }}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, 1fr)',
+            gap: '1.5rem',
+          }}
         >
-          <MenuItem value="Primarno">Primarno</MenuItem>
-          <MenuItem value="Virtuelno">Virtuelno</MenuItem>
-          <MenuItem value="Korektivno">Korektivno</MenuItem>
-          <MenuItem value="Kontrolno">Kontrolno</MenuItem>
-        </Select>
+          <Input inputRef={IDMMRef} autoComplete="off" name="IDMM" label="ID mernog mesta*" fullWidth variant="standard" />
 
-        <Input inputRef={prosekURef} autoComplete="off" name="prosek_u" label="Prosek U" fullWidth variant="standard" />
+          <SearchList
+            endpoint="/api/water-meters/unassigned-for-sl"
+            label="ID vodomera"
+            multiple={false}
+            onChange={(newValue) => setSelectedIDV(newValue)}
+          />
 
-        <SearchList
-          endpoint="/api/measuring-points/primary-measuring-points"
-          label="Primarno merno mesto"
-          multiple={false}
-          onChange={(newValue) => setSelectedPrimMM(newValue)}
-        />
+          <DatePicker
+            value={selectedDate}
+            label="Datum ugradnje"
+            sx={{ width: '100%' }}
+            slotProps={{ textField: { variant: 'standard' } }}
+            onChange={(newDate) => setSelectedDate(newDate)}
+          />
 
-        <Input inputRef={redosledMMRef} autoComplete="off" name="redosled_mm" label="Redosled mernog mesta" fullWidth variant="standard" />
+          <SearchList
+            endpoint="/api/measuring-points/cities"
+            label="Naselje"
+            multiple={false}
+            onChange={(newValue) => setSelectedNaselje(newValue)}
+          />
 
-        <Input inputRef={broj2Ref} autoComplete="off" name="broj2" label="Broj 2" fullWidth variant="standard" />
+          <SearchList
+            endpoint="/api/measuring-points/addresses"
+            label="Ulica"
+            multiple={false}
+            onChange={(newValue) => setSelectedAdress(newValue)}
+          />
 
-        <Input inputRef={checkLLRef} autoComplete="off" name="check_ll" label="Check LL" fullWidth variant="standard" />
+          <Input inputRef={ulazRef} autoComplete="off" name="ulaz" label="Ulaz" fullWidth variant="standard" />
 
-        <Input inputRef={latitudeRef} autoComplete="off" name="latitude" label="Latitude" fullWidth variant="standard" />
+          <Input inputRef={brojRef} autoComplete="off" name="broj" label="Kućni broj" fullWidth variant="standard" />
 
-        <Input inputRef={longitudeRef} autoComplete="off" name="longtitude" label="Longitude" fullWidth variant="standard" />
+          <Input inputRef={prosekPSRef} autoComplete="off" name="prosek_ps" label="Prosek PS" fullWidth variant="standard" />
 
-        <SearchList
-          endpoint="/api/measuring-points/house-council-options"
-          label="Kućni savet"
-          multiple={false}
-          onChange={(newValue) => setSelectedKS(newValue)}
-        />
+          <Input inputRef={napomenaRef} autoComplete="off" name="napomena" label="Napomena" fullWidth variant="standard" multiline rows={2} />
 
-        <Input inputRef={napomenaMMRef} autoComplete="off" name="_Napomena_MM" label="Napomena mernog mesta" fullWidth variant="standard" multiline rows={2} />
+          <Input inputRef={brojClanovaKSRef} autoComplete="off" name="broj_clanova_ks" label="Broj članova kućnog saveta" fullWidth variant="standard" />
 
-        <Input inputRef={prosekORef} autoComplete="off" name="prosek_o" label="Prosek O" fullWidth variant="standard" />
+          <Input inputRef={brojPotrosacaKSRef} autoComplete="off" name="broj_potrosaca_ks" label="Broj potrošača kućnog saveta" fullWidth variant="standard" />
 
-        <SearchList
-          endpoint="/api/measuring-points/status-options"
-          label="Status"
-          multiple={false}
-          onChange={(newValue) => setSelectedStatus(newValue)}
-        />
+          <Select
+            value={typeSelection}
+            onChange={(e) => setTypeSelection(e.target.value)}
+            fullWidth
+            variant="standard"
+            label="Vrsta mernog mesta"
+          >
+            <MenuItem value="Primarno">Primarno</MenuItem>
+            <MenuItem value="Virtuelno">Virtuelno</MenuItem>
+            <MenuItem value="Korektivno">Korektivno</MenuItem>
+            <MenuItem value="Kontrolno">Kontrolno</MenuItem>
+          </Select>
 
-        <SearchList
-          endpoint="/api/measuring-points/type-options"
-          label="Obračun"
-          multiple={false}
-          onChange={(newValue) => setSelectedTypeId(newValue)}
-        />
+          <Input inputRef={prosekURef} autoComplete="off" name="prosek_u" label="Prosek U" fullWidth variant="standard" />
+
+          <SearchList
+            endpoint="/api/measuring-points/primary-measuring-points"
+            label="Primarno merno mesto"
+            multiple={false}
+            onChange={(newValue) => setSelectedPrimMM(newValue)}
+          />
+
+          <Input inputRef={redosledMMRef} autoComplete="off" name="redosled_mm" label="Redosled mernog mesta" fullWidth variant="standard" />
+
+          <Input inputRef={broj2Ref} autoComplete="off" name="broj2" label="Broj 2" fullWidth variant="standard" />
+
+          <Input inputRef={checkLLRef} autoComplete="off" name="check_ll" label="Check LL" fullWidth variant="standard" />
+
+          <Input inputRef={latitudeRef} autoComplete="off" name="latitude" label="Latitude" fullWidth variant="standard" />
+
+          <Input inputRef={longitudeRef} autoComplete="off" name="longtitude" label="Longitude" fullWidth variant="standard" />
+
+          <SearchList
+            endpoint="/api/measuring-points/house-council-options"
+            label="Kućni savet"
+            multiple={false}
+            onChange={(newValue) => setSelectedKS(newValue)}
+          />
+
+          <Input inputRef={napomenaMMRef} autoComplete="off" name="_Napomena_MM" label="Napomena mernog mesta" fullWidth variant="standard" multiline rows={2} />
+
+          <Input inputRef={prosekORef} autoComplete="off" name="prosek_o" label="Prosek O" fullWidth variant="standard" />
+
+          <SearchList
+            endpoint="/api/measuring-points/status-options"
+            label="Status"
+            multiple={false}
+            onChange={(newValue) => setSelectedStatus(newValue)}
+          />
+
+          <SearchList
+            endpoint="/api/measuring-points/type-options"
+            label="Obračun"
+            multiple={false}
+            onChange={(newValue) => setSelectedTypeId(newValue)}
+          />
+        </Box>
       </DialogContent>
       <DialogActions sx={{ px: 3, py: 2, gap: 1 }}>
         <Button
@@ -661,23 +670,30 @@ export const MeasuringPointsPage = ({ title }: { title: string }) => {
     onEditingRowCancel: ({ table }) => handleEditClose(table),
     renderEditRowDialogContent: ({ table, row, internalEditComponents }) => (
       <Dialog open={true} onClose={() => handleEditClose(table)} maxWidth="lg" fullWidth>
-        <DialogTitle variant="h4">Izmena mernog mesta</DialogTitle>
+        <DialogTitle variant="h4" marginBottom={2}>Izmena mernog mesta</DialogTitle>
         <DialogContent
           sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '1.5rem',
             padding: '24px',
             overflow: 'scroll',
           }}
         >
-          {internalEditComponents}
-          <GenericTable<HistoryRow>
-            title="Istorija promena na mernom mestu"
-            fetchUrl="/api/measuring-points/history"
-            fetchParams={{ idmm: row.original.IDMM }}
-            columns={historyColumns}
-          />
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: '1.5rem',
+            }}
+          >
+            {internalEditComponents}
+          </Box>
+          <Box sx={{ mt: 3 }}>
+            <GenericTable<HistoryRow>
+              title="Istorija promena na mernom mestu"
+              fetchUrl="/api/measuring-points/history"
+              fetchParams={{ idmm: row.original.IDMM }}
+              columns={historyColumns}
+            />
+          </Box>
         </DialogContent>
         <DialogActions>
           <MRT_EditActionButtons variant="text" table={table} row={row} />
