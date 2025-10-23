@@ -113,6 +113,51 @@ class TurnusiSyncService {
     return response.data;
   }
 
+  // ========== CITY SERVER (READ-ONLY) ==========
+
+  // ========== TIKETING SERVER (READ-ONLY) ==========
+
+  async getAllGroupsCity(): Promise<TurnusGroupLegacy[]> {
+    const response = await api.get('/api/turnusi-sync/city/groups');
+    return response.data;
+  }
+
+  async getAllAssignCity(
+    groupId?: number,
+    page = 1,
+    limit = 50,
+  ): Promise<PaginatedResponse<TurnusAssignLegacy>> {
+    const params: any = { page, limit };
+    if (groupId) {
+      params.groupId = groupId;
+    }
+    const response = await api.get('/api/turnusi-sync/city/assign', {
+      params,
+    });
+    return response.data;
+  }
+
+  async getAllDaysCity(
+    groupId?: number,
+    page = 1,
+    limit = 50,
+  ): Promise<PaginatedResponse<TurnusDayLegacy>> {
+    const params: any = { page, limit };
+    if (groupId) {
+      params.groupId = groupId;
+    }
+    const response = await api.get('/api/turnusi-sync/city/days', {
+      params,
+    });
+    return response.data;
+  }
+
+  async syncFromCity(): Promise<TurnusiSyncResult> {
+    const response = await api.post('/api/turnusi-sync/sync-city');
+    return response.data;
+  }
+
+
   // ========== GLAVNI SERVER (NAŠA BAZA) ==========
 
   async getAllGroupsMain(
