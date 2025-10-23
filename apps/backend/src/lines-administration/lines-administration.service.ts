@@ -121,6 +121,8 @@ export class LinesAdministrationService {
           l.line_type as lineType,
           l.status as lineStatus,
           l.price_table_ident as priceTableIdent,
+          l.central_point_db_id as centralPointId,
+          l.central_point_name as centralPointName,
           pv.id as variationId,
           pv.variation_name as variationName,
           pv.datetime_from as datetimeFrom,

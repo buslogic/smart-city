@@ -220,6 +220,22 @@ const LinesAdministration: React.FC = () => {
       width: 100,
     },
     {
+      title: 'Centralna tačka',
+      key: 'centralPoint',
+      width: 200,
+      ellipsis: true,
+      render: (_: any, record: LineWithVariation) => {
+        if (!record.centralPointId || record.centralPointId === '0') {
+          return <span className="text-gray-400">-</span>;
+        }
+        return (
+          <Tooltip title={`ID: ${record.centralPointId}`}>
+            <span>{record.centralPointName}</span>
+          </Tooltip>
+        );
+      },
+    },
+    {
       title: 'Naziv varijacije',
       dataIndex: 'variationName',
       key: 'variationName',

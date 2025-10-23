@@ -10,6 +10,7 @@ import {
   Schedule as ScheduleType,
 } from '../../../services/planning.service';
 import { DriverSelectionModal } from './components/DriverSelectionModal';
+import { MonthlyScheduleForm } from './components/MonthlyScheduleForm';
 
 const { Title } = Typography;
 
@@ -542,13 +543,7 @@ const Schedule: React.FC = () => {
     {
       key: 'monthly',
       label: 'Mesečni',
-      children: (
-        <div className="p-4">
-          <div className="text-gray-600">
-            <p>Mesečni raspored - pregled po mesecima</p>
-          </div>
-        </div>
-      ),
+      children: <MonthlyScheduleForm />,
     },
   ];
 

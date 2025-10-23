@@ -17,6 +17,8 @@ export interface LineWithVariation {
   direction: string;
   lineType: string;
   lineStatus: string;
+  centralPointId: string;
+  centralPointName: string;
   variationId: number | null;
   variationName: string | null;
   datetimeFrom: Date | null;
@@ -131,14 +133,14 @@ export interface TurnusRecord {
   turnusId: number;
   turnusName: string;
   lineNo: string;
-  startTime: Date;
+  startTime: Date | string; // Can be string in HH:mm:ss format after backend CAST
   direction: number;
-  duration: Date;
+  duration: Date | string; // Can be string in HH:mm:ss format after backend CAST
   centralPoint: string;
   changeCode: number;
   jobId: number;
-  newStartTime: Date;
-  newDuration: Date;
+  newStartTime: Date | string; // Can be string in HH:mm:ss format after backend CAST
+  newDuration: Date | string; // Can be string in HH:mm:ss format after backend CAST
   startStation: number;
   endStation: number;
   dayNumber: number;
@@ -152,8 +154,8 @@ export interface TurnusRecord {
   changeTime: Date;
   changeUser: string;
   active: number;
-  firstDayDurationPart: Date;
-  secondDayDurationPart: Date;
+  firstDayDurationPart: Date | string; // Can be string in HH:mm:ss format after backend CAST
+  secondDayDurationPart: Date | string; // Can be string in HH:mm:ss format after backend CAST
   customId: string;
   transportId: string;
   departureNumber: number;
@@ -174,8 +176,8 @@ export interface TurnusiResponse {
 
 export interface ShiftDetail {
   shiftNumber: number;
-  firstDepartureTime: Date;
-  lastDepartureTime: Date;
+  firstDepartureTime: Date | string; // Can be string in HH:mm:ss format after backend CAST
+  lastDepartureTime: Date | string;  // Can be string in HH:mm:ss format after backend CAST
   departureCount: number;
 }
 
@@ -186,8 +188,8 @@ export interface GroupedTurnus {
   dayname: string;
   active: number;
   departureCount: number;
-  firstDepartureTime: Date;
-  lastDepartureTime: Date;
+  firstDepartureTime: Date | string; // Can be string in HH:mm:ss format after backend CAST
+  lastDepartureTime: Date | string;  // Can be string in HH:mm:ss format after backend CAST
   linesServed: string[];
   shiftsCount: number;
   driversNeeded: number;

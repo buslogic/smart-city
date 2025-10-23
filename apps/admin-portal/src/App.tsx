@@ -1,3 +1,4 @@
+// Trigger deploy - migration 20251022214407 applied
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ConfigProvider, App as AntApp } from 'antd';
 import srRS from 'antd/locale/sr_RS';
@@ -40,7 +41,9 @@ import ChangePassword from './pages/users/ChangePassword';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import TimescaleDB from './pages/transport/maintenance/TimescaleDB';
 import Schedule from './pages/transport/planning/Schedule';
+import SchedulePrint from './pages/transport/planning/SchedulePrint';
 import TurnusDefaults from './pages/transport/planning/TurnusDefaults';
+import LinkedTurnusi from './pages/transport/planning/LinkedTurnusi';
 import MigrationPage from './pages/migration/MigrationPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import WaterMeterTypesPage from './pages/water-meter-types/WaterMeterTypesPage';
@@ -475,10 +478,28 @@ function App() {
             />
 
             <Route
+              path="transport/planning/schedule-print"
+              element={
+                <PermissionGuard permissions={['transport.planning.schedule_print:view']}>
+                  <SchedulePrint />
+                </PermissionGuard>
+              }
+            />
+
+            <Route
               path="transport/planning/turnus-defaults"
               element={
                 <PermissionGuard permissions={['transport.planning.turnus_defaults:view']}>
                   <TurnusDefaults />
+                </PermissionGuard>
+              }
+            />
+
+            <Route
+              path="transport/planning/linked-turnusi"
+              element={
+                <PermissionGuard permissions={['transport.planning.linked_turnusi:view']}>
+                  <LinkedTurnusi />
                 </PermissionGuard>
               }
             />

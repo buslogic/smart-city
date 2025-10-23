@@ -1,10 +1,19 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, MessageEvent, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateScheduleDto } from './dto/create-schedule.dto';
+import {
+  CreateMonthlyScheduleDto,
+  ConflictResolution,
+} from './dto/create-monthly-schedule.dto';
 import { GetDriversAvailabilityDto } from './dto/get-drivers-availability.dto';
+import { DriverReportDto } from './dto/monthly-driver-report.dto';
+import { Observable } from 'rxjs';
 
 @Injectable()
 export class PlanningService {
+  private readonly logger = new Logger(PlanningService.name);
+
   constructor(private prisma: PrismaService) {}
 
   /**
@@ -64,6 +73,7 @@ export class PlanningService {
     // Koristi line.lineNumber (ne lineNumberForDisplay) za povezivanje sa changes_codes_tours
     // Filtrira samo turnuse koji pripadaju linijama sa aktivnim date_valid_from
     // Dodatno filtrira po aktivnim varijacijama cena za odabrani datum
+    // VAŽNO: Filtrira samo turnuse koji su važeći za odabrani datum (turnus_groups_assign)
     const turnusi = await this.prisma.$queryRaw<
       Array<{
         turnus_id: number;
@@ -77,6 +87,7 @@ export class PlanningService {
         cct.shift_number
       FROM changes_codes_tours cct
       INNER JOIN turnus_days td ON cct.turnus_id = td.turnus_id
+      INNER JOIN turnus_groups_assign tga ON cct.turnus_id = tga.turnus_id
       INNER JOIN \`lines\` l ON cct.line_no = l.line_number
       LEFT JOIN price_variations pv ON l.price_variation_id = pv.id
       INNER JOIN price_table_groups ptg ON l.date_valid_from = ptg.date_valid_from
@@ -85,6 +96,7 @@ export class PlanningService {
         AND ptg.status = 'A'
         AND ptg.synchro_status = 'A'
         AND td.dayname = ${dayName}
+        AND DATE(${date}) BETWEEN tga.date_from AND tga.date_to
         AND (
           l.price_variation_id = 0
           OR pv.id IS NULL
@@ -448,16 +460,19 @@ export class PlanningService {
 
     // Pronađi turnus_id sa najnovijim MAX(change_time) koji TAKOĐE ima dan u turnus_days
     // KLJUČNO: Mora da JOIN-uje sa `lines` i filtrira status='A' da izbegne neaktivne linije!
+    // VAŽNO: Filtrira samo turnuse koji su važeći za odabrani datum (turnus_groups_assign)
     const latestTurnusId = await this.prisma.$queryRawUnsafe<any[]>(
       `SELECT cct.turnus_id, MAX(cct.change_time) as max_change_time
        FROM changes_codes_tours cct
        INNER JOIN turnus_days td ON cct.turnus_id = td.turnus_id
+       INNER JOIN turnus_groups_assign tga ON cct.turnus_id = tga.turnus_id
        INNER JOIN \`lines\` l ON cct.line_no = l.line_number
        WHERE cct.turnus_name = '${turnusInfo.turnusName}'
          AND cct.shift_number = ${dto.shiftNumber}
          AND cct.direction = 0
          AND td.dayname = '${dayName}'
          AND l.status = 'A'
+         AND DATE('${dto.date}') BETWEEN tga.date_from AND tga.date_to
        GROUP BY cct.turnus_id
        ORDER BY max_change_time DESC
        LIMIT 1`
@@ -473,6 +488,7 @@ export class PlanningService {
     // Dobavi SVE polaske za ovaj turnus/smenu sa ISTIM filterima kao u getTurnusiByLineAndDate
     // VAŽNO: Filterujemo samo direction=0 jer svaki polazak ima 2 reda (smer A i B)
     // VAŽNO: Koristi samo turnus_id sa najnovijim change_time (najsvežija verzija reda vožnje)
+    // VAŽNO: Filtrira samo turnuse koji su važeći za odabrani datum (turnus_groups_assign)
     const allDepartures = await this.prisma.$queryRaw<
       Array<{
         id: number;
@@ -510,6 +526,7 @@ export class PlanningService {
         l.legacy_ticketing_id
       FROM changes_codes_tours cct
       INNER JOIN turnus_days td ON cct.turnus_id = td.turnus_id
+      INNER JOIN turnus_groups_assign tga ON cct.turnus_id = tga.turnus_id
       INNER JOIN \`lines\` l ON cct.line_no = l.line_number
       LEFT JOIN price_variations pv ON l.price_variation_id = pv.id
       INNER JOIN price_table_groups ptg ON l.date_valid_from = ptg.date_valid_from
@@ -521,6 +538,7 @@ export class PlanningService {
         AND cct.shift_number = ${dto.shiftNumber}
         AND cct.direction = 0
         AND td.dayname = ${dayName}
+        AND DATE(${dto.date}) BETWEEN tga.date_from AND tga.date_to
         AND (
           l.price_variation_id = 0
           OR pv.id IS NULL
@@ -542,7 +560,29 @@ export class PlanningService {
       firstDep.date_valid_from
     );
 
-    // Kreiraj jedan zapis u date_travel_order ZA SVAKI POLAZAK
+    // PRVO: Kreiraj zapise u date_shedule tabeli i dobij ID-eve
+    // Ovo mora biti PRE kreiranja date_travel_order zapisa jer sheduleId mora da pokazuje na date_shedule.id
+    const dateSheduleIds = await this.syncToLegacySchedule({
+      lineNo: dto.lineNumber,
+      lineName: line.lineTitle,
+      startStation: stations.startStation,
+      endStation: stations.endStation,
+      startDate,
+      driverId: dto.driverId,
+      driverName: `${driver.firstName} ${driver.lastName}`,
+      driverLegacyId: driver.legacyId,
+      turnusId: dto.turnusId,
+      turnusName: turnusInfo.turnusName,
+      shiftNumber: dto.shiftNumber,
+      departures: allDepartures.map(d => ({
+        start_time: d.start_time,
+        duration: d.duration,
+        direction: d.direction,
+        departure_number: d.departure_number,
+      })),
+    });
+
+    // DRUGO: Kreiraj zapise u date_travel_order sa pravim sheduleId
     const createdSchedules: Array<{ id: number }> = [];
 
     for (let i = 0; i < allDepartures.length; i++) {
@@ -652,7 +692,7 @@ export class PlanningService {
           afterTime: '00:00',
           beforeTimeFound: '00:00:00',
           afterTimeFound: '00:00:00',
-          sheduleId: dto.turnusId,
+          sheduleId: dateSheduleIds[i], // Koristi pravi ID iz date_shedule tabele
           prepareFlag: '',
           beforeFlag: '',
           durationFlag: '',
@@ -688,27 +728,6 @@ export class PlanningService {
 
       createdSchedules.push({ id: schedule.id });
     }
-
-    // Sinhronizuj sa legacy date_shedule tabelom
-    await this.syncToLegacySchedule({
-      lineNo: dto.lineNumber,
-      lineName: line.lineTitle,
-      startStation: stations.startStation,
-      endStation: stations.endStation,
-      startDate,
-      driverId: dto.driverId,
-      driverName: `${driver.firstName} ${driver.lastName}`,
-      driverLegacyId: driver.legacyId,
-      turnusId: dto.turnusId,
-      turnusName: turnusInfo.turnusName,
-      shiftNumber: dto.shiftNumber,
-      departures: allDepartures.map(d => ({
-        start_time: d.start_time,
-        duration: d.duration,
-        direction: d.direction,
-        departure_number: d.departure_number,
-      })),
-    });
 
     // Vrati informacije o kreiranim zapisima
     const firstDeparture = allDepartures[0];
@@ -910,6 +929,105 @@ export class PlanningService {
   }
 
   /**
+   * Dobavi rasporede za ceo mesec i liniju
+   * Agregira rasporede za sve dane u mesecu za odabranu liniju
+   */
+  async getMonthlySchedulesByLine(query: {
+    month: number;
+    year: number;
+    lineNumber: string;
+  }) {
+    // Generiši sve datume u mesecu
+    const allDates = this.getAllDatesInMonth(query.month, query.year);
+
+    // Za svaki datum dobavi rasporede
+    const allSchedules: Awaited<ReturnType<typeof this.getSchedulesByDate>> = [];
+
+    for (const date of allDates) {
+      const formattedDate = this.formatDateForQuery(date);
+      const schedulesForDate = await this.getSchedulesByDate(formattedDate);
+
+      // Filtriraj samo rasporede za odabranu liniju
+      const filteredSchedules = schedulesForDate.filter(
+        (schedule) => schedule.lineNumber === query.lineNumber
+      );
+
+      allSchedules.push(...filteredSchedules);
+    }
+
+    // Sortiraj po datumu, zatim po turnusu, zatim po smeni
+    return allSchedules.sort((a, b) => {
+      // 1. Prvo po datumu
+      const dateCompare = new Date(a.date).getTime() - new Date(b.date).getTime();
+      if (dateCompare !== 0) return dateCompare;
+
+      // 2. Zatim po nazivu turaže (natural sort)
+      const turnusCompare = a.turnusName.localeCompare(b.turnusName, undefined, { numeric: true });
+      if (turnusCompare !== 0) return turnusCompare;
+
+      // 3. Na kraju po smeni
+      return a.shiftNumber - b.shiftNumber;
+    });
+  }
+
+  /**
+   * Dobavi dostupne turaže za odabranu liniju, smenu i dan
+   * Vraća SVE turaže koje saobraćaju na toj liniji, imaju odabranu smenu i saobraćaju tog dana
+   * Npr. za liniju 18, smena 1, Subota → vraća: 00018-1, 00018-8, 00018-12
+   * Koristi se za dropdown u Mesečnom tab-u (Subota/Nedelja)
+   */
+  async getTurageOptions(dto: {
+    lineNumber: string;
+    turnusName: string;
+    shiftNumber: number;
+    dayOfWeek: 'Subota' | 'Nedelja';
+  }) {
+    const { lineNumber, shiftNumber, dayOfWeek } = dto;
+
+    // Dobavi liniju da bi dobio line_number (ne lineNumberForDisplay!)
+    const lines = await this.prisma.line.findMany({
+      where: {
+        lineNumberForDisplay: lineNumber,
+        status: 'A',
+      },
+    });
+
+    if (lines.length === 0) {
+      throw new NotFoundException(`Linija ${lineNumber} nije pronađena`);
+    }
+
+    const lineNumbers = lines.map((line) => line.lineNumber);
+
+    // Query za dobijanje svih turaža za odabranu liniju, smenu i dan
+    const turageOptions = await this.prisma.$queryRaw<
+      Array<{
+        turnus_name: string;
+        departure_count: number;
+      }>
+    >`
+      SELECT DISTINCT
+        cct.turnus_name,
+        COUNT(*) as departure_count
+      FROM changes_codes_tours cct
+      INNER JOIN turnus_days td ON cct.turnus_id = td.turnus_id
+      INNER JOIN \`lines\` l ON cct.line_no = l.line_number
+      WHERE l.line_number IN (${Prisma.join(lineNumbers)})
+        AND td.dayname = ${dayOfWeek}
+        AND cct.shift_number = ${shiftNumber}
+        AND l.status = 'A'
+        AND cct.direction = 0
+      GROUP BY cct.turnus_name
+      ORDER BY cct.turnus_name ASC
+    `;
+
+    // Formatiranje za react-select
+    return turageOptions.map((option) => ({
+      value: option.turnus_name,
+      label: `${option.turnus_name} (${option.departure_count} polazaka)`,
+    }));
+  }
+
+  /**
    * Helper: Izračunaj ime dana u nedelji iz datuma
    */
   private getDayNameFromDate(dateString: string): string {
@@ -981,6 +1099,87 @@ export class PlanningService {
   }
 
   /**
+   * Obriši raspored za ceo mesec - briše SVE polaske za turnus/smenu u celom mesecu
+   */
+  async deleteMonthlySchedule(params: {
+    id: number;
+    startDate: Date;
+    month: number;
+    year: number;
+    lineNumber: string;
+    turnusName: string;
+    shiftNumber: number;
+  }) {
+    // Generiši sve datume u mesecu
+    const allDates = this.getAllDatesInMonth(params.month, params.year);
+
+    let totalDeletedCount = 0;
+    let daysDeleted = 0;
+
+    // Za svaki datum u mesecu obriši rasporede
+    for (const date of allDates) {
+      try {
+        const formattedDate = this.formatDateForQuery(date);
+        const dateForQuery = new Date(formattedDate);
+
+        // Pronađi rasporede za taj datum, liniju, turnus i smenu
+        const schedulesForDate = await this.prisma.dateTravelOrder.findMany({
+          where: {
+            startDate: dateForQuery,
+            lineNo: params.lineNumber,
+            comment: {
+              contains: `Turnus: ${params.turnusName}, Smena: ${params.shiftNumber}`,
+            },
+          },
+        });
+
+        // Ako postoje rasporedi za taj datum
+        if (schedulesForDate.length > 0) {
+          // Uzmi driverId iz prvog rasporeda
+          const driverId = schedulesForDate[0].driverId;
+
+          // Obriši SVE polaske za taj datum
+          const deleteResult = await this.prisma.dateTravelOrder.deleteMany({
+            where: {
+              startDate: dateForQuery,
+              lineNo: params.lineNumber,
+              driverId,
+              comment: {
+                contains: `Turnus: ${params.turnusName}, Smena: ${params.shiftNumber}`,
+              },
+            },
+          });
+
+          totalDeletedCount += deleteResult.count;
+          daysDeleted++;
+
+          // Obriši i iz legacy date_shedule tabele
+          await this.deleteFromLegacySchedule({
+            lineNo: params.lineNumber,
+            startDate: dateForQuery,
+            driverId,
+            turnusName: params.turnusName,
+            shiftNumber: params.shiftNumber,
+          });
+        }
+      } catch (error) {
+        this.logger.error(
+          `Greška pri brisanju rasporeda za datum ${date.toISOString()}:`,
+          error,
+        );
+        // Nastavi sa sledećim datumom
+      }
+    }
+
+    return {
+      success: true,
+      message: `Mesečni raspored uspešno obrisan (obrisano ${totalDeletedCount} polazaka za ${daysDeleted} dana)`,
+      deletedCount: totalDeletedCount,
+      daysDeleted,
+    };
+  }
+
+  /**
    * Helper: Ekstraktuj broj smene iz comment polja
    */
   private extractShiftFromComment(comment: string): number {
@@ -999,6 +1198,7 @@ export class PlanningService {
   /**
    * Sync raspored u legacy date_shedule tabelu
    * Upisuje SAMO planirane podatke (bez vozila i realizacije)
+   * @returns Niz ID-eva kreiranih zapisa u date_shedule tabeli
    */
   private async syncToLegacySchedule(data: {
     lineNo: string;
@@ -1018,89 +1218,85 @@ export class PlanningService {
       direction: number;
       departure_number: number;
     }>;
-  }) {
+  }): Promise<number[]> {
+    const createdIds: number[] = [];
+
     try {
       // Za SVAKI polazak kreiraj zapis u date_shedule
       for (let i = 0; i < data.departures.length; i++) {
         const departure = data.departures[i];
 
-        // Izračunaj end_time
-        const startTime = new Date(departure.start_time);
-        const duration = new Date(departure.duration);
+        // Izračunaj end_time (direktno koristi Date objekte iz MySQL-a)
+        const startTime = departure.start_time;
+        const duration = departure.duration;
         const endTime = new Date(startTime);
         endTime.setUTCHours(
           startTime.getUTCHours() + duration.getUTCHours(),
-          startTime.getUTCMinutes() + duration.getUTCMinutes()
+          startTime.getUTCMinutes() + duration.getUTCMinutes(),
+          startTime.getUTCSeconds() + duration.getUTCSeconds()
         );
 
-        // Formatiraj datum za MySQL (YYYY-MM-DD)
-        const dateStr = data.startDate.toISOString().split('T')[0];
+        // Kreiraj zapis koristeći Prisma - direktno koristi Date objekte bez konverzije
+        const createdSchedule = await this.prisma.dateShedule.create({
+          data: {
+            lineNo: data.lineNo,
+            lineName: data.lineName,
+            startDate: data.startDate,
+            startTime: startTime,
+            endTime: endTime,
+            endDate: data.startDate,
+            startStation: data.startStation,
+            endStation: data.endStation,
+            ttStartDate: data.startDate,
+            ttStartTime: startTime,
+            user1IdPlanned: data.driverLegacyId || 0,
+            user1IdRealised: 0,
+            user2IdPlanned: 0,
+            user2IdRealised: 0,
+            user3IdPlanned: 0,
+            user3IdRealised: 0,
+            tourId: data.turnusId,
+            turnusDepartureNo: departure.departure_number,
+            direction: departure.direction,
+            rideType: 0,
+            kmPred: 0,
+            plannedBy: 0,
+            departureStatus: 0,
+            busOperator: '',
+            busNumber: 0,
+            busGarageNo: '',
+            rBusGarageNo: '',
+            busRegistration: '',
+            rBusRegistration: '',
+            peron: '',
+            rPeron: '',
+            assignedPersons: data.driverName,
+            rAssignedPersons: '',
+            rUserIds: '',
+            userIds: '',
+            busReg2: '',
+            busGar2: '',
+            status: 1,
+            modified: 0,
+            departureOpenTime: new Date('1970-01-01T00:00:00.000Z'),
+            departureCloseTime: new Date('1970-01-01T00:00:00.000Z'),
+            lastStationUpdateTime: new Date('1970-01-01T00:00:00.000Z'),
+            firstStationTime: new Date('1970-01-01T00:00:00.000Z'),
+            lastStationTime: new Date('1970-01-01T00:00:00.000Z'),
+          },
+        });
 
-        // Formatiraj vreme za MySQL (HH:MM:SS)
-        const formatTime = (time: Date) => {
-          const h = time.getUTCHours().toString().padStart(2, '0');
-          const m = time.getUTCMinutes().toString().padStart(2, '0');
-          const s = time.getUTCSeconds().toString().padStart(2, '0');
-          return `${h}:${m}:${s}`;
-        };
-
-        const startTimeStr = formatTime(startTime);
-        const endTimeStr = formatTime(endTime);
-
-        // INSERT u date_shedule tabelu
-        // Dodajemo SVA obavezna NOT NULL polja
-        await this.prisma.$executeRawUnsafe(`
-          INSERT INTO date_shedule (
-            line_no, line_name,
-            start_date, start_time, end_time, end_date,
-            start_station, end_station,
-            tt_start_date, tt_start_time,
-            user_1_id_planned, user_1_id_realised,
-            user_2_id_planned, user_2_id_realised,
-            user_3_id_planned, user_3_id_realised,
-            tour_id, turnus_departure_no,
-            direction, ride_type, km_pred,
-            planned_by, departure_status,
-            bus_operator, bus_number,
-            bus_garage_no, r_bus_garage_no,
-            bus_registration, r_bus_registration,
-            peron, r_peron,
-            assigned_persons, r_assigned_persons,
-            r_user_ids, user_ids,
-            bus_reg_2, bus_gar_2,
-            status, modified,
-            departure_open_time, departure_close_time,
-            last_station_update_time,
-            first_station_time, last_station_time
-          ) VALUES (
-            '${data.lineNo}', '${data.lineName.replace(/'/g, "''")}',
-            '${dateStr}', '${startTimeStr}', '${endTimeStr}', '${dateStr}',
-            '${data.startStation.replace(/'/g, "''")}', '${data.endStation.replace(/'/g, "''")}',
-            '${dateStr}', '${startTimeStr}',
-            ${data.driverLegacyId || 0}, 0,
-            0, 0,
-            0, 0,
-            ${data.turnusId}, ${departure.departure_number},
-            ${departure.direction}, 0, 0,
-            0, 0,
-            '', 0,
-            '', '',
-            '', '',
-            '', '',
-            '${data.driverName.replace(/'/g, "''")}', '',
-            '', '',
-            '', '',
-            1, 0,
-            '1970-01-01 00:00:00', '1970-01-01 00:00:00',
-            '1970-01-01 00:00:00',
-            '1970-01-01 00:00:00', '1970-01-01 00:00:00'
-          )
-        `);
+        createdIds.push(createdSchedule.id);
       }
+
+      return createdIds;
     } catch (error) {
       // Ne blokiraj glavni proces ako sync ne uspe
       console.error('❌ Greška pri sinhronizaciji u date_shedule:', error.message);
-      console.error('  Glavni proces planiranja nastavlja (upis u date_travel_order je uspeo)');
+      console.error('  Glavni proces planiranja nastavlja, ali sheduleId će biti 0');
+
+      // Vrati niz nula da označimo da nisu kreirani pravi ID-evi
+      return new Array(data.departures.length).fill(0);
     }
   }
 
@@ -1123,19 +1319,26 @@ export class PlanningService {
         select: { legacyId: true },
       });
 
-      const result = await this.prisma.$executeRawUnsafe(`
-        DELETE FROM date_shedule
-        WHERE line_no = '${data.lineNo}'
-          AND start_date = '${dateStr}'
-          AND user_1_id_planned = ${driver?.legacyId || 0}
-          AND tour_id IN (
-            SELECT turnus_id
-            FROM changes_codes_tours
-            WHERE turnus_name = '${data.turnusName.replace(/'/g, "''")}'
-              AND shift_number = ${data.shiftNumber}
-            LIMIT 1
-          )
+      // Prvo dobavi turnus_id da izbegneš LIMIT u subquery-ju
+      const turnusResult = await this.prisma.$queryRawUnsafe<Array<{ turnus_id: number }>>(`
+        SELECT turnus_id
+        FROM changes_codes_tours
+        WHERE turnus_name = '${data.turnusName.replace(/'/g, "''")}'
+          AND shift_number = ${data.shiftNumber}
+        LIMIT 1
       `);
+
+      if (turnusResult && turnusResult.length > 0) {
+        const turnusId = turnusResult[0].turnus_id;
+
+        await this.prisma.$executeRawUnsafe(`
+          DELETE FROM date_shedule
+          WHERE line_no = '${data.lineNo}'
+            AND start_date = '${dateStr}'
+            AND user_1_id_planned = ${driver?.legacyId || 0}
+            AND tour_id = ${turnusId}
+        `);
+      }
     } catch (error) {
       // Ne blokiraj glavni proces ako sync ne uspe
       console.error('❌ Greška pri brisanju iz date_shedule:', error.message);
@@ -1337,4 +1540,759 @@ export class PlanningService {
       lineNumber: dto.lineNumber,
     };
   }
+
+  /**
+   * Helper: Generiši sve datume u mesecu
+   */
+  private getAllDatesInMonth(month: number, year: number): Date[] {
+    const dates: Date[] = [];
+    const daysInMonth = new Date(year, month, 0).getDate(); // 0 = poslednji dan prethodnog meseca
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      dates.push(new Date(year, month - 1, day));
+    }
+
+    return dates;
+  }
+
+  /**
+   * Helper: Filtriraj datume po includedDaysOfWeek
+   * VAŽNO: Ne proverava turnus_days ovde, to se radi kasnije u async metodu
+   */
+  private filterDatesByDaysOfWeek(
+    dates: Date[],
+    includedDaysOfWeek: number[],
+  ): Date[] {
+    return dates.filter((date) => {
+      const dayOfWeek = date.getDay(); // 0 = Nedelja, 1 = Ponedeljak, ..., 6 = Subota
+
+      // Filtriraj samo po includedDaysOfWeek
+      return includedDaysOfWeek.includes(dayOfWeek);
+    });
+  }
+
+  /**
+   * Helper: Proveri da li turnus saobraćaju na određeni dan u nedelji za dati datum
+   */
+  private async checkIfTurnusRunsOnDay(
+    turnusName: string,
+    date: Date,
+  ): Promise<boolean> {
+    const dayName = this.getDayNameFromDate(this.formatDateForQuery(date));
+
+    // Proveri da li turnus saobraćaju tog dana u nedelji
+    const turnusDaysCheck = await this.prisma.$queryRaw<Array<{ count: number }>>`
+      SELECT COUNT(*) as count
+      FROM changes_codes_tours cct
+      INNER JOIN turnus_days td ON cct.turnus_id = td.turnus_id
+      INNER JOIN turnus_groups_assign tga ON cct.turnus_id = tga.turnus_id
+      WHERE cct.turnus_name = ${turnusName}
+        AND td.dayname = ${dayName}
+        AND DATE(${this.formatDateForQuery(date)}) BETWEEN tga.date_from AND tga.date_to
+    `;
+
+    return turnusDaysCheck[0]?.count > 0;
+  }
+
+  /**
+   * Helper: Filtriraj datume po excludedDaysOfWeek (isključi specifične datume)
+   * Ovo se primenjuje NAKON što su datumi već filtrirani po includedDaysOfWeek i turnus_days
+   */
+  private filterExcludedDates(
+    dates: Date[],
+    excludedDaysOfWeek: number[],
+  ): Date[] {
+    if (excludedDaysOfWeek.length === 0) {
+      return dates;
+    }
+
+    return dates.filter((date) => {
+      const dayOfWeek = date.getDay();
+      // Isključi samo one datume čiji dan u nedelji je u excludedDaysOfWeek
+      return !excludedDaysOfWeek.includes(dayOfWeek);
+    });
+  }
+
+  /**
+   * Helper: Proveri postojeće rasporede za vozača u datim datumima
+   */
+  private async checkExistingSchedules(
+    dates: Date[],
+    driverId: number,
+  ): Promise<Date[]> {
+    const existingDates: Date[] = [];
+
+    for (const date of dates) {
+      const formattedDate = this.formatDateForQuery(date);
+      const existing = await this.prisma.dateTravelOrder.findFirst({
+        where: {
+          startDate: new Date(formattedDate),
+          driverId,
+        },
+      });
+
+      if (existing) {
+        existingDates.push(date);
+      }
+    }
+
+    return existingDates;
+  }
+
+  /**
+   * Helper: Formatiraj datum za query (YYYY-MM-DD)
+   */
+  private formatDateForQuery(date: Date): string {
+    const year = date.getFullYear();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  /**
+   * Kreiraj mesečni raspored
+   * Omogućava kreiranje rasporeda za ceo mesec sa isključivanjem specifičnih dana u nedelji
+   */
+  async createMonthlySchedule(
+    dto: CreateMonthlyScheduleDto,
+    userId: number,
+  ) {
+    // Validacija - proveri da li vozač postoji
+    const driver = await this.prisma.user.findUnique({
+      where: { id: dto.driverId },
+      include: { userGroup: true },
+    });
+
+    if (!driver || !driver.userGroup?.driver) {
+      throw new NotFoundException(
+        `Vozač sa ID ${dto.driverId} nije pronađen`,
+      );
+    }
+
+    // 1. Generiši sve datume u mesecu
+    const allDates = this.getAllDatesInMonth(dto.month, dto.year);
+
+    // 2. Filtriraj datume po includedDaysOfWeek (npr. samo Subote)
+    const datesByDayOfWeek = this.filterDatesByDaysOfWeek(
+      allDates,
+      dto.includedDaysOfWeek,
+    );
+
+    if (datesByDayOfWeek.length === 0) {
+      throw new NotFoundException(
+        'Nema datuma koji odgovaraju odabranim danima u nedelji',
+      );
+    }
+
+    // 3. Proveri za svaki datum da li turnus saobraćaju tog dana (turnus_days)
+    const datesWhereTurnusRuns: Date[] = [];
+    for (const date of datesByDayOfWeek) {
+      const turnusRuns = await this.checkIfTurnusRunsOnDay(dto.turnusName, date);
+      if (turnusRuns) {
+        datesWhereTurnusRuns.push(date);
+      }
+    }
+
+    if (datesWhereTurnusRuns.length === 0) {
+      throw new NotFoundException(
+        `Turnus ${dto.turnusName} ne saobraćaju ni jednog od odabranih dana u nedelji`,
+      );
+    }
+
+    // 4. Primeni excludedDaysOfWeek (isključi specifične datume)
+    const validDates = this.filterExcludedDates(
+      datesWhereTurnusRuns,
+      dto.excludedDaysOfWeek,
+    );
+
+    if (validDates.length === 0) {
+      throw new NotFoundException(
+        'Nema validnih dana za planiranje nakon isključivanja specifičnih dana',
+      );
+    }
+
+    // 3. Proveri postojeće rasporede
+    const existingDates = await this.checkExistingSchedules(
+      validDates,
+      dto.driverId,
+    );
+
+    // Ako ima duplikata i nema conflict resolution, vrati conflict info
+    if (existingDates.length > 0 && !dto.conflictResolution) {
+      return {
+        conflict: {
+          hasConflict: true,
+          conflictDates: existingDates.map((d) => this.formatDateForQuery(d)),
+          conflictCount: existingDates.length,
+        },
+        totalDays: validDates.length,
+        message:
+          'Vozač već ima raspored za neke datume. Molimo odaberite akciju: prepiši ili preskoči.',
+      };
+    }
+
+    // 3.5. Pronađi turnusId na osnovu lineNumber, date i turnusName
+    // Koristimo prvi dan meseca kao referentni datum
+    const firstDayOfMonth = this.formatDateForQuery(validDates[0]);
+    const turnusiForLine = await this.getTurnusiByLineAndDate(
+      dto.lineNumber,
+      firstDayOfMonth,
+    );
+
+    const matchingTurnus = turnusiForLine.find(
+      (t) => t.turnusName === dto.turnusName,
+    );
+
+    if (!matchingTurnus) {
+      throw new NotFoundException(
+        `Turnus "${dto.turnusName}" nije pronađen za liniju ${dto.lineNumber}`,
+      );
+    }
+
+    const turnusId = matchingTurnus.turnusId;
+
+    // 4. Odluči koje datume da procesuješ
+    let datesToProcess: Date[] = [];
+
+    if (dto.conflictResolution === ConflictResolution.SKIP) {
+      // Preskoči datume sa postojećim rasporedima
+      datesToProcess = validDates.filter(
+        (d) =>
+          !existingDates.some(
+            (ed) => this.formatDateForQuery(ed) === this.formatDateForQuery(d),
+          ),
+      );
+    } else if (dto.conflictResolution === ConflictResolution.OVERWRITE) {
+      // Prvo obriši postojeće rasporede za conflict datume
+      for (const conflictDate of existingDates) {
+        const formattedDate = this.formatDateForQuery(conflictDate);
+        await this.prisma.dateTravelOrder.deleteMany({
+          where: {
+            startDate: new Date(formattedDate),
+            driverId: dto.driverId,
+          },
+        });
+      }
+      datesToProcess = validDates;
+    } else {
+      // Nema conflict resolution i nema duplikata
+      datesToProcess = validDates;
+    }
+
+    // 5. Kreiraj rasporede za sve datume
+    const results: Array<{
+      date: string;
+      status: 'success' | 'error';
+      departuresCount?: number;
+      error?: string;
+    }> = [];
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const date of datesToProcess) {
+      try {
+        const formattedDate = this.formatDateForQuery(date);
+
+        const result = await this.createSchedule(
+          {
+            date: formattedDate,
+            lineNumber: dto.lineNumber,
+            turnusId: turnusId,
+            shiftNumber: dto.shiftNumber,
+            driverId: dto.driverId,
+          },
+          userId,
+        );
+
+        results.push({
+          date: formattedDate,
+          status: 'success',
+          departuresCount: result.departuresCount,
+        });
+        successCount++;
+      } catch (error) {
+        results.push({
+          date: this.formatDateForQuery(date),
+          status: 'error',
+          error: error.message,
+        });
+        errorCount++;
+      }
+    }
+
+    // 6. Vrati sumarni rezultat
+    return {
+      totalDays: validDates.length,
+      processedDays: datesToProcess.length,
+      successCount,
+      skippedCount:
+        dto.conflictResolution === ConflictResolution.SKIP
+          ? existingDates.length
+          : 0,
+      errorCount,
+      results,
+      summary: {
+        month: dto.month,
+        year: dto.year,
+        lineNumber: dto.lineNumber,
+        turnusName: dto.turnusName,
+        shiftNumber: dto.shiftNumber,
+        driverName: `${driver.firstName} ${driver.lastName}`,
+        excludedDaysOfWeek: dto.excludedDaysOfWeek,
+      },
+    };
+  }
+
+  /**
+   * Kreiraj mesečni raspored sa real-time progress streaming (SSE)
+   * Emituje progress event nakon obrade svakog dana
+   */
+  createMonthlyScheduleStream(
+    dto: CreateMonthlyScheduleDto,
+    userId: number,
+  ): Observable<MessageEvent> {
+    return new Observable((observer) => {
+      (async () => {
+        try {
+          // Validacija - proveri da li vozač postoji
+          const driver = await this.prisma.user.findUnique({
+            where: { id: dto.driverId },
+            include: { userGroup: true },
+          });
+
+          if (!driver || !driver.userGroup?.driver) {
+            observer.error(
+              new NotFoundException(
+                `Vozač sa ID ${dto.driverId} nije pronađen`,
+              ),
+            );
+            return;
+          }
+
+          // 1. Generiši sve datume u mesecu
+          const allDates = this.getAllDatesInMonth(dto.month, dto.year);
+
+          // 2. Filtriraj datume po includedDaysOfWeek (npr. samo Subote)
+          const datesByDayOfWeek = this.filterDatesByDaysOfWeek(
+            allDates,
+            dto.includedDaysOfWeek,
+          );
+
+          if (datesByDayOfWeek.length === 0) {
+            observer.error(
+              new NotFoundException(
+                'Nema datuma koji odgovaraju odabranim danima u nedelji',
+              ),
+            );
+            return;
+          }
+
+          // 3. Proveri za svaki datum da li turnus saobraćaju tog dana (turnus_days)
+          const datesWhereTurnusRuns: Date[] = [];
+          for (const date of datesByDayOfWeek) {
+            const turnusRuns = await this.checkIfTurnusRunsOnDay(dto.turnusName, date);
+            if (turnusRuns) {
+              datesWhereTurnusRuns.push(date);
+            }
+          }
+
+          if (datesWhereTurnusRuns.length === 0) {
+            observer.error(
+              new NotFoundException(
+                `Turnus ${dto.turnusName} ne saobraćaju ni jednog od odabranih dana u nedelji`,
+              ),
+            );
+            return;
+          }
+
+          // 4. Primeni excludedDaysOfWeek (isključi specifične datume)
+          const validDates = this.filterExcludedDates(
+            datesWhereTurnusRuns,
+            dto.excludedDaysOfWeek,
+          );
+
+          if (validDates.length === 0) {
+            observer.error(
+              new NotFoundException(
+                'Nema validnih dana za planiranje nakon isključivanja specifičnih dana',
+              ),
+            );
+            return;
+          }
+
+          // 3. Proveri postojeće rasporede
+          const existingDates = await this.checkExistingSchedules(
+            validDates,
+            dto.driverId,
+          );
+
+          // Ako ima duplikata i nema conflict resolution, vrati conflict info
+          if (existingDates.length > 0 && !dto.conflictResolution) {
+            observer.next({
+              data: {
+                type: 'conflict',
+                conflict: {
+                  hasConflict: true,
+                  conflictDates: existingDates.map((d) =>
+                    this.formatDateForQuery(d),
+                  ),
+                  conflictCount: existingDates.length,
+                },
+                totalDays: validDates.length,
+                message:
+                  'Vozač već ima raspored za neke datume. Molimo odaberite akciju: prepiši ili preskoči.',
+              },
+            } as MessageEvent);
+            observer.complete();
+            return;
+          }
+
+          // 3.5. Pronađi turnusId
+          const firstDayOfMonth = this.formatDateForQuery(validDates[0]);
+          const turnusiForLine = await this.getTurnusiByLineAndDate(
+            dto.lineNumber,
+            firstDayOfMonth,
+          );
+
+          const matchingTurnus = turnusiForLine.find(
+            (t) => t.turnusName === dto.turnusName,
+          );
+
+          if (!matchingTurnus) {
+            observer.error(
+              new NotFoundException(
+                `Turnus "${dto.turnusName}" nije pronađen za liniju ${dto.lineNumber}`,
+              ),
+            );
+            return;
+          }
+
+          const turnusId = matchingTurnus.turnusId;
+
+          // 3.6. Pronađi turnusId za Subotu i Nedelju (ako su odabrani)
+          let saturdayTurnusId: number | null = null;
+          let sundayTurnusId: number | null = null;
+
+          if (dto.saturdayTurnusName) {
+            const saturdayTurnus = turnusiForLine.find(
+              (t) => t.turnusName === dto.saturdayTurnusName,
+            );
+
+            if (!saturdayTurnus) {
+              observer.error(
+                new NotFoundException(
+                  `Turnus za Subotu "${dto.saturdayTurnusName}" nije pronađen za liniju ${dto.lineNumber}`,
+                ),
+              );
+              return;
+            }
+
+            saturdayTurnusId = saturdayTurnus.turnusId;
+
+            // Validacija: proveri da li turnus saobraćaju Subotom
+            const saturdayDate = validDates.find((d) => d.getDay() === 6);
+            if (saturdayDate) {
+              const runs = await this.checkIfTurnusRunsOnDay(
+                dto.saturdayTurnusName,
+                saturdayDate,
+              );
+              if (!runs) {
+                observer.error(
+                  new NotFoundException(
+                    `Turnus za Subotu "${dto.saturdayTurnusName}" ne saobraća Subotom`,
+                  ),
+                );
+                return;
+              }
+            }
+          }
+
+          if (dto.sundayTurnusName) {
+            const sundayTurnus = turnusiForLine.find(
+              (t) => t.turnusName === dto.sundayTurnusName,
+            );
+
+            if (!sundayTurnus) {
+              observer.error(
+                new NotFoundException(
+                  `Turnus za Nedelju "${dto.sundayTurnusName}" nije pronađen za liniju ${dto.lineNumber}`,
+                ),
+              );
+              return;
+            }
+
+            sundayTurnusId = sundayTurnus.turnusId;
+
+            // Validacija: proveri da li turnus saobraćaju Nedeljom
+            const sundayDate = validDates.find((d) => d.getDay() === 0);
+            if (sundayDate) {
+              const runs = await this.checkIfTurnusRunsOnDay(
+                dto.sundayTurnusName,
+                sundayDate,
+              );
+              if (!runs) {
+                observer.error(
+                  new NotFoundException(
+                    `Turnus za Nedelju "${dto.sundayTurnusName}" ne saobraća Nedeljom`,
+                  ),
+                );
+                return;
+              }
+            }
+          }
+
+          // 4. Odluči koje datume da procesuješ
+          let datesToProcess: Date[] = [];
+
+          if (dto.conflictResolution === ConflictResolution.SKIP) {
+            datesToProcess = validDates.filter(
+              (d) =>
+                !existingDates.some(
+                  (ed) =>
+                    this.formatDateForQuery(ed) === this.formatDateForQuery(d),
+                ),
+            );
+          } else if (dto.conflictResolution === ConflictResolution.OVERWRITE) {
+            // Obriši postojeće rasporede
+            for (const conflictDate of existingDates) {
+              const formattedDate = this.formatDateForQuery(conflictDate);
+              await this.prisma.dateTravelOrder.deleteMany({
+                where: {
+                  startDate: new Date(formattedDate),
+                  driverId: dto.driverId,
+                },
+              });
+            }
+            datesToProcess = validDates;
+          } else {
+            datesToProcess = validDates;
+          }
+
+          // 5. Kreiraj rasporede sa streaming progress updates
+          const results: Array<{
+            date: string;
+            status: 'success' | 'error';
+            departuresCount?: number;
+            error?: string;
+          }> = [];
+          let successCount = 0;
+          let errorCount = 0;
+
+          for (let i = 0; i < datesToProcess.length; i++) {
+            const date = datesToProcess[i];
+            try {
+              const formattedDate = this.formatDateForQuery(date);
+
+              // Odredi koji turnusId koristiti zavisno od dana u nedelji
+              const dayOfWeek = date.getDay(); // 0=Nedelja, 6=Subota
+              let turnusIdForDate = turnusId; // Default: globalni turnus
+
+              if (dayOfWeek === 6 && saturdayTurnusId) {
+                // Ako je Subota i odabran je poseban turnus za Subotu
+                turnusIdForDate = saturdayTurnusId;
+              } else if (dayOfWeek === 0 && sundayTurnusId) {
+                // Ako je Nedelja i odabran je poseban turnus za Nedelju
+                turnusIdForDate = sundayTurnusId;
+              }
+
+              const result = await this.createSchedule(
+                {
+                  date: formattedDate,
+                  lineNumber: dto.lineNumber,
+                  turnusId: turnusIdForDate,
+                  shiftNumber: dto.shiftNumber,
+                  driverId: dto.driverId,
+                },
+                userId,
+              );
+
+              results.push({
+                date: formattedDate,
+                status: 'success',
+                departuresCount: result.departuresCount,
+              });
+              successCount++;
+            } catch (error) {
+              results.push({
+                date: this.formatDateForQuery(date),
+                status: 'error',
+                error: error.message,
+              });
+              errorCount++;
+            }
+
+            // Emitiraj progress update nakon obrade svakog dana
+            observer.next({
+              data: {
+                type: 'progress',
+                current: i + 1,
+                total: datesToProcess.length,
+                status:
+                  i + 1 === datesToProcess.length ? 'success' : 'processing',
+                results: [...results], // Šalji sve rezultate do sada
+              },
+            } as MessageEvent);
+          }
+
+          // 6. Emitiraj finalni rezultat
+          observer.next({
+            data: {
+              type: 'complete',
+              totalDays: validDates.length,
+              processedDays: datesToProcess.length,
+              successCount,
+              skippedCount:
+                dto.conflictResolution === ConflictResolution.SKIP
+                  ? existingDates.length
+                  : 0,
+              errorCount,
+              results,
+              summary: {
+                month: dto.month,
+                year: dto.year,
+                lineNumber: dto.lineNumber,
+                turnusName: dto.turnusName,
+                shiftNumber: dto.shiftNumber,
+                driverName: `${driver.firstName} ${driver.lastName}`,
+                excludedDaysOfWeek: dto.excludedDaysOfWeek,
+              },
+            },
+          } as MessageEvent);
+
+          observer.complete();
+        } catch (error) {
+          observer.error(error);
+        }
+      })();
+    });
+  }
+
+  /**
+   * Dobavi mesečni izveštaj vozača
+   * Vraća listu vozača sa turnusima, linijama, smenama i slobodnim danima
+   */
+  async getMonthlyDriverReport(
+    month: number,
+    year: number,
+  ): Promise<DriverReportDto[]> {
+    // Napravi datum raspon za odabrani mesec
+    const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const endDate = `${year}-${month.toString().padStart(2, '0')}-${lastDay
+      .toString()
+      .padStart(2, '0')}`;
+
+    // Query za dobijanje svih rasporeda u mesecu sa grupisanjem po vozaču
+    const rawData = await this.prisma.$queryRaw<
+      Array<{
+        driver_id: number;
+        driver_name: string;
+        line_no: string;
+        comment: string;
+        working_days: string; // '1,2,3,4,5' (dani u nedelji kada vozač radi)
+      }>
+    >`
+      SELECT
+        dto.driver_id,
+        dto.driver_name,
+        dto.line_no,
+        MIN(dto.comment) as comment,
+        GROUP_CONCAT(DISTINCT DAYOFWEEK(dto.start_date) ORDER BY DAYOFWEEK(dto.start_date)) as working_days
+      FROM date_travel_order dto
+      WHERE DATE(dto.start_date) >= ${startDate}
+        AND DATE(dto.start_date) <= ${endDate}
+        AND dto.driver_id > 0
+      GROUP BY dto.driver_id, dto.driver_name, dto.line_no
+      ORDER BY dto.driver_id
+    `;
+
+    // Transformiši podatke u DriverReportDto format
+    const driverReports: DriverReportDto[] = rawData.map((data) => {
+      // Parsiraj RADNO MESTO iz comment polja
+      // Format comment: "Turnus: 00018-5, Smena: 1, Polazak: 1/6"
+      const workPlace = this.parseWorkPlace(data.comment, data.line_no);
+
+      // Izračunaj SLOBODNE DANE
+      // working_days = '1,2,3,4,5' (dani kada radi)
+      // Slobodni dani = svi dani (1-7) minus working_days
+      const freeDays = this.calculateFreeDays(data.working_days);
+
+      return {
+        driverId: Number(data.driver_id), // Konvertuj BigInt u Number
+        driverName: data.driver_name,
+        workPlace,
+        freeDays,
+        maintenanceDate: undefined, // Za sada preskoči
+      };
+    });
+
+    return driverReports;
+  }
+
+  /**
+   * Parsiraj RADNO MESTO iz comment polja
+   * Format: "Turnus: 00018-5, Smena: 1, Polazak: 1/6"
+   * Return: "5-18 I" (turaža-linija smena)
+   */
+  private parseWorkPlace(comment: string, lineNo: string): string {
+    // Regex za parsiranje turnusa i smene
+    const turnusMatch = comment.match(/Turnus: (\d+)-(\d+)/);
+    const smenaMatch = comment.match(/Smena: (\d+)/);
+
+    if (!turnusMatch || !smenaMatch) {
+      return `?-${lineNo} ?`; // Fallback ako parsiranje ne uspe
+    }
+
+    // 00018-5 → turaža = 5
+    const turage = parseInt(turnusMatch[2]);
+    // Smena: 1 → rimski I
+    const smena = this.romanNumerals[parseInt(smenaMatch[1])] || '?';
+
+    return `${turage}-${lineNo} ${smena}`;
+  }
+
+  /**
+   * Izračunaj SLOBODNE DANE
+   * working_days = '1,2,3,4,5' (MySQL DAYOFWEEK format - dani kada vozač radi)
+   * Return: '67' (subota i nedelja su slobodni - ISO format)
+   *
+   * MySQL DAYOFWEEK: 1=Nedelja, 2=Ponedeljak, ..., 7=Subota
+   * ISO format: 1=Ponedeljak, 2=Utorak, ..., 6=Subota, 7=Nedelja
+   */
+  private calculateFreeDays(workingDays: string): string {
+    if (!workingDays) {
+      return ''; // Ako nema podataka
+    }
+
+    // Konvertuj MySQL DAYOFWEEK format u ISO format
+    const mysqlToIso = (mysqlDay: number): number => {
+      // MySQL 1 (nedelja) → ISO 7
+      // MySQL 2 (ponedeljak) → ISO 1
+      // MySQL 3 (utorak) → ISO 2, itd.
+      return mysqlDay === 1 ? 7 : mysqlDay - 1;
+    };
+
+    // Svi dani u nedelji (ISO format: 1-7)
+    const allDaysISO = [1, 2, 3, 4, 5, 6, 7];
+
+    // Dani kada vozač radi (MySQL format), konvertovani u ISO
+    const workingMySQL = workingDays.split(',').map((d) => parseInt(d.trim()));
+    const workingISO = workingMySQL.map(mysqlToIso);
+
+    // Slobodni dani (ISO format) = razlika
+    const freeDaysISO = allDaysISO.filter((day) => !workingISO.includes(day));
+
+    // Sortiraj i vrati kao string "67" (bez razmaka ili zareza)
+    return freeDaysISO.sort((a, b) => a - b).join('');
+  }
+
+  /**
+   * Mapiranje brojeva smena na rimske brojeve
+   */
+  private romanNumerals: Record<number, string> = {
+    1: 'I',
+    2: 'II',
+    3: 'III',
+    4: 'IV',
+  };
 }
