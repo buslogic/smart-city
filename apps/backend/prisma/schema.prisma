@@ -38,6 +38,8 @@ model User {
   driverDefaults           TurnusDefaultPerDriver[]   @relation("DriverDefaults")
   createdDefaults          TurnusDefaultPerDriver[]   @relation("DefaultCreator")
   updatedDefaults          TurnusDefaultPerDriver[]   @relation("DefaultUpdater")
+  createdTurnusLinked      TurnusLinked[]             @relation("TurnusLinkedCreator")
+  updatedTurnusLinked      TurnusLinked[]             @relation("TurnusLinkedUpdater")
 
   @@index([email])
   @@index([userGroupId])
@@ -1144,6 +1146,7 @@ model TurnusGroupsName {
   changeDate    DateTime @default(now()) @updatedAt @map("change_date") @db.Timestamp(0)
   dateValidFrom DateTime @map("date_valid_from") @db.Date
 
+  @@unique([name])
   @@index([active])
   @@index([dateValidFrom])
   @@map("turnus_groups_names")
@@ -1168,6 +1171,7 @@ model TurnusDays {
   turnusId Int    @map("turnus_id") @db.MediumInt
   dayname  String @db.VarChar(20)
 
+  @@unique([turnusId, dayname])
   @@index([turnusId])
   @@index([dayname])
   @@map("turnus_days")
@@ -1524,4 +1528,36 @@ model TurnusSyncLog {
   @@index([userId])
   @@index([startedAt])
   @@map("turnus_sync_logs")
+}
+
+// ========== LINKED TURNUSI (Povezani turnusi) ==========
+
+model TurnusLinked {
+  id           Int      @id @default(autoincrement())
+  lineNumber1  String   @map("line_number_1") @db.VarChar(6)
+  turnusId1    Int      @map("turnus_id_1") @db.UnsignedMediumInt
+  turnusName1  String   @map("turnus_name_1") @db.VarChar(320)
+  shiftNumber1 Int      @map("shift_number_1") @db.UnsignedTinyInt
+  lineNumber2  String   @map("line_number_2") @db.VarChar(6)
+  turnusId2    Int      @map("turnus_id_2") @db.UnsignedMediumInt
+  turnusName2  String   @map("turnus_name_2") @db.VarChar(320)
+  shiftNumber2 Int      @map("shift_number_2") @db.UnsignedTinyInt
+  description  String?  @db.Text
+  status       String   @default("ACTIVE") @db.VarChar(20)
+  createdBy    Int      @map("created_by")
+  updatedBy    Int?     @map("updated_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  creator User  @relation("TurnusLinkedCreator", fields: [createdBy], references: [id])
+  updater User? @relation("TurnusLinkedUpdater", fields: [updatedBy], references: [id])
+
+  @@unique([lineNumber1, turnusId1, shiftNumber1, lineNumber2, turnusId2, shiftNumber2], name: "unique_turnus_pair")
+  @@index([lineNumber1])
+  @@index([lineNumber2])
+  @@index([status])
+  @@index([createdBy])
+  @@index([updatedBy])
+  @@map("turnus_linked")
 }

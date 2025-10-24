@@ -1111,7 +1111,6 @@ export class TurnusiSyncService {
     const values = records
       .map((r) => {
         return `(
-          ${r.id},
           ${this.escapeSQLValue(r.name)},
           ${r.active ? 1 : 0},
           ${r.changed_by},
@@ -1123,10 +1122,9 @@ export class TurnusiSyncService {
 
     const insertSQL = `
       INSERT INTO turnus_groups_names (
-        id, name, active, changed_by, change_date, date_valid_from
+        name, active, changed_by, change_date, date_valid_from
       ) VALUES ${values}
       ON DUPLICATE KEY UPDATE
-        name = VALUES(name),
         active = VALUES(active),
         changed_by = VALUES(changed_by),
         change_date = VALUES(change_date),
@@ -1151,7 +1149,7 @@ export class TurnusiSyncService {
           ${r.group_id},
           ${r.changed_by},
           ${this.escapeSQLValue(this.formatDateTimeForSQL(r.change_date))},
-          ${this.escapeSQLValue(this.formatDateTimeForSQL(r.date_from))},
+          ${this.escapeSQLValue(this.formatDateForPK(r.date_from))},
           ${this.escapeSQLValue(this.formatDateTimeForSQL(r.date_to))}
         )`;
       })
@@ -1258,5 +1256,32 @@ export class TurnusiSyncService {
     const minutes = String(d.getMinutes()).padStart(2, '0');
     const seconds = String(d.getSeconds()).padStart(2, '0');
     return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  }
+
+  /**
+   * Formatira datum za polja koja su deo Primary Key-a
+   * VAŽNO: Uvek postavlja vreme na 00:00:00 i koristi UTC da izbegne timezone probleme
+   * Ovo garantuje konzistentnost kod composite PK-ova (npr. turnus_groups_assign)
+   */
+  private formatDateForPK(date: any): string {
+    if (!date) return '2023-11-01 00:00:00';
+
+    // Ako je string sa '0000-00-00', koristi default
+    if (typeof date === 'string' && date.startsWith('0000-00-00')) {
+      return '2023-11-01 00:00:00';
+    }
+
+    const d = new Date(date);
+    if (isNaN(d.getTime()) || d.getFullYear() < 1900) {
+      return '2023-11-01 00:00:00';
+    }
+
+    // Koristiti UTC da izbegnemo timezone probleme
+    const year = d.getUTCFullYear();
+    const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+
+    // Uvek 00:00:00 za konzistentnost PK-a
+    return `${year}-${month}-${day} 00:00:00`;
   }
 }
