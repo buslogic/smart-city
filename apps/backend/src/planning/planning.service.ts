@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, MessageEvent, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, MessageEvent, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateScheduleDto } from './dto/create-schedule.dto';
@@ -9,12 +9,16 @@ import {
 import { GetDriversAvailabilityDto } from './dto/get-drivers-availability.dto';
 import { DriverReportDto } from './dto/monthly-driver-report.dto';
 import { Observable } from 'rxjs';
+import { LinkedTurnusiService } from '../linked-turnusi/linked-turnusi.service';
 
 @Injectable()
 export class PlanningService {
   private readonly logger = new Logger(PlanningService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private linkedTurnusiService: LinkedTurnusiService,
+  ) {}
 
   /**
    * Dobavi sve linije za dropdown
@@ -412,7 +416,78 @@ export class PlanningService {
   /**
    * Kreiraj novi raspored - upisuje SVE polaske za turnus/smenu u date_travel_order
    */
-  async createSchedule(dto: CreateScheduleDto, userId: number) {
+  async createSchedule(dto: CreateScheduleDto, userId: number, skipLinkedCheck = false) {
+    // 🔗 PROVERA LINKED TURNUSA (samo ako nije rekurzivni poziv)
+    if (!skipLinkedCheck) {
+      const turnusInfo = await this.prisma.changesCodesTours.findFirst({
+        where: { turnusId: dto.turnusId },
+        select: { turnusName: true },
+      });
+
+      if (turnusInfo) {
+        const linkedInfo = await this.getLinkedTurnusInfo(
+          dto.lineNumber,
+          turnusInfo.turnusName,
+          dto.shiftNumber,
+          dto.date,
+        );
+
+        if (linkedInfo.hasLink && linkedInfo.linkedTurnus && linkedInfo.chronologicalOrder) {
+          // Proveri da li linked turnus već ima raspored
+          const existingSchedules = await this.getSchedulesByDate(dto.date);
+          const linkedSchedule = existingSchedules.find(
+            (s) =>
+              s.turnusName === linkedInfo.linkedTurnus!.turnusName &&
+              s.lineNumber === linkedInfo.linkedTurnus!.lineNumber &&
+              s.shiftNumber === linkedInfo.linkedTurnus!.shiftNumber,
+          );
+
+          // Ako linked turnus već ima raspored sa DRUGIM vozačem - blokiraj
+          if (linkedSchedule && linkedSchedule.driverId !== dto.driverId) {
+            throw new ConflictException(
+              `Linked turnus ${linkedInfo.linkedTurnus.turnusName} je već isplaniran za vozača ${linkedSchedule.driverName}. ` +
+                `Moguće je isplanirati oba turnusa samo sa istim vozačem.`,
+            );
+          }
+
+          // Ako linked turnus još nije isplaniran, kreiraj oba u hronološkom redosledu
+          if (!linkedSchedule) {
+            const firstTurnus = linkedInfo.chronologicalOrder.first;
+            const secondTurnus = linkedInfo.chronologicalOrder.second;
+
+            // Kreiraj prvi turnus
+            const firstDto: CreateScheduleDto = {
+              date: dto.date,
+              lineNumber: firstTurnus.lineNumber,
+              turnusId: firstTurnus.turnusId,
+              shiftNumber: firstTurnus.shiftNumber,
+              driverId: dto.driverId,
+            };
+
+            // Kreiraj drugi turnus
+            const secondDto: CreateScheduleDto = {
+              date: dto.date,
+              lineNumber: secondTurnus.lineNumber,
+              turnusId: secondTurnus.turnusId,
+              shiftNumber: secondTurnus.shiftNumber,
+              driverId: dto.driverId,
+            };
+
+            // Pozovi createSchedule za oba turnusa (sa skipLinkedCheck = true da se spreči rekurzija)
+            const firstResult = await this.createSchedule(firstDto, userId, true);
+            const secondResult = await this.createSchedule(secondDto, userId, true);
+
+            // Vrati kombinovani rezultat
+            return {
+              ...firstResult,
+              linkedTurnus: secondResult,
+              message: `Uspešno kreirani linked turnusi: ${firstTurnus.turnusName} i ${secondTurnus.turnusName}`,
+            };
+          }
+        }
+      }
+    }
+
     // Dobavi dodatne informacije za popunjavanje date_travel_order
     const line = await this.prisma.line.findFirst({
       where: { lineNumberForDisplay: dto.lineNumber },
@@ -424,7 +499,7 @@ export class PlanningService {
 
     // Prvo pronađi ime turnusa po turnusId
     const turnusInfo = await this.prisma.changesCodesTours.findFirst({
-      where: { turnusId: dto.turnusId },
+      where: { turnusId: Number(dto.turnusId) }, // Konvertuj BigInt u Number za Prisma
       select: { turnusName: true },
     });
 
@@ -2284,6 +2359,202 @@ export class PlanningService {
 
     // Sortiraj i vrati kao string "67" (bez razmaka ili zareza)
     return freeDaysISO.sort((a, b) => a - b).join('');
+  }
+
+  /**
+   * Dobavi informacije o linkovanom turnusu
+   * Proverava da li odabrani turnus ima linkovan par i vraća informacije o njima u hronološkom redosledu
+   */
+  async getLinkedTurnusInfo(
+    lineNumber: string,
+    turnusName: string,
+    shiftNumber: number,
+    date: string,
+  ) {
+    // 1. Dobavi sve linked turnuse za odabranu liniju
+    const linkedTurnusi = await this.linkedTurnusiService.findAll({
+      lineNumber,
+      status: 'ACTIVE',
+    });
+
+    // 2. Pronađi da li odabrani turnus ima linked par (u bilo kom smeru)
+    // VAŽNO: Provera uključuje i shiftNumber!
+    const linkedPair = linkedTurnusi.find(
+      (link) =>
+        (link.lineNumber1 === lineNumber &&
+         link.turnusName1 === turnusName &&
+         link.shiftNumber1 === shiftNumber) ||
+        (link.lineNumber2 === lineNumber &&
+         link.turnusName2 === turnusName &&
+         link.shiftNumber2 === shiftNumber),
+    );
+
+    if (!linkedPair) {
+      return {
+        hasLink: false,
+      };
+    }
+
+    // 3. Odredi koji je prvi a koji drugi turnus u linked paru
+    // VAŽNO: Provera uključuje i shiftNumber jer isti turnus može imati više linked parova sa različitim smenama!
+    const isTurnusFirst =
+      linkedPair.lineNumber1 === lineNumber &&
+      linkedPair.turnusName1 === turnusName &&
+      linkedPair.shiftNumber1 === shiftNumber;
+
+    const selectedTurnusInfo = {
+      lineNumber: isTurnusFirst
+        ? linkedPair.lineNumber1
+        : linkedPair.lineNumber2,
+      turnusId: isTurnusFirst ? linkedPair.turnusId1 : linkedPair.turnusId2,
+      turnusName: isTurnusFirst
+        ? linkedPair.turnusName1
+        : linkedPair.turnusName2,
+      shiftNumber: isTurnusFirst ? linkedPair.shiftNumber1 : linkedPair.shiftNumber2,
+    };
+
+    const linkedTurnusInfo = {
+      lineNumber: isTurnusFirst
+        ? linkedPair.lineNumber2
+        : linkedPair.lineNumber1,
+      turnusId: isTurnusFirst ? linkedPair.turnusId2 : linkedPair.turnusId1,
+      turnusName: isTurnusFirst
+        ? linkedPair.turnusName2
+        : linkedPair.turnusName1,
+      shiftNumber: isTurnusFirst ? linkedPair.shiftNumber2 : linkedPair.shiftNumber1,
+    };
+
+    // 4. Dobavi start_time za oba turnusa iz changes_codes_tours
+    const dayName = this.getDayNameFromDate(date);
+
+    // VAŽNO: Linija može imati više varijanti (smerova), moramo uzeti SVE line_number vrednosti!
+    const lines1 = await this.prisma.line.findMany({
+      where: { lineNumberForDisplay: selectedTurnusInfo.lineNumber },
+      select: { lineNumber: true },
+    });
+    const lineNumbers1 = lines1.map(l => l.lineNumber);
+
+    const lines2 = await this.prisma.line.findMany({
+      where: { lineNumberForDisplay: linkedTurnusInfo.lineNumber },
+      select: { lineNumber: true },
+    });
+    const lineNumbers2 = lines2.map(l => l.lineNumber);
+
+    if (lineNumbers1.length === 0 || lineNumbers2.length === 0) {
+      return {
+        hasLink: false,
+      };
+    }
+
+    // Query za prvi turnus - koristi SVE varijante linije
+    const turnus1StartTime = await this.prisma.$queryRaw<
+      Array<{
+        start_time: Date;
+        turnus_id: number;
+        turnus_name: string;
+      }>
+    >`
+      SELECT cct.start_time, cct.turnus_id, cct.turnus_name
+      FROM changes_codes_tours cct
+      INNER JOIN turnus_days td ON cct.turnus_id = td.turnus_id
+      WHERE cct.line_no IN (${Prisma.join(lineNumbers1)})
+        AND cct.turnus_name = ${selectedTurnusInfo.turnusName}
+        AND cct.shift_number = ${selectedTurnusInfo.shiftNumber}
+        AND td.dayname = ${dayName}
+      ORDER BY cct.start_time ASC
+      LIMIT 1
+    `;
+
+    // Query za drugi turnus - koristi SVE varijante linije
+    const turnus2StartTime = await this.prisma.$queryRaw<
+      Array<{
+        start_time: Date;
+        turnus_id: number;
+        turnus_name: string;
+      }>
+    >`
+      SELECT cct.start_time, cct.turnus_id, cct.turnus_name
+      FROM changes_codes_tours cct
+      INNER JOIN turnus_days td ON cct.turnus_id = td.turnus_id
+      WHERE cct.line_no IN (${Prisma.join(lineNumbers2)})
+        AND cct.turnus_name = ${linkedTurnusInfo.turnusName}
+        AND cct.shift_number = ${linkedTurnusInfo.shiftNumber}
+        AND td.dayname = ${dayName}
+      ORDER BY cct.start_time ASC
+      LIMIT 1
+    `;
+
+    if (turnus1StartTime.length === 0 || turnus2StartTime.length === 0) {
+      return {
+        hasLink: false,
+      };
+    }
+
+    // 5. Sortiraj hronološki po start_time (ne po redosledu u turnus_linked tabeli!)
+    const turnusA = {
+      lineNumber: selectedTurnusInfo.lineNumber,
+      turnusId: Number(turnus1StartTime[0].turnus_id), // Konvertuj BigInt u Number
+      turnusName: turnus1StartTime[0].turnus_name,
+      shiftNumber: selectedTurnusInfo.shiftNumber,
+      startTime: turnus1StartTime[0].start_time,
+    };
+
+    const turnusB = {
+      lineNumber: linkedTurnusInfo.lineNumber,
+      turnusId: Number(turnus2StartTime[0].turnus_id), // Konvertuj BigInt u Number
+      turnusName: turnus2StartTime[0].turnus_name,
+      shiftNumber: linkedTurnusInfo.shiftNumber,
+      startTime: turnus2StartTime[0].start_time,
+    };
+
+    // Sort hronološki
+    const sortedTurnusi =
+      turnusA.startTime <= turnusB.startTime
+        ? [turnusA, turnusB]
+        : [turnusB, turnusA];
+
+    // 6. Odredi koji je selected a koji linked
+    const isSelectedFirst = sortedTurnusi[0].turnusName === turnusName;
+
+    // Helper funkcija za formatiranje vremena
+    const formatTime = (timeValue: Date | null) => {
+      if (!timeValue) return '';
+      const hours = String(timeValue.getUTCHours()).padStart(2, '0');
+      const minutes = String(timeValue.getUTCMinutes()).padStart(2, '0');
+      return `${hours}:${minutes}`;
+    };
+
+    return {
+      hasLink: true,
+      linkedTurnus: {
+        lineNumber: linkedTurnusInfo.lineNumber,
+        turnusId: Number(linkedTurnusInfo.turnusId), // Konvertuj BigInt u Number
+        turnusName: linkedTurnusInfo.turnusName,
+        shiftNumber: linkedTurnusInfo.shiftNumber,
+        startTime: formatTime(
+          isSelectedFirst
+            ? sortedTurnusi[1].startTime
+            : sortedTurnusi[0].startTime,
+        ),
+      },
+      chronologicalOrder: {
+        first: {
+          lineNumber: sortedTurnusi[0].lineNumber,
+          turnusId: Number(sortedTurnusi[0].turnusId), // Konvertuj BigInt u Number
+          turnusName: sortedTurnusi[0].turnusName,
+          shiftNumber: sortedTurnusi[0].shiftNumber,
+          startTime: formatTime(sortedTurnusi[0].startTime),
+        },
+        second: {
+          lineNumber: sortedTurnusi[1].lineNumber,
+          turnusId: Number(sortedTurnusi[1].turnusId), // Konvertuj BigInt u Number
+          turnusName: sortedTurnusi[1].turnusName,
+          shiftNumber: sortedTurnusi[1].shiftNumber,
+          startTime: formatTime(sortedTurnusi[1].startTime),
+        },
+      },
+      isSelectedFirst,
+    };
   }
 
   /**
