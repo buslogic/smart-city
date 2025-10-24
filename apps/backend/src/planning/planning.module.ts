@@ -4,10 +4,12 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PlanningController } from './planning.controller';
 import { PlanningService } from './planning.service';
 import { PrismaModule } from '../prisma/prisma.module';
+import { LinkedTurnusiModule } from '../linked-turnusi/linked-turnusi.module';
 
 @Module({
   imports: [
     PrismaModule,
+    LinkedTurnusiModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
