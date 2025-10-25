@@ -149,6 +149,94 @@ export class TurnusiController {
     return this.turnusiService.getLastIncompleteSyncForGroup(parseInt(groupId));
   }
 
+
+  // ========== CITY SERVER ENDPOINTS (READ-ONLY) ==========
+
+  @Get('city/groups')
+  @ApiOperation({
+    summary: 'Grupe turnusa sa Tiketing servera (legacy)',
+  })
+  @ApiResponse({ status: 200, description: 'Lista grupa turnusa' })
+  @RequirePermissions('transport.administration.turnusi.city:view')
+  getAllGroupsCity() {
+    return this.turnusiService.getAllGroupsCity();
+  }
+
+  @Get('city/changes-codes')
+  @ApiOperation({
+    summary: 'Changes codes tours sa Tiketing servera (legacy)',
+  })
+  @ApiResponse({ status: 200, description: 'Lista changes codes tours' })
+  @ApiQuery({ name: 'groupId', required: false, type: Number })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @RequirePermissions('transport.administration.turnusi.city:view')
+  getAllChangesCodesCity(@Query() query: QueryChangesCodeToursDto) {
+    return this.turnusiService.getAllChangesCodesCity(
+      query.groupName ? parseInt(query.groupName) : undefined,
+      query.page,
+      query.limit,
+    );
+  }
+
+  @Post('sync-city')
+  @ApiOperation({
+    summary:
+      'Sinhronizacija Changes Codes Tours sa Tiketing servera (sa resume capability)',
+    description:
+      'Automatski detektuje nedovršene sync-ove i pokreće novi. UPSERT pristup osigurava konzistentnost podataka.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Sinhronizacija uspešno završena',
+    schema: {
+      type: 'object',
+      properties: {
+        upserted: { type: 'number' },
+        skipped: { type: 'number' },
+        errors: { type: 'number' },
+        totalProcessed: { type: 'number' },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Legacy baza nije pronađena' })
+  @RequirePermissions('transport.administration.turnusi.city:sync')
+  async syncFromCity(
+    @Body() dto: SyncChangesCodesToursDto,
+    @Req() req: Request,
+  ) {
+    const userId = (req.user as any)?.id || 1;
+    return this.turnusiService.resumeOrStartSyncCity(dto.groupId, userId);
+  }
+
+  @Post('sync-city-async')
+  @ApiOperation({
+    summary:
+      'Pokreće sinhronizaciju asinhrono i vraća syncId odmah za real-time praćenje',
+    description:
+      'Sync se izvršava u pozadini. Koristi vraćeni syncId za praćenje progresa preko /sync-status/:syncId endpoint-a.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Sync pokrenut, vraćen syncId',
+    schema: {
+      type: 'object',
+      properties: {
+        syncId: { type: 'string' },
+        message: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Legacy baza nije pronađena' })
+  @RequirePermissions('transport.administration.turnusi.city:sync')
+  async syncFromCityAsync(
+    @Body() dto: SyncChangesCodesToursDto,
+    @Req() req: Request,
+  ) {
+    const userId = (req.user as any)?.id || 1;
+    return this.turnusiService.startSyncCityAsync(dto.groupId, userId);
+  }
+
   // ========== GLAVNI SERVER ENDPOINTS (NAŠA BAZA) ==========
 
   @Get('main/changes-codes')

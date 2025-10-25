@@ -164,6 +164,47 @@ class TurnusiService {
     return response.data;
   }
 
+  // ========== CITY SERVER (READ-ONLY) ==========
+
+  async getAllGroupsCity(): Promise<TurnusGroup[]> {
+    const response = await api.get('/api/turnusi/city/groups');
+    return response.data;
+  }
+
+  async getAllChangesCodesCity(
+    groupId?: number,
+    page = 1,
+    limit = 50,
+  ): Promise<PaginatedResponse<ChangesCodeTour>> {
+    const params: any = { page, limit };
+    if (groupId) {
+      params.groupId = groupId;
+    }
+    const response = await api.get('/api/turnusi/city/changes-codes', {
+      params,
+    });
+    return response.data;
+  }
+
+  async syncFromCity(groupId: number): Promise<SyncResultDetail> {
+    const response = await api.post('/api/turnusi/sync-city', {
+      groupId,
+    });
+    return response.data;
+  }
+
+  /**
+   * Start sync asynchronously and get syncId immediately for real-time tracking
+   */
+  async syncFromCityAsync(
+    groupId: number,
+  ): Promise<{ syncId: string; message: string }> {
+    const response = await api.post('/api/turnusi/sync-city-async', {
+      groupId,
+    });
+    return response.data;
+  }
+
   // ========== GLAVNI SERVER (NAŠA BAZA) ==========
 
   async getAllChangesCodesMain(

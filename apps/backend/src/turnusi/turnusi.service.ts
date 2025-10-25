@@ -169,6 +169,121 @@ export class TurnusiService {
     }
   }
 
+  // ========== CITY SERVER (LEGACY BAZA) ==========
+
+  async getAllGroupsCity() {
+    try {
+      const legacyDb = await this.prisma.legacyDatabase.findFirst({
+        where: { subtype: 'city_ticketing_database' },
+      });
+
+      if (!legacyDb) {
+        throw new NotFoundException(
+          'Legacy baza "Gradska Ticketing Baza" nije pronađena',
+        );
+      }
+
+      const decryptedPassword =
+        this.legacyDatabasesService.decryptPassword(legacyDb.password);
+
+      const connection = await createConnection({
+        host: legacyDb.host,
+        port: legacyDb.port,
+        user: legacyDb.username,
+        password: decryptedPassword,
+        database: legacyDb.database,
+      });
+
+      try {
+        const [rows] = await connection.execute(
+          'SELECT * FROM turnus_groups_names ORDER BY id ASC',
+        );
+        return rows;
+      } finally {
+        await connection.end();
+      }
+    } catch (error) {
+      console.error('Greška pri učitavanju grupa turnusa sa City servera:', error);
+      throw new InternalServerErrorException(
+        `Greška pri konektovanju na City legacy bazu: ${error.message}`,
+      );
+    }
+  }
+
+  async getAllChangesCodesCity(groupId?: number, page = 1, limit = 50) {
+    try {
+      const legacyDb = await this.prisma.legacyDatabase.findFirst({
+        where: { subtype: 'city_ticketing_database' },
+      });
+
+      if (!legacyDb) {
+        throw new NotFoundException(
+          'Legacy baza "Gradska Ticketing Baza" nije pronađena',
+        );
+      }
+
+      const decryptedPassword =
+        this.legacyDatabasesService.decryptPassword(legacyDb.password);
+
+      const connection = await createConnection({
+        host: legacyDb.host,
+        port: legacyDb.port,
+        user: legacyDb.username,
+        password: decryptedPassword,
+        database: legacyDb.database,
+      });
+
+      try {
+        const offset = (page - 1) * limit;
+
+        // Prvo dohvatimo turnus_name iz turnus_groups_assign za odabranu grupu
+        let query = `SELECT cct.* FROM changes_codes_tours cct`;
+        const params: any[] = [];
+
+        if (groupId) {
+          query += `
+            INNER JOIN turnus_groups_assign tga
+              ON cct.turnus_name = (SELECT DISTINCT turnus_name
+                                    FROM changes_codes_tours
+                                    WHERE turnus_id = tga.turnus_id
+                                    LIMIT 1)
+            WHERE tga.group_id = ?`;
+          params.push(groupId);
+        }
+
+        // Get total count
+        const countQuery = query.replace(
+          'SELECT cct.*',
+          'SELECT COUNT(*) as total',
+        );
+        const [countRows] = await connection.execute(countQuery, params);
+        const total = (countRows as any)[0].total;
+
+        // Get paginated data
+        const dataQuery = `${query} ORDER BY cct.turnus_id ASC, cct.start_time ASC LIMIT ? OFFSET ?`;
+        const [rows] = await connection.execute(dataQuery, [
+          ...params,
+          limit,
+          offset,
+        ]);
+
+        return {
+          data: rows,
+          total,
+          page,
+          limit,
+        };
+      } finally {
+        await connection.end();
+      }
+    } catch (error) {
+      console.error('Greška pri učitavanju changes_codes_tours sa City servera:', error);
+      throw new InternalServerErrorException(
+        `Greška pri konektovanju na City legacy bazu: ${error.message}`,
+      );
+    }
+  }
+
   // ========== LOCAL DATABASE METHODS ==========
 
   async getTurnusiByLineNumber(lineNumber: string) {
@@ -607,6 +722,205 @@ export class TurnusiService {
       if (!legacyDb) {
         throw new NotFoundException(
           'Legacy baza "Glavna Ticketing Baza" nije pronađena',
+        );
+      }
+
+      const decryptedPassword =
+        this.legacyDatabasesService.decryptPassword(legacyDb.password);
+
+      const connection = await createConnection({
+        host: legacyDb.host,
+        port: legacyDb.port,
+        user: legacyDb.username,
+        password: decryptedPassword,
+        database: legacyDb.database,
+      });
+
+      try {
+        const [tables] = await connection.execute(
+          "SHOW TABLES LIKE 'changes_codes_tours'",
+        );
+
+        if ((tables as any[]).length === 0) {
+          console.warn(
+            '⚠️ Tabela "changes_codes_tours" ne postoji u legacy bazi',
+          );
+          return { upserted: 0, skipped: 0, errors: 0, totalProcessed: 0 };
+        }
+
+        // Dobij sve turnus_name vrednosti za odabranu grupu
+        const [groupAssignments] = await connection.execute(
+          `SELECT DISTINCT turnus_name
+           FROM changes_codes_tours cct
+           INNER JOIN turnus_groups_assign tga ON cct.turnus_id = tga.turnus_id
+           WHERE tga.group_id = ?`,
+          [groupId],
+        );
+
+        const turnusNames = (groupAssignments as any[]).map(
+          (r) => r.turnus_name,
+        );
+
+        if (turnusNames.length === 0) {
+          console.warn(
+            `⚠️ Nema turnusa za grupu ${groupId} u changes_codes_tours`,
+          );
+          return { upserted: 0, skipped: 0, errors: 0, totalProcessed: 0 };
+        }
+
+        console.log(
+          `📋 Found ${turnusNames.length} distinct turnus_name(s) for group ${groupId}`,
+        );
+
+        // UPSERT pristup - ne brišemo postojeće podatke, nego ažuriramo
+        console.log('🔄 Starting UPSERT sync (safe sync without data loss)...');
+
+        // SELECT podataka iz legacy baze
+        const placeholders = turnusNames.map(() => '?').join(',');
+        const query = `SELECT * FROM changes_codes_tours WHERE turnus_name IN (${placeholders}) ORDER BY turnus_id ASC`;
+        const [rows] = await connection.execute(query, turnusNames);
+
+        legacyRecords = rows as any[]; // Assign to outer variable
+        totalProcessed = legacyRecords.length;
+
+        console.log(`📊 Found ${totalProcessed} changes_codes_tours record(s)`);
+
+      } finally {
+        // FIX #1: Zatvori Legacy konekciju ODMAH nakon SELECT-a
+        // Legacy konekcija se više ne koristi - workeri koriste samo Prisma
+        await connection.end();
+        console.log('✅ Legacy MySQL connection closed after SELECT');
+      }
+
+      // Create sync log entry for progress tracking
+      syncId = await this.createSyncLog(groupId, userId, totalProcessed);
+
+      if (legacyRecords.length === 0) {
+        console.warn(
+          `⚠️ Nema podataka u tabeli changes_codes_tours za odabranu grupu`,
+        );
+
+        // Mark sync as completed even though there are no records
+        if (syncId) {
+          await this.updateSyncProgress(syncId, {
+            status: 'completed',
+            processedRecords: 0,
+            upsertedRecords: 0,
+          });
+        }
+
+        const totalDuration = ((Date.now() - overallStartTime) / 1000).toFixed(
+          2,
+        );
+        return {
+          upserted: 0,
+          skipped: 0,
+          errors: 0,
+          totalProcessed: 0,
+        };
+      }
+
+      // FIX #22: Konzervativni batch size za stabilnost
+      // FIX #25: Session timeout override (DigitalOcean net_read_timeout=30s)
+      // FIX #27: Smanjen na 500 zbog MySQL replication hook error (Code 3100)
+      // FIX #28: Dodat delay 200ms da MySQL stigne da commit-uje (replication lag)
+      const NUM_WORKERS = 1; // Single worker = jedna Prisma konekcija
+      const BATCH_SIZE = 500; // 500 rekorda = ~50KB SQL
+      const BATCH_DELAY_MS = 200; // 200ms delay između batch-eva za replication
+
+        const chunkSize = Math.ceil(legacyRecords.length / NUM_WORKERS);
+        console.log(`🚀 Starting ${NUM_WORKERS} parallel workers, ${chunkSize} records per worker`);
+
+        // Create worker promises
+        const workerPromises = Array.from({ length: NUM_WORKERS }, (_, workerIndex) => {
+          const start = workerIndex * chunkSize;
+          const end = Math.min(start + chunkSize, legacyRecords.length);
+          const workerRecords = legacyRecords.slice(start, end);
+
+          if (workerRecords.length === 0) return Promise.resolve({ inserted: 0, errors: 0 });
+
+          return this.parallelInsertWorker(
+            workerRecords,
+            workerIndex + 1,
+            BATCH_SIZE,
+            BATCH_DELAY_MS, // Prosleđujemo delay
+            totalProcessed,
+            syncId // Prosleđujemo syncId za progress tracking
+          );
+        });
+
+        // Wait for all workers to complete
+        const workerResults = await Promise.all(workerPromises);
+
+        // Aggregate results
+        workerResults.forEach(result => {
+          upserted += result.inserted; // Changed: created → upserted
+          errors += result.errors;
+        });
+
+      console.log(`✅ All ${NUM_WORKERS} workers completed successfully`);
+
+      // Mark sync as completed
+      if (syncId) {
+        await this.updateSyncProgress(syncId, {
+          status: 'completed',
+          processedRecords: totalProcessed,
+          upsertedRecords: upserted,
+          errorRecords: errors,
+        });
+      }
+
+      const totalDuration = ((Date.now() - overallStartTime) / 1000).toFixed(2);
+      console.log(
+        `✅ Changes_codes_tours sync completed in ${totalDuration}s`,
+      );
+      console.log(
+        `   Upserted: ${upserted}, Skipped: ${skipped}, Errors: ${errors}`,
+      );
+
+      return { upserted, skipped, errors, totalProcessed };
+    } catch (error) {
+      console.error('❌ Changes_codes_tours sync failed:', error);
+
+      // Mark sync as failed
+      if (syncId) {
+        await this.updateSyncProgress(syncId, {
+          status: 'failed',
+          errorMessage: error.message,
+          errorRecords: errors,
+        });
+      }
+
+      throw new InternalServerErrorException(
+        `Greška pri sinhronizaciji changes_codes_tours: ${error.message}`,
+      );
+    }
+  }
+
+  async syncChangesCodesFromCity(
+    groupId: number,
+    userId: number,
+  ): Promise<SyncResult> {
+    console.log(
+      `🔄 Starting City Server sync for changes_codes_tours (group_id=${groupId})...`,
+    );
+    const overallStartTime = Date.now();
+
+    let upserted = 0; // Created + Updated rekorda
+    let skipped = 0;
+    let errors = 0;
+    let totalProcessed = 0;
+    let syncId: string | null = null;
+    let legacyRecords: any[] = []; // Declare outside try block
+
+    try {
+      const legacyDb = await this.prisma.legacyDatabase.findFirst({
+        where: { subtype: 'city_ticketing_database' },
+      });
+
+      if (!legacyDb) {
+        throw new NotFoundException(
+          'Legacy baza "Gradska Ticketing Baza" nije pronađena',
         );
       }
 
@@ -1414,6 +1728,297 @@ export class TurnusiService {
       if (!legacyDb) {
         throw new NotFoundException(
           'Legacy baza "Glavna Ticketing Baza" nije pronađena',
+        );
+      }
+
+      const decryptedPassword =
+        this.legacyDatabasesService.decryptPassword(legacyDb.password);
+
+      const connection = await createConnection({
+        host: legacyDb.host,
+        port: legacyDb.port,
+        user: legacyDb.username,
+        password: decryptedPassword,
+        database: legacyDb.database,
+      });
+
+      try {
+        const [tables] = await connection.execute(
+          "SHOW TABLES LIKE 'changes_codes_tours'",
+        );
+
+        if ((tables as any[]).length === 0) {
+          console.warn(
+            '⚠️ Tabela "changes_codes_tours" ne postoji u legacy bazi',
+          );
+          await this.updateSyncProgress(syncId, {
+            status: 'completed',
+            processedRecords: 0,
+            upsertedRecords: 0,
+          });
+          return { upserted: 0, skipped: 0, errors: 0, totalProcessed: 0 };
+        }
+
+        // Dobij sve turnus_name vrednosti za odabranu grupu
+        const [groupAssignments] = await connection.execute(
+          `SELECT DISTINCT turnus_name
+           FROM changes_codes_tours cct
+           INNER JOIN turnus_groups_assign tga ON cct.turnus_id = tga.turnus_id
+           WHERE tga.group_id = ?`,
+          [groupId],
+        );
+
+        const turnusNames = (groupAssignments as any[]).map(
+          (r) => r.turnus_name,
+        );
+
+        if (turnusNames.length === 0) {
+          console.warn(
+            `⚠️ Nema turnusa za grupu ${groupId} u changes_codes_tours`,
+          );
+          await this.updateSyncProgress(syncId, {
+            status: 'completed',
+            processedRecords: 0,
+            upsertedRecords: 0,
+          });
+          return { upserted: 0, skipped: 0, errors: 0, totalProcessed: 0 };
+        }
+
+        console.log(
+          `📋 Found ${turnusNames.length} distinct turnus_name(s) for group ${groupId}`,
+        );
+
+        console.log('🔄 Starting UPSERT sync (safe sync without data loss)...');
+
+        // SELECT podataka iz legacy baze
+        const placeholders = turnusNames.map(() => '?').join(',');
+        const query = `SELECT * FROM changes_codes_tours WHERE turnus_name IN (${placeholders}) ORDER BY turnus_id ASC`;
+        const [rows] = await connection.execute(query, turnusNames);
+
+        legacyRecords = rows as any[]; // Assign to outer variable
+        totalProcessed = legacyRecords.length;
+
+        console.log(`📊 Found ${totalProcessed} changes_codes_tours record(s)`);
+
+      } finally {
+        // FIX #1: Zatvori Legacy konekciju ODMAH nakon SELECT-a
+        // Legacy konekcija se više ne koristi - workeri koriste samo Prisma
+        await connection.end();
+        console.log('✅ Legacy MySQL connection closed after SELECT');
+      }
+
+      // Update sync log with totalRecords now that we know it
+      await this.updateSyncProgress(syncId, {
+        totalRecords: totalProcessed,
+      });
+
+      if (legacyRecords.length === 0) {
+        console.warn(
+          `⚠️ Nema podataka u tabeli changes_codes_tours za odabranu grupu`,
+        );
+        await this.updateSyncProgress(syncId, {
+          status: 'completed',
+          processedRecords: 0,
+          upsertedRecords: 0,
+        });
+        return {
+          upserted: 0,
+          skipped: 0,
+          errors: 0,
+          totalProcessed: 0,
+        };
+      }
+
+      // FIX #22: Konzervativni batch size za stabilnost
+      // FIX #25: Session timeout override (DigitalOcean net_read_timeout=30s)
+      // FIX #27: Smanjen na 500 zbog MySQL replication hook error (Code 3100)
+      // FIX #28: Dodat delay 200ms da MySQL stigne da commit-uje (replication lag)
+      const NUM_WORKERS = 1; // Single worker = jedna Prisma konekcija
+      const BATCH_SIZE = 500; // 500 rekorda = ~50KB SQL
+      const BATCH_DELAY_MS = 200; // 200ms delay između batch-eva za replication
+
+        const chunkSize = Math.ceil(legacyRecords.length / NUM_WORKERS);
+        console.log(`🚀 Starting ${NUM_WORKERS} parallel workers, ${chunkSize} records per worker`);
+
+        // Create worker promises
+        const workerPromises = Array.from({ length: NUM_WORKERS }, (_, workerIndex) => {
+          const start = workerIndex * chunkSize;
+          const end = Math.min(start + chunkSize, legacyRecords.length);
+          const workerRecords = legacyRecords.slice(start, end);
+
+          if (workerRecords.length === 0) return Promise.resolve({ inserted: 0, errors: 0 });
+
+          return this.parallelInsertWorker(
+            workerRecords,
+            workerIndex + 1,
+            BATCH_SIZE,
+            BATCH_DELAY_MS,
+            totalProcessed,
+            syncId,
+          );
+        });
+
+        // Wait for all workers to complete
+        const workerResults = await Promise.all(workerPromises);
+
+        // Aggregate results
+        workerResults.forEach(result => {
+          upserted += result.inserted;
+          errors += result.errors;
+        });
+
+      console.log(`✅ All ${NUM_WORKERS} workers completed successfully`);
+
+      // Mark sync as completed
+      await this.updateSyncProgress(syncId, {
+        status: 'completed',
+        processedRecords: totalProcessed,
+        upsertedRecords: upserted,
+        errorRecords: errors,
+      });
+
+      const totalDuration = ((Date.now() - overallStartTime) / 1000).toFixed(2);
+      console.log(
+        `✅ Changes_codes_tours sync completed in ${totalDuration}s`,
+      );
+      console.log(
+        `   Upserted: ${upserted}, Skipped: ${skipped}, Errors: ${errors}`,
+      );
+
+      return { upserted, skipped, errors, totalProcessed };
+    } catch (error) {
+      console.error('❌ Changes_codes_tours sync failed:', error);
+
+      // Mark sync as failed
+      await this.updateSyncProgress(syncId, {
+        status: 'failed',
+        errorMessage: error.message,
+        errorRecords: errors,
+      });
+
+      throw new InternalServerErrorException(
+        `Greška pri sinhronizaciji changes_codes_tours: ${error.message}`,
+      );
+    }
+  }
+
+  async resumeOrStartSyncCity(groupId: number, userId: number): Promise<SyncResult> {
+    // Check for incomplete sync
+    const incompleteSync = await this.getLastIncompleteSyncForGroup(groupId);
+
+    if (incompleteSync) {
+      console.log(`⚠️ Found incomplete sync: ${incompleteSync.syncId}`);
+      console.log(`   Started: ${incompleteSync.startedAt}`);
+      console.log(
+        `   Progress: ${incompleteSync.processedRecords}/${incompleteSync.totalRecords} (${Math.round((incompleteSync.processedRecords / incompleteSync.totalRecords) * 100)}%)`,
+      );
+
+      // Mark old sync as abandoned
+      await this.updateSyncProgress(incompleteSync.syncId, {
+        status: 'abandoned',
+        errorMessage: 'Sync was interrupted and a new sync was started',
+      });
+
+      console.log(`🔄 Starting new sync to replace abandoned one...`);
+      console.log(`   ✅ UPSERT approach ensures no data loss from interrupted sync`);
+    }
+
+    // Start fresh sync (UPSERT ensures data consistency - won't duplicate or lose data)
+    return await this.syncChangesCodesFromCity(groupId, userId);
+  }
+
+  /**
+   * Start sync asynchronously and return syncId immediately for real-time tracking
+   * Sync continues in background
+   */
+  async startSyncCityAsync(groupId: number, userId: number): Promise<SyncStartResponse> {
+    // Check for incomplete sync
+    const incompleteSync = await this.getLastIncompleteSyncForGroup(groupId);
+
+    if (incompleteSync) {
+      console.log(`⚠️ Found incomplete sync: ${incompleteSync.syncId}`);
+      console.log(`   Started: ${incompleteSync.startedAt}`);
+      console.log(
+        `   Progress: ${incompleteSync.processedRecords}/${incompleteSync.totalRecords} (${Math.round((incompleteSync.processedRecords / incompleteSync.totalRecords) * 100)}%)`,
+      );
+
+      // Mark old sync as abandoned
+      await this.updateSyncProgress(incompleteSync.syncId, {
+        status: 'abandoned',
+        errorMessage: 'Sync was interrupted and a new sync was started',
+      });
+
+      console.log(`🔄 Starting new sync to replace abandoned one...`);
+      console.log(`   ✅ UPSERT approach ensures no data loss from interrupted sync`);
+    }
+
+    // Create a temporary sync log to get syncId (we don't know totalRecords yet, will update in sync method)
+    const syncId = `sync_${groupId}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+    // FIX #6: Create initial sync log using raw SQL (totalRecords will be updated later when we know the count)
+    await this.prisma.$executeRawUnsafe(
+      `
+      INSERT INTO turnus_sync_logs (
+        sync_id, group_id, user_id, status, total_records,
+        processed_records, upserted_records, error_records,
+        last_processed_batch, started_at, updated_at
+      ) VALUES (?, ?, ?, 'in_progress', 0, 0, 0, 0, 0, NOW(), NOW())
+      `,
+      syncId,
+      groupId,
+      userId
+    );
+
+    // Start sync in background (don't await)
+    setImmediate(() => {
+      this.syncChangesCodesFromCityWithExistingLog(groupId, userId, syncId)
+        .then(() => {
+          console.log(`✅ Background sync completed for group ${groupId}`);
+        })
+        .catch((error) => {
+          console.error(`❌ Background sync failed for group ${groupId}:`, error);
+          // Mark sync as failed
+          this.updateSyncProgress(syncId, {
+            status: 'failed',
+            errorMessage: error.message,
+          }).catch(console.error);
+        });
+    });
+
+    return {
+      syncId,
+      message: `Sync started successfully for group ${groupId}. Use syncId to track progress.`,
+    };
+  }
+
+  /**
+   * Internal method - sync with existing log (used by startSyncCityAsync)
+   */
+  private async syncChangesCodesFromCityWithExistingLog(
+    groupId: number,
+    userId: number,
+    existingSyncId: string,
+  ): Promise<SyncResult> {
+    console.log(
+      `🔄 Starting City Server sync for changes_codes_tours (group_id=${groupId}) with existing syncId=${existingSyncId}...`,
+    );
+    const overallStartTime = Date.now();
+
+    let upserted = 0;
+    let skipped = 0;
+    let errors = 0;
+    let totalProcessed = 0;
+    const syncId = existingSyncId;
+    let legacyRecords: any[] = []; // Declare outside try block
+
+    try {
+      const legacyDb = await this.prisma.legacyDatabase.findFirst({
+        where: { subtype: 'city_ticketing_database' },
+      });
+
+      if (!legacyDb) {
+        throw new NotFoundException(
+          'Legacy baza "Gradska Ticketing Baza" nije pronađena',
         );
       }
 
