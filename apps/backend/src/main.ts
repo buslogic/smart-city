@@ -8,6 +8,12 @@ import { join } from 'path';
 import { SwaggerAuthMiddleware } from './common/middleware/swagger-auth.middleware';
 import { ApiKeysService } from './api-keys/api-keys.service';
 
+// BigInt serialization fix - convert BigInt to string in JSON responses
+// MySQL vraća BigInt vrednosti (npr. turnus_id) koje se moraju konvertovati za JSON
+(BigInt.prototype as any).toJSON = function () {
+  return this.toString();
+};
+
 // Bootstrap aplikacije - inicijalizacija NestJS servera
 // Fixed Prisma migrations: Added UNIQUE constraint before FK creation (2025-10-19)
 async function bootstrap() {
