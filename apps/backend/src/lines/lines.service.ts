@@ -391,14 +391,22 @@ export class LinesService {
 
   private async processLineSyncFromCity(legacyRecord: any) {
     const legacyId = BigInt(legacyRecord.id);
+    const mappedData = this.mapLegacyLine(legacyRecord);
 
-    const existingRecord = await this.prisma.line.findUnique({
+    // Prvo proveri da li postoji linija sa legacyCityId
+    let existingRecord = await this.prisma.line.findUnique({
       where: { legacyCityId: legacyId },
     });
 
-    const mappedData = this.mapLegacyLine(legacyRecord);
+    // Ako ne postoji sa legacyCityId, proveri po price_table_ident (UNIQUE)
+    if (!existingRecord && mappedData.priceTableIdent) {
+      existingRecord = await this.prisma.line.findUnique({
+        where: { priceTableIdent: mappedData.priceTableIdent },
+      });
+    }
 
     if (!existingRecord) {
+      // Kreiraj novu liniju
       await this.prisma.line.create({
         data: {
           ...mappedData,
@@ -408,6 +416,7 @@ export class LinesService {
 
       return { action: 'create' };
     } else {
+      // Ažuriraj postojeću liniju (dodaj legacyCityId ako ga nema)
       await this.prisma.line.update({
         where: { id: existingRecord.id },
         data: {
@@ -758,6 +767,72 @@ export class LinesService {
   }
 
   /**
+   * Sinhronizuj stanice sa Legacy City Servera
+   * Kreira tabelu price_lists_line_uids_YYYY_MM_DD ako ne postoji
+   * i sinhronizuje podatke sa legacy_city_database
+   */
+  async syncLineUidsFromCity(dateValidFrom: string): Promise<{
+    success: boolean;
+    tableName: string;
+    tableCreated: boolean;
+    totalRecords: number;
+    inserted: number;
+    duration: string;
+    message: string;
+  }> {
+    console.log(
+      `🔄 Starting Line UIDs sync from City Server for date: ${dateValidFrom}...`,
+    );
+    const startTime = Date.now();
+
+    // 1. Format table name (npr. "2023-09-01" -> "price_lists_line_uids_2023_09_01")
+    const tableName = `price_lists_line_uids_${dateValidFrom.replace(/-/g, '_')}`;
+
+    // 2. Proveri da li tabela postoji
+    const tableExists = await this.checkIfTableExists(tableName);
+    const tableCreated = !tableExists;
+
+    // 3. Ako ne postoji, kreiraj iz template-a
+    if (!tableExists) {
+      console.log(`📋 Table ${tableName} does not exist, creating from template...`);
+      await this.createTableFromTemplate(tableName);
+    } else {
+      console.log(`✅ Table ${tableName} already exists`);
+    }
+
+    // 4. Konektuj se na legacy City bazu
+    const legacyDb = await this.prisma.legacyDatabase.findFirst({
+      where: { subtype: 'city_ticketing_database' },
+    });
+
+    if (!legacyDb) {
+      throw new NotFoundException(
+        'Legacy baza "Gradska Ticketing Baza" nije pronađena',
+      );
+    }
+
+    // 5. Sinhronizuj podatke sa legacy City tabele u našu tabelu
+    const inserted = await this.syncDataFromLegacy(
+      tableName,
+      dateValidFrom,
+      legacyDb,
+    );
+
+    const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+    console.log(`✅ Line UIDs sync from City Server completed in ${duration}s`);
+
+    return {
+      success: true,
+      tableName,
+      tableCreated,
+      totalRecords: inserted,
+      inserted,
+      duration: `${duration}s`,
+      message: `${tableCreated ? 'Tabela kreirana i ' : ''}Sinhronizovano ${inserted} stanica sa City servera za grupu ${dateValidFrom}`,
+    };
+  }
+
+  /**
    * Proveri da li tabela postoji u bazi
    */
   private async checkIfTableExists(tableName: string): Promise<boolean> {
@@ -820,13 +895,13 @@ export class LinesService {
         return 0;
       }
 
-      // Najpre obriši postojeće podatke za ovu verziju cenovnika (ako postoje)
+      // Obriši sve postojeće podatke iz tabele (svaka tabela sadrži samo jednu verziju cenovnika)
+      // TRUNCATE je brži od DELETE i resetuje auto-increment
       await this.prisma.$executeRawUnsafe(
-        `DELETE FROM ${tableName} WHERE pricelist_version = ?`,
-        dateValidFrom,
+        `TRUNCATE TABLE ${tableName}`,
       );
 
-      console.log(`🗑️  Cleared existing data for pricelist version: ${dateValidFrom}`);
+      console.log(`🗑️  Cleared all data from ${tableName} (TRUNCATE)`);
 
       // Batch insert u našu tabelu
       const BATCH_SIZE = 100;

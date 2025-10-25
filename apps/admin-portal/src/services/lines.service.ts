@@ -291,6 +291,15 @@ class LinesService {
     return response.data;
   }
 
+  async syncLineUidsFromCity(
+    dateValidFrom: string,
+  ): Promise<LineUidsSyncResult> {
+    const response = await api.post(
+      `/api/lines/sync-line-uids-city/${dateValidFrom}`,
+    );
+    return response.data;
+  }
+
   // ========== GRADSKI SERVER (LEGACY) ==========
 
   async getAllCity(

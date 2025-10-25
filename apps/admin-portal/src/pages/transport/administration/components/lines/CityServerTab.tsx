@@ -27,6 +27,7 @@ const CityServerTab: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [groupsLoading, setGroupsLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [syncingLineUids, setSyncingLineUids] = useState(false);
   const [data, setData] = useState<any[]>([]);
   const [groups, setGroups] = useState<PriceListGroup[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<string | undefined>(undefined);
@@ -120,6 +121,49 @@ const CityServerTab: React.FC = () => {
     });
   };
 
+  const handleSyncLineUids = () => {
+    if (!selectedGroup) {
+      message.warning('Molimo odaberite grupu cenovnika pre sinhronizacije.');
+      return;
+    }
+
+    modal.confirm({
+      title: 'Potvrda sinhronizacije stanica na linijama',
+      icon: <ExclamationCircleOutlined />,
+      content: (
+        <div>
+          <p>
+            Da li ste sigurni da želite da pokrenete sinhronizaciju stanica na linijama za grupu:{' '}
+            <Text strong>{selectedGroup}</Text>?
+          </p>
+          <p>
+            <Text type="secondary">
+              Sistem će automatski kreirati tabelu ako ne postoji i sinhronizovati sve stanice sa City servera.
+            </Text>
+          </p>
+        </div>
+      ),
+      okText: 'Da, pokreni sinhronizaciju',
+      okType: 'primary',
+      cancelText: 'Otkaži',
+      onOk: async () => {
+        setSyncingLineUids(true);
+        try {
+          const result = await linesService.syncLineUidsFromCity(selectedGroup);
+          message.success(result.message);
+          console.log('📊 City sync result:', result);
+        } catch (error: any) {
+          console.error('Greška pri sinhronizaciji stanica sa City servera:', error);
+          message.error(
+            error.response?.data?.message || 'Greška pri sinhronizaciji stanica'
+          );
+        } finally {
+          setSyncingLineUids(false);
+        }
+      },
+    });
+  };
+
   const handleTableChange = (newPagination: any) => {
     loadData(newPagination.current, newPagination.pageSize);
   };
@@ -204,20 +248,31 @@ const CityServerTab: React.FC = () => {
                 icon={<ReloadOutlined />}
                 onClick={() => loadData(pagination.current, pagination.pageSize)}
                 loading={loading}
-                disabled={syncing}
+                disabled={syncing || syncingLineUids}
               >
                 Osveži
               </Button>
               {hasPermission('transport.administration.lines.city:sync') && (
-                <Button
-                  type="primary"
-                  icon={<SyncOutlined spin={syncing} />}
-                  onClick={handleSync}
-                  loading={syncing}
-                  disabled={loading}
-                >
-                  Sinhronizacija
-                </Button>
+                <>
+                  <Button
+                    type="primary"
+                    icon={<SyncOutlined spin={syncing} />}
+                    onClick={handleSync}
+                    loading={syncing}
+                    disabled={loading || syncingLineUids}
+                  >
+                    Sinhronizacija
+                  </Button>
+                  <Button
+                    type="default"
+                    icon={<SyncOutlined spin={syncingLineUids} />}
+                    onClick={handleSyncLineUids}
+                    loading={syncingLineUids}
+                    disabled={loading || syncing || !selectedGroup}
+                  >
+                    Sinhronizuj stanice
+                  </Button>
+                </>
               )}
             </Space>
           </Col>

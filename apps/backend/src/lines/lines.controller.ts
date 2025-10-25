@@ -157,6 +157,32 @@ export class LinesController {
     return this.linesService.syncLineUidsFromTicketing(dateValidFrom);
   }
 
+  @Post('sync-line-uids-city/:dateValidFrom')
+  @ApiOperation({
+    summary: 'Sinhronizacija stanica na linijama sa City servera (price_lists_line_uids)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Sinhronizacija stanica na linijama sa City servera uspešno završena',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        tableName: { type: 'string' },
+        tableCreated: { type: 'boolean' },
+        totalRecords: { type: 'number' },
+        inserted: { type: 'number' },
+        duration: { type: 'string' },
+        message: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Legacy City baza nije pronađena' })
+  @RequirePermissions('transport.administration.lines.city:sync')
+  async syncLineUidsCity(@Param('dateValidFrom') dateValidFrom: string) {
+    return this.linesService.syncLineUidsFromCity(dateValidFrom);
+  }
+
   // ========== GRADSKI SERVER ENDPOINTS (READ-ONLY) ==========
 
   @Get('city')
