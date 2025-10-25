@@ -884,33 +884,97 @@ export class PlanningService {
       }
     }
 
+    if (groupedSchedules.size === 0) {
+      return [];
+    }
+
+    // ⚡ OPTIMIZACIJA: Učitaj SVE potrebne podatke JEDNOM (umesto N query-ja)
+    const firstGroup = Array.from(groupedSchedules.values())[0];
+    const dayName = this.getDayNameFromDate(firstGroup.date);
+
+    // 1. Učitaj sve turnus_id-eve za ovaj dan JEDNOM
+    const turnusIdsForDay = await this.prisma.turnusDays.findMany({
+      where: { dayname: dayName },
+      select: { turnusId: true },
+    });
+    const turnusIdsList = turnusIdsForDay.map(t => t.turnusId);
+
+    // 2. Pronađi sve različite lineNumberForDisplay iz grupa
+    const uniqueLineNumbers = Array.from(new Set(
+      Array.from(groupedSchedules.values()).map(g => g.lineNumber)
+    ));
+
+    // 3. Učitaj SVE aktivne linije JEDNOM
+    const allLines = await this.prisma.line.findMany({
+      where: {
+        lineNumberForDisplay: { in: uniqueLineNumbers },
+        status: 'A',
+      },
+      select: { lineNumber: true, lineNumberForDisplay: true },
+    });
+
+    // Grupiši linije po lineNumberForDisplay
+    const linesMap = new Map<string, string[]>();
+    for (const line of allLines) {
+      if (!linesMap.has(line.lineNumberForDisplay)) {
+        linesMap.set(line.lineNumberForDisplay, []);
+      }
+      linesMap.get(line.lineNumberForDisplay)!.push(line.lineNumber);
+    }
+
+    // 4. Učitaj SVE turnusDetails za sve grupe JEDNIM query-jem
+    const allLineNumbers = allLines.map(l => l.lineNumber);
+    const uniqueTurnusNames = Array.from(new Set(
+      Array.from(groupedSchedules.values()).map(g => g.turnusName)
+    ));
+    const uniqueShiftNumbers = Array.from(new Set(
+      Array.from(groupedSchedules.values()).map(g => g.shiftNumber)
+    ));
+
+    const allTurnusDetails = await this.prisma.changesCodesTours.findMany({
+      where: {
+        turnusName: { in: uniqueTurnusNames },
+        shiftNumber: { in: uniqueShiftNumbers },
+        lineNo: { in: allLineNumbers },
+        turnusId: { in: turnusIdsList },
+        direction: 0,
+      },
+      select: {
+        turnusName: true,
+        shiftNumber: true,
+        lineNo: true,
+        turageNo: true,
+        departureNoInTurage: true,
+      },
+      orderBy: {
+        departureNoInTurage: 'asc',
+      },
+    });
+
+    // Grupiši turnusDetails po turnusName_shiftNumber_lineNo za brz lookup
+    const turnusDetailsMap = new Map<string, typeof allTurnusDetails[0]>();
+    for (const detail of allTurnusDetails) {
+      const key = `${detail.turnusName}_${detail.shiftNumber}_${detail.lineNo}`;
+      if (!turnusDetailsMap.has(key)) {
+        turnusDetailsMap.set(key, detail);
+      }
+    }
+
     // Za svaku grupu izračunaj ukupno trajanje i dodatne informacije
     const schedulesWithDetails = await Promise.all(
       Array.from(groupedSchedules.values()).map(async (group) => {
-        const dayName = this.getDayNameFromDate(group.date);
+        // Dobavi lineNumbers za ovu grupu iz keša
+        const lineNumbers = linesMap.get(group.lineNumber) || [];
 
-        // Pronađi SVE AKTIVNE line_number varijante za ovu lineNumberForDisplay
-        const lines = await this.prisma.line.findMany({
-          where: {
-            lineNumberForDisplay: group.lineNumber,
-            status: 'A',
-          },
-          select: { lineNumber: true },
-        });
-        const lineNumbers = lines.map(l => l.lineNumber);
-
-        // Dobavi turage_no iz prvog polaska
-        const turnusDetails = await this.prisma.changesCodesTours.findFirst({
-          where: {
-            turnusName: group.turnusName,
-            shiftNumber: group.shiftNumber,
-            lineNo: { in: lineNumbers },
-          },
-          select: {
-            turageNo: true,
-            departureNoInTurage: true,
-          },
-        });
+        // Pronađi turnusDetails iz keša
+        let turnusDetails: typeof allTurnusDetails[0] | undefined = undefined;
+        for (const lineNo of lineNumbers) {
+          const key = `${group.turnusName}_${group.shiftNumber}_${lineNo}`;
+          if (turnusDetailsMap.has(key)) {
+            turnusDetails = turnusDetailsMap.get(key);
+            break;
+          }
+        }
 
         // Sortiraj polaske po vremenu
         group.departures.sort((a, b) => {
@@ -1005,7 +1069,7 @@ export class PlanningService {
 
   /**
    * Dobavi rasporede za ceo mesec i liniju
-   * Agregira rasporede za sve dane u mesecu za odabranu liniju
+   * ⚡ OPTIMIZOVANO: Učitava SVE podatke za mesec JEDNIM query-jem umesto 30 query-ja
    */
   async getMonthlySchedulesByLine(query: {
     month: number;
@@ -1015,32 +1079,223 @@ export class PlanningService {
     // Generiši sve datume u mesecu
     const allDates = this.getAllDatesInMonth(query.month, query.year);
 
-    // Za svaki datum dobavi rasporede
-    const allSchedules: Awaited<ReturnType<typeof this.getSchedulesByDate>> = [];
-
-    for (const date of allDates) {
-      const formattedDate = this.formatDateForQuery(date);
-      const schedulesForDate = await this.getSchedulesByDate(formattedDate);
-
-      // Filtriraj samo rasporede za odabranu liniju
-      const filteredSchedules = schedulesForDate.filter(
-        (schedule) => schedule.lineNumber === query.lineNumber
-      );
-
-      allSchedules.push(...filteredSchedules);
+    if (allDates.length === 0) {
+      return [];
     }
 
-    // Sortiraj po datumu, zatim po turnusu, zatim po smeni
-    return allSchedules.sort((a, b) => {
-      // 1. Prvo po datumu
+    const startDate = new Date(allDates[0]);
+    const endDate = new Date(allDates[allDates.length - 1]);
+
+    // ⚡ Učitaj SVE rasporede za ceo mesec JEDNIM query-jem
+    const schedules = await this.prisma.dateTravelOrder.findMany({
+      where: {
+        startDate: {
+          gte: startDate,
+          lte: endDate,
+        },
+        lineNo: query.lineNumber,
+      },
+      orderBy: [
+        { startDate: 'asc' },
+        { startTime: 'asc' },
+      ],
+    });
+
+    if (schedules.length === 0) {
+      return [];
+    }
+
+    // Grupiši po datum_linija_turnus_smena_vozač kombinaciji
+    type GroupedSchedule = {
+      id: number;
+      date: string;
+      lineNumber: string;
+      lineName: string;
+      turnusId: number;
+      turnusName: string;
+      shiftNumber: number;
+      driverId: number;
+      driverName: string;
+      departures: typeof schedules;
+    };
+
+    const groupedSchedules = new Map<string, GroupedSchedule>();
+
+    for (const schedule of schedules) {
+      const turnusName = this.extractTurnusNameFromComment(schedule.comment);
+      const shiftNumber = this.extractShiftFromComment(schedule.comment);
+      const dateStr = schedule.startDate.toISOString().split('T')[0];
+      const groupKey = `${dateStr}_${schedule.lineNo}_${turnusName}_${shiftNumber}_${schedule.driverId}`;
+
+      if (!groupedSchedules.has(groupKey)) {
+        groupedSchedules.set(groupKey, {
+          id: schedule.id,
+          date: dateStr,
+          lineNumber: schedule.lineNo,
+          lineName: schedule.lineName,
+          turnusId: schedule.sheduleId,
+          turnusName,
+          shiftNumber,
+          driverId: schedule.driverId,
+          driverName: schedule.driverName,
+          departures: [schedule],
+        });
+      } else {
+        groupedSchedules.get(groupKey)!.departures.push(schedule);
+      }
+    }
+
+    if (groupedSchedules.size === 0) {
+      return [];
+    }
+
+    // ⚡ BATCH LOAD: Učitaj SVE potrebne podatke JEDNOM
+
+    // 1. Pronađi sve jedinstvene dane u nedelji
+    const uniqueDayNames = Array.from(new Set(
+      Array.from(groupedSchedules.values()).map(g => this.getDayNameFromDate(g.date))
+    ));
+
+    // 2. Učitaj sve aktivne linije za ovu lineNumberForDisplay
+    const allLines = await this.prisma.line.findMany({
+      where: {
+        lineNumberForDisplay: query.lineNumber,
+        status: 'A',
+      },
+      select: { lineNumber: true },
+    });
+    const allLineNumbers = allLines.map(l => l.lineNumber);
+
+    // 3. Učitaj sve jedinstvene turnusName i shiftNumber
+    const uniqueTurnusNames = Array.from(new Set(
+      Array.from(groupedSchedules.values()).map(g => g.turnusName)
+    ));
+    const uniqueShiftNumbers = Array.from(new Set(
+      Array.from(groupedSchedules.values()).map(g => g.shiftNumber)
+    ));
+
+    // 4. ⚡ OPTIMIZOVANO: Učitaj turnusDetails SA danom u nedelji u jednom query-ju
+    // Koristi raw SQL sa JOIN-om da izbegnemo učitavanje 200K+ turnus_id-eva
+    const turnusNamesStr = uniqueTurnusNames.map(n => `'${n.replace(/'/g, "''")}'`).join(',');
+    const shiftNumbersStr = uniqueShiftNumbers.join(',');
+    const lineNumbersStr = allLineNumbers.map(n => `'${n.replace(/'/g, "''")}'`).join(',');
+    const dayNamesStr = uniqueDayNames.map(n => `'${n.replace(/'/g, "''")}'`).join(',');
+
+    const allTurnusDetailsWithDay = await this.prisma.$queryRawUnsafe<
+      Array<{
+        turnus_name: string;
+        shift_number: number;
+        line_no: string;
+        turage_no: number;
+        departure_no_in_turage: number;
+        turnus_id: number;
+        dayname: string;
+      }>
+    >(`
+      SELECT DISTINCT
+        cct.turnus_name,
+        cct.shift_number,
+        cct.line_no,
+        cct.turage_no,
+        cct.departure_no_in_turage,
+        cct.turnus_id,
+        td.dayname
+      FROM changes_codes_tours cct
+      INNER JOIN turnus_days td ON cct.turnus_id = td.turnus_id
+      WHERE cct.turnus_name IN (${turnusNamesStr})
+        AND cct.shift_number IN (${shiftNumbersStr})
+        AND cct.line_no IN (${lineNumbersStr})
+        AND td.dayname IN (${dayNamesStr})
+        AND cct.direction = 0
+      ORDER BY cct.departure_no_in_turage ASC
+    `);
+
+    // Grupiši po dayname_turnusName_shiftNumber (BEZ lineNo)
+    // Uzmi MINIMUM departure_no_in_turage za svaku grupu
+    const turnusDetailsMap = new Map<string, typeof allTurnusDetailsWithDay[0]>();
+    for (const detail of allTurnusDetailsWithDay) {
+      const key = `${detail.dayname}_${detail.turnus_name}_${detail.shift_number}`;
+      const existing = turnusDetailsMap.get(key);
+
+      // Uzmi onaj sa najmanjim departure_no_in_turage
+      if (!existing || detail.departure_no_in_turage < existing.departure_no_in_turage) {
+        turnusDetailsMap.set(key, detail);
+      }
+    }
+
+    // Procesuj sve grupe
+    const schedulesWithDetails = Array.from(groupedSchedules.values()).map((group) => {
+      const dayName = this.getDayNameFromDate(group.date);
+
+      // Pronađi turnusDetails iz keša sa danom u nedelji
+      const key = `${dayName}_${group.turnusName}_${group.shiftNumber}`;
+      const turnusDetails = turnusDetailsMap.get(key);
+
+      // Sortiraj polaske
+      group.departures.sort((a, b) =>
+        new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+      );
+
+      const firstDeparture = group.departures[0];
+      const lastDeparture = group.departures[group.departures.length - 1];
+      const departuresCount = group.departures.length;
+
+      // Format vremena
+      const formatTime = (timeValue: Date | string | null) => {
+        if (!timeValue) return '00:00';
+        const d = timeValue instanceof Date ? timeValue : new Date(timeValue);
+        if (isNaN(d.getTime())) return '00:00';
+        return `${d.getUTCHours().toString().padStart(2, '0')}:${d.getUTCMinutes().toString().padStart(2, '0')}`;
+      };
+
+      const firstTime = formatTime(firstDeparture.startTime);
+      const lastEndTime = formatTime(lastDeparture.endTime || lastDeparture.startTime);
+
+      // Trajanje
+      const firstTimeMs = firstDeparture.startTime instanceof Date
+        ? firstDeparture.startTime.getTime()
+        : new Date(firstDeparture.startTime).getTime();
+      const lastEndTimeMs = (lastDeparture.endTime || lastDeparture.startTime) instanceof Date
+        ? (lastDeparture.endTime || lastDeparture.startTime).getTime()
+        : new Date(lastDeparture.endTime || lastDeparture.startTime).getTime();
+
+      let durationMinutes = Math.floor((lastEndTimeMs - firstTimeMs) / (1000 * 60));
+      if (durationMinutes < 0) {
+        durationMinutes += 24 * 60;
+      }
+
+      const hours = Math.floor(durationMinutes / 60);
+      const minutes = durationMinutes % 60;
+      const durationFormatted = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+      const timeDisplay = `${firstTime} - ${lastEndTime} (${durationFormatted})`;
+
+      return {
+        id: group.id,
+        date: group.date,
+        lineNumber: group.lineNumber,
+        lineName: group.lineName,
+        turnusId: group.turnusId,
+        turnusName: group.turnusName,
+        shiftNumber: group.shiftNumber,
+        turageNo: turnusDetails?.turage_no || 0,
+        departureNoInTurage: turnusDetails?.departure_no_in_turage || 0,
+        turnusStartTime: firstTime,
+        turnusDuration: timeDisplay,
+        departuresCount,
+        driverId: group.driverId,
+        driverName: group.driverName,
+        startTime: firstDeparture.startTime,
+      };
+    });
+
+    // Sortiraj
+    return schedulesWithDetails.sort((a, b) => {
       const dateCompare = new Date(a.date).getTime() - new Date(b.date).getTime();
       if (dateCompare !== 0) return dateCompare;
 
-      // 2. Zatim po nazivu turaže (natural sort)
       const turnusCompare = a.turnusName.localeCompare(b.turnusName, undefined, { numeric: true });
       if (turnusCompare !== 0) return turnusCompare;
 
-      // 3. Na kraju po smeni
       return a.shiftNumber - b.shiftNumber;
     });
   }
@@ -2372,10 +2627,15 @@ export class PlanningService {
     date: string,
   ) {
     // 1. Dobavi sve linked turnuse za odabranu liniju
-    const linkedTurnusi = await this.linkedTurnusiService.findAll({
+    const allLinkedTurnusi = await this.linkedTurnusiService.findAll({
       lineNumber,
       status: 'ACTIVE',
     });
+
+    // 🌟 FILTER PO VALIDNIM DANIMA - prikazuj samo linked turnuse validne za odabrani datum
+    const linkedTurnusi = allLinkedTurnusi.filter((lt) =>
+      this.linkedTurnusiService.isValidForDate(lt, date),
+    );
 
     // 2. Pronađi da li odabrani turnus ima linked par (u bilo kom smeru)
     // VAŽNO: Provera uključuje i shiftNumber!

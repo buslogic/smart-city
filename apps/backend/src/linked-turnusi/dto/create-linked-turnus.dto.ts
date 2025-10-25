@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsInt, IsOptional, IsIn } from 'class-validator';
+import { IsString, IsInt, IsOptional, IsIn, IsBoolean } from 'class-validator';
 
 export class CreateLinkedTurnusDto {
   @ApiProperty({
@@ -79,4 +79,67 @@ export class CreateLinkedTurnusDto {
   @IsOptional()
   @IsIn(['ACTIVE', 'INACTIVE'])
   status?: string;
+
+  @ApiProperty({
+    description: 'Da li važi ponedeljkom',
+    default: true,
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  validMonday?: boolean;
+
+  @ApiProperty({
+    description: 'Da li važi utorkom',
+    default: true,
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  validTuesday?: boolean;
+
+  @ApiProperty({
+    description: 'Da li važi sredom',
+    default: true,
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  validWednesday?: boolean;
+
+  @ApiProperty({
+    description: 'Da li važi četvrtkom',
+    default: true,
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  validThursday?: boolean;
+
+  @ApiProperty({
+    description: 'Da li važi petkom',
+    default: true,
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  validFriday?: boolean;
+
+  @ApiProperty({
+    description: 'Da li važi subotom',
+    default: false,
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  validSaturday?: boolean;
+
+  @ApiProperty({
+    description: 'Da li važi nedeljom',
+    default: false,
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  validSunday?: boolean;
 }

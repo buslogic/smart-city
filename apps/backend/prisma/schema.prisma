@@ -1533,21 +1533,28 @@ model TurnusSyncLog {
 // ========== LINKED TURNUSI (Povezani turnusi) ==========
 
 model TurnusLinked {
-  id           Int      @id @default(autoincrement())
-  lineNumber1  String   @map("line_number_1") @db.VarChar(6)
-  turnusId1    Int      @map("turnus_id_1") @db.UnsignedMediumInt
-  turnusName1  String   @map("turnus_name_1") @db.VarChar(320)
-  shiftNumber1 Int      @map("shift_number_1") @db.UnsignedTinyInt
-  lineNumber2  String   @map("line_number_2") @db.VarChar(6)
-  turnusId2    Int      @map("turnus_id_2") @db.UnsignedMediumInt
-  turnusName2  String   @map("turnus_name_2") @db.VarChar(320)
-  shiftNumber2 Int      @map("shift_number_2") @db.UnsignedTinyInt
-  description  String?  @db.Text
-  status       String   @default("ACTIVE") @db.VarChar(20)
-  createdBy    Int      @map("created_by")
-  updatedBy    Int?     @map("updated_by")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id             Int      @id @default(autoincrement())
+  lineNumber1    String   @map("line_number_1") @db.VarChar(6)
+  turnusId1      Int      @map("turnus_id_1") @db.UnsignedMediumInt
+  turnusName1    String   @map("turnus_name_1") @db.VarChar(320)
+  shiftNumber1   Int      @map("shift_number_1") @db.UnsignedTinyInt
+  lineNumber2    String   @map("line_number_2") @db.VarChar(6)
+  turnusId2      Int      @map("turnus_id_2") @db.UnsignedMediumInt
+  turnusName2    String   @map("turnus_name_2") @db.VarChar(320)
+  shiftNumber2   Int      @map("shift_number_2") @db.UnsignedTinyInt
+  description    String?  @db.Text
+  status         String   @default("ACTIVE") @db.VarChar(20)
+  validMonday    Boolean  @default(true) @map("valid_monday")
+  validTuesday   Boolean  @default(true) @map("valid_tuesday")
+  validWednesday Boolean  @default(true) @map("valid_wednesday")
+  validThursday  Boolean  @default(true) @map("valid_thursday")
+  validFriday    Boolean  @default(true) @map("valid_friday")
+  validSaturday  Boolean  @default(false) @map("valid_saturday")
+  validSunday    Boolean  @default(false) @map("valid_sunday")
+  createdBy      Int      @map("created_by")
+  updatedBy      Int?     @map("updated_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   // Relations
   creator User  @relation("TurnusLinkedCreator", fields: [createdBy], references: [id])

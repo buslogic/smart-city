@@ -102,6 +102,30 @@ export class LinkedTurnusiService {
       );
     }
 
+    // Postavi default vrednosti za validne dane (radni dani)
+    const validMonday = dto.validMonday ?? true;
+    const validTuesday = dto.validTuesday ?? true;
+    const validWednesday = dto.validWednesday ?? true;
+    const validThursday = dto.validThursday ?? true;
+    const validFriday = dto.validFriday ?? true;
+    const validSaturday = dto.validSaturday ?? false;
+    const validSunday = dto.validSunday ?? false;
+
+    // Validacija: Barem jedan dan mora biti selektovan
+    if (
+      !validMonday &&
+      !validTuesday &&
+      !validWednesday &&
+      !validThursday &&
+      !validFriday &&
+      !validSaturday &&
+      !validSunday
+    ) {
+      throw new BadRequestException(
+        'Barem jedan dan mora biti selektovan za povezani turnus',
+      );
+    }
+
     return this.prisma.turnusLinked.create({
       data: {
         lineNumber1: dto.lineNumber1,
@@ -114,6 +138,13 @@ export class LinkedTurnusiService {
         shiftNumber2: dto.shiftNumber2,
         description: dto.description,
         status: dto.status || 'ACTIVE',
+        validMonday,
+        validTuesday,
+        validWednesday,
+        validThursday,
+        validFriday,
+        validSaturday,
+        validSunday,
         createdBy: userId,
       },
       include: {
@@ -239,6 +270,50 @@ export class LinkedTurnusiService {
       }
     }
 
+    // Validacija validnih dana ako se menjaju
+    if (
+      dto.validMonday !== undefined ||
+      dto.validTuesday !== undefined ||
+      dto.validWednesday !== undefined ||
+      dto.validThursday !== undefined ||
+      dto.validFriday !== undefined ||
+      dto.validSaturday !== undefined ||
+      dto.validSunday !== undefined
+    ) {
+      const current = await this.prisma.turnusLinked.findUnique({
+        where: { id },
+      });
+
+      if (!current) {
+        throw new NotFoundException(
+          `Povezani turnus sa ID ${id} nije pronađen`,
+        );
+      }
+
+      // Proveri da li će barem jedan dan biti true posle update-a
+      const validMonday = dto.validMonday ?? current.validMonday;
+      const validTuesday = dto.validTuesday ?? current.validTuesday;
+      const validWednesday = dto.validWednesday ?? current.validWednesday;
+      const validThursday = dto.validThursday ?? current.validThursday;
+      const validFriday = dto.validFriday ?? current.validFriday;
+      const validSaturday = dto.validSaturday ?? current.validSaturday;
+      const validSunday = dto.validSunday ?? current.validSunday;
+
+      if (
+        !validMonday &&
+        !validTuesday &&
+        !validWednesday &&
+        !validThursday &&
+        !validFriday &&
+        !validSaturday &&
+        !validSunday
+      ) {
+        throw new BadRequestException(
+          'Barem jedan dan mora biti selektovan za povezani turnus',
+        );
+      }
+    }
+
     return this.prisma.turnusLinked.update({
       where: { id },
       data: {
@@ -278,5 +353,39 @@ export class LinkedTurnusiService {
       success: true,
       message: 'Povezani turnus uspešno obrisan',
     };
+  }
+
+  /**
+   * Proverava da li je linked turnus validan za dati datum
+   * @param linkedTurnus - Linked turnus objekat sa valid_* poljima
+   * @param date - Datum za proveru (Date ili string)
+   * @returns true ako je linked turnus validan za taj datum, inače false
+   */
+  isValidForDate(
+    linkedTurnus: {
+      validMonday: boolean;
+      validTuesday: boolean;
+      validWednesday: boolean;
+      validThursday: boolean;
+      validFriday: boolean;
+      validSaturday: boolean;
+      validSunday: boolean;
+    },
+    date: Date | string,
+  ): boolean {
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    const dayOfWeek = dateObj.getDay(); // 0=Nedelja, 1=Ponedeljak, ..., 6=Subota
+
+    const dayMap = [
+      linkedTurnus.validSunday, // 0
+      linkedTurnus.validMonday, // 1
+      linkedTurnus.validTuesday, // 2
+      linkedTurnus.validWednesday, // 3
+      linkedTurnus.validThursday, // 4
+      linkedTurnus.validFriday, // 5
+      linkedTurnus.validSaturday, // 6
+    ];
+
+    return dayMap[dayOfWeek];
   }
 }
