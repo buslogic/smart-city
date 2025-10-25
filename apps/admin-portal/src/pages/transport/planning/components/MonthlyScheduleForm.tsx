@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { DatePicker, Checkbox, Input, message, Spin } from 'antd';
-import { UserOutlined, LoadingOutlined, DeleteOutlined } from '@ant-design/icons';
+import { DatePicker, Checkbox, Input, message, Spin, Alert } from 'antd';
+import { UserOutlined, LoadingOutlined, DeleteOutlined, LinkOutlined } from '@ant-design/icons';
 import Select from 'react-select';
 import dayjs, { Dayjs } from 'dayjs';
 import {
@@ -12,6 +12,7 @@ import {
   CreateMonthlyScheduleDto,
   MonthlyScheduleResult,
   TurageOption,
+  LinkedTurnusInfo,
 } from '../../../../services/planning.service';
 import { ConflictResolutionModal } from './ConflictResolutionModal';
 import { ProgressModal } from './ProgressModal';
@@ -94,6 +95,10 @@ export const MonthlyScheduleForm: React.FC = () => {
   // EventSource za SSE
   const [eventSource, setEventSource] = useState<EventSource | null>(null);
 
+  // Linked turnusi state
+  const [linkedTurnusInfo, setLinkedTurnusInfo] = useState<LinkedTurnusInfo | null>(null);
+  const [linkValidationError, setLinkValidationError] = useState<string | null>(null);
+
   // Weekday options (1 = Monday, ..., 6 = Saturday, 0 = Sunday)
   // Redosled: Ponedeljak → Nedelja
   const weekdayOptions = [
@@ -172,6 +177,36 @@ export const MonthlyScheduleForm: React.FC = () => {
       }
     };
   }, [eventSource]);
+
+  // Detect linked turnus when turnus, shift, line, and month are selected
+  useEffect(() => {
+    const fetchLinkedTurnusInfo = async () => {
+      if (selectedLine && selectedTurnus && selectedShift && selectedMonth) {
+        try {
+          // Koristi prvi dan meseca kao referentni datum
+          const firstDayOfMonth = selectedMonth.startOf('month').format('YYYY-MM-DD');
+          const shiftNumber = parseInt(selectedShift, 10);
+          const linkInfo = await planningService.getTurnusLinkInfo(
+            selectedLine.value,
+            selectedTurnus.turnusName,
+            shiftNumber,
+            firstDayOfMonth,
+          );
+          setLinkedTurnusInfo(linkInfo);
+          setLinkValidationError(null);
+        } catch (error: any) {
+          console.error('Greška pri učitavanju linked turnus informacija:', error);
+          setLinkedTurnusInfo(null);
+          setLinkValidationError(null);
+        }
+      } else {
+        setLinkedTurnusInfo(null);
+        setLinkValidationError(null);
+      }
+    };
+
+    fetchLinkedTurnusInfo();
+  }, [selectedTurnus, selectedShift, selectedLine, selectedMonth]);
 
   const loadLines = async () => {
     try {
@@ -903,6 +938,70 @@ export const MonthlyScheduleForm: React.FC = () => {
         </div>
       </form>
 
+      {/* LINKED TURNUS ALERT NOTIFIKACIJA */}
+      {linkedTurnusInfo?.hasLink && linkedTurnusInfo.linkedTurnus && linkedTurnusInfo.chronologicalOrder && (
+        <div className="mt-4">
+          <Alert
+            message="Linkovan turnus detektovan"
+            description={
+              <div className="space-y-2">
+                <p>
+                  Odabrani turnus <strong>{selectedTurnus?.turnusName}</strong> (Smena{' '}
+                  {linkedTurnusInfo.isSelectedFirst
+                    ? (linkedTurnusInfo.chronologicalOrder.first.shiftNumber === 1 ? 'I' :
+                       linkedTurnusInfo.chronologicalOrder.first.shiftNumber === 2 ? 'II' : 'III')
+                    : (linkedTurnusInfo.chronologicalOrder.second.shiftNumber === 1 ? 'I' :
+                       linkedTurnusInfo.chronologicalOrder.second.shiftNumber === 2 ? 'II' : 'III')
+                  }) je linkovan sa turnusom{' '}
+                  <strong>{linkedTurnusInfo.linkedTurnus.turnusName}</strong> (Smena{' '}
+                  {linkedTurnusInfo.linkedTurnus.shiftNumber === 1 ? 'I' :
+                   linkedTurnusInfo.linkedTurnus.shiftNumber === 2 ? 'II' : 'III'},{' '}
+                  linija {linkedTurnusInfo.linkedTurnus.lineNumber}).
+                </p>
+                <p className="font-semibold">Hronološki redosled:</p>
+                <ul className="list-disc list-inside">
+                  <li>
+                    1. {linkedTurnusInfo.chronologicalOrder.first.turnusName} (Smena{' '}
+                    {linkedTurnusInfo.chronologicalOrder.first.shiftNumber === 1 ? 'I' :
+                     linkedTurnusInfo.chronologicalOrder.first.shiftNumber === 2 ? 'II' : 'III'},{' '}
+                    linija {linkedTurnusInfo.chronologicalOrder.first.lineNumber}) - počinje u{' '}
+                    {linkedTurnusInfo.chronologicalOrder.first.startTime}
+                  </li>
+                  <li>
+                    2. {linkedTurnusInfo.chronologicalOrder.second.turnusName} (Smena{' '}
+                    {linkedTurnusInfo.chronologicalOrder.second.shiftNumber === 1 ? 'I' :
+                     linkedTurnusInfo.chronologicalOrder.second.shiftNumber === 2 ? 'II' : 'III'},{' '}
+                    linija {linkedTurnusInfo.chronologicalOrder.second.lineNumber}) - počinje u{' '}
+                    {linkedTurnusInfo.chronologicalOrder.second.startTime}
+                  </li>
+                </ul>
+                <p className="text-blue-700 font-medium mt-2">
+                  Sistem će automatski kreirati oba turnusa u hronološkom redosledu za sve dane u mesecu sa istim vozačem.
+                </p>
+              </div>
+            }
+            type="info"
+            showIcon
+            icon={<LinkOutlined />}
+            closable
+          />
+        </div>
+      )}
+
+      {/* Error Alert za Linked Turnus Conflict */}
+      {linkValidationError && (
+        <div className="mt-4">
+          <Alert
+            message="Konflikt kod linkovanog turnusa"
+            description={linkValidationError}
+            type="error"
+            showIcon
+            closable
+            onClose={() => setLinkValidationError(null)}
+          />
+        </div>
+      )}
+
       {/* TABELA ISPLANIRANIH TURAŽA */}
       {selectedMonth && selectedLine && (
         <div className="mt-8 border-t pt-6">
@@ -1039,17 +1138,34 @@ export const MonthlyScheduleForm: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredSchedules.map((schedule) => (
-                    <tr key={`${schedule.id}-${schedule.date}`} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {new Date(schedule.date).toLocaleDateString('sr-RS')}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {schedule.lineNumber} - {schedule.lineName}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {schedule.turnusName} ({schedule.turageNo}/{schedule.departureNoInTurage})
-                      </td>
+                  {filteredSchedules.map((schedule) => {
+                    // Proveri da li je raspored linkovan turnus
+                    const isLinkedTurnus = linkedTurnusInfo?.hasLink &&
+                      linkedTurnusInfo.chronologicalOrder &&
+                      (
+                        (schedule.turnusName === linkedTurnusInfo.chronologicalOrder.first.turnusName &&
+                         schedule.lineNumber === linkedTurnusInfo.chronologicalOrder.first.lineNumber) ||
+                        (schedule.turnusName === linkedTurnusInfo.chronologicalOrder.second.turnusName &&
+                         schedule.lineNumber === linkedTurnusInfo.chronologicalOrder.second.lineNumber)
+                      );
+
+                    return (
+                      <tr
+                        key={`${schedule.id}-${schedule.date}`}
+                        className={`hover:bg-gray-50 ${isLinkedTurnus ? 'bg-blue-50 border-l-4 border-blue-500' : ''}`}
+                      >
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {new Date(schedule.date).toLocaleDateString('sr-RS')}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {schedule.lineNumber} - {schedule.lineName}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {isLinkedTurnus && (
+                            <LinkOutlined className="text-blue-500 mr-2" title="Linkovan turnus" />
+                          )}
+                          {schedule.turnusName} ({schedule.turageNo}/{schedule.departureNoInTurage})
+                        </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {schedule.shiftNumber === 1
                           ? 'Prva smena'
@@ -1080,7 +1196,8 @@ export const MonthlyScheduleForm: React.FC = () => {
                         </button>
                       </td>
                     </tr>
-                  ))}
+                  );
+                  })}
                 </tbody>
               </table>
             )}

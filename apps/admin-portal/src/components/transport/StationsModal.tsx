@@ -10,12 +10,14 @@ import {
   Descriptions,
   Space,
   Tooltip,
+  Alert,
 } from 'antd';
 import {
   EnvironmentOutlined,
   EyeInvisibleOutlined,
   ClockCircleOutlined,
   InfoCircleOutlined,
+  WarningOutlined,
 } from '@ant-design/icons';
 import { linesAdministrationService, StationsOnLineResponse } from '../../services/linesAdministration.service';
 
@@ -182,6 +184,35 @@ const StationsModal: React.FC<StationsModalProps> = ({
                 </Text>
               </Space>
             </div>
+
+            {/* Upozorenje ako nema stanica */}
+            {data.totalStations === 0 && (
+              <Alert
+                message="Nema definisanih stajališta"
+                description={
+                  <div>
+                    <p>
+                      Za ovu liniju nisu pronađena stajališta u bazi podataka.
+                      Moguće razlozi:
+                    </p>
+                    <ul style={{ marginBottom: 0, paddingLeft: '20px' }}>
+                      <li>Linija još nije sinhronizovana sa legacy sistema</li>
+                      <li>Legacy sistem ne sadrži podatke o stajalištima za ovu liniju</li>
+                      <li>Linija je u pripremi i stanice će biti dodane naknadno</li>
+                    </ul>
+                    <p style={{ marginTop: '8px', marginBottom: 0 }}>
+                      <Text type="secondary">
+                        Izvorna tabela: <Text code>{data.tableName}</Text>
+                      </Text>
+                    </p>
+                  </div>
+                }
+                type="warning"
+                showIcon
+                icon={<WarningOutlined />}
+                style={{ marginBottom: '16px' }}
+              />
+            )}
 
             {/* Tabela */}
             <Table

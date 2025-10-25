@@ -374,14 +374,15 @@ export class LinesAdministrationService {
   }
 
   async getStationsOnLine(priceTableIdent: string): Promise<StationsOnLineResponseDto> {
-    // 1. Povući line info (date_valid_from, legacy_ticketing_id, line_number, etc.)
+    // 1. Povući line info (legacy_city_id, date_valid_from, line_number, etc.)
     const lineInfo = await this.prisma.$queryRaw<any[]>`
       SELECT
+        id,
+        legacy_city_id as legacyCityId,
         line_number as lineNumber,
         line_number_for_display as lineNumberForDisplay,
         line_title as lineTitle,
-        date_valid_from as dateValidFrom,
-        legacy_ticketing_id as legacyTicketingId
+        date_valid_from as dateValidFrom
       FROM \`lines\`
       WHERE price_table_ident = ${priceTableIdent}
       LIMIT 1
@@ -392,10 +393,6 @@ export class LinesAdministrationService {
     }
 
     const line = lineInfo[0];
-
-    if (!line.legacyTicketingId) {
-      throw new NotFoundException(`Line does not have legacy_ticketing_id - cannot fetch stations`);
-    }
 
     // 2. Formatirati datum u YYYY_MM_DD za ime tabele
     const dateValidFrom = line.dateValidFrom;
@@ -432,7 +429,7 @@ export class LinesAdministrationService {
           AND plu.active_flag = 1
         ORDER BY plu.station_number
         `,
-        line.legacyTicketingId
+        Number(line.legacyCityId)
       );
 
       return {
