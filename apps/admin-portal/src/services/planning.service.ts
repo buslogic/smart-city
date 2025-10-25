@@ -111,6 +111,34 @@ export interface GetTurageOptionsParams {
   dayOfWeek: 'Subota' | 'Nedelja';
 }
 
+export interface LinkedTurnusInfo {
+  hasLink: boolean;
+  linkedTurnus?: {
+    lineNumber: string;
+    turnusId: number;
+    turnusName: string;
+    shiftNumber: number;
+    startTime: string;
+  };
+  chronologicalOrder?: {
+    first: {
+      lineNumber: string;
+      turnusId: number;
+      turnusName: string;
+      shiftNumber: number;
+      startTime: string;
+    };
+    second: {
+      lineNumber: string;
+      turnusId: number;
+      turnusName: string;
+      shiftNumber: number;
+      startTime: string;
+    };
+  };
+  isSelectedFirst?: boolean;
+}
+
 export interface DriverReport {
   driverId: number;
   driverName: string;
@@ -227,6 +255,14 @@ class PlanningService {
   async getTurageOptions(params: GetTurageOptionsParams): Promise<TurageOption[]> {
     const response = await axios.get<TurageOption[]>(`${BASE_URL}/turage-options`, {
       params,
+      headers: this.getAuthHeaders(),
+    });
+    return response.data;
+  }
+
+  async getTurnusLinkInfo(lineNumber: string, turnusName: string, shiftNumber: number, date: string): Promise<LinkedTurnusInfo> {
+    const response = await axios.get<LinkedTurnusInfo>(`${BASE_URL}/turnus-link-info`, {
+      params: { lineNumber, turnusName, shiftNumber, date },
       headers: this.getAuthHeaders(),
     });
     return response.data;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Typography, Tabs, message, Modal, Input, Button } from 'antd';
-import { CalendarOutlined, DeleteOutlined, ExclamationCircleOutlined, UserOutlined } from '@ant-design/icons';
+import { Card, Typography, Tabs, message, Modal, Input, Button, Alert } from 'antd';
+import { CalendarOutlined, DeleteOutlined, ExclamationCircleOutlined, UserOutlined, LinkOutlined } from '@ant-design/icons';
 import Select from 'react-select';
 import {
   planningService,
@@ -8,6 +8,7 @@ import {
   Turnus,
   Driver,
   Schedule as ScheduleType,
+  LinkedTurnusInfo,
 } from '../../../services/planning.service';
 import { DriverSelectionModal } from './components/DriverSelectionModal';
 import { MonthlyScheduleForm } from './components/MonthlyScheduleForm';
@@ -53,6 +54,10 @@ const Schedule: React.FC = () => {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [schedules, setSchedules] = useState<ScheduleType[]>([]);
 
+  // Linked turnus state
+  const [linkedTurnusInfo, setLinkedTurnusInfo] = useState<LinkedTurnusInfo | null>(null);
+  const [linkValidationError, setLinkValidationError] = useState<string | null>(null);
+
   // Loading state
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -79,6 +84,37 @@ const Schedule: React.FC = () => {
       loadTurnusi(selectedLine.value, selectedDate);
     }
   }, [selectedLine, selectedDate]);
+
+  // Check for linked turnus when turnus and shift are selected
+  useEffect(() => {
+    const fetchLinkedTurnusInfo = async () => {
+      if (selectedLine && selectedTurnus && selectedShift && selectedDate) {
+        try {
+          const shiftNumber = parseInt(selectedShift, 10);
+
+          const linkInfo = await planningService.getTurnusLinkInfo(
+            selectedLine.value,
+            selectedTurnus.turnusName,
+            shiftNumber,
+            selectedDate
+          );
+
+          setLinkedTurnusInfo(linkInfo);
+          setLinkValidationError(null);
+        } catch (error: any) {
+          console.error('Greška pri proveri linked turnusa:', error);
+          setLinkedTurnusInfo(null);
+          setLinkValidationError(null);
+        }
+      } else {
+        // Resetuj linked info ako nema odabranog turnusa ili smene
+        setLinkedTurnusInfo(null);
+        setLinkValidationError(null);
+      }
+    };
+
+    fetchLinkedTurnusInfo();
+  }, [selectedTurnus, selectedShift, selectedLine, selectedDate]);
 
   const loadLines = async () => {
     try {
@@ -172,10 +208,40 @@ const Schedule: React.FC = () => {
     setSelectedDriver(null);
   };
 
-  const handleTurnusChange = (option: Turnus | null) => {
+  const handleTurnusChange = async (option: Turnus | null) => {
     setSelectedTurnus(option);
-    // Reset shift
-    setSelectedShift('');
+
+    // Automatski postavi prvi nepopunjeni shift za odabrani turnus
+    if (option && selectedDate && selectedLine) {
+      try {
+        const currentSchedules = await planningService.getSchedule(selectedDate);
+
+        // Pronađi popunjene smene za ovaj turnus
+        const existingSchedulesForTurnus = currentSchedules.filter(
+          (s) => s.turnusName === option.turnusName && s.lineNumber === selectedLine.value
+        );
+        const filledShifts = existingSchedulesForTurnus.map((s) => s.shiftNumber);
+
+        // Pronađi prvu nepopunjenu smenu
+        const firstUnfilledShift = option.shifts
+          .sort((a, b) => a - b)
+          .find((shift) => !filledShifts.includes(shift));
+
+        if (firstUnfilledShift) {
+          setSelectedShift(firstUnfilledShift.toString());
+        } else {
+          // Ako su sve smene popunjene, postavi prvu smenu
+          setSelectedShift(option.shifts[0]?.toString() || '');
+        }
+      } catch (error) {
+        console.error('Greška pri učitavanju rasporeda za turnus:', error);
+        // Fallback: postavi prvu smenu
+        setSelectedShift(option.shifts[0]?.toString() || '');
+      }
+    } else {
+      // Reset shift ako nije odabran turnus
+      setSelectedShift('');
+    }
   };
 
   const handleDelete = (schedule: ScheduleType) => {
@@ -286,7 +352,14 @@ const Schedule: React.FC = () => {
       // Resetuj samo vozača
       setSelectedDriver(null);
     } catch (error: any) {
-      message.error(error.response?.data?.message || 'Greška pri dodavanju rasporeda');
+      const errorMessage = error.response?.data?.message || 'Greška pri dodavanju rasporeda';
+
+      // Ako je greška vezana za linked turnus conflict, prikaži kao linkValidationError
+      if (errorMessage.includes('Linked turnus') || errorMessage.includes('linked')) {
+        setLinkValidationError(errorMessage);
+      } else {
+        message.error(errorMessage);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -357,6 +430,69 @@ const Schedule: React.FC = () => {
 
           {selectedDate && (
             <>
+              {/* Linked Turnus Alert */}
+              {linkedTurnusInfo?.hasLink && (
+                <Alert
+                  type="info"
+                  icon={<LinkOutlined />}
+                  message="Linkovan turnus detektovan"
+                  description={
+                    <div>
+                      <p className="mb-2">
+                        Ovaj turnus ({linkedTurnusInfo.isSelectedFirst
+                          ? linkedTurnusInfo.chronologicalOrder?.first.turnusName
+                          : linkedTurnusInfo.chronologicalOrder?.second.turnusName
+                        }{' '}
+                        - Smena{' '}
+                        {linkedTurnusInfo.isSelectedFirst
+                          ? (linkedTurnusInfo.chronologicalOrder?.first.shiftNumber === 1 ? 'I' :
+                             linkedTurnusInfo.chronologicalOrder?.first.shiftNumber === 2 ? 'II' : 'III')
+                          : (linkedTurnusInfo.chronologicalOrder?.second.shiftNumber === 1 ? 'I' :
+                             linkedTurnusInfo.chronologicalOrder?.second.shiftNumber === 2 ? 'II' : 'III')
+                        }) je povezan sa turnusom <strong>{linkedTurnusInfo.linkedTurnus?.turnusName}</strong>{' '}
+                        (Smena{' '}
+                        {linkedTurnusInfo.linkedTurnus?.shiftNumber === 1 ? 'I' :
+                         linkedTurnusInfo.linkedTurnus?.shiftNumber === 2 ? 'II' : 'III'}).
+                      </p>
+                      <p className="mb-2">
+                        Oba turnusa će biti automatski isplanirana zajedno u hronološkom redosledu:
+                      </p>
+                      <ol className="list-decimal list-inside ml-4">
+                        <li>
+                          <strong>{linkedTurnusInfo.chronologicalOrder?.first.turnusName}</strong>
+                          {' '}(Smena{' '}
+                          {linkedTurnusInfo.chronologicalOrder?.first.shiftNumber === 1 ? 'I' :
+                           linkedTurnusInfo.chronologicalOrder?.first.shiftNumber === 2 ? 'II' : 'III'},{' '}
+                          start: {linkedTurnusInfo.chronologicalOrder?.first.startTime})
+                        </li>
+                        <li>
+                          <strong>{linkedTurnusInfo.chronologicalOrder?.second.turnusName}</strong>
+                          {' '}(Smena{' '}
+                          {linkedTurnusInfo.chronologicalOrder?.second.shiftNumber === 1 ? 'I' :
+                           linkedTurnusInfo.chronologicalOrder?.second.shiftNumber === 2 ? 'II' : 'III'},{' '}
+                          start: {linkedTurnusInfo.chronologicalOrder?.second.startTime})
+                        </li>
+                      </ol>
+                    </div>
+                  }
+                  className="mb-4"
+                  showIcon
+                />
+              )}
+
+              {/* Link Validation Error */}
+              {linkValidationError && (
+                <Alert
+                  type="error"
+                  message="Greška pri validaciji linked turnusa"
+                  description={linkValidationError}
+                  className="mb-4"
+                  showIcon
+                  closable
+                  onClose={() => setLinkValidationError(null)}
+                />
+              )}
+
               {/* Table */}
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200 border border-gray-200">
@@ -481,8 +617,23 @@ const Schedule: React.FC = () => {
                         </td>
                       </tr>
                     ) : (
-                      schedules.map((schedule) => (
-                        <tr key={schedule.id} className="hover:bg-gray-50">
+                      schedules.map((schedule) => {
+                        // Proveri da li je ovaj schedule deo linked para (provera uključuje shiftNumber!)
+                        const isLinkedTurnus = linkedTurnusInfo?.hasLink &&
+                          linkedTurnusInfo.chronologicalOrder &&
+                          (
+                            (schedule.turnusName === linkedTurnusInfo.chronologicalOrder.first.turnusName &&
+                             schedule.shiftNumber === linkedTurnusInfo.chronologicalOrder.first.shiftNumber) ||
+                            (schedule.turnusName === linkedTurnusInfo.chronologicalOrder.second.turnusName &&
+                             schedule.shiftNumber === linkedTurnusInfo.chronologicalOrder.second.shiftNumber)
+                          ) &&
+                          schedule.lineNumber === selectedLine?.value;
+
+                        return (
+                        <tr
+                          key={schedule.id}
+                          className={`hover:bg-gray-50 ${isLinkedTurnus ? 'bg-blue-50 border-l-4 border-blue-500' : ''}`}
+                        >
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                             {new Date(schedule.date).toLocaleDateString('sr-RS')}
                           </td>
@@ -490,6 +641,9 @@ const Schedule: React.FC = () => {
                             {schedule.lineNumber} - {schedule.lineName}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {isLinkedTurnus && (
+                              <LinkOutlined className="text-blue-500 mr-2" title="Linkovan turnus" />
+                            )}
                             {schedule.turnusName} ({schedule.turageNo}/{schedule.departureNoInTurage})
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -519,7 +673,8 @@ const Schedule: React.FC = () => {
                             </button>
                           </td>
                         </tr>
-                      ))
+                        );
+                      })
                     )}
                   </tbody>
                 </table>

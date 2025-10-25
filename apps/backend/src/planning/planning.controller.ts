@@ -29,6 +29,7 @@ import { CreateMonthlyScheduleDto } from './dto/create-monthly-schedule.dto';
 import { QueryScheduleDto, QueryTurnusiDto, QueryMonthlyScheduleDto } from './dto/query-schedule.dto';
 import { GetDriversAvailabilityDto } from './dto/get-drivers-availability.dto';
 import { GetTurageOptionsDto } from './dto/get-turage-options.dto';
+import { GetTurnusLinkInfoDto } from './dto/get-turnus-link-info.dto';
 import { MonthlyDriverReportQueryDto } from './dto/monthly-driver-report.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SseAuthGuard } from '../auth/guards/sse-auth.guard';
@@ -135,6 +136,57 @@ export class PlanningController {
   @RequirePermissions('transport.planning.schedule:view')
   async getTurageOptions(@Query() query: GetTurageOptionsDto) {
     return this.planningService.getTurageOptions(query);
+  }
+
+  @Get('turnus-link-info')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @ApiOperation({
+    summary: 'Dobavi informacije o linkovanom turnusu',
+    description:
+      'Proverava da li odabrani turnus ima linkovan par u turnus_linked tabeli. Ako ima, vraća informacije o linkovanom turnusu i hronološkom redosledu (sortiranom po start_time).',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Informacije o linkovanom turnusu',
+    schema: {
+      example: {
+        hasLink: true,
+        linkedTurnus: {
+          lineNumber: '18',
+          turnusId: 123,
+          turnusName: '00018-2',
+          startTime: '12:30',
+        },
+        chronologicalOrder: {
+          first: {
+            lineNumber: '18',
+            turnusId: 122,
+            turnusName: '00018-1',
+            startTime: '04:00',
+          },
+          second: {
+            lineNumber: '18',
+            turnusId: 123,
+            turnusName: '00018-2',
+            startTime: '12:30',
+          },
+        },
+        isSelectedFirst: true,
+      },
+    },
+  })
+  @ApiQuery({ name: 'lineNumber', required: true, type: String })
+  @ApiQuery({ name: 'turnusName', required: true, type: String })
+  @ApiQuery({ name: 'shiftNumber', required: true, type: Number })
+  @ApiQuery({ name: 'date', required: true, type: String })
+  @RequirePermissions('transport.planning.schedule:view')
+  async getTurnusLinkInfo(@Query() query: GetTurnusLinkInfoDto) {
+    return this.planningService.getLinkedTurnusInfo(
+      query.lineNumber,
+      query.turnusName,
+      query.shiftNumber,
+      query.date,
+    );
   }
 
   @Post('schedule')

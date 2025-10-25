@@ -45,6 +45,7 @@ import { TurnusiSyncModule } from './turnusi-sync/turnusi-sync.module';
 import { TurnusiModule } from './turnusi/turnusi.module';
 import { PlanningModule } from './planning/planning.module';
 import { TurnusDefaultsModule } from './turnus-defaults/turnus-defaults.module';
+import { LinkedTurnusiModule } from './linked-turnusi/linked-turnusi.module';
 
 @Module({
   imports: [
@@ -92,6 +93,7 @@ import { TurnusDefaultsModule } from './turnus-defaults/turnus-defaults.module';
     TurnusiModule,
     PlanningModule,
     TurnusDefaultsModule,
+    LinkedTurnusiModule,
   ],
   controllers: [AppController],
   providers: [
